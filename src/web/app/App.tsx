@@ -281,11 +281,10 @@ export function App() {
     }
   }
 
-  async function saveDocument(content: string, displayName: string): Promise<void> {
-    if (!activeDoc) return;
+  async function saveDocument(content: string, displayName: string, documentId: string): Promise<void> {
     try {
-      const updated = await updateDocumentApi(activeDoc.documentId, { content, displayName });
-      setActiveDoc(updated);
+      const updated = await updateDocumentApi(documentId, { content, displayName });
+      setActiveDoc((prev) => (prev && prev.documentId === documentId ? updated : prev));
       await refreshTree();
       setMessage("saved");
       window.setTimeout(() => setMessage(null), 1200);

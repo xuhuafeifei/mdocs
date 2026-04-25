@@ -37,7 +37,7 @@ interface DocumentEditorProps {
   domains: DomainSummary[];
   currentDomainId: string;
   onDomainChange: (domainId: string) => void;
-  onSave: (content: string, displayName: string) => Promise<void>;
+  onSave: (content: string, displayName: string, documentId: string) => Promise<void>;
   onDelete: () => Promise<void>;
 }
 
@@ -328,7 +328,22 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
       const content = v.getValue();
       setBusy(true);
       try {
-        await props.onSave(content, displayName);
+        await props.onSave(content, displayName, props.document.documentId);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function saveDisplayNameIfChanged(): Promise<void> {
+      if (!props.canEdit) return;
+      const prev = props.document.displayName.trim();
+      const next = displayName.trim();
+      if (next === prev) return;
+      const v = vditorRef.current;
+      if (!v) return;
+      setBusy(true);
+      try {
+        await props.onSave(v.getValue(), displayName, props.document.documentId);
       } finally {
         setBusy(false);
       }
@@ -341,6 +356,7 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
             className="mdocs-editor-title-input"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
+            onBlur={() => void saveDisplayNameIfChanged()}
             placeholder="Display name"
             disabled={!props.canEdit}
           />
