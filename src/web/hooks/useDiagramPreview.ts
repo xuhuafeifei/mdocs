@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { renderDiagramToImage, discardCachedPreview } from "../meta2d/renderEngine";
+import { renderDiagramToSvg, renderDiagramToImage, discardCachedPreview } from "../meta2d/renderEngine";
 
 const SOURCE_SELECTOR =
   ".vditor-wysiwyg__pre > code.language-meta2, .vditor-wysiwyg__pre > code.language-meta";
@@ -112,7 +112,7 @@ export function useDiagramPreview(
           continue;
         }
 
-        renderDiagramToImage(jsonStr, (blob) => {
+        renderDiagramToSvg(jsonStr, (svg) => {
           if (!block.isConnected) return;
 
           const sc = block.querySelector(SOURCE_SELECTOR);
@@ -124,20 +124,46 @@ export function useDiagramPreview(
           const current = sc.textContent?.trim() ?? "";
           if (current !== jsonStr) return;
 
-          discardCachedPreview(pc);
-
-          if (!blob || blob.size === 0) {
-            pc.textContent = "流程图渲染失败";
+          const finish = () => {
+            discardCachedPreview(pc);
+            delete pc.dataset.diagramRenderMode;
             pc.setAttribute("data-processed", "true");
             pc.dataset.diagramSrc = jsonStr;
+          };
+
+          if (svg) {
+            pc.innerHTML = svg;
+            const svgEl = pc.querySelector("svg");
+            if (svgEl) svgEl.style.display = "block";
+            finish();
             return;
           }
 
-          const url = URL.createObjectURL(blob);
-          pc.dataset.diagramBlobUrl = url;
-          pc.innerHTML = `<img src="${url}" alt="流程图" style="display:block;max-width:100%;height:auto;" draggable="false" />`;
-          pc.setAttribute("data-processed", "true");
-          pc.dataset.diagramSrc = jsonStr;
+          renderDiagramToImage(jsonStr, (blob) => {
+            if (!block.isConnected) return;
+
+            const sc2 = block.querySelector(SOURCE_SELECTOR);
+            const pc2 = block.querySelector(
+              PREVIEW_SELECTOR,
+            ) as HTMLElement | null;
+            if (!sc2 || !pc2) return;
+            if (sc2.textContent?.trim() !== jsonStr) return;
+
+            discardCachedPreview(pc2);
+            if (!blob || blob.size === 0) {
+              pc2.textContent = "流程图渲染失败";
+              pc2.setAttribute("data-processed", "true");
+              pc2.dataset.diagramSrc = jsonStr;
+              return;
+            }
+
+            const url = URL.createObjectURL(blob);
+            pc2.dataset.diagramBlobUrl = url;
+            pc2.dataset.diagramRenderMode = "png";
+            pc2.innerHTML = `<img src="${url}" alt="流程图" style="display:block;max-width:100%;height:auto;" draggable="false" />`;
+            pc2.setAttribute("data-processed", "true");
+            pc2.dataset.diagramSrc = jsonStr;
+          });
         });
       }
     };
@@ -166,7 +192,7 @@ export function useDiagramPreview(
     };
 
     const toolbar = document.createElement("div");
-    toolbar.className = "meta2-flow-overlay";
+    toolbar.className = "diagram-preview-toolbar";
     toolbar.style.cssText = [
       "position: fixed",
       "z-index: 1500",
@@ -218,7 +244,12 @@ export function useDiagramPreview(
       "display:flex;flex-direction:row;gap:4px;justify-content:flex-end;";
     btnRow.appendChild(editBtn);
     btnRow.appendChild(delBtn);
+
+    const hintEl = document.createElement("div");
+    hintEl.style.cssText = "display:none;font-size:11px;line-height:1.35;color:#666;max-width:208px;text-align:right;padding-top:4px;margin-top:2px;border-top:1px solid #e8e8e8;";
+
     toolbar.appendChild(btnRow);
+    toolbar.appendChild(hintEl);
     document.body.appendChild(toolbar);
 
     let currentNode: Element | null = null;
@@ -235,6 +266,16 @@ export function useDiagramPreview(
       window.clearTimeout(dismissTimer);
       currentNode = block;
       btnRow.style.display = isLockedRef.current ? "none" : "flex";
+      const pc = block.querySelector(
+        PREVIEW_SELECTOR,
+      ) as HTMLElement | null;
+      if (pc?.dataset.diagramRenderMode === "png") {
+        hintEl.textContent = "SVG渲染失败，已降级为 PNG 预览";
+        hintEl.style.display = "block";
+      } else {
+        hintEl.textContent = "";
+        hintEl.style.display = "none";
+      }
       positionToolbar(block);
     };
 

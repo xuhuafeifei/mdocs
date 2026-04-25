@@ -150,7 +150,9 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
       const v = vditorRef.current;
       if (!v) return;
       if (readyRef.current) {
-        v.setValue(props.document.content);
+        if (v.getValue() !== props.document.content) {
+          v.setValue(props.document.content);
+        }
       } else {
         pendingValueRef.current = props.document.content;
       }
