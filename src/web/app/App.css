@@ -355,16 +355,128 @@
   background: #f1f1ee;
 }
 
+/* meta2 / meta: 预览+源码显隐全由 :has 定，勿在 JS 上写 display 以免与删块互闪 */
 .vditor-wysiwyg__block:has(> .vditor-wysiwyg__pre > code:is(.language-meta2, .language-meta))
   > .vditor-wysiwyg__pre {
   display: none !important;
 }
 .vditor-wysiwyg__block:has(> .vditor-wysiwyg__pre > code:is(.language-meta2, .language-meta))
   > .vditor-wysiwyg__preview {
+  position: relative;
   display: block !important;
 }
-.vditor-wysiwyg__preview > code:is(.language-meta2, .language-meta) {
+.vditor-wysiwyg__block:has(> .vditor-wysiwyg__pre > code:is(.language-meta2, .language-meta)) .vditor-copy {
+  display: none !important;
+}
+.vditor-wysiwyg__preview > code:is(.language-meta2, .language-meta),
+.vditor-wysiwyg__preview pre > code:is(.language-meta2, .language-meta) {
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* 删块瞬间孤儿 HUD 可能挂到 p/正文中，先压掉；仅「preview 的直子」在下一选择器里放开 */
+.mdocs-vditor-host .mdocs-diagram-hud {
+  display: none !important;
+  visibility: hidden !important;
+  position: fixed !important;
+  left: -10000px !important;
+  top: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+/* 合法：仅作为 meta2 块下 .vditor-wysiwyg__preview 的直接子节点时显示（必须 >，避免子树中误选） */
+.vditor-wysiwyg__block:has(> .vditor-wysiwyg__pre > code:is(.language-meta2, .language-meta))
+  > .vditor-wysiwyg__preview
+  > .mdocs-diagram-hud {
+  display: flex !important;
+  visibility: visible !important;
+  position: absolute !important;
+  left: auto !important;
+  top: auto !important;
+  right: 8px;
+  bottom: 8px;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  z-index: 20;
+  flex-direction: row;
+  gap: 2px;
+  align-items: center;
+  margin: 0;
+  padding: 3px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  cursor: default;
+  isolation: isolate;
+  -webkit-user-select: none;
+  user-select: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease-out;
+}
+/* Toolbar-style actions: 手型光标、不可当作文本编辑、不像输入框 */
+.vditor-wysiwyg__block:has(> .vditor-wysiwyg__pre > code:is(.language-meta2, .language-meta))
+  > .vditor-wysiwyg__preview
+  > .mdocs-diagram-hud
+  [data-mdocs-hud] {
+  -webkit-appearance: none;
+  appearance: none;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  padding: 5px 10px;
+  margin: 0;
+  min-height: 28px;
+  border-radius: 6px;
+  border: none;
+  color: #1e40af;
+  background: #e8f0ff;
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: none;
+  outline: none;
+}
+.vditor-wysiwyg__block:has(> .vditor-wysiwyg__pre > code:is(.language-meta2, .language-meta))
+  > .vditor-wysiwyg__preview
+  > .mdocs-diagram-hud
+  [data-mdocs-hud="delete"] {
+  color: #9f1239;
+  background: #ffe4e6;
+}
+.vditor-wysiwyg__block:has(> .vditor-wysiwyg__pre > code:is(.language-meta2, .language-meta))
+  > .vditor-wysiwyg__preview
+  > .mdocs-diagram-hud
+  [data-mdocs-hud]:hover {
+  filter: brightness(0.97);
+  cursor: pointer;
+}
+.vditor-wysiwyg__block:has(> .vditor-wysiwyg__pre > code:is(.language-meta2, .language-meta))
+  > .vditor-wysiwyg__preview
+  > .mdocs-diagram-hud
+  [data-mdocs-hud]:focus-visible {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #93b4ff;
+}
+.vditor-wysiwyg__block:has(> .vditor-wysiwyg__pre > code:is(.language-meta2, .language-meta))
+  > .vditor-wysiwyg__preview:hover
+  > .mdocs-diagram-hud {
+  opacity: 1;
+  pointer-events: auto;
+}
+.vditor-wysiwyg__block:has(> .vditor-wysiwyg__pre > code:is(.language-meta2, .language-meta))
+  > .vditor-wysiwyg__preview
+  > .mdocs-diagram-hud:hover {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .mdocs-diagram-body {

@@ -10,8 +10,9 @@ Markdown knowledge base for small teams.
 
 ## Clean-room policy
 
-`mdocs` is implemented from scratch. It MUST NOT reuse any code from other
-projects. That includes, but is not limited to:
+`mdocs` is implemented from scratch. It MUST NOT reuse any code from
+`markdown-docs` (located at `~/ddmc/markdown-docs`). That includes, but is
+not limited to:
 
 - Source files, functions, classes, interfaces, types
 - SQL statements or schema definitions
@@ -22,8 +23,11 @@ projects. That includes, but is not limited to:
 Reuse of the `agent-demo` logger design is permitted because it is the
 author's own demo project.
 
-The diagram feature uses fenced `` ```meta2 `` blocks with inline JSON,
-**wysiwyg** mode, and an SVG-first preview pipeline.
+The **Meta2d / Vditor flow** matches `markdown-docs`: `useFlowRenderer`,
+`registerPens`, fenced `` ```meta2 `` blocks with inline JSON, **wysiwyg**
+mode (not IR), SVG preview in the preview half of each block, and
+`window.vditorInstance` for `getValue` / `setValue` when editing or deleting
+blocks.
 
 ## Diagrams (Meta2d in Markdown)
 
@@ -35,11 +39,11 @@ Diagrams live in the `.md` source as fenced blocks:
 ```
 ````
 
-The editor renders them as SVG (via `canvas2svg` + Meta2d). Saving the modal
-rewrites that JSON in the document with `Vditor#setValue`. Use the toolbar
-**Insert diagram** (or double-click a diagram). Switch **edit-mode** / **both**
-in the Vditor toolbar for source vs wysiwyg. Large documents: API JSON body
-limit is 32&nbsp;MiB.
+The editor renders them as SVG (via `canvas2svg` + Meta2d, same approach as
+`markdown-docs`). Saving the modal rewrites that JSON in the document with
+`Vditor#setValue`. Use the toolbar **Insert diagram** (or double-click a
+diagram). Switch **edit-mode** / **both** in the Vditor toolbar for source vs
+wysiwyg. Large documents: API JSON body limit is 32&nbsp;MiB.
 
 ## Layout
 

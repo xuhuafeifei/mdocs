@@ -103,6 +103,8 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
       const instance = new Vditor(host, {
         height: "100%",
         mode: "wysiwyg",
+        /** 不设时 `fixTab` 不生效，按 Tab 会走浏览器默认＝焦点离开编辑器，代码块内既无缩进也「像丢了编辑区」。 */
+        tab: "    ",
         toolbar: VDITOR_TOOLBAR,
         cache: { enable: false },
         toolbarConfig: { pin: true },
