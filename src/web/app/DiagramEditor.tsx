@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Meta2d } from "@meta2d/core";
 import { DiagramPalette } from "./DiagramPalette";
-import { registerAllPens } from "../diagram/registerPens";
+import { registerAllShapeLibraries } from "../meta2d/registerPens";
 
 /**
  * Meta2d editor shell. Pen registration matches markdown-docs `registerPens.ts`.
@@ -25,7 +25,7 @@ export function DiagramEditor(props: {
     const host = hostRef.current;
     if (!window._pensRegistered) {
       try {
-        registerAllPens();
+        registerAllShapeLibraries();
       } catch {
         // ignore duplicate registration on HMR
       }

@@ -1,5 +1,5 @@
 import { Meta2d, isShowChild } from "@meta2d/core";
-import { initializeShapeLibrary } from "../diagram/registerPens";
+import { initializeShapeLibrary } from "./registerPens";
 import { installCanvasPatches } from "./canvasPatches";
 
 installCanvasPatches();

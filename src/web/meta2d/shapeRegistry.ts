@@ -1,4 +1,4 @@
-import { initializeShapeLibrary } from "../diagram/registerPens";
+import { initializeShapeLibrary } from "./registerPens";
 
 let ready = false;
 
