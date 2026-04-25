@@ -9,6 +9,7 @@ import {
 import Vditor from "vditor";
 import "vditor/dist/index.css";
 import type { DocumentDetail } from "../../shared/types/document";
+import { getStoredToken } from "../api/client";
 import { findMeta2BlockRange } from "../diagram/meta2Markdown";
 import { useFlowRenderer } from "../hooks/useDiagramPreview";
 import { FlowDiagramModal } from "./FlowDiagramModal";
@@ -27,7 +28,7 @@ interface DocumentEditorProps {
   onDelete: () => Promise<void>;
 }
 
-const VDITOR_TOOLBAR = [
+const VDITOR_TOOLBAR_BASE = [
   "headings",
   "bold",
   "italic",
@@ -46,6 +47,20 @@ const VDITOR_TOOLBAR = [
   "edit-mode",
   "both",
 ];
+
+const UPLOAD_MAX_BYTES = 12 * 1024 * 1024;
+
+function buildToolbar(canEdit: boolean): Array<string | { name: string }> {
+  if (!canEdit) return [...VDITOR_TOOLBAR_BASE];
+  const t: string[] = [...VDITOR_TOOLBAR_BASE];
+  const linkIdx = t.indexOf("link");
+  if (linkIdx >= 0) {
+    t.splice(linkIdx + 1, 0, "upload");
+  } else {
+    t.push("upload");
+  }
+  return t;
+}
 
 export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorProps>(
   function DocumentEditor(props, ref) {
@@ -100,14 +115,38 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
       readyRef.current = false;
       pendingValueRef.current = null;
 
+      const uploadOpts = props.canEdit
+        ? {
+            upload: {
+              url: "/api/assets/upload",
+              linkToImgUrl: `/api/assets/link-to-img?documentId=${encodeURIComponent(props.document.documentId)}`,
+              max: UPLOAD_MAX_BYTES,
+              fieldName: "file[]",
+              accept: "image/*",
+              multiple: true,
+              extraData: { documentId: props.document.documentId },
+              setHeaders: () => ({
+                "x-visitor-token": getStoredToken() ?? "",
+              }),
+            },
+          }
+        : {};
+
       const instance = new Vditor(host, {
         height: "100%",
         mode: "wysiwyg",
         /** 不设时 `fixTab` 不生效，按 Tab 会走浏览器默认＝焦点离开编辑器，代码块内既无缩进也「像丢了编辑区」。 */
         tab: "    ",
-        toolbar: VDITOR_TOOLBAR,
+        toolbar: buildToolbar(props.canEdit),
         cache: { enable: false },
         toolbarConfig: { pin: true },
+        preview: {
+          markdown: {
+            /** Allow `![](http...)` and other inline HTML in trusted self-hosted editor. */
+            sanitize: false,
+          },
+        },
+        ...uploadOpts,
         value: props.document.content,
         after: () => {
           readyRef.current = true;
@@ -135,7 +174,7 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
         }
         vditorRef.current = null;
       };
-    }, []);
+    }, [props.document.documentId, props.canEdit]);
 
     useEffect(() => {
       setTitle(props.document.title);

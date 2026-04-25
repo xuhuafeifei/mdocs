@@ -7,6 +7,7 @@ import { authMiddleware } from "./identity/auth.middleware.js";
 import { buildVisitorsRouter } from "./routes/visitors.routes.js";
 import { buildDocumentsRouter } from "./routes/documents.routes.js";
 import { buildTreeRouter } from "./routes/tree.routes.js";
+import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
 import { useLogger } from "./logger/logger.js";
 
 const log = useLogger("app");
@@ -24,7 +25,12 @@ export function buildApp(): Application {
     res.json({ data: { status: "ok" } });
   });
 
+  app.get("/api/assets/:assetId", (req, res) => {
+    serveAssetFile(req, res);
+  });
+
   app.use("/api", authMiddleware);
+  app.use("/api/assets", buildAssetsUploadRouter());
   app.use("/api/visitors", buildVisitorsRouter());
   app.use("/api/documents", buildDocumentsRouter());
   app.use("/api/tree", buildTreeRouter());
