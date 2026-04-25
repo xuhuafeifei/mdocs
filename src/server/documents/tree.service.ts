@@ -1,6 +1,7 @@
 import { getDb } from "../db/connection.js";
 import { listDocumentsByDomain, type DocumentRow } from "../db/repositories/document.repo.js";
 import { getConfig } from "../config/index.js";
+import { FOLDER_DESC_FILENAME } from "../../shared/folderDesc.js";
 import type {
   TreeFolderNode,
   TreeNode,
@@ -35,6 +36,12 @@ function attachRow(root: TreeFolderNode, row: DocumentRow): void {
     current = next;
   }
   const leafName = segments[segments.length - 1]!;
+  if (leafName.toLowerCase() === FOLDER_DESC_FILENAME.toLowerCase()) {
+    if (segments.length >= 2) {
+      current.descDocumentId = row.document_id;
+    }
+    return;
+  }
   current.children.push({
     type: "document",
     name: leafName,

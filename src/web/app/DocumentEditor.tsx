@@ -9,6 +9,7 @@ import {
 import Vditor from "vditor";
 import "vditor/dist/index.css";
 import type { DocumentDetail } from "../../shared/types/document";
+import type { DomainSummary } from "../../shared/types/domain";
 import { getStoredToken } from "../api/client";
 import { findMeta2BlockRange } from "../diagram/meta2Markdown";
 import { useFlowRenderer } from "../hooks/useDiagramPreview";
@@ -33,6 +34,9 @@ export interface DocumentEditorHandle {
 interface DocumentEditorProps {
   document: DocumentDetail;
   canEdit: boolean;
+  domains: DomainSummary[];
+  currentDomainId: string;
+  onDomainChange: (domainId: string) => void;
   onSave: (content: string, title: string) => Promise<void>;
   onDelete: () => Promise<void>;
 }
@@ -334,32 +338,46 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
       <div className="mdocs-editor">
         <div className="mdocs-editor-toolbar">
           <input
-            style={{ flex: 1 }}
+            className="mdocs-editor-title-input"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="document title"
             disabled={!props.canEdit}
           />
-          <span className="mdocs-editor-path">{props.document.relativePath}</span>
-          <button
-            type="button"
-            disabled={!props.canEdit || busy}
-            onClick={() => {
-              setEditingFlowData(null);
-              setEditingLineNumber(-1);
-              setEditingBlockIndex(-1);
-              setEditingRawJson("");
-              setFlowModalOpen(true);
-            }}
+          <select
+            className="mdocs-editor-domain-select"
+            aria-label="当前域"
+            value={props.currentDomainId}
+            onChange={(e) => props.onDomainChange(e.target.value)}
           >
-            Insert diagram
-          </button>
-          <button type="button" className="primary" disabled={!props.canEdit || busy} onClick={() => void save()}>
-            {busy ? "saving..." : "Save"}
-          </button>
-          <button type="button" disabled={!props.canEdit || busy} onClick={props.onDelete}>
-            Delete
-          </button>
+            {(props.domains.length ? props.domains : [{ domainId: "default", domainName: "Default" }]).map((d) => (
+              <option key={d.domainId} value={d.domainId}>
+                {d.domainName}
+              </option>
+            ))}
+          </select>
+          <span className="mdocs-editor-toolbar-spacer" aria-hidden />
+          <div className="mdocs-editor-toolbar-actions">
+            <button
+              type="button"
+              disabled={!props.canEdit || busy}
+              onClick={() => {
+                setEditingFlowData(null);
+                setEditingLineNumber(-1);
+                setEditingBlockIndex(-1);
+                setEditingRawJson("");
+                setFlowModalOpen(true);
+              }}
+            >
+              Insert diagram
+            </button>
+            <button type="button" className="primary" disabled={!props.canEdit || busy} onClick={() => void save()}>
+              {busy ? "saving..." : "Save"}
+            </button>
+            <button type="button" disabled={!props.canEdit || busy} onClick={props.onDelete}>
+              Delete
+            </button>
+          </div>
         </div>
         <div className="mdocs-editor-body">
           <div ref={hostRef} className="mdocs-vditor-host" />

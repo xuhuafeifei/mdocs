@@ -7,6 +7,7 @@ import { authMiddleware } from "./identity/auth.middleware.js";
 import { buildVisitorsRouter } from "./routes/visitors.routes.js";
 import { buildDocumentsRouter } from "./routes/documents.routes.js";
 import { buildTreeRouter } from "./routes/tree.routes.js";
+import { buildDomainsRouter } from "./routes/domains.routes.js";
 import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
 import { useLogger } from "./logger/logger.js";
 
@@ -34,6 +35,7 @@ export function buildApp(): Application {
   app.use("/api/visitors", buildVisitorsRouter());
   app.use("/api/documents", buildDocumentsRouter());
   app.use("/api/tree", buildTreeRouter());
+  app.use("/api/domains", buildDomainsRouter());
 
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: { code: "NOT_FOUND", message: "api not found" } });

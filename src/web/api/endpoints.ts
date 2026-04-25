@@ -6,6 +6,7 @@ import type {
   VisitorRegisterResponse,
 } from "../../shared/types/visitor";
 import type { TreeNode } from "../../shared/types/tree";
+import type { DomainSummary } from "../../shared/types/domain";
 
 export function registerVisitorApi(visitorName: string): Promise<VisitorRegisterResponse> {
   return api<VisitorRegisterResponse>("/api/visitors/register", {
@@ -19,8 +20,13 @@ export async function fetchMe(): Promise<VisitorPublic> {
   return res.visitor;
 }
 
-export function fetchTreeApi(): Promise<TreeNode[]> {
-  return api<TreeNode[]>("/api/tree");
+export function fetchDomainsApi(): Promise<DomainSummary[]> {
+  return api<DomainSummary[]>("/api/domains");
+}
+
+export function fetchTreeApi(domainId?: string): Promise<TreeNode[]> {
+  const q = domainId?.trim() ? `?domainId=${encodeURIComponent(domainId.trim())}` : "";
+  return api<TreeNode[]>(`/api/tree${q}`);
 }
 
 export function getDocumentApi(documentId: string): Promise<DocumentDetail> {
@@ -31,6 +37,7 @@ export function createDocumentApi(input: {
   relativePath: string;
   title?: string;
   content: string;
+  domainId?: string;
 }): Promise<DocumentDetail> {
   return api<DocumentDetail>("/api/documents", {
     method: "POST",

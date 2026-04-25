@@ -8,6 +8,7 @@ export function TreeContextMenu(props: {
   parentPath: string;
   onClose: () => void;
   onCreateChild: (parentPath: string) => void;
+  onCreateFolder: (parentPath: string) => void;
   onDelete: (node: Extract<TreeNode, { type: "document" }>) => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -35,6 +36,11 @@ export function TreeContextMenu(props: {
       ? `New document in ${props.node.path}`
       : "New document at root"
     : "New document beside this";
+  const folderLabel = isFolder
+    ? props.node.path
+      ? `New folder in ${props.node.path}`
+      : "New folder at root"
+    : "New folder beside this";
 
   return (
     <div
@@ -52,6 +58,17 @@ export function TreeContextMenu(props: {
         }}
       >
         {createLabel}
+      </button>
+      <button
+        type="button"
+        className="mdocs-context-item"
+        onClick={() => {
+          const parent = isFolder ? props.node.path : props.parentPath;
+          props.onCreateFolder(parent);
+          props.onClose();
+        }}
+      >
+        {folderLabel}
       </button>
       {props.node.type === "document" && (
         <button

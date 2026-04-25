@@ -5,6 +5,8 @@ export interface TreeFolderNode {
   name: string;
   path: string;
   children: TreeNode[];
+  /** When set, selecting this folder loads this document (path ends with desc.md). */
+  descDocumentId?: string | null;
 }
 
 export interface TreeDocumentNode {
