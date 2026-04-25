@@ -4,6 +4,8 @@ import {
   toPublic,
   VisitorValidationError,
 } from "../identity/visitor.service.js";
+import { getDb } from "../db/connection.js";
+import { ensurePersonalDomain } from "../domains/personal-domain.service.js";
 import { useLogger } from "../logger/logger.js";
 
 const log = useLogger("visitors-route");
@@ -35,6 +37,7 @@ export function buildVisitorsRouter(): Router {
       res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
       return;
     }
+    ensurePersonalDomain(getDb(), req.visitor.visitor_id, req.visitor.visitor_name);
     res.json({ data: { visitor: toPublic(req.visitor) } });
   });
 

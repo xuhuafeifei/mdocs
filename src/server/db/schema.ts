@@ -21,7 +21,7 @@ const SCHEMA_STATEMENTS: string[] = [
     document_id TEXT PRIMARY KEY,
     domain_id TEXT NOT NULL,
     relative_path TEXT NOT NULL UNIQUE,
-    title TEXT NOT NULL,
+    display_name TEXT NOT NULL,
     owner_visitor_id TEXT NOT NULL,
     created_by TEXT NOT NULL,
     updated_by TEXT NOT NULL,
@@ -67,9 +67,24 @@ export function applySchema(db: Database.Database): void {
     for (const stmt of SCHEMA_STATEMENTS) {
       db.exec(stmt);
     }
+    migrateDocumentsTitleToDisplayName(db);
     ensureDefaultDomain(db);
   });
   tx();
+}
+
+/** Older DBs used `title`; rename once so code can use `display_name` consistently. */
+function migrateDocumentsTitleToDisplayName(db: Database.Database): void {
+  const exists = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='documents'`)
+    .get() as { name: string } | undefined;
+  if (!exists) return;
+  const cols = db.prepare(`PRAGMA table_info(documents)`).all() as { name: string }[];
+  const names = new Set(cols.map((c) => c.name));
+  if (names.has("display_name")) return;
+  if (names.has("title")) {
+    db.exec(`ALTER TABLE documents RENAME COLUMN title TO display_name`);
+  }
 }
 
 function ensureDefaultDomain(db: Database.Database): void {

@@ -2,7 +2,7 @@ export interface DocumentSummary {
   documentId: string;
   domainId: string;
   relativePath: string;
-  title: string;
+  displayName: string;
   ownerVisitorId: string;
   updatedBy: string;
   updatedAt: string;
@@ -17,11 +17,11 @@ export interface DocumentDetail extends DocumentSummary {
 export interface CreateDocumentRequest {
   domainId?: string;
   relativePath: string;
-  title?: string;
+  displayName?: string;
   content: string;
 }
 
 export interface UpdateDocumentRequest {
   content: string;
-  title?: string;
+  displayName?: string;
 }

@@ -37,7 +37,7 @@ interface DocumentEditorProps {
   domains: DomainSummary[];
   currentDomainId: string;
   onDomainChange: (domainId: string) => void;
-  onSave: (content: string, title: string) => Promise<void>;
+  onSave: (content: string, displayName: string) => Promise<void>;
   onDelete: () => Promise<void>;
 }
 
@@ -85,7 +85,7 @@ function buildToolbar(canEdit: boolean): string[] {
 
 export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorProps>(
   function DocumentEditor(props, ref) {
-    const [title, setTitle] = useState(props.document.title);
+    const [displayName, setDisplayName] = useState(props.document.displayName);
     const [busy, setBusy] = useState(false);
 
     const hostRef = useRef<HTMLDivElement | null>(null);
@@ -204,7 +204,7 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
     }, [props.document.documentId, props.canEdit]);
 
     useEffect(() => {
-      setTitle(props.document.title);
+      setDisplayName(props.document.displayName);
       const v = vditorRef.current;
       if (!v) return;
       const display = withReadOnlyNotice(props.document.content, props.canEdit);
@@ -213,7 +213,7 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
       } else {
         pendingValueRef.current = display;
       }
-    }, [props.document.documentId, props.document.content, props.document.title, props.canEdit]);
+    }, [props.document.documentId, props.document.content, props.document.displayName, props.canEdit]);
 
     const handleFlowSave = useCallback(
       (flowData: unknown) => {
@@ -328,7 +328,7 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
       const content = v.getValue();
       setBusy(true);
       try {
-        await props.onSave(content, title);
+        await props.onSave(content, displayName);
       } finally {
         setBusy(false);
       }
@@ -339,9 +339,9 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
         <div className="mdocs-editor-toolbar">
           <input
             className="mdocs-editor-title-input"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="document title"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Display name"
             disabled={!props.canEdit}
           />
           <select

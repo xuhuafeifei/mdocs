@@ -31,14 +31,19 @@ export function TreeContextMenu(props: {
   }, [props]);
 
   const isFolder = props.node.type === "folder";
+  let folderHuman = "root";
+  if (props.node.type === "folder") {
+    const f = props.node;
+    folderHuman = f.folderDisplayName?.trim() || f.path || "root";
+  }
   const createLabel = isFolder
-    ? props.node.path
-      ? `New document in ${props.node.path}`
+    ? props.node.path || folderHuman !== "root"
+      ? `New document in ${folderHuman}`
       : "New document at root"
     : "New document beside this";
   const folderLabel = isFolder
-    ? props.node.path
-      ? `New folder in ${props.node.path}`
+    ? props.node.path || folderHuman !== "root"
+      ? `New folder in ${folderHuman}`
       : "New folder at root"
     : "New folder beside this";
 

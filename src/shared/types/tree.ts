@@ -7,6 +7,8 @@ export interface TreeFolderNode {
   children: TreeNode[];
   /** When set, selecting this folder loads this document (path ends with desc.md). */
   descDocumentId?: string | null;
+  /** From folder `desc.md` row `display_name` when present; UI label, while `name`/`path` stay storage-relative. */
+  folderDisplayName?: string | null;
 }
 
 export interface TreeDocumentNode {
@@ -14,7 +16,7 @@ export interface TreeDocumentNode {
   name: string;
   path: string;
   documentId: string;
-  title: string;
+  displayName: string;
   ownerVisitorId: string;
   updatedAt: string;
 }

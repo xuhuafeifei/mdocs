@@ -4,11 +4,19 @@ import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
 import type { TreeNode } from "../../shared/types/tree";
 import { DocPathError, normaliseDocRelativePath } from "../../shared/docPath";
+import {
+  normalisePathSegmentForStorage,
+  normaliseRelativePathForStorage,
+  parseDisplayNameFolder,
+  parseDisplayNameMarkdownFile,
+} from "../../shared/storagePath";
 import { FOLDER_DESC_FILENAME, folderDescPathForFolder } from "../../shared/folderDesc";
+import { stripDomainPathPrefix } from "../../shared/personalDomain";
 import {
   ApiRequestError,
   clearIdentity,
   getStoredToken,
+  getStoredVisitorId,
   storeIdentity,
 } from "../api/client";
 import {
@@ -57,23 +65,11 @@ function parentDirForCreates(relativePath: string): string {
   return i === -1 ? "" : relativePath.slice(0, i);
 }
 
-function suggestUntitledMd(parentPath: string, paths: Set<string>): string {
-  const rel = (name: string) => joinDocPath(parentPath, name);
-  if (!paths.has(rel("untitled.md"))) return "untitled.md";
-  let i = 2;
-  while (paths.has(rel(`untitled-${i}.md`))) i += 1;
-  return `untitled-${i}.md`;
-}
-
-const FOLDER_SEGMENT_RX = /^[A-Za-z0-9_\-\.\u4e00-\u9fa5]+$/;
-
-function parseFolderSegment(raw: string): { ok: true; value: string } | { ok: false; message: string } {
-  const t = raw.trim();
-  if (!t) return { ok: false, message: "enter a folder name" };
-  if (t.includes("/") || t.includes("\\")) return { ok: false, message: "use a single name, not a path" };
-  if (t === "." || t === ".." || t.includes("..")) return { ok: false, message: "invalid folder name" };
-  if (!FOLDER_SEGMENT_RX.test(t)) return { ok: false, message: "unsupported characters in folder name" };
-  return { ok: true, value: t };
+/** Tree / create-modal paths are domain-relative; strip personal-domain storage prefix. */
+function docPathForSelection(doc: DocumentDetail): string {
+  const vid = getStoredVisitorId();
+  if (!vid || doc.domainId !== vid) return doc.relativePath;
+  return stripDomainPathPrefix(vid, doc.relativePath);
 }
 
 async function fetchDomainsSafe(): Promise<DomainSummary[]> {
@@ -124,7 +120,10 @@ export function App() {
       const doms = await fetchDomainsSafe();
       setDomains(doms);
       const initialDomain =
-        doms.find((d) => d.domainId === "default")?.domainId ?? doms[0]?.domainId ?? "default";
+        doms.find((d) => d.domainId === me.visitorId)?.domainId ??
+        doms.find((d) => d.domainId === "default")?.domainId ??
+        doms[0]?.domainId ??
+        "default";
       setCurrentDomainId(initialDomain);
       await refreshTree(initialDomain);
       setPhase("ready");
@@ -147,7 +146,10 @@ export function App() {
     const doms = await fetchDomainsSafe();
     setDomains(doms);
     const initialDomain =
-      doms.find((d) => d.domainId === "default")?.domainId ?? doms[0]?.domainId ?? "default";
+      doms.find((d) => d.domainId === res.visitor.visitorId)?.domainId ??
+      doms.find((d) => d.domainId === "default")?.domainId ??
+      doms[0]?.domainId ??
+      "default";
     setCurrentDomainId(initialDomain);
     await refreshTree(initialDomain);
     setPhase("ready");
@@ -163,7 +165,7 @@ export function App() {
     try {
       const doc = await getDocumentApi(documentId);
       setActiveDoc(doc);
-      setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
+      setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
     } catch (err) {
       setMessage(errorMessage(err));
     }
@@ -171,15 +173,12 @@ export function App() {
 
   function openNewDocumentModal(explicitParentPath?: string): void {
     const fixed = explicitParentPath !== undefined;
-    const snapshotParent = fixed ? explicitParentPath! : selectedCreateParentPath;
-    const paths = collectDocumentPaths(tree);
-    const draft = suggestUntitledMd(snapshotParent, paths);
     setCreateModalError(null);
     setCreateModal({
       kind: "document",
       parentMode: fixed ? "fixed" : "selection",
       parentPath: fixed ? explicitParentPath! : "",
-      draft,
+      draft: "untitled.md",
     });
   }
 
@@ -212,15 +211,16 @@ export function App() {
         : createModal.parentPath;
     try {
       if (createModal.kind === "document") {
-        let file = createModal.draft.trim();
-        if (!file) {
-          setCreateModalError("enter a file name");
+        const fileParsed = parseDisplayNameMarkdownFile(createModal.draft);
+        if (!fileParsed.ok) {
+          setCreateModalError(fileParsed.message);
           return;
         }
-        if (!file.toLowerCase().endsWith(".md")) file += ".md";
+        const displayFile = fileParsed.displayFile;
+        const displayTitle = displayFile.replace(/\.md$/i, "");
         let relativePath: string;
         try {
-          relativePath = normaliseDocRelativePath(joinDocPath(effectiveParent, file));
+          relativePath = normaliseRelativePathForStorage(joinDocPath(effectiveParent, displayFile));
         } catch (e) {
           setCreateModalError(e instanceof DocPathError ? e.message : "invalid path");
           return;
@@ -231,24 +231,30 @@ export function App() {
         }
         const doc = await createDocumentApi({
           relativePath,
-          content: `# ${file.replace(/\.md$/i, "")}\n\n`,
+          displayName: displayTitle,
+          content: `# ${displayTitle}\n\n`,
           domainId: currentDomainId,
         });
         await refreshTree();
         setActiveDoc(doc);
-        setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
+        setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
         setCreateModal(null);
         return;
       }
-      const parsed = parseFolderSegment(createModal.draft);
+      const parsed = parseDisplayNameFolder(createModal.draft);
       if (!parsed.ok) {
         setCreateModalError(parsed.message);
         return;
       }
-      const folderPrefix = joinDocPath(effectiveParent, parsed.value);
+      const storageSeg = normalisePathSegmentForStorage(parsed.display);
+      if (!storageSeg) {
+        setCreateModalError("could not derive a safe folder path from that name");
+        return;
+      }
+      const folderPrefix = joinDocPath(effectiveParent, storageSeg);
       let relativePath: string;
       try {
-        relativePath = normaliseDocRelativePath(joinDocPath(folderPrefix, FOLDER_DESC_FILENAME));
+        relativePath = normaliseRelativePathForStorage(joinDocPath(folderPrefix, FOLDER_DESC_FILENAME));
       } catch (e) {
         setCreateModalError(e instanceof DocPathError ? e.message : "invalid path");
         return;
@@ -257,16 +263,16 @@ export function App() {
         setCreateModalError("a folder with this name already exists");
         return;
       }
-      const folderTitle = parsed.value;
+      const folderTitle = parsed.display;
       const doc = await createDocumentApi({
         relativePath,
-        title: folderTitle,
+        displayName: folderTitle,
         content: `# ${folderTitle}\n\n`,
         domainId: currentDomainId,
       });
       await refreshTree();
       setActiveDoc(doc);
-      setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
+      setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
       setCreateModal(null);
     } catch (err) {
       setCreateModalError(errorMessage(err));
@@ -275,10 +281,10 @@ export function App() {
     }
   }
 
-  async function saveDocument(content: string, title: string): Promise<void> {
+  async function saveDocument(content: string, displayName: string): Promise<void> {
     if (!activeDoc) return;
     try {
-      const updated = await updateDocumentApi(activeDoc.documentId, { content, title });
+      const updated = await updateDocumentApi(activeDoc.documentId, { content, displayName });
       setActiveDoc(updated);
       await refreshTree();
       setMessage("saved");
@@ -376,7 +382,41 @@ export function App() {
         ) : (
           <div className="mdocs-welcome">
             <h1>mdocs</h1>
-            <p className="muted">Create a document to start writing.</p>
+            {tree.length === 0 ? (
+              <>
+                <p className="muted mdocs-welcome-lead">
+                  No documents in this domain yet. Switch domain below or create a document.
+                </p>
+                <div className="mdocs-welcome-domain">
+                  <label className="muted mdocs-welcome-domain-label" htmlFor="mdocs-welcome-domain">
+                    Domain
+                  </label>
+                  <select
+                    id="mdocs-welcome-domain"
+                    className="mdocs-editor-domain-select"
+                    aria-label="Domain"
+                    value={currentDomainId}
+                    onChange={(e) => {
+                      const domainId = e.target.value;
+                      setCurrentDomainId(domainId);
+                      setActiveDoc(null);
+                      setSelectedCreateParentPath("");
+                      void refreshTree(domainId);
+                    }}
+                  >
+                    {(domains.length ? domains : [{ domainId: "default", domainName: "Default" }]).map(
+                      (d) => (
+                        <option key={d.domainId} value={d.domainId}>
+                          {d.domainName}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </div>
+              </>
+            ) : (
+              <p className="muted">Create a document to start writing.</p>
+            )}
             <div className="mdocs-welcome-actions">
               <button type="button" className="primary" onClick={() => openNewDocumentModal()}>
                 New document
@@ -414,8 +454,8 @@ export function App() {
             <h1>{createModal.kind === "document" ? "New document" : "New folder"}</h1>
             <p className="muted">
               {createModal.kind === "document"
-                ? "File name must end with .md. A free name is suggested from your tree."
-                : "Creates a new subdirectory under the current location."}
+                ? "Names are shown as you type; stored paths are normalised (e.g. spaces → underscores). Use a .md file name."
+                : "Names are shown as you type; stored paths are normalised (e.g. folder 1 → folder_1)."}
             </p>
             <form onSubmit={submitCreateModal} className="mdocs-dialog-form">
               <label className="mdocs-dialog-label">
@@ -428,7 +468,7 @@ export function App() {
                       prev ? { ...prev, draft: ev.target.value } : prev,
                     )
                   }
-                  placeholder={createModal.kind === "document" ? "note.md" : "e.g. research"}
+                  placeholder={createModal.kind === "document" ? "untitled.md" : "e.g. research"}
                   maxLength={200}
                   disabled={createModalBusy}
                 />

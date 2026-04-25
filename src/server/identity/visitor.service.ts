@@ -8,6 +8,7 @@ import {
   type VisitorRow,
 } from "../db/repositories/visitor.repo.js";
 import { insertAuditLog } from "../db/repositories/audit.repo.js";
+import { ensurePersonalDomain } from "../domains/personal-domain.service.js";
 import {
   hashVisitorToken,
   newVisitorId,
@@ -44,6 +45,7 @@ export function registerVisitor(visitorName: string): RegisteredVisitor {
       visitorTokenHash: tokenHash,
       createdAt,
     });
+    ensurePersonalDomain(db, visitorId, trimmed);
     insertAuditLog(db, {
       actorVisitorId: visitorId,
       action: "visitor.register",

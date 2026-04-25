@@ -39,7 +39,7 @@ export function VisitorRegisterDialog(props: {
         <form onSubmit={submit}>
           <input
             autoFocus
-            placeholder="e.g. xu changfeng"
+            placeholder="fgbg"
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={60}

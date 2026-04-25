@@ -105,7 +105,7 @@ function TreeNodeView(props: {
     >
       <span className="mdocs-tree-caret-spacer" aria-hidden />
       <span className="mdocs-tree-icon">md</span>
-      <span className="mdocs-tree-label">{doc.title || doc.name}</span>
+      <span className="mdocs-tree-label">{doc.displayName || doc.name}</span>
     </button>
   );
 }
@@ -186,7 +186,9 @@ function FolderRow(props: {
         </span>
         <FolderDirIcon />
         <span className="mdocs-tree-folder-select">
-          <span className="mdocs-tree-label">{props.folder.name}</span>
+          <span className="mdocs-tree-label">
+            {props.folder.folderDisplayName?.trim() || props.folder.name}
+          </span>
         </span>
       </div>
       {open &&

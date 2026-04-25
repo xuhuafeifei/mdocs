@@ -402,6 +402,24 @@
   letter-spacing: 0.2px;
 }
 
+.mdocs-welcome-lead {
+  max-width: 360px;
+  text-align: center;
+  line-height: 1.45;
+}
+
+.mdocs-welcome-domain {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.mdocs-welcome-domain-label {
+  font-size: 13px;
+}
+
 .mdocs-welcome-actions {
   display: flex;
   gap: 10px;

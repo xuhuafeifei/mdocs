@@ -4,7 +4,7 @@ export interface DocumentRow {
   document_id: string;
   domain_id: string;
   relative_path: string;
-  title: string;
+  display_name: string;
   owner_visitor_id: string;
   created_by: string;
   updated_by: string;
@@ -17,7 +17,7 @@ export interface InsertDocumentInput {
   documentId: string;
   domainId: string;
   relativePath: string;
-  title: string;
+  displayName: string;
   ownerVisitorId: string;
   createdBy: string;
   updatedBy: string;
@@ -32,7 +32,7 @@ export function insertDocument(
 ): void {
   db.prepare(
     `INSERT INTO documents (
-      document_id, domain_id, relative_path, title,
+      document_id, domain_id, relative_path, display_name,
       owner_visitor_id, created_by, updated_by,
       content_hash, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -40,7 +40,7 @@ export function insertDocument(
     input.documentId,
     input.domainId,
     input.relativePath,
-    input.title,
+    input.displayName,
     input.ownerVisitorId,
     input.createdBy,
     input.updatedBy,
@@ -85,7 +85,7 @@ export function updateDocumentContent(
   db: Database.Database,
   input: {
     documentId: string;
-    title: string;
+    displayName: string;
     contentHash: string;
     updatedBy: string;
     updatedAt: string;
@@ -93,10 +93,10 @@ export function updateDocumentContent(
 ): void {
   db.prepare(
     `UPDATE documents
-        SET title = ?, content_hash = ?, updated_by = ?, updated_at = ?
+        SET display_name = ?, content_hash = ?, updated_by = ?, updated_at = ?
       WHERE document_id = ?`,
   ).run(
-    input.title,
+    input.displayName,
     input.contentHash,
     input.updatedBy,
     input.updatedAt,

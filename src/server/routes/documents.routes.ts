@@ -27,7 +27,7 @@ export function buildDocumentsRouter(): Router {
     }
     const body = (req.body ?? {}) as {
       relativePath?: unknown;
-      title?: unknown;
+      displayName?: unknown;
       content?: unknown;
       domainId?: unknown;
     };
@@ -39,7 +39,7 @@ export function buildDocumentsRouter(): Router {
       const doc = createDocument({
         actorVisitorId: req.visitor.visitor_id,
         relativePath: body.relativePath,
-        title: typeof body.title === "string" ? body.title : undefined,
+        displayName: typeof body.displayName === "string" ? body.displayName : undefined,
         content: body.content,
         domainId: typeof body.domainId === "string" ? body.domainId : undefined,
       });
@@ -68,7 +68,7 @@ export function buildDocumentsRouter(): Router {
       res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
       return;
     }
-    const body = (req.body ?? {}) as { content?: unknown; title?: unknown };
+    const body = (req.body ?? {}) as { content?: unknown; displayName?: unknown };
     if (typeof body.content !== "string") {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "content is required" } });
       return;
@@ -83,7 +83,7 @@ export function buildDocumentsRouter(): Router {
         actorVisitorId: req.visitor.visitor_id,
         documentId,
         content: body.content,
-        title: typeof body.title === "string" ? body.title : undefined,
+        displayName: typeof body.displayName === "string" ? body.displayName : undefined,
       });
       res.json({ data: doc });
     } catch (err) {

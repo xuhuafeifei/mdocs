@@ -20,6 +20,9 @@ import type {
   DocumentDetail,
   DocumentSummary,
 } from "../../shared/types/document.js";
+import { DocPathError } from "../../shared/docPath.js";
+import { normaliseRelativePathForStorage } from "../../shared/storagePath.js";
+import { prefixPersonalDomainStoragePath } from "../../shared/personalDomain.js";
 import { getConfig } from "../config/index.js";
 
 export class DocumentError extends Error {
@@ -42,13 +45,30 @@ export function listDocuments(domainId?: string): DocumentSummary[] {
 export function createDocument(params: {
   actorVisitorId: string;
   relativePath: string;
-  title?: string;
+  displayName?: string;
   content: string;
   domainId?: string;
 }): DocumentDetail {
   const cfg = getConfig();
   const domainId = params.domainId?.trim() || cfg.defaultDomainId;
-  const relativePath = normaliseDocRelativePath(params.relativePath);
+
+  if (domainId !== cfg.defaultDomainId && domainId !== params.actorVisitorId) {
+    throw new DocumentError("FORBIDDEN", "cannot create documents in this domain", 403);
+  }
+
+  let pathFromUser: string;
+  try {
+    pathFromUser = normaliseRelativePathForStorage(params.relativePath);
+  } catch (e) {
+    if (e instanceof DocPathError) {
+      throw new DocumentError("INVALID_PATH", e.message, 400);
+    }
+    throw e;
+  }
+  const relativePath =
+    domainId === params.actorVisitorId
+      ? normaliseDocRelativePath(prefixPersonalDomainStoragePath(params.actorVisitorId, pathFromUser))
+      : normaliseDocRelativePath(pathFromUser);
   const db = getDb();
 
   const existing = findDocumentByPath(db, relativePath);
@@ -56,7 +76,7 @@ export function createDocument(params: {
     throw new DocumentError("DOC_EXISTS", "document already exists", 409);
   }
 
-  const title = deriveTitle(params.title, relativePath);
+  const displayName = deriveDisplayName(params.displayName, relativePath);
   const documentId = randomUUID();
   const now = new Date().toISOString();
 
@@ -67,7 +87,7 @@ export function createDocument(params: {
       documentId,
       domainId,
       relativePath,
-      title,
+      displayName,
       ownerVisitorId: params.actorVisitorId,
       createdBy: params.actorVisitorId,
       updatedBy: params.actorVisitorId,
@@ -90,7 +110,7 @@ export function createDocument(params: {
     documentId,
     domainId,
     relativePath,
-    title,
+    displayName,
     ownerVisitorId: params.actorVisitorId,
     updatedBy: params.actorVisitorId,
     updatedAt: now,
@@ -115,7 +135,7 @@ export function updateDocument(params: {
   actorVisitorId: string;
   documentId: string;
   content: string;
-  title?: string;
+  displayName?: string;
 }): DocumentDetail {
   const db = getDb();
   const row = findDocumentById(db, params.documentId);
@@ -124,14 +144,14 @@ export function updateDocument(params: {
     throw new DocumentError("FORBIDDEN", "only the owner can edit this document", 403);
   }
 
-  const title = params.title?.trim() || row.title;
+  const displayName = params.displayName?.trim() || row.display_name;
   const write = writeDocument(row.relative_path, params.content);
   const now = new Date().toISOString();
 
   const tx = db.transaction(() => {
     updateDocumentContent(db, {
       documentId: row.document_id,
-      title,
+      displayName,
       contentHash: write.contentHash,
       updatedBy: params.actorVisitorId,
       updatedAt: now,
@@ -151,7 +171,7 @@ export function updateDocument(params: {
     documentId: row.document_id,
     domainId: row.domain_id,
     relativePath: row.relative_path,
-    title,
+    displayName,
     ownerVisitorId: row.owner_visitor_id,
     updatedBy: params.actorVisitorId,
     updatedAt: now,
@@ -192,7 +212,7 @@ function rowToSummary(row: DocumentRow): DocumentSummary {
     documentId: row.document_id,
     domainId: row.domain_id,
     relativePath: row.relative_path,
-    title: row.title,
+    displayName: row.display_name,
     ownerVisitorId: row.owner_visitor_id,
     updatedBy: row.updated_by,
     updatedAt: row.updated_at,
@@ -200,7 +220,7 @@ function rowToSummary(row: DocumentRow): DocumentSummary {
   };
 }
 
-function deriveTitle(raw: string | undefined, relativePath: string): string {
+function deriveDisplayName(raw: string | undefined, relativePath: string): string {
   const t = raw?.trim();
   if (t) return t.slice(0, 200);
   const base = relativePath.split("/").pop() ?? relativePath;

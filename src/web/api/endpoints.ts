@@ -35,7 +35,7 @@ export function getDocumentApi(documentId: string): Promise<DocumentDetail> {
 
 export function createDocumentApi(input: {
   relativePath: string;
-  title?: string;
+  displayName?: string;
   content: string;
   domainId?: string;
 }): Promise<DocumentDetail> {
@@ -47,7 +47,7 @@ export function createDocumentApi(input: {
 
 export function updateDocumentApi(
   documentId: string,
-  input: { content: string; title?: string },
+  input: { content: string; displayName?: string },
 ): Promise<DocumentDetail> {
   return api<DocumentDetail>(`/api/documents/${encodeURIComponent(documentId)}`, {
     method: "PUT",
