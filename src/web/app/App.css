@@ -374,6 +374,18 @@
   -webkit-user-select: none;
   user-select: none;
 }
+/* 流程图预览行末：零宽可编辑槽，系统文本光标在此闪烁（在 HUD 左侧） */
+.vditor-wysiwyg__block:has(> .vditor-wysiwyg__pre > code:is(.language-meta2, .language-meta))
+  > .vditor-wysiwyg__preview
+  > .mdocs-meta2-caret-anchor {
+  display: inline-block;
+  min-width: 1px;
+  min-height: calc(1em + 2px);
+  vertical-align: text-bottom;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
 /* 删块瞬间孤儿 HUD 可能挂到 p/正文中，先压掉；仅「preview 的直子」在下一选择器里放开 */
 .mdocs-vditor-host .mdocs-diagram-hud {
   display: none !important;

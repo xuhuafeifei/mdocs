@@ -1,4 +1,4 @@
-import { BLOCK_SELECTOR, META2_SOURCE_SELECTOR } from "./diagramUtils";
+import { BLOCK_SELECTOR, META2_SOURCE_SELECTOR, ensureMeta2CaretAnchor } from "./diagramUtils";
 
 export const HUD_CLASS = "mdocs-diagram-hud";
 
@@ -37,13 +37,13 @@ export function sweepOrphanMdocsHuds(container: Element): void {
  * 不缓存 block：点击时从 DOM 解析当前 .vditor-wysiwyg__block，避免删块/重排后闭包还是旧节点。
  */
 export function syncDiagramHud(viewPre: HTMLElement, isLocked: boolean): void {
+  viewPre.style.position = "relative";
+  removeDiagramHud(viewPre);
+  ensureMeta2CaretAnchor(viewPre);
   if (isLocked) {
-    removeDiagramHud(viewPre);
     return;
   }
 
-  viewPre.style.position = "relative";
-  removeDiagramHud(viewPre);
   const hud = document.createElement("div");
   hud.className = HUD_CLASS;
   hud.setAttribute("contenteditable", "false");

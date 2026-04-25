@@ -5,7 +5,13 @@
 import { useEffect, useCallback } from "react";
 import { useDiagramRenderer } from "./useDiagramRenderer";
 import { useBlockActions } from "./useBlockActions";
-import { identifyChartBlock, isNodeInsideMeta2Preview, showPreviewView } from "./diagramUtils";
+import {
+  identifyChartBlock,
+  isNodeInsideMeta2Preview,
+  showPreviewView,
+  focusCaretAtEndOfMeta2Block,
+  META2_CARET_ANCHOR_CLASS,
+} from "./diagramUtils";
 import { MDOCS_DIAGRAM_HUD_EVENT, type MdocsDiagramHudDetail } from "./diagramHud";
 
 export function useDiagramPreview(
@@ -76,10 +82,37 @@ export function useDiagramPreview(
   );
 
   // Click: keep showing preview, but do not capture clicks meant for the corner HUD (otherwise buttons never receive them).
+  const handleCaretAnchorInput = useCallback(
+    (e: Event) => {
+      const t = e.target;
+      if (!(t instanceof Node)) return;
+      const el = t instanceof Element ? t : t.parentElement;
+      const a = el?.closest(`.${META2_CARET_ANCHOR_CLASS}`);
+      const root = editorRootRef.current;
+      if (!a || !root?.contains(a)) return;
+      if (!a.textContent?.length) {
+        (a as HTMLElement).textContent = "\u200b";
+        const sel = window.getSelection();
+        const tn = a.firstChild;
+        if (sel && tn?.nodeType === Node.TEXT_NODE) {
+          const r = document.createRange();
+          r.setStart(tn, tn.textContent?.length ?? 1);
+          r.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
+      }
+    },
+    [editorRootRef],
+  );
+
   const handleClick = useCallback(
     (e: MouseEvent) => {
       if (e.target instanceof Element) {
         const t = e.target;
+        if (t.closest(`.${META2_CARET_ANCHOR_CLASS}`)) {
+          return;
+        }
         if (
           t.closest("button, .mdocs-diagram-hud, [data-mdocs-hud]") ||
           t.closest(".vditor-copy")
@@ -98,6 +131,9 @@ export function useDiagramPreview(
       e.preventDefault();
       e.stopPropagation();
       showPreviewView(block);
+      queueMicrotask(() => {
+        focusCaretAtEndOfMeta2Block(block);
+      });
     },
     [editorRootRef],
   );
@@ -133,14 +169,16 @@ export function useDiagramPreview(
 
     container.addEventListener("click", handleClick, true);
     container.addEventListener("keydown", handleKeyDownCapture, true);
+    container.addEventListener("input", handleCaretAnchorInput, true);
 
     return () => {
       container.removeEventListener(MDOCS_DIAGRAM_HUD_EVENT, onHud);
       observer.disconnect();
       container.removeEventListener("click", handleClick, true);
       container.removeEventListener("keydown", handleKeyDownCapture, true);
+      container.removeEventListener("input", handleCaretAnchorInput, true);
     };
-  }, [editorRootRef, queueRefresh, handleClick, handleKeyDownCapture, onEdit, onDelete]);
+  }, [editorRootRef, queueRefresh, handleClick, handleKeyDownCapture, handleCaretAnchorInput, onEdit, onDelete]);
 }
 
 export const useFlowRenderer = useDiagramPreview;

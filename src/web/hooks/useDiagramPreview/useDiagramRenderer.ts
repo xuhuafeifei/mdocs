@@ -3,6 +3,7 @@ import {
   META2_PREVIEW_SELECTOR,
   META2_SOURCE_SELECTOR,
   parseDiagramPayload,
+  removeMeta2CaretAnchors,
   sealMeta2PreviewCode,
 } from "./diagramUtils";
 import { removeDiagramHud, sweepOrphanMdocsHuds, syncDiagramHud } from "./diagramHud";
@@ -34,7 +35,10 @@ export function useDiagramRenderer(
       const raw = s.textContent?.trim() ?? "";
 
       if (!raw) {
-        if (w) removeDiagramHud(w);
+        if (w) {
+          removeDiagramHud(w);
+          removeMeta2CaretAnchors(w);
+        }
         if (p.innerHTML || p.getAttribute("data-rendered") === "true") {
           releasePreviewResources(p);
           p.removeAttribute("data-rendered");
@@ -54,7 +58,10 @@ export function useDiagramRenderer(
 
       const pr = parseDiagramPayload(raw);
       if (!pr.success) {
-        if (w) removeDiagramHud(w);
+        if (w) {
+          removeDiagramHud(w);
+          removeMeta2CaretAnchors(w);
+        }
         releasePreviewResources(p);
         p.removeAttribute("data-rendered");
         delete p.dataset.chartHash;
@@ -92,7 +99,10 @@ export function useDiagramRenderer(
 
         releasePreviewResources(p2);
         const vw = b.querySelector<HTMLElement>(".vditor-wysiwyg__preview");
-        if (vw) removeDiagramHud(vw);
+        if (vw) {
+          removeDiagramHud(vw);
+          removeMeta2CaretAnchors(vw);
+        }
         p2.textContent = "Diagram preview failed";
         sealMeta2PreviewCode(p2);
         mark();

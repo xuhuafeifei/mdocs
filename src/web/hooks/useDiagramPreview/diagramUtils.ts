@@ -10,8 +10,12 @@ export const META2_PREVIEW_SELECTOR =
   ".vditor-wysiwyg__preview code.language-meta2, .vditor-wysiwyg__preview code.language-meta";
 export const BLOCK_SELECTOR = ".vditor-wysiwyg__block";
 
+/** Editable ZWSP slot at end of diagram preview so a real blinking caret can sit after the SVG. */
+export const META2_CARET_ANCHOR_CLASS = "mdocs-meta2-caret-anchor";
+
 /**
  * 预览区是「展示用」，不应让光标/Delete 改到 DOM；否则 Lute 重绘、HUD 会错位成「脱落」.
+ * 末尾 `META2_CARET_ANCHOR_CLASS` 为刻意可编辑占位，不拦截键盘。
  */
 export function isNodeInsideMeta2Preview(node: Node | null, container: Element): boolean {
   if (!node) {
@@ -19,6 +23,9 @@ export function isNodeInsideMeta2Preview(node: Node | null, container: Element):
   }
   const el = node instanceof Element ? node : node.parentElement;
   if (!el || !container.contains(el)) {
+    return false;
+  }
+  if (el.closest(`.${META2_CARET_ANCHOR_CLASS}`)) {
     return false;
   }
   const previewRoot = el.closest(".vditor-wysiwyg__preview");
@@ -110,6 +117,70 @@ export function showPreviewView(block: Element): void {
   }
   if (viewNode) {
     viewNode.style.removeProperty("display");
+  }
+}
+
+/**
+ * 在预览列末尾（HUD 前）插入可编辑占位，承载真实文本光标闪烁。
+ */
+export function ensureMeta2CaretAnchor(preview: HTMLElement): HTMLElement {
+  let el = preview.querySelector(`:scope > .${META2_CARET_ANCHOR_CLASS}`) as HTMLElement | null;
+  if (!el) {
+    el = document.createElement("span");
+    el.className = META2_CARET_ANCHOR_CLASS;
+    el.setAttribute("contenteditable", "true");
+    el.setAttribute("spellcheck", "false");
+    el.setAttribute("translate", "no");
+    el.setAttribute("data-mdocs-meta2-caret", "1");
+    el.appendChild(document.createTextNode("\u200b"));
+  }
+  const hud = preview.querySelector(":scope > .mdocs-diagram-hud");
+  if (hud) {
+    preview.insertBefore(el, hud);
+  } else {
+    preview.appendChild(el);
+  }
+  return el;
+}
+
+export function removeMeta2CaretAnchors(preview: Element): void {
+  preview.querySelectorAll(`.${META2_CARET_ANCHOR_CLASS}`).forEach((n) => n.remove());
+}
+
+/**
+ * After intercepting meta2 block clicks (preventDefault), focus the trailing caret anchor (blinking cursor).
+ */
+export function focusCaretAtEndOfMeta2Block(block: Element): void {
+  const wysiwyg = block.closest(".vditor-wysiwyg") as HTMLElement | null;
+  const preview = block.querySelector(".vditor-wysiwyg__preview") as HTMLElement | null;
+  if (!wysiwyg || !preview) return;
+
+  const anchor = ensureMeta2CaretAnchor(preview);
+  wysiwyg.focus();
+  const sel = window.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+  try {
+    const tn = anchor.firstChild;
+    if (tn && tn.nodeType === Node.TEXT_NODE && tn.textContent && tn.textContent.length > 0) {
+      const len = tn.textContent.length;
+      range.setStart(tn, len);
+      range.collapse(true);
+    } else {
+      range.selectNodeContents(anchor);
+      range.collapse(false);
+    }
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch {
+    try {
+      range.selectNodeContents(anchor);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch {
+      // ignore
+    }
   }
 }
 
