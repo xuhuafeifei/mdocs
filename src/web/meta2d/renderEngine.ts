@@ -95,14 +95,22 @@ function computeBoundsWithPadding(
 ): { x: number; y: number; width: number; height: number } | null {
   try {
     const bounds = engine.getRect();
-    if (!bounds || !isFinite(bounds.width) || !isFinite(bounds.height)) {
+    const w = bounds?.width;
+    const h = bounds?.height;
+    if (
+      bounds == null ||
+      typeof w !== "number" ||
+      typeof h !== "number" ||
+      !Number.isFinite(w) ||
+      !Number.isFinite(h)
+    ) {
       return null;
     }
     return {
-      x: bounds.x - PREVIEW_PADDING,
-      y: bounds.y - PREVIEW_PADDING,
-      width: Math.ceil(bounds.width + PREVIEW_PADDING * 2),
-      height: Math.ceil(bounds.height + PREVIEW_PADDING * 2),
+      x: (bounds.x ?? 0) - PREVIEW_PADDING,
+      y: (bounds.y ?? 0) - PREVIEW_PADDING,
+      width: Math.ceil(w + PREVIEW_PADDING * 2),
+      height: Math.ceil(h + PREVIEW_PADDING * 2),
     };
   } catch {
     return null;
