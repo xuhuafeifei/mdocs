@@ -355,7 +355,6 @@
   background: #f1f1ee;
 }
 
-/* meta2 / meta blocks: same UX as markdown-docs (preview only, edit via overlay / dblclick). */
 .vditor-wysiwyg__block:has(> .vditor-wysiwyg__pre > code:is(.language-meta2, .language-meta))
   > .vditor-wysiwyg__pre {
   display: none !important;

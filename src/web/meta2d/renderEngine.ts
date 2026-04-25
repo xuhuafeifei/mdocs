@@ -1,23 +1,49 @@
 import { Meta2d } from "@meta2d/core";
-import { initializeShapeLibrary } from "../diagram/registerPens";
+import { ensureMeta2Shapes } from "./shapeRegistry";
 import { fixEllipseRendering, fixDashPatternSupport } from "./canvasPatches";
 
 fixEllipseRendering();
 fixDashPatternSupport();
 
-export function makeHiddenViewport(width: number, height: number): HTMLDivElement {
+let sharedHost: HTMLDivElement | null = null;
+let sharedMeta2d: Meta2d | null = null;
+
+function getSharedHost(): HTMLDivElement {
+  if (sharedHost && sharedHost.isConnected) return sharedHost;
   const el = document.createElement("div");
   el.style.cssText = [
     "position: fixed",
     "left: -20000px",
-    "top: 0",
-    `width: ${width}px`,
-    `height: ${height}px`,
+    "top: -20000px",
+    "width: 1200px",
+    "height: 800px",
+    "opacity: 0",
     "pointer-events: none",
     "z-index: -1",
   ].join(";");
   document.body.appendChild(el);
+  sharedHost = el;
   return el;
+}
+
+function getSharedMeta2d(): Meta2d {
+  const host = getSharedHost();
+  if (sharedMeta2d) return sharedMeta2d;
+  ensureMeta2Shapes();
+  sharedMeta2d = new Meta2d(host, {
+    background: "#ffffff",
+    grid: false,
+    rule: false,
+  });
+  return sharedMeta2d;
+}
+
+function safeReset(meta2d: Meta2d): void {
+  try {
+    meta2d.open({ pens: [] } as any);
+  } catch {
+    // ignore
+  }
 }
 
 export function renderVectorGraphic(
@@ -31,30 +57,9 @@ export function renderVectorGraphic(
     return;
   }
 
-  const offscreenContainer = makeHiddenViewport(1200, 800);
-
-  if (!(window as any)._shapesReady) {
-    initializeShapeLibrary();
-    (window as any)._shapesReady = true;
-  }
-
-  const meta2d = new Meta2d(offscreenContainer, {
-    background: "#ffffff",
-    grid: false,
-    rule: false,
-  });
-
-  const data = JSON.parse(flowJsonStr);
-  meta2d.open(data);
-
-  const cleanup = () => {
-    setTimeout(() => {
-      meta2d.destroy?.();
-      if (offscreenContainer.parentNode) {
-        offscreenContainer.parentNode.removeChild(offscreenContainer);
-      }
-    }, 100);
-  };
+  const meta2d = getSharedMeta2d();
+  safeReset(meta2d);
+  meta2d.open(JSON.parse(flowJsonStr));
 
   meta2d.render(true);
 
@@ -70,20 +75,20 @@ export function renderVectorGraphic(
         const ctx: any = new C2S(width, height);
         ctx.textBaseline = "middle";
 
-        let _fontRaw = ctx.font;
+        let fontRaw = ctx.font;
         Object.defineProperty(ctx, "font", {
           get() {
-            return _fontRaw;
+            return fontRaw;
           },
           set(v: string) {
-            _fontRaw =
+            fontRaw =
               typeof v === "string"
                 ? v.replace(
                     /(\d+(?:\.\d+)?(?:px|pt|pc|em|ex|%|in|cm|mm))\s*\/\s*(\d+(?:\.\d+)?)(?=\s|$)/,
                     "$1/normal",
                   )
                 : v;
-            if (this.__ctx) this.__ctx.font = _fontRaw;
+            if (this.__ctx) this.__ctx.font = fontRaw;
           },
         });
 
@@ -94,29 +99,22 @@ export function renderVectorGraphic(
           (meta2d as any).renderPenRaw(ctx, pen, rect);
         }
 
+        const background = store.data.background as string | undefined;
         let svg: string = ctx.getSerializedSvg();
-
-        const background = store.data.background;
-        if (background) {
-          svg = svg.replace("{{bk}}", "");
-          svg = svg.replace(
-            "{{bkRect}}",
-            `<rect x="0" y="0" width="100%" height="100%" fill="${background}"></rect>`,
-          );
-        } else {
-          svg = svg.replace("{{bk}}", "");
-          svg = svg.replace("{{bkRect}}", "");
-        }
-
+        svg = svg.replace("{{bk}}", "");
+        svg = svg.replace(
+          "{{bkRect}}",
+          background
+            ? `<rect x="0" y="0" width="100%" height="100%" fill="${background}"></rect>`
+            : "",
+        );
         svg = svg.replace(/--le5le--/g, "&#x");
 
         const naturalWidth = Math.max(200, Math.ceil(rect.width));
         onDone(svg, naturalWidth);
-        cleanup();
       } catch (err) {
         console.error("meta2d toSvg failed:", err);
         onDone("", 400);
-        cleanup();
       }
     });
   });
@@ -126,30 +124,9 @@ export function renderRasterGraphic(
   flowJsonStr: string,
   onDone: (blob: Blob, naturalWidth: number) => void,
 ) {
-  const offscreenContainer = makeHiddenViewport(1200, 800);
-
-  if (!(window as any)._shapesReady) {
-    initializeShapeLibrary();
-    (window as any)._shapesReady = true;
-  }
-
-  const meta2d = new Meta2d(offscreenContainer, {
-    background: "#ffffff",
-    grid: false,
-    rule: false,
-  });
-
-  const data = JSON.parse(flowJsonStr);
-  meta2d.open(data);
-
-  const cleanup = () => {
-    setTimeout(() => {
-      meta2d.destroy?.();
-      if (offscreenContainer.parentNode) {
-        offscreenContainer.parentNode.removeChild(offscreenContainer);
-      }
-    }, 100);
-  };
+  const meta2d = getSharedMeta2d();
+  safeReset(meta2d);
+  meta2d.open(JSON.parse(flowJsonStr));
 
   meta2d.render(true);
 
@@ -163,7 +140,6 @@ export function renderRasterGraphic(
           20,
           (blob) => {
             onDone(blob ?? new Blob(), naturalWidth);
-            cleanup();
           },
           true,
           outputWidth,
@@ -171,7 +147,6 @@ export function renderRasterGraphic(
       } catch (err) {
         console.error("meta2d toPng failed:", err);
         onDone(new Blob(), 400);
-        cleanup();
       }
     });
   });

@@ -6,7 +6,7 @@ import {
 } from "react";
 import { Meta2d } from "@meta2d/core";
 import { DiagramPalette } from "./DiagramPalette";
-import { initializeShapeLibrary } from "../diagram/registerPens";
+import { ensureMeta2Shapes } from "../meta2d/shapeRegistry";
 
 export interface DiagramEditorHandle {
   triggerNewDiagram: () => void;
@@ -43,14 +43,7 @@ export const DiagramEditor = forwardRef<DiagramEditorHandle, DiagramEditorProps>
     useEffect(() => {
       if (!hostRef.current) return;
       const host = hostRef.current;
-      if (!window._shapesReady) {
-        try {
-          initializeShapeLibrary();
-        } catch {
-          // ignore duplicate registration on HMR
-        }
-        window._shapesReady = true;
-      }
+      ensureMeta2Shapes();
       const instance = new Meta2d(host, { grid: true, rule: false });
       meta2dRef.current = instance;
       try {
