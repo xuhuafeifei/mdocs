@@ -28,7 +28,16 @@ interface DocumentEditorProps {
   onDelete: () => Promise<void>;
 }
 
-const VDITOR_TOOLBAR_BASE = [
+/**
+ * Same order as `markdown-docs/frontend/src/hooks/useVditor.ts` `FULL_TOOLBAR`.
+ * `upload` is omitted when the user cannot edit (no owner token / read-only).
+ */
+const VDITOR_TOOLBAR_FULL: string[] = [
+  "undo",
+  "redo",
+  "table",
+  "outline",
+  "|",
   "headings",
   "bold",
   "italic",
@@ -38,11 +47,17 @@ const VDITOR_TOOLBAR_BASE = [
   "list",
   "ordered-list",
   "check",
+  "outdent",
+  "indent",
   "|",
   "quote",
   "line",
   "code",
   "inline-code",
+  "insert-before",
+  "insert-after",
+  "|",
+  "upload",
   "|",
   "edit-mode",
   "both",
@@ -50,16 +65,9 @@ const VDITOR_TOOLBAR_BASE = [
 
 const UPLOAD_MAX_BYTES = 12 * 1024 * 1024;
 
-function buildToolbar(canEdit: boolean): Array<string | { name: string }> {
-  if (!canEdit) return [...VDITOR_TOOLBAR_BASE];
-  const t: string[] = [...VDITOR_TOOLBAR_BASE];
-  const linkIdx = t.indexOf("link");
-  if (linkIdx >= 0) {
-    t.splice(linkIdx + 1, 0, "upload");
-  } else {
-    t.push("upload");
-  }
-  return t;
+function buildToolbar(canEdit: boolean): string[] {
+  if (canEdit) return [...VDITOR_TOOLBAR_FULL];
+  return VDITOR_TOOLBAR_FULL.filter((x) => x !== "upload");
 }
 
 export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorProps>(
@@ -124,6 +132,7 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
               fieldName: "file[]",
               accept: "image/*",
               multiple: true,
+              filename: (name: string) => name,
               extraData: { documentId: props.document.documentId },
               setHeaders: () => ({
                 "x-visitor-token": getStoredToken() ?? "",
@@ -134,15 +143,23 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
 
       const instance = new Vditor(host, {
         height: "100%",
+        minHeight: 360,
         mode: "wysiwyg",
         /** 不设时 `fixTab` 不生效，按 Tab 会走浏览器默认＝焦点离开编辑器，代码块内既无缩进也「像丢了编辑区」。 */
         tab: "    ",
+        typewriterMode: false,
+        outline: { enable: false, position: "left" },
         toolbar: buildToolbar(props.canEdit),
         cache: { enable: false },
-        toolbarConfig: { pin: true },
+        toolbarConfig: { pin: false },
+        counter: { enable: false },
         preview: {
+          actions: ["desktop", "tablet", "mobile"],
           markdown: {
-            /** Allow `![](http...)` and other inline HTML in trusted self-hosted editor. */
+            toc: true,
+            autoSpace: true,
+            footnotes: true,
+            /** Allow `![](http...)` in trusted self-hosted editor (markdown-docs relies on server-side hygiene). */
             sanitize: false,
           },
         },
