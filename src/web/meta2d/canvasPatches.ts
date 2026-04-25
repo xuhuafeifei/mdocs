@@ -1,86 +1,130 @@
 import "canvas2svg";
 
-function applyEllipsePatch(): void {
-  const ctor = (window as any).C2S;
-  if (!ctor?.prototype?.ellipse) {
-    ctor.prototype.ellipse = function (
-      x: number, y: number, rx: number, ry: number,
-      rotation: number, startAngle: number, endAngle: number,
-      anticlockwise?: boolean,
-    ) {
-      const TAU = Math.PI * 2;
-      let s = startAngle, e = endAngle;
-      if (!anticlockwise && e - s >= TAU) e = s + TAU;
-      else if (anticlockwise && s - e >= TAU) e = s - TAU;
-      else if (!anticlockwise && s > e) e = s + (TAU - ((s - e) % TAU));
-      else if (anticlockwise && s < e) e = s - (TAU - ((e - s) % TAU));
+const EPSILON = 1e-6;
 
-      const cos = Math.cos(rotation), sin = Math.sin(rotation);
-      const pt = (t: number): [number, number] => {
-        const cx = Math.cos(t), sy = Math.sin(t);
-        return [x + rx * cx * cos - ry * sy * sin, y + rx * cx * sin + ry * sy * cos];
-      };
+function patchEllipse(): void {
+  const Ctor = (window as any).C2S;
+  if (!Ctor?.prototype || Ctor.prototype.ellipse) return;
 
-      const [sx, syPt] = pt(s);
-      this.moveTo(sx, syPt);
+  Ctor.prototype.ellipse = function (
+    cx: number,
+    cy: number,
+    rx: number,
+    ry: number,
+    rotation: number,
+    sa: number,
+    ea: number,
+    ccw?: boolean,
+  ) {
+    const TWO_PI = Math.PI * 2;
 
-      const delta = e - s;
-      const segs = Math.max(1, Math.ceil(Math.abs(delta) / (Math.PI / 2)));
-      const step = delta / segs;
+    // normalize arc range
+    let start = sa;
+    let end = ea;
+    const span = Math.abs(end - start);
+    if (!ccw && end - start >= TWO_PI) {
+      end = start + TWO_PI;
+    } else if (ccw && start - end >= TWO_PI) {
+      end = start - TWO_PI;
+    } else if (!ccw && start > end) {
+      end = start + (TWO_PI - ((start - end) % TWO_PI));
+    } else if (ccw && start < end) {
+      end = start - (TWO_PI - ((end - start) % TWO_PI));
+    }
 
-      for (let i = 0; i < segs; i++) {
-        const t1 = s + i * step, t2 = t1 + step;
-        const alpha = (4 / 3) * Math.tan((t2 - t1) / 4);
-        const [p1x, p1y] = pt(t1), [p2x, p2y] = pt(t2);
-        const tan1x = -Math.sin(t1) * rx, tan1y = Math.cos(t1) * ry;
-        const tan2x = -Math.sin(t2) * rx, tan2y = Math.cos(t2) * ry;
-        this.bezierCurveTo(
-          p1x + alpha * (tan1x * cos - tan1y * sin),
-          p1y + alpha * (tan1x * sin + tan1y * cos),
-          p2x - alpha * (tan2x * cos - tan2y * sin),
-          p2y - alpha * (tan2x * sin + tan2y * cos),
-          p2x, p2y,
-        );
-      }
+    const c = Math.cos(rotation);
+    const s = Math.sin(rotation);
+
+    const map = (t: number): [number, number] => {
+      const u = Math.cos(t);
+      const v = Math.sin(t);
+      const px = rx * u;
+      const py = ry * v;
+      return [cx + px * c - py * s, cy + px * s + py * c];
     };
-  }
+
+    const [sx, sy] = map(start);
+    this.moveTo(sx, sy);
+
+    const sweep = end - start;
+    const pieces = Math.max(1, Math.ceil(Math.abs(sweep) / (Math.PI / 2)));
+    const piece = sweep / pieces;
+
+    for (let i = 0; i < pieces; i++) {
+      const a1 = start + i * piece;
+      const a2 = a1 + piece;
+      const k = (4 / 3) * Math.tan((a2 - a1) / 4);
+
+      const [x1, y1] = map(a1);
+      const [x2, y2] = map(a2);
+
+      const tx1 = -Math.sin(a1) * rx;
+      const ty1 = Math.cos(a1) * ry;
+      const tx2 = -Math.sin(a2) * rx;
+      const ty2 = Math.cos(a2) * ry;
+
+      this.bezierCurveTo(
+        x1 + k * (tx1 * c - ty1 * s),
+        y1 + k * (tx1 * s + ty1 * c),
+        x2 - k * (tx2 * c - ty2 * s),
+        y2 - k * (tx2 * s + ty2 * c),
+        x2,
+        y2,
+      );
+    }
+  };
 }
 
-function applyDashPatch(): void {
-  const ctor = (window as any).C2S;
-  if (!ctor?.prototype?.setLineDash) {
-    ctor.prototype.setLineDash = function (s: number[] | undefined) {
-      this.lineDash = Array.isArray(s) && s.length ? s : [];
-    };
-    ctor.prototype.getLineDash = function (): number[] {
-      return Array.isArray(this.lineDash) ? [...this.lineDash] : [];
-    };
-    Object.defineProperty(ctor.prototype, "lineDashOffset", {
-      get() { return this._lineDashOffset ?? 0; },
-      set(v: number) { this._lineDashOffset = Number(v) || 0; },
+function patchLineDash(): void {
+  const Ctor = (window as any).C2S;
+  if (!Ctor?.prototype || Ctor.prototype.setLineDash) return;
+
+  Ctor.prototype.setLineDash = function (segments?: number[]) {
+    this.__dashPattern =
+      Array.isArray(segments) && segments.length > 0 ? segments : [];
+  };
+
+  Ctor.prototype.getLineDash = function (): number[] {
+    return Array.isArray(this.__dashPattern) ? [...this.__dashPattern] : [];
+  };
+
+  if (!Object.prototype.hasOwnProperty.call(Ctor.prototype, "lineDashOffset")) {
+    Object.defineProperty(Ctor.prototype, "lineDashOffset", {
+      get() {
+        return this.__dashOffset ?? 0;
+      },
+      set(v: number) {
+        this.__dashOffset = Number(v) || 0;
+      },
       configurable: true,
     });
-    const orig = ctor.prototype.__applyStyleToCurrentElement;
-    if (typeof orig === "function") {
-      ctor.prototype.__applyStyleToCurrentElement = function (type: string) {
-        orig.call(this, type);
-        const el = this.__currentElement;
-        if (type !== "stroke" || !el?.setAttribute) return;
-        const dash: number[] = this.lineDash;
-        if (dash?.length) {
-          el.setAttribute("stroke-dasharray", dash.join(" "));
-          if (this._lineDashOffset) el.setAttribute("stroke-dashoffset", String(this._lineDashOffset));
-          else el.removeAttribute("stroke-dashoffset");
-        } else {
-          el.removeAttribute("stroke-dasharray");
-          el.removeAttribute("stroke-dashoffset");
-        }
-      };
-    }
   }
+
+  const baseApply = Ctor.prototype.__applyStyleToCurrentElement;
+  if (typeof baseApply !== "function") return;
+
+  Ctor.prototype.__applyStyleToCurrentElement = function (kind: string) {
+    baseApply.call(this, kind);
+    const node = this.__currentElement;
+    if (kind !== "stroke" || !node?.setAttribute) return;
+
+    const pattern: number[] = this.__dashPattern;
+    if (pattern && pattern.length > 0) {
+      node.setAttribute("stroke-dasharray", pattern.join(" "));
+      const off = this.__dashOffset ?? 0;
+      if (Math.abs(off) > EPSILON) {
+        node.setAttribute("stroke-dashoffset", String(off));
+      } else {
+        node.removeAttribute("stroke-dashoffset");
+      }
+    } else {
+      node.removeAttribute("stroke-dasharray");
+      node.removeAttribute("stroke-dashoffset");
+    }
+  };
 }
 
 export function installCanvasPatches(): void {
-  applyEllipsePatch();
-  applyDashPatch();
+  patchEllipse();
+  patchLineDash();
 }
