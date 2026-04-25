@@ -17,6 +17,15 @@ import { FlowDiagramModal } from "./FlowDiagramModal";
 /** Same fence as markdown-docs (`EditorPanel` / `useFlowRenderer`). */
 const FLOW_OPEN_FENCE = /^\s*```(meta2|meta)\b/;
 
+/** Shown only in the editor surface for non-owners; not persisted (Save is disabled). */
+const READ_ONLY_MD_PREFIX = "> 您无权限编辑\n\n";
+
+function withReadOnlyNotice(content: string, canEdit: boolean): string {
+  if (canEdit) return content;
+  if (content.startsWith(READ_ONLY_MD_PREFIX)) return content;
+  return READ_ONLY_MD_PREFIX + content;
+}
+
 export interface DocumentEditorHandle {
   openInsertFlowEditor: () => void;
 }
@@ -164,16 +173,13 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
           },
         },
         ...uploadOpts,
-        value: props.document.content,
+        value: withReadOnlyNotice(props.document.content, props.canEdit),
         after: () => {
           readyRef.current = true;
           window.vditorInstance = instance;
           if (pendingValueRef.current !== null) {
             instance.setValue(pendingValueRef.current);
             pendingValueRef.current = null;
-          }
-          if (!props.canEdit) {
-            instance.disabled();
           }
         },
       });
@@ -197,22 +203,13 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
       setTitle(props.document.title);
       const v = vditorRef.current;
       if (!v) return;
+      const display = withReadOnlyNotice(props.document.content, props.canEdit);
       if (readyRef.current) {
-        v.setValue(props.document.content);
+        v.setValue(display);
       } else {
-        pendingValueRef.current = props.document.content;
+        pendingValueRef.current = display;
       }
-    }, [props.document.documentId, props.document.content, props.document.title]);
-
-    useEffect(() => {
-      const v = vditorRef.current;
-      if (!v || !readyRef.current) return;
-      if (props.canEdit) {
-        v.enable();
-      } else {
-        v.disabled();
-      }
-    }, [props.canEdit]);
+    }, [props.document.documentId, props.document.content, props.document.title, props.canEdit]);
 
     const handleFlowSave = useCallback(
       (flowData: unknown) => {
