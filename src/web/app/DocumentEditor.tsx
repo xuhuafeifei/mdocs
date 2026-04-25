@@ -9,15 +9,13 @@ import {
 import Vditor from "vditor";
 import "vditor/dist/index.css";
 import type { DocumentDetail } from "../../shared/types/document";
-import { useFlowRenderer } from "../hooks/useFlowRenderer";
-import { FlowDiagramModal } from "./FlowDiagramModal";
+import { useDiagramPreview } from "../hooks/useDiagramPreview";
+import { DiagramModal } from "./FlowDiagramModal";
 
-/** Same fence as markdown-docs (`EditorPanel` / `useFlowRenderer`). */
-const FLOW_OPEN_FENCE = /^\s*```(meta2|meta)\b/;
+const DIAGRAM_BLOCK_START = /^\s*```(meta2|meta)\b/;
 
 export interface DocumentEditorHandle {
-  /** Opens the flow editor for a new ` ```meta2 ` block (toolbar / parent). */
-  openInsertFlowEditor: () => void;
+  triggerNewDiagram: () => void;
 }
 
 interface DocumentEditorProps {
@@ -47,6 +45,38 @@ const VDITOR_TOOLBAR = [
   "both",
 ];
 
+function insertDiagramBlock(editor: Vditor, data: unknown): void {
+  const lines = ["", "```meta2", JSON.stringify(data), "```", ""];
+  const block = lines.join("\n");
+  const current = editor.getValue();
+  const next = current.endsWith("\n") ? current + block : `${current}\n${block}`;
+  editor.setValue(next);
+}
+
+function updateDiagramBlock(
+  editor: Vditor,
+  data: unknown,
+  priorData: unknown,
+  lineNo: number,
+): void {
+  const currentContent = editor.getValue();
+  const lines = currentContent.split("\n");
+  if (
+    lineNo >= 0 &&
+    lineNo < lines.length &&
+    DIAGRAM_BLOCK_START.test(lines[lineNo - 1] ?? "") &&
+    lines[lineNo + 1]?.includes("```")
+  ) {
+    lines[lineNo] = JSON.stringify(data);
+    editor.setValue(lines.join("\n"));
+  } else {
+    const oldStr = JSON.stringify(priorData);
+    const newStr = JSON.stringify(data);
+    const pattern = new RegExp(oldStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
+    editor.setValue(currentContent.replace(pattern, newStr));
+  }
+}
+
 export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorProps>(
   function DocumentEditor(props, ref) {
     const [title, setTitle] = useState(props.document.title);
@@ -57,23 +87,22 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
     const readyRef = useRef(false);
     const pendingValueRef = useRef<string | null>(null);
 
-    const [flowModalOpen, setFlowModalOpen] = useState(false);
-    const [editingFlowData, setEditingFlowData] = useState<unknown | null>(null);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editingChart, setEditingChart] = useState<unknown | null>(null);
     const [editingLineNumber, setEditingLineNumber] = useState(-1);
-    /** Always matches latest modal context so Save never reads stale closure. */
-    const flowEditCtxRef = useRef<{ data: unknown | null; line: number }>({
+    const chartEditCtxRef = useRef<{ data: unknown | null; line: number }>({
       data: null,
       line: -1,
     });
-    flowEditCtxRef.current = { data: editingFlowData, line: editingLineNumber };
+    chartEditCtxRef.current = { data: editingChart, line: editingLineNumber };
 
     const handleEditFlow = useCallback((lineNumber: number, flowData: unknown) => {
       setEditingLineNumber(lineNumber);
-      setEditingFlowData(flowData);
-      setFlowModalOpen(true);
+      setEditingChart(flowData);
+      setModalOpen(true);
     }, []);
 
-    useFlowRenderer(hostRef, handleEditFlow, !props.canEdit);
+    useDiagramPreview(hostRef, handleEditFlow, !props.canEdit);
 
     useEffect(() => {
       if (!hostRef.current) return;
@@ -90,7 +119,7 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
         value: props.document.content,
         after: () => {
           readyRef.current = true;
-          window.vditorInstance = instance;
+          window.activeEditor = instance;
           if (pendingValueRef.current !== null) {
             instance.setValue(pendingValueRef.current);
             pendingValueRef.current = null;
@@ -104,8 +133,8 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
 
       return () => {
         readyRef.current = false;
-        if (window.vditorInstance === instance) {
-          window.vditorInstance = undefined;
+        if (window.activeEditor === instance) {
+          window.activeEditor = undefined;
         }
         try {
           instance.destroy();
@@ -140,56 +169,39 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
     const handleFlowSave = useCallback(
       (flowData: unknown) => {
         if (!props.canEdit) {
-          setFlowModalOpen(false);
+          setModalOpen(false);
           return;
         }
-        setFlowModalOpen(false);
+        setModalOpen(false);
         const v = vditorRef.current;
         if (!v) return;
 
-        const { data: priorData, line: lineNo } = flowEditCtxRef.current;
+        const { data: priorData, line: lineNo } = chartEditCtxRef.current;
 
         if (!priorData) {
-          const block = `\n\n\`\`\`meta2\n${JSON.stringify(flowData)}\n\`\`\`\n\n`;
-          const current = v.getValue();
-          const next = current.endsWith("\n") ? current + block : `${current}\n${block}`;
-          v.setValue(next);
+          insertDiagramBlock(v, flowData);
         } else {
-          const currentContent = v.getValue();
-          const lines = currentContent.split("\n");
-          if (
-            lineNo >= 0 &&
-            lineNo < lines.length &&
-            FLOW_OPEN_FENCE.test(lines[lineNo - 1] ?? "") &&
-            lines[lineNo + 1]?.includes("```")
-          ) {
-            lines[lineNo] = JSON.stringify(flowData);
-            v.setValue(lines.join("\n"));
-          } else {
-            const oldStr = JSON.stringify(priorData);
-            const newStr = JSON.stringify(flowData);
-            v.setValue(currentContent.replace(oldStr, newStr));
-          }
+          updateDiagramBlock(v, flowData, priorData, lineNo);
         }
-        setEditingFlowData(null);
+        setEditingChart(null);
         setEditingLineNumber(-1);
       },
       [props.canEdit],
     );
 
     const handleFlowCancel = useCallback(() => {
-      setFlowModalOpen(false);
-      setEditingFlowData(null);
+      setModalOpen(false);
+      setEditingChart(null);
       setEditingLineNumber(-1);
     }, []);
 
     useImperativeHandle(
       ref,
       () => ({
-        openInsertFlowEditor() {
-          setEditingFlowData(null);
+        triggerNewDiagram() {
+          setEditingChart(null);
           setEditingLineNumber(-1);
-          setFlowModalOpen(true);
+          setModalOpen(true);
         },
       }),
       [],
@@ -222,9 +234,9 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
             type="button"
             disabled={!props.canEdit || busy}
             onClick={() => {
-              setEditingFlowData(null);
+              setEditingChart(null);
               setEditingLineNumber(-1);
-              setFlowModalOpen(true);
+              setModalOpen(true);
             }}
           >
             Insert diagram
@@ -239,14 +251,14 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
         <div className="mdocs-editor-body">
           <div ref={hostRef} className="mdocs-vditor-host" />
         </div>
-        <FlowDiagramModal
-          open={flowModalOpen}
-          flowKey={editingFlowData === null ? "flow-insert" : `flow-edit-${editingLineNumber}`}
-          initialData={editingFlowData}
+        <DiagramModal
+          open={modalOpen}
+          diagramKey={editingChart === null ? "flow-insert" : `flow-edit-${editingLineNumber}`}
+          initialChart={editingChart}
           canEdit={props.canEdit}
-          saveLabel={!editingFlowData ? "Save and insert" : "Save"}
-          onSave={handleFlowSave}
-          onCancel={handleFlowCancel}
+          saveLabel={!editingChart ? "Save and insert" : "Save"}
+          onCommit={handleFlowSave}
+          onDismiss={handleFlowCancel}
         />
       </div>
     );
