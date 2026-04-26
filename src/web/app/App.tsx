@@ -96,6 +96,7 @@ export function App() {
   const [domains, setDomains] = useState<DomainSummary[]>([]);
   const [currentDomainId, setCurrentDomainId] = useState("default");
   const [activeDoc, setActiveDoc] = useState<DocumentDetail | null>(null);
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [menu, setMenu] = useState<TreeContextMenuPayload | null>(null);
   const [createModal, setCreateModal] = useState<CreateModalState | null>(null);
@@ -174,6 +175,7 @@ export function App() {
     try {
       const doc = await getDocumentApi(documentId);
       setActiveDoc(doc);
+      setSelectedDocId(documentId);
       setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
     } catch (err) {
       setMessage(translateError(t, err));
@@ -246,6 +248,7 @@ export function App() {
         });
         await refreshTree();
         setActiveDoc(doc);
+        setSelectedDocId(doc.documentId);
         setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
         setCreateModal(null);
         return;
@@ -281,6 +284,7 @@ export function App() {
       });
       await refreshTree();
       setActiveDoc(doc);
+      setSelectedDocId(doc.documentId);
       setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
       setCreateModal(null);
     } catch (err) {
@@ -308,6 +312,7 @@ export function App() {
       await deleteDocumentApi(documentId);
       if (activeDoc?.documentId === documentId) {
         setActiveDoc(null);
+        setSelectedDocId(null);
         setSelectedCreateParentPath("");
       }
       await refreshTree();
@@ -360,7 +365,7 @@ export function App() {
         </div>
         <DocumentTree
           nodes={tree}
-          activeDocumentId={activeDoc?.documentId ?? null}
+          activeDocumentId={selectedDocId}
           selectedParentPath={selectedCreateParentPath}
           onOpen={(node) => void openDocument(node.documentId)}
           onOpenFolder={(folderPath, descDocumentId) => {
@@ -368,10 +373,14 @@ export function App() {
             if (descDocumentId) {
               void openDocument(descDocumentId);
             } else {
-              setActiveDoc(null);
+              setSelectedDocId(null);
             }
           }}
           onContextMenu={setMenu}
+          onDeselect={() => {
+            setSelectedDocId(null);
+            setSelectedCreateParentPath("");
+          }}
         />
         <footer className="mdocs-sidebar-footer" onClick={() => setShowSettings(true)}>
           <span className="mdocs-visitor-avatar">
@@ -391,6 +400,7 @@ export function App() {
             onDomainChange={(domainId) => {
               setCurrentDomainId(domainId);
               setActiveDoc(null);
+              setSelectedDocId(null);
               setSelectedCreateParentPath("");
               void refreshTree(domainId);
             }}
@@ -402,41 +412,34 @@ export function App() {
         ) : (
           <div className="mdocs-welcome">
             <h1>{t("brand")}</h1>
-            {tree.length === 0 ? (
-              <>
-                <p className="muted mdocs-welcome-lead">
-                  {t("noDocsInDomain")}
-                </p>
-                <div className="mdocs-welcome-domain">
-                  <label className="muted mdocs-welcome-domain-label" htmlFor="mdocs-welcome-domain">
-                    {t("domainLabel")}
-                  </label>
-                  <select
-                    id="mdocs-welcome-domain"
-                    className="mdocs-editor-domain-select"
-                    aria-label={t("domainLabel")}
-                    value={currentDomainId}
-                    onChange={(e) => {
-                      const domainId = e.target.value;
-                      setCurrentDomainId(domainId);
-                      setActiveDoc(null);
-                      setSelectedCreateParentPath("");
-                      void refreshTree(domainId);
-                    }}
-                  >
-                    {(domains.length ? domains : [{ domainId: "default", domainName: t("defaultDomain") }]).map(
-                      (d) => (
-                        <option key={d.domainId} value={d.domainId}>
-                          {localizeDomainName(d.domainName, lang, t)}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </div>
-              </>
-            ) : (
-              <p className="muted">{t("createDocToStart")}</p>
-            )}
+            <p className="muted mdocs-welcome-lead">
+              {tree.length === 0 ? t("noDocsInDomain") : t("createDocToStart")}
+            </p>
+            <div className="mdocs-welcome-domain">
+              <label className="muted mdocs-welcome-domain-label" htmlFor="mdocs-welcome-domain">
+                {t("domainLabel")}
+              </label>
+              <select
+                id="mdocs-welcome-domain"
+                className="mdocs-editor-domain-select"
+                aria-label={t("domainLabel")}
+                value={currentDomainId}
+                onChange={(e) => {
+                  const domainId = e.target.value;
+                  setCurrentDomainId(domainId);
+                  setActiveDoc(null);
+                  setSelectedDocId(null);
+                  setSelectedCreateParentPath("");
+                  void refreshTree(domainId);
+                }}
+              >
+                {(domains.length ? domains : [{ domainId: "default", domainName: t("defaultDomain") }]).map((d) => (
+                  <option key={d.domainId} value={d.domainId}>
+                    {localizeDomainName(d.domainName, lang, t)}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="mdocs-welcome-actions">
               <button type="button" className="primary" onClick={() => openNewDocumentModal()}>
                 {t("newDocument")}

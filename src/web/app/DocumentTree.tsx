@@ -20,6 +20,7 @@ export function DocumentTree(props: {
   onOpen: (node: Extract<TreeNode, { type: "document" }>) => void;
   onOpenFolder: (folderPath: string, descDocumentId: string | null | undefined) => void;
   onContextMenu: (payload: TreeContextMenu) => void;
+  onDeselect?: () => void;
 }) {
   const { t } = useI18n();
   if (props.nodes.length === 0) {
@@ -34,6 +35,12 @@ export function DocumentTree(props: {
   return (
     <div
       className="mdocs-sidebar-list"
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        if (!target.closest(".mdocs-tree-row")) {
+          props.onDeselect?.();
+        }
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         props.onContextMenu({
