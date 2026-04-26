@@ -117,6 +117,12 @@ export type TranslationKey =
   | "fileNameTooLong"
   // Domain
   | "personalDomainSuffix"
+  // Permission
+  | "permissionLabel"
+  | "permissionPrivate"
+  | "permissionInvite"
+  | "permissionPublicRead"
+  | "permissionPublicEdit"
   // Settings
   | "settings"
   | "general"

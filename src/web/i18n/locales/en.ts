@@ -33,7 +33,7 @@ export const en: Record<TranslationKey, string> = {
   // Welcome page
   noDocsInDomain:
     "No documents in this domain yet. Switch domain below or create a document.",
-  createDocToStart: "Create a document to start writing.",
+  createDocToStart: "Create or select a document to start writing.",
   domainLabel: "Domain",
   defaultDomain: "Default",
   // Editor
@@ -121,6 +121,12 @@ export const en: Record<TranslationKey, string> = {
   singleFileNameNotPath: "use a file name, not a path",
   invalidFileName: "invalid file name",
   fileNameTooLong: "file name is too long",
+  // Permission
+  permissionLabel: "Permission",
+  permissionPrivate: "Private",
+  permissionInvite: "Invite",
+  permissionPublicRead: "Public read",
+  permissionPublicEdit: "Public edit",
   // Domain
   personalDomainSuffix: "'s workspace",
   // Settings

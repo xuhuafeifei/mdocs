@@ -15,7 +15,8 @@ const SCHEMA_STATEMENTS: string[] = [
     domain_id TEXT PRIMARY KEY,
     domain_name TEXT NOT NULL,
     created_by TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    permission TEXT NOT NULL DEFAULT 'public'
   )`,
   `CREATE TABLE IF NOT EXISTS documents (
     document_id TEXT PRIMARY KEY,
@@ -27,7 +28,8 @@ const SCHEMA_STATEMENTS: string[] = [
     updated_by TEXT NOT NULL,
     content_hash TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    permission INTEGER NOT NULL DEFAULT 1
   )`,
   `CREATE INDEX IF NOT EXISTS idx_documents_domain ON documents (domain_id)`,
   `CREATE INDEX IF NOT EXISTS idx_documents_owner ON documents (owner_visitor_id)`,
@@ -60,6 +62,13 @@ const SCHEMA_STATEMENTS: string[] = [
     affected_counts_json TEXT NOT NULL,
     executed_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS document_invites (
+    document_id TEXT NOT NULL,
+    visitor_id TEXT NOT NULL,
+    permission TEXT NOT NULL DEFAULT 'read',
+    PRIMARY KEY (document_id, visitor_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_document_invites_doc ON document_invites (document_id)`,
 ];
 
 export function applySchema(db: Database.Database): void {
@@ -67,24 +76,9 @@ export function applySchema(db: Database.Database): void {
     for (const stmt of SCHEMA_STATEMENTS) {
       db.exec(stmt);
     }
-    migrateDocumentsTitleToDisplayName(db);
     ensureDefaultDomain(db);
   });
   tx();
-}
-
-/** Older DBs used `title`; rename once so code can use `display_name` consistently. */
-function migrateDocumentsTitleToDisplayName(db: Database.Database): void {
-  const exists = db
-    .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='documents'`)
-    .get() as { name: string } | undefined;
-  if (!exists) return;
-  const cols = db.prepare(`PRAGMA table_info(documents)`).all() as { name: string }[];
-  const names = new Set(cols.map((c) => c.name));
-  if (names.has("display_name")) return;
-  if (names.has("title")) {
-    db.exec(`ALTER TABLE documents RENAME COLUMN title TO display_name`);
-  }
 }
 
 function ensureDefaultDomain(db: Database.Database): void {
@@ -93,7 +87,7 @@ function ensureDefaultDomain(db: Database.Database): void {
     .get("default");
   if (row) return;
   db.prepare(
-    `INSERT INTO domains (domain_id, domain_name, created_by, created_at)
-     VALUES (?, ?, ?, ?)`,
-  ).run("default", "Default", "system", new Date().toISOString());
+    `INSERT INTO domains (domain_id, domain_name, created_by, created_at, permission)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run("default", "Default", "system", new Date().toISOString(), "public");
 }

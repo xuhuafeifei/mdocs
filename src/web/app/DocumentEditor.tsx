@@ -390,7 +390,7 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
             <button type="button" className="primary" disabled={!props.canEdit || busy} onClick={() => void save()}>
               {busy ? t("saving") : t("save")}
             </button>
-            <button type="button" disabled={!props.canEdit || busy} onClick={props.onDelete}>
+            <button type="button" className="danger" disabled={!props.canEdit || busy} onClick={props.onDelete}>
               {t("delete")}
             </button>
           </div>

@@ -4,11 +4,16 @@ import {
   deleteDocument,
   findDocumentById,
   findDocumentByPath,
+  findDocumentInvite,
   insertDocument,
+  insertDocumentInvite,
+  deleteDocumentInvite,
+  listDocumentInvites,
   listDocumentsByDomain,
   updateDocumentContent,
   type DocumentRow,
 } from "../db/repositories/document.repo.js";
+import { findDomainById } from "../db/repositories/domain.repo.js";
 import { insertAuditLog } from "../db/repositories/audit.repo.js";
 import {
   deleteDocumentFile,
@@ -35,11 +40,79 @@ export class DocumentError extends Error {
   }
 }
 
-export function listDocuments(domainId?: string): DocumentSummary[] {
+export const Permission = {
+  PRIVATE: 0,
+  PUBLIC_READ: 1,
+  PUBLIC_EDIT: 2,
+  INVITE: 3,
+} as const;
+
+export function canReadDocument(row: DocumentRow, visitorId: string | null): boolean {
+  if (row.owner_visitor_id === visitorId) return true;
+  if (row.permission === Permission.PUBLIC_READ || row.permission === Permission.PUBLIC_EDIT) return true;
+  if (!visitorId) return false;
+  if (row.permission === Permission.INVITE) {
+    return !!findDocumentInvite(getDb(), row.document_id, visitorId);
+  }
+  return false;
+}
+
+export function canEditDocument(row: DocumentRow, visitorId: string | null): boolean {
+  if (row.owner_visitor_id === visitorId) return true;
+  if (row.permission === Permission.PUBLIC_EDIT) return true;
+  if (!visitorId) return false;
+  if (row.permission === Permission.INVITE) {
+    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
+    return invite?.permission === "edit";
+  }
+  return false;
+}
+
+export function assertDocumentAccess(
+  documentId: string,
+  visitorId: string | null,
+  action: "read" | "edit" | "delete",
+): void {
+  const db = getDb();
+  const row = findDocumentById(db, documentId);
+  if (!row) {
+    throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
+  }
+
+  // Domain boundary check
+  const domain = findDomainById(db, row.domain_id);
+  if (domain && domain.permission === "private" && domain.domain_id !== visitorId) {
+    throw new DocumentError("FORBIDDEN", `no permission to ${action} this document`, 403);
+  }
+
+  if (action === "read") {
+    if (!canReadDocument(row, visitorId)) {
+      throw new DocumentError("FORBIDDEN", "no permission to read this document", 403);
+    }
+  } else if (action === "edit") {
+    if (!canEditDocument(row, visitorId)) {
+      throw new DocumentError("FORBIDDEN", "no permission to edit this document", 403);
+    }
+  } else if (action === "delete") {
+    if (row.owner_visitor_id !== visitorId) {
+      throw new DocumentError("FORBIDDEN", "only the owner can delete this document", 403);
+    }
+  }
+}
+
+export function listDocuments(domainId?: string, visitorId?: string | null): DocumentSummary[] {
   const cfg = getConfig();
   const effective = domainId?.trim() || cfg.defaultDomainId;
-  const rows = listDocumentsByDomain(getDb(), effective);
-  return rows.map(rowToSummary);
+  const db = getDb();
+  const domain = findDomainById(db, effective);
+  if (domain && domain.permission === "private" && domain.domain_id !== visitorId) {
+    return [];
+  }
+  const rows = listDocumentsByDomain(db, effective);
+  const filtered = visitorId
+    ? rows.filter((r) => canReadDocument(r, visitorId))
+    : rows.filter((r) => r.permission === Permission.PUBLIC_READ || r.permission === Permission.PUBLIC_EDIT);
+  return filtered.map(rowToSummary);
 }
 
 export function createDocument(params: {
@@ -48,6 +121,7 @@ export function createDocument(params: {
   displayName?: string;
   content: string;
   domainId?: string;
+  permission?: number;
 }): DocumentDetail {
   const cfg = getConfig();
   const domainId = params.domainId?.trim() || cfg.defaultDomainId;
@@ -80,6 +154,14 @@ export function createDocument(params: {
   const documentId = randomUUID();
   const now = new Date().toISOString();
 
+  // Default permission: private for personal domain, public-read for default domain
+  const permission =
+    params.permission !== undefined
+      ? params.permission
+      : domainId === params.actorVisitorId
+        ? Permission.PRIVATE
+        : Permission.PUBLIC_READ;
+
   const write = writeDocument(relativePath, params.content);
 
   const tx = db.transaction(() => {
@@ -94,6 +176,7 @@ export function createDocument(params: {
       contentHash: write.contentHash,
       createdAt: now,
       updatedAt: now,
+      permission,
     });
     insertAuditLog(db, {
       actorVisitorId: params.actorVisitorId,
@@ -117,6 +200,7 @@ export function createDocument(params: {
     createdAt: now,
     content: params.content,
     contentHash: write.contentHash,
+    permission,
   };
 }
 
@@ -128,6 +212,7 @@ export function getDocument(documentId: string): DocumentDetail {
     ...rowToSummary(row),
     content,
     contentHash,
+    permission: row.permission,
   };
 }
 
@@ -136,12 +221,13 @@ export function updateDocument(params: {
   documentId: string;
   content: string;
   displayName?: string;
+  permission?: number;
 }): DocumentDetail {
   const db = getDb();
   const row = findDocumentById(db, params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
-  if (row.owner_visitor_id !== params.actorVisitorId) {
-    throw new DocumentError("FORBIDDEN", "only the owner can edit this document", 403);
+  if (!canEditDocument(row, params.actorVisitorId)) {
+    throw new DocumentError("FORBIDDEN", "no permission to edit this document", 403);
   }
 
   const displayName = params.displayName?.trim() || row.display_name;
@@ -155,6 +241,7 @@ export function updateDocument(params: {
       contentHash: write.contentHash,
       updatedBy: params.actorVisitorId,
       updatedAt: now,
+      permission: params.permission,
     });
     insertAuditLog(db, {
       actorVisitorId: params.actorVisitorId,
@@ -178,6 +265,7 @@ export function updateDocument(params: {
     createdAt: row.created_at,
     content: params.content,
     contentHash: write.contentHash,
+    permission: params.permission !== undefined ? params.permission : row.permission,
   };
 }
 
@@ -207,6 +295,41 @@ export function removeDocument(params: {
   deleteDocumentFile(row.relative_path);
 }
 
+export function addDocumentInvite(
+  actorVisitorId: string,
+  documentId: string,
+  targetVisitorId: string,
+  targetPermission: string,
+): void {
+  const db = getDb();
+  const row = findDocumentById(db, documentId);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
+  if (row.owner_visitor_id !== actorVisitorId) {
+    throw new DocumentError("FORBIDDEN", "only the owner can invite to this document", 403);
+  }
+  insertDocumentInvite(db, documentId, targetVisitorId, targetPermission);
+}
+
+export function removeDocumentInvite(
+  actorVisitorId: string,
+  documentId: string,
+  targetVisitorId: string,
+): void {
+  const db = getDb();
+  const row = findDocumentById(db, documentId);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
+  if (row.owner_visitor_id !== actorVisitorId) {
+    throw new DocumentError("FORBIDDEN", "only the owner can manage invites", 403);
+  }
+  deleteDocumentInvite(db, documentId, targetVisitorId);
+}
+
+export function getDocumentInvites(documentId: string): { visitorId: string; permission: string }[] {
+  const db = getDb();
+  const rows = listDocumentInvites(db, documentId);
+  return rows.map((r) => ({ visitorId: r.visitor_id, permission: r.permission }));
+}
+
 function rowToSummary(row: DocumentRow): DocumentSummary {
   return {
     documentId: row.document_id,
@@ -217,6 +340,7 @@ function rowToSummary(row: DocumentRow): DocumentSummary {
     updatedBy: row.updated_by,
     updatedAt: row.updated_at,
     createdAt: row.created_at,
+    permission: row.permission,
   };
 }
 

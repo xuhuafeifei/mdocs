@@ -424,6 +424,19 @@
   color: var(--mdocs-text);
 }
 
+.mdocs-editor-permission-select {
+  max-width: 160px;
+  flex: 0 1 auto;
+  min-width: 100px;
+  height: 35px;
+  padding: 0 8px;
+  border: 1px solid var(--mdocs-border);
+  border-radius: 6px;
+  background: var(--mdocs-surface);
+  font-size: 13px;
+  color: var(--mdocs-text);
+}
+
 .mdocs-editor-toolbar-spacer {
   flex: 1;
   min-width: 4px;
@@ -522,6 +535,31 @@
 .mdocs-dialog-error {
   color: #c0392b;
   font-size: 12px;
+}
+
+.mdocs-message-dialog {
+  width: min(360px, 92vw);
+  padding: 20px 24px 16px;
+}
+
+.mdocs-message-dialog-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--mdocs-text);
+}
+
+.mdocs-message-dialog-body {
+  margin: 0 0 16px;
+  color: var(--mdocs-text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.mdocs-message-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .mdocs-notice {

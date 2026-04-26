@@ -1,5 +1,6 @@
 import { getDb } from "../db/connection.js";
-import { listDocumentsByDomain, type DocumentRow } from "../db/repositories/document.repo.js";
+import { listDocumentsByDomain, findDocumentInvite, type DocumentRow } from "../db/repositories/document.repo.js";
+import { findDomainById } from "../db/repositories/domain.repo.js";
 import { getConfig } from "../config/index.js";
 import { FOLDER_DESC_FILENAME } from "../../shared/folderDesc.js";
 import { stripDomainPathPrefix } from "../../shared/personalDomain.js";
@@ -8,17 +9,33 @@ import type {
   TreeNode,
 } from "../../shared/types/tree.js";
 
-export function buildDocumentTree(domainId?: string): TreeNode[] {
+export function buildDocumentTree(domainId?: string, visitorId?: string | null): TreeNode[] {
   const cfg = getConfig();
   const effective = domainId?.trim() || cfg.defaultDomainId;
-  const rows = listDocumentsByDomain(getDb(), effective);
+  const db = getDb();
+  const domain = findDomainById(db, effective);
+  if (domain && domain.permission === "private" && domain.domain_id !== visitorId) {
+    return [];
+  }
+  const rows = listDocumentsByDomain(db, effective);
   const root: TreeFolderNode = { type: "folder", name: "", path: "", children: [] };
   for (const row of rows) {
+    if (!canReadInTree(row, visitorId)) continue;
     const forTree = stripDomainPathPrefix(effective, row.relative_path);
     attachRow(root, row, forTree);
   }
   sortFolder(root);
   return root.children;
+}
+
+function canReadInTree(row: DocumentRow, visitorId: string | null | undefined): boolean {
+  if (row.owner_visitor_id === visitorId) return true;
+  if (row.permission === 1 || row.permission === 2) return true; // PUBLIC_READ or PUBLIC_EDIT
+  if (!visitorId) return false;
+  if (row.permission === 3) {
+    return !!findDocumentInvite(getDb(), row.document_id, visitorId);
+  }
+  return false;
 }
 
 function attachRow(root: TreeFolderNode, row: DocumentRow, forTree: string): void {

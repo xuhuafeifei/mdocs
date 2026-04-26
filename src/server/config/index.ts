@@ -47,7 +47,7 @@ export function getConfig(): AppConfig {
     host,
     port,
     dataDir,
-    dbFile: path.join(dataDir, "data.sqlite"),
+    dbFile: path.join(dataDir, "sqlite", "data.sqlite"),
     filesDir: path.join(dataDir, "files"),
     docsDir: path.join(dataDir, "files", "docs"),
     assetsDir: path.join(dataDir, "files", "assets"),

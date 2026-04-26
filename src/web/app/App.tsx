@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import {
   ERROR_CODE_MAP,
@@ -41,6 +42,7 @@ import { DocumentTree, type TreeContextMenu as TreeContextMenuPayload } from "./
 import { TreeContextMenu } from "./TreeContextMenu";
 import { DocumentEditor } from "./DocumentEditor";
 import { SettingsPage } from "./SettingsPage";
+import { MessageDialog } from "./MessageDialog";
 import "./App.css";
 
 type Phase = "loading" | "needsRegister" | "ready";
@@ -83,7 +85,7 @@ async function fetchDomainsSafe(): Promise<DomainSummary[]> {
   try {
     return await fetchDomainsApi();
   } catch {
-    return [{ domainId: "default", domainName: "Default" }];
+    return [{ domainId: "default", domainName: "Default", permission: "public" }];
   }
 }
 
@@ -95,9 +97,11 @@ export function App() {
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [domains, setDomains] = useState<DomainSummary[]>([]);
   const [currentDomainId, setCurrentDomainId] = useState("default");
+  const { documentId } = useParams();
+  const navigate = useNavigate();
   const [activeDoc, setActiveDoc] = useState<DocumentDetail | null>(null);
-  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [menu, setMenu] = useState<TreeContextMenuPayload | null>(null);
   const [createModal, setCreateModal] = useState<CreateModalState | null>(null);
   const [createModalError, setCreateModalError] = useState<string | null>(null);
@@ -143,7 +147,7 @@ export function App() {
         setPhase("needsRegister");
         return;
       }
-      setMessage(translateError(t, err));
+      setAlertMessage(translateError(t, err));
       setPhase("needsRegister");
     }
   }
@@ -171,16 +175,25 @@ export function App() {
     setTree(nodes);
   }
 
-  async function openDocument(documentId: string): Promise<void> {
+  async function openDocument(docId: string): Promise<void> {
     try {
-      const doc = await getDocumentApi(documentId);
+      const doc = await getDocumentApi(docId);
       setActiveDoc(doc);
-      setSelectedDocId(documentId);
       setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
     } catch (err) {
-      setMessage(translateError(t, err));
+      setAlertMessage(translateError(t, err));
     }
   }
+
+  useEffect(() => {
+    if (phase !== "ready") return;
+    if (documentId) {
+      void openDocument(documentId);
+    } else {
+      setActiveDoc(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, documentId]);
 
   function openNewDocumentModal(explicitParentPath?: string): void {
     const fixed = explicitParentPath !== undefined;
@@ -248,8 +261,8 @@ export function App() {
         });
         await refreshTree();
         setActiveDoc(doc);
-        setSelectedDocId(doc.documentId);
         setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
+        navigate(`/doc/${doc.documentId}`);
         setCreateModal(null);
         return;
       }
@@ -284,8 +297,8 @@ export function App() {
       });
       await refreshTree();
       setActiveDoc(doc);
-      setSelectedDocId(doc.documentId);
       setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
+      navigate(`/doc/${doc.documentId}`);
       setCreateModal(null);
     } catch (err) {
       setCreateModalError(translateError(t, err));
@@ -302,7 +315,7 @@ export function App() {
       setMessage(t("saved"));
       window.setTimeout(() => setMessage(null), 1200);
     } catch (err) {
-      setMessage(translateError(t, err));
+      setAlertMessage(translateError(t, err));
     }
   }
 
@@ -312,12 +325,12 @@ export function App() {
       await deleteDocumentApi(documentId);
       if (activeDoc?.documentId === documentId) {
         setActiveDoc(null);
-        setSelectedDocId(null);
         setSelectedCreateParentPath("");
+        navigate("/");
       }
       await refreshTree();
     } catch (err) {
-      setMessage(translateError(t, err));
+      setAlertMessage(translateError(t, err));
     }
   }
 
@@ -365,21 +378,19 @@ export function App() {
         </div>
         <DocumentTree
           nodes={tree}
-          activeDocumentId={selectedDocId}
+          activeDocumentId={documentId ?? null}
           selectedParentPath={selectedCreateParentPath}
-          onOpen={(node) => void openDocument(node.documentId)}
+          onOpen={(node) => navigate(`/doc/${node.documentId}`)}
           onOpenFolder={(folderPath, descDocumentId) => {
             setSelectedCreateParentPath(folderPath);
             if (descDocumentId) {
-              void openDocument(descDocumentId);
-            } else {
-              setSelectedDocId(null);
+              navigate(`/doc/${descDocumentId}`);
             }
           }}
           onContextMenu={setMenu}
           onDeselect={() => {
-            setSelectedDocId(null);
             setSelectedCreateParentPath("");
+            navigate("/");
           }}
         />
         <footer className="mdocs-sidebar-footer" onClick={() => setShowSettings(true)}>
@@ -394,14 +405,14 @@ export function App() {
           <DocumentEditor
             key={activeDoc.documentId}
             document={activeDoc}
-            canEdit={Boolean(visitor && activeDoc.ownerVisitorId === visitor.visitorId)}
+            canEdit={Boolean(visitor && (activeDoc.ownerVisitorId === visitor.visitorId || activeDoc.permission === 2))}
             domains={domains}
             currentDomainId={currentDomainId}
             onDomainChange={(domainId) => {
               setCurrentDomainId(domainId);
               setActiveDoc(null);
-              setSelectedDocId(null);
               setSelectedCreateParentPath("");
+              navigate("/");
               void refreshTree(domainId);
             }}
             onSave={saveDocument}
@@ -428,8 +439,8 @@ export function App() {
                   const domainId = e.target.value;
                   setCurrentDomainId(domainId);
                   setActiveDoc(null);
-                  setSelectedDocId(null);
                   setSelectedCreateParentPath("");
+                  navigate("/");
                   void refreshTree(domainId);
                 }}
               >
@@ -444,6 +455,9 @@ export function App() {
               <button type="button" className="primary" onClick={() => openNewDocumentModal()}>
                 {t("newDocument")}
               </button>
+              <button type="button" onClick={() => openNewFolderModal()}>
+                {t("newFolder")}
+              </button>
             </div>
           </div>
         )}
@@ -451,6 +465,13 @@ export function App() {
           <div className="mdocs-toast" role="status">
             {message}
           </div>
+        )}
+        {alertMessage && (
+          <MessageDialog
+            title={t("error")}
+            message={alertMessage}
+            onClose={() => setAlertMessage(null)}
+          />
         )}
       </main>
       {menu && (

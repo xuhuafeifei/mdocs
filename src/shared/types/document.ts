@@ -7,6 +7,7 @@ export interface DocumentSummary {
   updatedBy: string;
   updatedAt: string;
   createdAt: string;
+  permission: number;
 }
 
 export interface DocumentDetail extends DocumentSummary {
@@ -19,9 +20,11 @@ export interface CreateDocumentRequest {
   relativePath: string;
   displayName?: string;
   content: string;
+  permission?: number;
 }
 
 export interface UpdateDocumentRequest {
   content: string;
   displayName?: string;
+  permission?: number;
 }

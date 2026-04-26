@@ -59,6 +59,15 @@ button.primary:hover {
   filter: brightness(0.96);
 }
 
+button.danger {
+  color: #b3261e;
+  border-color: #b3261e;
+}
+
+button.danger:hover {
+  background: #fbeae7;
+}
+
 input,
 textarea {
   font-family: inherit;

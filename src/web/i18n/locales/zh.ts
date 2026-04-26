@@ -32,7 +32,7 @@ export const zh: Record<TranslationKey, string> = {
   expandFolder: "展开文件夹",
   // Welcome page
   noDocsInDomain: "此域尚无文档。请在下方切换域或创建文档。",
-  createDocToStart: "创建一个文档开始写作。",
+  createDocToStart: "创建一个文档或选择一个文档开始写作。",
   domainLabel: "域",
   defaultDomain: "默认",
   // Editor
@@ -120,6 +120,12 @@ export const zh: Record<TranslationKey, string> = {
   singleFileNameNotPath: "请使用文件名，而非路径",
   invalidFileName: "文件名无效",
   fileNameTooLong: "文件名过长",
+  // Permission
+  permissionLabel: "权限",
+  permissionPrivate: "私有",
+  permissionInvite: "邀请",
+  permissionPublicRead: "公开可读",
+  permissionPublicEdit: "公开可编辑",
   // Domain
   personalDomainSuffix: "个人域",
   // Settings

@@ -38,6 +38,7 @@ export function createDocumentApi(input: {
   displayName?: string;
   content: string;
   domainId?: string;
+  permission?: number;
 }): Promise<DocumentDetail> {
   return api<DocumentDetail>("/api/documents", {
     method: "POST",
@@ -47,7 +48,7 @@ export function createDocumentApi(input: {
 
 export function updateDocumentApi(
   documentId: string,
-  input: { content: string; displayName?: string },
+  input: { content: string; displayName?: string; permission?: number },
 ): Promise<DocumentDetail> {
   return api<DocumentDetail>(`/api/documents/${encodeURIComponent(documentId)}`, {
     method: "PUT",
@@ -61,3 +62,23 @@ export function deleteDocumentApi(documentId: string): Promise<void> {
   });
 }
 
+export function getDocumentInvitesApi(documentId: string): Promise<{ visitorId: string; permission: string }[]> {
+  return api<{ visitorId: string; permission: string }[]>(`/api/documents/${encodeURIComponent(documentId)}/invites`);
+}
+
+export function addDocumentInviteApi(
+  documentId: string,
+  targetVisitorId: string,
+  targetPermission: string,
+): Promise<void> {
+  return api<void>(`/api/documents/${encodeURIComponent(documentId)}/invites`, {
+    method: "POST",
+    body: JSON.stringify({ targetVisitorId, targetPermission }),
+  });
+}
+
+export function removeDocumentInviteApi(documentId: string, targetVisitorId: string): Promise<void> {
+  return api<void>(`/api/documents/${encodeURIComponent(documentId)}/invites/${encodeURIComponent(targetVisitorId)}`, {
+    method: "DELETE",
+  });
+}

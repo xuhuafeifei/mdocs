@@ -5,7 +5,8 @@ export function buildTreeRouter(): Router {
   const router = Router();
   router.get("/", (req: Request, res: Response) => {
     const domainId = typeof req.query.domainId === "string" ? req.query.domainId : undefined;
-    res.json({ data: buildDocumentTree(domainId) });
+    const visitorId = req.visitor?.visitor_id ?? null;
+    res.json({ data: buildDocumentTree(domainId, visitorId) });
   });
   return router;
 }

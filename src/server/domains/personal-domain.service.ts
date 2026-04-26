@@ -11,5 +11,6 @@ export function ensurePersonalDomain(db: Database.Database, visitorId: string, v
     domainName: personalDomainDisplayName(visitorName),
     createdBy: visitorId,
     createdAt: now,
+    permission: "private",
   });
 }
