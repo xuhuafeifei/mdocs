@@ -108,7 +108,7 @@ export function App() {
   const [createModalBusy, setCreateModalBusy] = useState(false);
   const createModalInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedCreateParentPath, setSelectedCreateParentPath] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
+  const [view, setView] = useState<"docs" | "settings">("docs");
 
   useEffect(() => {
     void bootstrap();
@@ -355,12 +355,9 @@ export function App() {
           onDismiss={() => setPendingVisitorId(null)}
         />
       )}
-      {showSettings ? (
+      {view === "settings" ? (
         <SettingsPage
-          lang={lang}
-          setLang={setLang}
-          t={t}
-          onBack={() => setShowSettings(false)}
+          onBack={() => setView("docs")}
         />
       ) : (
         <>
@@ -393,7 +390,7 @@ export function App() {
             navigate("/");
           }}
         />
-        <footer className="mdocs-sidebar-footer" onClick={() => setShowSettings(true)}>
+        <footer className="mdocs-sidebar-footer" onClick={() => setView("settings")}>
           <span className="mdocs-visitor-avatar">
             {visitor ? visitor.visitorName.charAt(0).toUpperCase() : "?"}
           </span>

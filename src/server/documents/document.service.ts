@@ -79,12 +79,6 @@ export function assertDocumentAccess(
     throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
   }
 
-  // Domain boundary check
-  const domain = findDomainById(db, row.domain_id);
-  if (domain && domain.permission === "private" && domain.domain_id !== visitorId) {
-    throw new DocumentError("FORBIDDEN", `no permission to ${action} this document`, 403);
-  }
-
   if (action === "read") {
     if (!canReadDocument(row, visitorId)) {
       throw new DocumentError("FORBIDDEN", "no permission to read this document", 403);
@@ -104,10 +98,6 @@ export function listDocuments(domainId?: string, visitorId?: string | null): Doc
   const cfg = getConfig();
   const effective = domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
-  const domain = findDomainById(db, effective);
-  if (domain && domain.permission === "private" && domain.domain_id !== visitorId) {
-    return [];
-  }
   const rows = listDocumentsByDomain(db, effective);
   const filtered = visitorId
     ? rows.filter((r) => canReadDocument(r, visitorId))
@@ -306,6 +296,15 @@ export function addDocumentInvite(
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
   if (row.owner_visitor_id !== actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "only the owner can invite to this document", 403);
+  }
+  const domain = findDomainById(db, row.domain_id);
+  // Private domains have a single domain member (domain owner = domain_id); do not invite them.
+  if (domain?.permission === "private" && targetVisitorId === domain.domain_id) {
+    throw new DocumentError(
+      "BAD_REQUEST",
+      "private domain owner is the only domain member; invite is not used for that visitor",
+      400,
+    );
   }
   insertDocumentInvite(db, documentId, targetVisitorId, targetPermission);
 }

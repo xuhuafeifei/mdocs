@@ -11,7 +11,9 @@
     "build": "pnpm build:web && pnpm build:server",
     "start": "node dist/server/main.js",
     "mdocs": "tsx src/server/cli/main.ts",
-    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit"
+    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@meta2d/activity-diagram": "^1.0.1",
@@ -39,10 +41,12 @@
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
+    "jsdom": "^29.0.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2",
-    "vite": "^5.4.8"
+    "vite": "^5.4.8",
+    "vitest": "2.1.9"
   }
 }

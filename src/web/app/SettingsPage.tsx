@@ -1,12 +1,10 @@
-import type { TranslationKey } from "../i18n/types";
+import { useI18n } from "../i18n";
 
 export function SettingsPage(props: {
-  lang: "en" | "zh";
-  setLang: (v: "en" | "zh") => void;
-  t: (k: TranslationKey) => string;
   onBack: () => void;
 }) {
-  const { t, lang, setLang, onBack } = props;
+  const { t, lang, setLang } = useI18n();
+  const { onBack } = props;
   return (
     <>
       <aside className="mdocs-sidebar">
