@@ -40,6 +40,7 @@ import { VisitorIdNotice } from "./VisitorIdNotice";
 import { DocumentTree, type TreeContextMenu as TreeContextMenuPayload } from "./DocumentTree";
 import { TreeContextMenu } from "./TreeContextMenu";
 import { DocumentEditor } from "./DocumentEditor";
+import { SettingsPage } from "./SettingsPage";
 import "./App.css";
 
 type Phase = "loading" | "needsRegister" | "ready";
@@ -102,6 +103,7 @@ export function App() {
   const [createModalBusy, setCreateModalBusy] = useState(false);
   const createModalInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedCreateParentPath, setSelectedCreateParentPath] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     void bootstrap();
@@ -335,29 +337,18 @@ export function App() {
           onDismiss={() => setPendingVisitorId(null)}
         />
       )}
+      {showSettings ? (
+        <SettingsPage
+          lang={lang}
+          setLang={setLang}
+          t={t}
+          onBack={() => setShowSettings(false)}
+        />
+      ) : (
+        <>
       <aside className="mdocs-sidebar">
         <header className="mdocs-sidebar-header">
           <div className="mdocs-brand">{t("brand")}</div>
-          <div className="muted mdocs-visitor-line">
-            {visitor ? visitor.visitorName : ""}
-          </div>
-          <div className="mdocs-lang-switch">
-            <button
-              type="button"
-              className={lang === "en" ? "active" : ""}
-              onClick={() => setLang("en")}
-            >
-              EN
-            </button>
-            <span>/</span>
-            <button
-              type="button"
-              className={lang === "zh" ? "active" : ""}
-              onClick={() => setLang("zh")}
-            >
-              中
-            </button>
-          </div>
         </header>
         <div className="mdocs-sidebar-actions">
           <button type="button" onClick={() => openNewDocumentModal()} className="primary">
@@ -382,6 +373,12 @@ export function App() {
           }}
           onContextMenu={setMenu}
         />
+        <footer className="mdocs-sidebar-footer" onClick={() => setShowSettings(true)}>
+          <span className="mdocs-visitor-avatar">
+            {visitor ? visitor.visitorName.charAt(0).toUpperCase() : "?"}
+          </span>
+          <span className="mdocs-visitor-footer-name">{visitor ? visitor.visitorName : ""}</span>
+        </footer>
       </aside>
       <main className="mdocs-main">
         {activeDoc ? (
@@ -512,6 +509,8 @@ export function App() {
             </form>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

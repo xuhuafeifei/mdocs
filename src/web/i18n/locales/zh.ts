@@ -122,4 +122,9 @@ export const zh: Record<TranslationKey, string> = {
   fileNameTooLong: "文件名过长",
   // Domain
   personalDomainSuffix: "个人域",
+  // Settings
+  settings: "设置",
+  general: "通用",
+  language: "语言",
+  backToDocs: "返回文档",
 };

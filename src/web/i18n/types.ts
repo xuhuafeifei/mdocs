@@ -116,4 +116,9 @@ export type TranslationKey =
   | "invalidFileName"
   | "fileNameTooLong"
   // Domain
-  | "personalDomainSuffix";
+  | "personalDomainSuffix"
+  // Settings
+  | "settings"
+  | "general"
+  | "language"
+  | "backToDocs";

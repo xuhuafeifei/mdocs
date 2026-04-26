@@ -123,4 +123,9 @@ export const en: Record<TranslationKey, string> = {
   fileNameTooLong: "file name is too long",
   // Domain
   personalDomainSuffix: "'s workspace",
+  // Settings
+  settings: "Settings",
+  general: "General",
+  language: "Language",
+  backToDocs: "Back to documents",
 };
