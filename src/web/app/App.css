@@ -17,11 +17,13 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
 }
 
 .mdocs-sidebar-header {
   padding: 16px;
   border-bottom: 1px solid var(--mdocs-border);
+  flex-shrink: 0;
 }
 
 .mdocs-brand {
@@ -67,6 +69,7 @@
   flex-direction: row;
   flex-wrap: nowrap;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .mdocs-sidebar-actions > button {
@@ -78,6 +81,7 @@
   flex: 1;
   overflow-y: auto;
   padding: 4px 8px 16px;
+  min-height: 0;
 }
 
 .mdocs-doc-item {
