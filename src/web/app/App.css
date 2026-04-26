@@ -35,6 +35,32 @@
   font-size: 12px;
 }
 
+.mdocs-lang-switch {
+  margin-top: 6px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mdocs-lang-switch button {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  color: var(--mdocs-text-muted);
+  cursor: pointer;
+}
+
+.mdocs-lang-switch button.active {
+  color: var(--mdocs-text);
+  font-weight: 600;
+}
+
+.mdocs-lang-switch span {
+  color: var(--mdocs-border);
+}
+
 .mdocs-sidebar-actions {
   padding: 12px 16px;
   display: flex;

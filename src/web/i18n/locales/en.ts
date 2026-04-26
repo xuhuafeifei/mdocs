@@ -1,0 +1,126 @@
+import type { TranslationKey } from "../types";
+
+export const en: Record<TranslationKey, string> = {
+  // Common
+  loading: "loading...",
+  saved: "saved",
+  saving: "saving...",
+  cancel: "Cancel",
+  create: "Create",
+  creating: "Creating...",
+  close: "Close",
+  delete: "Delete",
+  save: "Save",
+  gotIt: "got it",
+  error: "error",
+  // Brand
+  brand: "mdocs",
+  // Visitor register
+  welcomeTitle: "Welcome to mdocs",
+  welcomeDesc:
+    "Enter a display name to create a visitor identity. A secure token will be stored in this browser to identify you on future visits.",
+  visitorNamePlaceholder: "Your name",
+  createVisitor: "Create visitor",
+  nameRequired: "please enter a name",
+  // Visitor ID notice
+  visitorIdNotice: "your visitor id is {{id}}, save it for recovery",
+  // Sidebar / tree
+  newDocument: "New document",
+  newFolder: "New folder",
+  noDocumentsYet: "no documents yet",
+  collapseFolder: "Collapse folder",
+  expandFolder: "Expand folder",
+  // Welcome page
+  noDocsInDomain:
+    "No documents in this domain yet. Switch domain below or create a document.",
+  createDocToStart: "Create a document to start writing.",
+  domainLabel: "Domain",
+  defaultDomain: "Default",
+  // Editor
+  displayNamePlaceholder: "Display name",
+  currentDomainAria: "Current domain",
+  insertDiagram: "Insert diagram",
+  readOnlyNotice: "> You don't have permission to edit\n\n",
+  // Create modal
+  newDocumentTitle: "New document",
+  newFolderTitle: "New folder",
+  fileNameLabel: "File name",
+  folderNameLabel: "Folder name",
+  fileNameHint:
+    "Names are shown as you type; stored paths are normalised (e.g. spaces → underscores). Use a .md file name.",
+  folderNameHint:
+    "Names are shown as you type; stored paths are normalised (e.g. folder 1 → folder_1).",
+  untitledPlaceholder: "untitled.md",
+  folderExamplePlaceholder: "e.g. research",
+  pathExists: "this path already exists; pick another name",
+  folderExists: "a folder with this name already exists",
+  // Confirm
+  deleteConfirm: "delete {{name}}?",
+  // Context menu
+  newDocIn: "New document in {{name}}",
+  newDocAtRoot: "New document at root",
+  newDocBeside: "New document beside this",
+  newFolderIn: "New folder in {{name}}",
+  newFolderAtRoot: "New folder at root",
+  newFolderBeside: "New folder beside this",
+  deleteItem: "Delete {{name}}",
+  // Flow diagram
+  editDiagram: "Edit diagram",
+  newDiagram: "New diagram",
+  saveAndInsert: "Save and insert",
+  deleteDiagram: "Delete diagram",
+  // Diagram editor
+  openFailed: "open failed: {{message}}",
+  // Palette
+  components: "Components",
+  dragToCanvas: "drag to canvas",
+  // Palette labels
+  shapeRectangle: "Rectangle",
+  shapeRounded: "Rounded",
+  shapeCircle: "Circle",
+  shapeDiamond: "Diamond",
+  shapeTriangle: "Triangle",
+  shapePentagon: "Pentagon",
+  shapeText: "Text",
+  shapeLine: "Line",
+  shapeData: "Data",
+  shapeDatabase: "Database",
+  shapeDocument: "Document",
+  shapeDisplay: "Display",
+  shapeManual: "Manual",
+  shapeParallel: "Parallel",
+  shapeComment: "Comment",
+  shapeSubprocess: "Subprocess",
+  shapeQueue: "Queue",
+  shapeIntStorage: "Int. Storage",
+  shapeExtStorage: "Ext. Storage",
+  // Error codes
+  errUnauthenticated: "Please register first",
+  errBadRequest: "Invalid request",
+  errInvalidVisitorName: "Invalid visitor name",
+  errDocExists: "Document already exists",
+  errDocNotFound: "Document not found",
+  errForbidden: "You don't have permission",
+  errInternal: "Internal error",
+  errInvalidPath: "Invalid path",
+  errUnknown: "Unknown error",
+  // Path validation errors
+  pathRequired: "relative path is required",
+  pathMustBeRelative: "path must be relative",
+  useForwardSlashes: "use forward slashes",
+  pathNoDotDot: "path must not contain ..",
+  pathMustEndWithMd: "document path must end with .md",
+  pathUnsupportedChars: "path contains unsupported characters",
+  pathEscapesRoot: "path escapes docs root",
+  // Storage validation errors
+  enterFolderName: "enter a folder name",
+  singleNameNotPath: "use a single name, not a path",
+  invalidFolderName: "invalid folder name",
+  folderNameTooLong: "folder name is too long",
+  enterFileName: "enter a file name",
+  singleFileNameNotPath: "use a file name, not a path",
+  invalidFileName: "invalid file name",
+  fileNameTooLong: "file name is too long",
+  // Domain
+  personalDomainSuffix: "'s workspace",
+};

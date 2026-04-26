@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "../i18n";
+import {
+  ERROR_CODE_MAP,
+  PATH_ERROR_MESSAGE_MAP,
+  STORAGE_ERROR_MESSAGE_MAP,
+} from "../i18n/errors";
 import type { VisitorPublic } from "../../shared/types/visitor";
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
@@ -81,6 +87,7 @@ async function fetchDomainsSafe(): Promise<DomainSummary[]> {
 }
 
 export function App() {
+  const { t, lang, setLang } = useI18n();
   const [phase, setPhase] = useState<Phase>("loading");
   const [visitor, setVisitor] = useState<VisitorPublic | null>(null);
   const [pendingVisitorId, setPendingVisitorId] = useState<string | null>(null);
@@ -133,7 +140,7 @@ export function App() {
         setPhase("needsRegister");
         return;
       }
-      setMessage(errorMessage(err));
+      setMessage(translateError(t, err));
       setPhase("needsRegister");
     }
   }
@@ -167,7 +174,7 @@ export function App() {
       setActiveDoc(doc);
       setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
     } catch (err) {
-      setMessage(errorMessage(err));
+      setMessage(translateError(t, err));
     }
   }
 
@@ -213,7 +220,7 @@ export function App() {
       if (createModal.kind === "document") {
         const fileParsed = parseDisplayNameMarkdownFile(createModal.draft);
         if (!fileParsed.ok) {
-          setCreateModalError(fileParsed.message);
+          setCreateModalError(translateStorageError(t, fileParsed.message));
           return;
         }
         const displayFile = fileParsed.displayFile;
@@ -222,11 +229,11 @@ export function App() {
         try {
           relativePath = normaliseRelativePathForStorage(joinDocPath(effectiveParent, displayFile));
         } catch (e) {
-          setCreateModalError(e instanceof DocPathError ? e.message : "invalid path");
+          setCreateModalError(translateError(t, e));
           return;
         }
         if (paths.has(relativePath)) {
-          setCreateModalError("this path already exists; pick another name");
+          setCreateModalError(t("pathExists"));
           return;
         }
         const doc = await createDocumentApi({
@@ -243,12 +250,12 @@ export function App() {
       }
       const parsed = parseDisplayNameFolder(createModal.draft);
       if (!parsed.ok) {
-        setCreateModalError(parsed.message);
+        setCreateModalError(translateStorageError(t, parsed.message));
         return;
       }
       const storageSeg = normalisePathSegmentForStorage(parsed.display);
       if (!storageSeg) {
-        setCreateModalError("could not derive a safe folder path from that name");
+        setCreateModalError(t("invalidFolderName"));
         return;
       }
       const folderPrefix = joinDocPath(effectiveParent, storageSeg);
@@ -256,11 +263,11 @@ export function App() {
       try {
         relativePath = normaliseRelativePathForStorage(joinDocPath(folderPrefix, FOLDER_DESC_FILENAME));
       } catch (e) {
-        setCreateModalError(e instanceof DocPathError ? e.message : "invalid path");
+        setCreateModalError(translateError(t, e));
         return;
       }
       if (paths.has(relativePath)) {
-        setCreateModalError("a folder with this name already exists");
+        setCreateModalError(t("folderExists"));
         return;
       }
       const folderTitle = parsed.display;
@@ -275,7 +282,7 @@ export function App() {
       setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
       setCreateModal(null);
     } catch (err) {
-      setCreateModalError(errorMessage(err));
+      setCreateModalError(translateError(t, err));
     } finally {
       setCreateModalBusy(false);
     }
@@ -286,15 +293,15 @@ export function App() {
       const updated = await updateDocumentApi(documentId, { content, displayName });
       setActiveDoc((prev) => (prev && prev.documentId === documentId ? updated : prev));
       await refreshTree();
-      setMessage("saved");
+      setMessage(t("saved"));
       window.setTimeout(() => setMessage(null), 1200);
     } catch (err) {
-      setMessage(errorMessage(err));
+      setMessage(translateError(t, err));
     }
   }
 
   async function deleteDocumentById(documentId: string, label: string): Promise<void> {
-    if (!window.confirm(`delete ${label}?`)) return;
+    if (!window.confirm(t("deleteConfirm", { name: label }))) return;
     try {
       await deleteDocumentApi(documentId);
       if (activeDoc?.documentId === documentId) {
@@ -303,12 +310,12 @@ export function App() {
       }
       await refreshTree();
     } catch (err) {
-      setMessage(errorMessage(err));
+      setMessage(translateError(t, err));
     }
   }
 
   if (phase === "loading") {
-    return <div className="mdocs-loading muted">loading...</div>;
+    return <div className="mdocs-loading muted">{t("loading")}</div>;
   }
 
   if (phase === "needsRegister") {
@@ -330,17 +337,34 @@ export function App() {
       )}
       <aside className="mdocs-sidebar">
         <header className="mdocs-sidebar-header">
-          <div className="mdocs-brand">mdocs</div>
+          <div className="mdocs-brand">{t("brand")}</div>
           <div className="muted mdocs-visitor-line">
             {visitor ? visitor.visitorName : ""}
+          </div>
+          <div className="mdocs-lang-switch">
+            <button
+              type="button"
+              className={lang === "en" ? "active" : ""}
+              onClick={() => setLang("en")}
+            >
+              EN
+            </button>
+            <span>/</span>
+            <button
+              type="button"
+              className={lang === "zh" ? "active" : ""}
+              onClick={() => setLang("zh")}
+            >
+              中
+            </button>
           </div>
         </header>
         <div className="mdocs-sidebar-actions">
           <button type="button" onClick={() => openNewDocumentModal()} className="primary">
-            New document
+            {t("newDocument")}
           </button>
           <button type="button" onClick={() => openNewFolderModal()}>
-            New folder
+            {t("newFolder")}
           </button>
         </div>
         <DocumentTree
@@ -380,20 +404,20 @@ export function App() {
           />
         ) : (
           <div className="mdocs-welcome">
-            <h1>mdocs</h1>
+            <h1>{t("brand")}</h1>
             {tree.length === 0 ? (
               <>
                 <p className="muted mdocs-welcome-lead">
-                  No documents in this domain yet. Switch domain below or create a document.
+                  {t("noDocsInDomain")}
                 </p>
                 <div className="mdocs-welcome-domain">
                   <label className="muted mdocs-welcome-domain-label" htmlFor="mdocs-welcome-domain">
-                    Domain
+                    {t("domainLabel")}
                   </label>
                   <select
                     id="mdocs-welcome-domain"
                     className="mdocs-editor-domain-select"
-                    aria-label="Domain"
+                    aria-label={t("domainLabel")}
                     value={currentDomainId}
                     onChange={(e) => {
                       const domainId = e.target.value;
@@ -403,10 +427,10 @@ export function App() {
                       void refreshTree(domainId);
                     }}
                   >
-                    {(domains.length ? domains : [{ domainId: "default", domainName: "Default" }]).map(
+                    {(domains.length ? domains : [{ domainId: "default", domainName: t("defaultDomain") }]).map(
                       (d) => (
                         <option key={d.domainId} value={d.domainId}>
-                          {d.domainName}
+                          {localizeDomainName(d.domainName, lang, t)}
                         </option>
                       ),
                     )}
@@ -414,11 +438,11 @@ export function App() {
                 </div>
               </>
             ) : (
-              <p className="muted">Create a document to start writing.</p>
+              <p className="muted">{t("createDocToStart")}</p>
             )}
             <div className="mdocs-welcome-actions">
               <button type="button" className="primary" onClick={() => openNewDocumentModal()}>
-                New document
+                {t("newDocument")}
               </button>
             </div>
           </div>
@@ -450,15 +474,15 @@ export function App() {
           }}
         >
           <div className="mdocs-dialog card" role="dialog" aria-modal="true">
-            <h1>{createModal.kind === "document" ? "New document" : "New folder"}</h1>
+            <h1>{createModal.kind === "document" ? t("newDocumentTitle") : t("newFolderTitle")}</h1>
             <p className="muted">
               {createModal.kind === "document"
-                ? "Names are shown as you type; stored paths are normalised (e.g. spaces → underscores). Use a .md file name."
-                : "Names are shown as you type; stored paths are normalised (e.g. folder 1 → folder_1)."}
+                ? t("fileNameHint")
+                : t("folderNameHint")}
             </p>
             <form onSubmit={submitCreateModal} className="mdocs-dialog-form">
               <label className="mdocs-dialog-label">
-                {createModal.kind === "document" ? "File name" : "Folder name"}
+                {createModal.kind === "document" ? t("fileNameLabel") : t("folderNameLabel")}
                 <input
                   ref={createModalInputRef}
                   value={createModal.draft}
@@ -467,7 +491,7 @@ export function App() {
                       prev ? { ...prev, draft: ev.target.value } : prev,
                     )
                   }
-                  placeholder={createModal.kind === "document" ? "untitled.md" : "e.g. research"}
+                  placeholder={createModal.kind === "document" ? t("untitledPlaceholder") : t("folderExamplePlaceholder")}
                   maxLength={200}
                   disabled={createModalBusy}
                 />
@@ -479,10 +503,10 @@ export function App() {
                   onClick={() => !createModalBusy && setCreateModal(null)}
                   disabled={createModalBusy}
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button type="submit" className="primary" disabled={createModalBusy}>
-                  {createModalBusy ? "Creating…" : "Create"}
+                  {createModalBusy ? t("creating") : t("create")}
                 </button>
               </div>
             </form>
@@ -493,8 +517,40 @@ export function App() {
   );
 }
 
-function errorMessage(err: unknown): string {
-  if (err instanceof ApiRequestError) return `${err.code}: ${err.message}`;
-  if (err instanceof Error) return err.message;
+function translateError(t: (k: import("../i18n/types").TranslationKey, vars?: Record<string, string>) => string, err: unknown): string {
+  if (err instanceof ApiRequestError) {
+    const key = ERROR_CODE_MAP[err.code];
+    if (key) return t(key);
+    return err.message;
+  }
+  if (err instanceof DocPathError) {
+    const key = PATH_ERROR_MESSAGE_MAP[err.message];
+    if (key) return t(key);
+    return err.message;
+  }
+  if (err instanceof Error) {
+    const key = PATH_ERROR_MESSAGE_MAP[err.message] ?? STORAGE_ERROR_MESSAGE_MAP[err.message];
+    if (key) return t(key);
+    return err.message;
+  }
   return String(err);
 }
+
+function translateStorageError(t: (k: import("../i18n/types").TranslationKey, vars?: Record<string, string>) => string, message: string): string {
+  const key = STORAGE_ERROR_MESSAGE_MAP[message];
+  if (key) return t(key);
+  return message;
+}
+
+function localizeDomainName(name: string, lang: "en" | "zh", t: (k: import("../i18n/types").TranslationKey, vars?: Record<string, string>) => string): string {
+  if (name === "Default") return t("defaultDomain");
+  // Personal domain: strip Chinese suffix and re-apply localized suffix
+  const suffix = "个人域";
+  if (name.endsWith(suffix)) {
+    const base = name.slice(0, -suffix.length);
+    return base + t("personalDomainSuffix");
+  }
+  return name;
+}
+
+

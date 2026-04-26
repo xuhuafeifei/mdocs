@@ -13,18 +13,16 @@ import type { DomainSummary } from "../../shared/types/domain";
 import { getStoredToken } from "../api/client";
 import { findMeta2BlockRange } from "../diagram/meta2Markdown";
 import { useFlowRenderer } from "../hooks/useDiagramPreview";
+import { useI18n } from "../i18n";
 import { FlowDiagramModal } from "./FlowDiagramModal";
 
 /** Same fence as markdown-docs (`EditorPanel` / `useFlowRenderer`). */
 const FLOW_OPEN_FENCE = /^\s*```(meta2|meta)\b/;
 
-/** Shown only in the editor surface for non-owners; not persisted (Save is disabled). */
-const READ_ONLY_MD_PREFIX = "> 您无权限编辑\n\n";
-
-function withReadOnlyNotice(content: string, canEdit: boolean): string {
+function withReadOnlyNotice(content: string, canEdit: boolean, prefix: string): string {
   if (canEdit) return content;
-  if (content.startsWith(READ_ONLY_MD_PREFIX)) return content;
-  return READ_ONLY_MD_PREFIX + content;
+  if (content.startsWith(prefix)) return content;
+  return prefix + content;
 }
 
 export interface DocumentEditorHandle {
@@ -85,6 +83,7 @@ function buildToolbar(canEdit: boolean): string[] {
 
 export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorProps>(
   function DocumentEditor(props, ref) {
+    const { t, lang: currentLang } = useI18n();
     const [displayName, setDisplayName] = useState(props.document.displayName);
     const [busy, setBusy] = useState(false);
 
@@ -158,6 +157,7 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
         height: "100%",
         minHeight: 360,
         mode: "wysiwyg",
+        lang: currentLang === "zh" ? "zh_CN" : "en_US",
         /** 不设时 `fixTab` 不生效，按 Tab 会走浏览器默认＝焦点离开编辑器，代码块内既无缩进也「像丢了编辑区」。 */
         tab: "    ",
         typewriterMode: false,
@@ -177,7 +177,7 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
           },
         },
         ...uploadOpts,
-        value: withReadOnlyNotice(props.document.content, props.canEdit),
+        value: withReadOnlyNotice(props.document.content, props.canEdit, t("readOnlyNotice")),
         after: () => {
           readyRef.current = true;
           window.vditorInstance = instance;
@@ -201,19 +201,19 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
         }
         vditorRef.current = null;
       };
-    }, [props.document.documentId, props.canEdit]);
+    }, [props.document.documentId, props.canEdit, currentLang]);
 
     useEffect(() => {
       setDisplayName(props.document.displayName);
       const v = vditorRef.current;
       if (!v) return;
-      const display = withReadOnlyNotice(props.document.content, props.canEdit);
+      const display = withReadOnlyNotice(props.document.content, props.canEdit, t("readOnlyNotice"));
       if (readyRef.current) {
         v.setValue(display);
       } else {
         pendingValueRef.current = display;
       }
-    }, [props.document.documentId, props.document.content, props.document.displayName, props.canEdit]);
+    }, [props.document.documentId, props.document.content, props.document.displayName, props.canEdit, currentLang]);
 
     const handleFlowSave = useCallback(
       (flowData: unknown) => {
@@ -357,18 +357,18 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             onBlur={() => void saveDisplayNameIfChanged()}
-            placeholder="Display name"
+            placeholder={t("displayNamePlaceholder")}
             disabled={!props.canEdit}
           />
           <select
             className="mdocs-editor-domain-select"
-            aria-label="当前域"
+            aria-label={t("currentDomainAria")}
             value={props.currentDomainId}
             onChange={(e) => props.onDomainChange(e.target.value)}
           >
-            {(props.domains.length ? props.domains : [{ domainId: "default", domainName: "Default" }]).map((d) => (
+            {(props.domains.length ? props.domains : [{ domainId: "default", domainName: t("defaultDomain") }]).map((d) => (
               <option key={d.domainId} value={d.domainId}>
-                {d.domainName}
+                {localizeDomainName(d.domainName, currentLang, t)}
               </option>
             ))}
           </select>
@@ -385,13 +385,13 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
                 setFlowModalOpen(true);
               }}
             >
-              Insert diagram
+              {t("insertDiagram")}
             </button>
             <button type="button" className="primary" disabled={!props.canEdit || busy} onClick={() => void save()}>
-              {busy ? "saving..." : "Save"}
+              {busy ? t("saving") : t("save")}
             </button>
             <button type="button" disabled={!props.canEdit || busy} onClick={props.onDelete}>
-              Delete
+              {t("delete")}
             </button>
           </div>
         </div>
@@ -403,7 +403,7 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
           flowKey={editingFlowData === null ? "flow-insert" : `flow-edit-${editingBlockIndex}-${editingLineNumber}`}
           initialData={editingFlowData}
           canEdit={props.canEdit}
-          saveLabel={!editingFlowData ? "Save and insert" : "Save"}
+          saveLabel={!editingFlowData ? t("saveAndInsert") : t("save")}
           onSave={handleFlowSave}
           onCancel={handleFlowCancel}
         />
@@ -411,3 +411,13 @@ export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorPro
     );
   },
 );
+
+function localizeDomainName(name: string, langCode: "en" | "zh", t: (k: import("../i18n/types").TranslationKey, vars?: Record<string, string>) => string): string {
+  if (name === "Default") return t("defaultDomain");
+  const suffix = "个人域";
+  if (name.endsWith(suffix)) {
+    const base = name.slice(0, -suffix.length);
+    return base + t("personalDomainSuffix");
+  }
+  return name;
+}

@@ -9,11 +9,13 @@ import {
 import { removeDiagramHud, sweepOrphanMdocsHuds, syncDiagramHud } from "./diagramHud";
 import { generateSvgPreview, releasePreviewResources } from "../../meta2d/renderEngine";
 import { useCallback, useEffect, useRef } from "react";
+import { useI18n } from "../../i18n";
 
 export function useDiagramRenderer(
   containerRef: React.RefObject<HTMLDivElement | null>,
   isLocked: boolean,
 ) {
+  const { t } = useI18n();
   const lock = useRef(isLocked);
   const tmr = useRef<ReturnType<typeof setTimeout> | null>(null);
   lock.current = isLocked;
@@ -51,7 +53,12 @@ export function useDiagramRenderer(
       if (p.getAttribute("data-rendered") === "true" && p.dataset.chartHash === raw) {
         if (w) {
           sealMeta2PreviewCode(p);
-          syncDiagramHud(w, lock.current);
+          syncDiagramHud(w, lock.current, {
+            edit: t("editDiagram"),
+            delete: t("delete"),
+            editDiagram: t("editDiagram"),
+            deleteDiagram: t("deleteDiagram"),
+          });
         }
         continue;
       }
@@ -92,7 +99,12 @@ export function useDiagramRenderer(
           sealMeta2PreviewCode(p2);
           mark();
           const vw = b.querySelector<HTMLElement>(".vditor-wysiwyg__preview");
-          if (vw) syncDiagramHud(vw, lock.current);
+          if (vw) syncDiagramHud(vw, lock.current, {
+            edit: t("editDiagram"),
+            delete: t("delete"),
+            editDiagram: t("editDiagram"),
+            deleteDiagram: t("deleteDiagram"),
+          });
           if (root) sweepOrphanMdocsHuds(root);
           return;
         }
@@ -103,7 +115,7 @@ export function useDiagramRenderer(
           removeDiagramHud(vw);
           removeMeta2CaretAnchors(vw);
         }
-        p2.textContent = "Diagram preview failed";
+        p2.textContent = t("openFailed", { message: "preview" });
         sealMeta2PreviewCode(p2);
         mark();
         if (root) sweepOrphanMdocsHuds(root);

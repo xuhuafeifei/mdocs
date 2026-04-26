@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useI18n } from "../i18n";
 import { DiagramEditor } from "./DiagramEditor";
 
 /**
@@ -14,6 +15,7 @@ export function FlowDiagramModal(props: {
   onSave: (flowData: unknown) => void;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
   useEffect(() => {
     if (!props.open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -29,9 +31,9 @@ export function FlowDiagramModal(props: {
     <div className="mdocs-modal-backdrop" onClick={props.onCancel}>
       <div className="mdocs-modal mdocs-flow-modal" onClick={(e) => e.stopPropagation()}>
         <div className="mdocs-modal-header">
-          <span>{props.initialData ? "Edit diagram" : "New diagram"}</span>
+          <span>{props.initialData ? t("editDiagram") : t("newDiagram")}</span>
           <button type="button" onClick={props.onCancel}>
-            Close
+            {t("close")}
           </button>
         </div>
         <div className="mdocs-modal-body">

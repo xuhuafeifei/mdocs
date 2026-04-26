@@ -1,12 +1,14 @@
 import { useMemo } from "react";
-import { PALETTE, type PaletteItem } from "./diagram-pens";
+import { useI18n } from "../i18n";
+import { getPalette, type PaletteItem } from "./diagram-pens";
 
 export function DiagramPalette(props: { disabled?: boolean }) {
-  const groups = useMemo(() => groupByGroup(PALETTE), []);
+  const { t } = useI18n();
+  const groups = useMemo(() => groupByGroup(getPalette(t)), []);
   return (
     <aside className="mdocs-palette">
-      <div className="mdocs-palette-title">Components</div>
-      <div className="mdocs-palette-hint muted">drag to canvas</div>
+      <div className="mdocs-palette-title">{t("components")}</div>
+      <div className="mdocs-palette-hint muted">{t("dragToCanvas")}</div>
       {groups.map(([group, items]) => (
         <div key={group} className="mdocs-palette-group">
           <div className="mdocs-palette-group-title muted">{group}</div>

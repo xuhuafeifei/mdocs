@@ -1,4 +1,5 @@
 import React from "react";
+import { useI18n } from "../../i18n";
 import type { Position } from "./diagramUtils";
 
 export interface ActionBarProps {
@@ -42,6 +43,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
   onMouseEnter,
   onMouseLeave,
 }) => {
+  const { t } = useI18n();
   if (!isVisible || !position) {
     return null;
   }
@@ -80,7 +82,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
         {!isLocked && (
           <ActionButton
             icon={EDIT_ICON}
-            title="Edit diagram"
+            title={t("editDiagram")}
             onClick={onEdit}
             color="#3b82f6"
           />
@@ -88,7 +90,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
         {!isLocked && (
           <ActionButton
             icon={DELETE_ICON}
-            title="Delete diagram"
+            title={t("deleteDiagram")}
             onClick={onDelete}
             color="#ef4444"
           />

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Meta2d } from "@meta2d/core";
+import { useI18n } from "../i18n";
 import { DiagramPalette } from "./DiagramPalette";
 import { registerAllShapeLibraries } from "../meta2d/registerPens";
 
@@ -15,6 +16,7 @@ export function DiagramEditor(props: {
   saveLabel?: string;
   compact?: boolean;
 }) {
+  const { t } = useI18n();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const meta2dRef = useRef<Meta2d | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,7 +39,7 @@ export function DiagramEditor(props: {
       const initial = props.initial ?? { pens: [] };
       instance.open(initial as never);
     } catch (err) {
-      setMessage(`open failed: ${errorMessage(err)}`);
+      setMessage(t("openFailed", { message: errorMessage(err) }));
     }
     return () => {
       try {
@@ -62,7 +64,7 @@ export function DiagramEditor(props: {
         }),
       );
       props.onSaved?.(sanitized);
-      setMessage("saved");
+      setMessage(t("saved"));
       window.setTimeout(() => setMessage(null), 800);
     } catch (err) {
       setMessage(errorMessage(err));
@@ -80,7 +82,7 @@ export function DiagramEditor(props: {
           disabled={!props.canEdit || busy}
           onClick={() => void save()}
         >
-          {busy ? "saving..." : (props.saveLabel ?? "Save")}
+          {busy ? t("saving") : (props.saveLabel ?? t("save"))}
         </button>
       </div>
       <div className="mdocs-editor-body mdocs-diagram-body">

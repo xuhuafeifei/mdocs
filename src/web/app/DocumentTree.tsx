@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "../i18n";
 import type {
   TreeFolderNode,
   TreeNode,
@@ -20,11 +21,12 @@ export function DocumentTree(props: {
   onOpenFolder: (folderPath: string, descDocumentId: string | null | undefined) => void;
   onContextMenu: (payload: TreeContextMenu) => void;
 }) {
+  const { t } = useI18n();
   if (props.nodes.length === 0) {
     return (
       <div className="mdocs-sidebar-list">
         <div className="muted" style={{ padding: "8px 10px", fontSize: 12 }}>
-          no documents yet
+          {t("noDocumentsYet")}
         </div>
       </div>
     );
@@ -136,6 +138,7 @@ function FolderRow(props: {
   onContextMenu: (payload: TreeContextMenu) => void;
   indent: React.CSSProperties;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(props.depth < 1);
   const isActive =
     Boolean(props.folder.descDocumentId) && props.folder.descDocumentId === props.activeDocumentId;
@@ -168,7 +171,7 @@ function FolderRow(props: {
           role="button"
           tabIndex={0}
           aria-expanded={open}
-          aria-label={open ? "Collapse folder" : "Expand folder"}
+          aria-label={open ? t("collapseFolder") : t("expandFolder")}
           onClick={(e) => {
             e.stopPropagation();
             setOpen((v) => !v);

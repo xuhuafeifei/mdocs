@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useI18n } from "../i18n";
 import type { TreeNode } from "../../shared/types/tree";
 
 export function TreeContextMenu(props: {
@@ -11,6 +12,7 @@ export function TreeContextMenu(props: {
   onCreateFolder: (parentPath: string) => void;
   onDelete: (node: Extract<TreeNode, { type: "document" }>) => void;
 }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -31,21 +33,21 @@ export function TreeContextMenu(props: {
   }, [props]);
 
   const isFolder = props.node.type === "folder";
-  let folderHuman = "root";
+  let folderHuman = "";
   if (props.node.type === "folder") {
     const f = props.node;
-    folderHuman = f.folderDisplayName?.trim() || f.path || "root";
+    folderHuman = f.folderDisplayName?.trim() || f.path || "";
   }
   const createLabel = isFolder
-    ? props.node.path || folderHuman !== "root"
-      ? `New document in ${folderHuman}`
-      : "New document at root"
-    : "New document beside this";
+    ? folderHuman
+      ? t("newDocIn", { name: folderHuman })
+      : t("newDocAtRoot")
+    : t("newDocBeside");
   const folderLabel = isFolder
-    ? props.node.path || folderHuman !== "root"
-      ? `New folder in ${folderHuman}`
-      : "New folder at root"
-    : "New folder beside this";
+    ? folderHuman
+      ? t("newFolderIn", { name: folderHuman })
+      : t("newFolderAtRoot")
+    : t("newFolderBeside");
 
   return (
     <div
@@ -85,7 +87,7 @@ export function TreeContextMenu(props: {
             props.onClose();
           }}
         >
-          Delete {props.node.name}
+          {t("deleteItem", { name: props.node.name })}
         </button>
       )}
     </div>

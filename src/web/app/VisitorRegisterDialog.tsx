@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useI18n } from "../i18n";
 
 export function VisitorRegisterDialog(props: {
   onSubmit: (visitorName: string) => Promise<void>;
   error: string | null;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -12,7 +14,7 @@ export function VisitorRegisterDialog(props: {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) {
-      setLocalError("please enter a name");
+      setLocalError(t("nameRequired"));
       return;
     }
     setBusy(true);
@@ -31,22 +33,19 @@ export function VisitorRegisterDialog(props: {
   return (
     <div className="mdocs-dialog-backdrop">
       <div className="mdocs-dialog card">
-        <h1>Welcome to mdocs</h1>
-        <p>
-          Enter a display name to create a visitor identity. A secure token will
-          be stored in this browser to identify you on future visits.
-        </p>
+        <h1>{t("welcomeTitle")}</h1>
+        <p>{t("welcomeDesc")}</p>
         <form onSubmit={submit}>
           <input
             autoFocus
-            placeholder="fgbg"
+            placeholder={t("visitorNamePlaceholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={60}
           />
           {error && <div className="mdocs-dialog-error">{error}</div>}
           <button type="submit" className="primary" disabled={busy}>
-            {busy ? "creating..." : "Create visitor"}
+            {busy ? t("creating") : t("createVisitor")}
           </button>
         </form>
       </div>

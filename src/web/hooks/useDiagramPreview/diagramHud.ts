@@ -36,7 +36,11 @@ export function sweepOrphanMdocsHuds(container: Element): void {
  * Corner overlay (bottom-right) on the preview column; shown via CSS on hover of the preview.
  * 不缓存 block：点击时从 DOM 解析当前 .vditor-wysiwyg__block，避免删块/重排后闭包还是旧节点。
  */
-export function syncDiagramHud(viewPre: HTMLElement, isLocked: boolean): void {
+export function syncDiagramHud(
+  viewPre: HTMLElement,
+  isLocked: boolean,
+  labels?: { edit: string; delete: string; editDiagram: string; deleteDiagram: string },
+): void {
   viewPre.style.position = "relative";
   removeDiagramHud(viewPre);
   ensureMeta2CaretAnchor(viewPre);
@@ -49,13 +53,13 @@ export function syncDiagramHud(viewPre: HTMLElement, isLocked: boolean): void {
   hud.setAttribute("contenteditable", "false");
   viewPre.appendChild(hud);
 
-  const addBtn = (action: "edit" | "delete", label: string) => {
+  const addBtn = (action: "edit" | "delete", label: string, ariaLabel: string) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "mdocs-diagram-hud__btn";
     b.setAttribute("data-mdocs-hud", action);
     b.setAttribute("contenteditable", "false");
-    b.setAttribute("aria-label", action === "edit" ? "Edit diagram" : "Delete diagram");
+    b.setAttribute("aria-label", ariaLabel);
     b.textContent = label;
     b.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -72,6 +76,7 @@ export function syncDiagramHud(viewPre: HTMLElement, isLocked: boolean): void {
     hud.appendChild(b);
   };
 
-  addBtn("edit", "Edit");
-  addBtn("delete", "Delete");
+  const l = labels;
+  addBtn("edit", l?.edit ?? "Edit", l?.editDiagram ?? "Edit diagram");
+  addBtn("delete", l?.delete ?? "Delete", l?.deleteDiagram ?? "Delete diagram");
 }
