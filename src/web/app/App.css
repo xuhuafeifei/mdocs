@@ -1,7 +1,9 @@
 .mdocs-shell {
   display: grid;
   grid-template-columns: 260px 1fr;
-  height: 100%;
+  grid-template-rows: 1fr;
+  height: 100vh;
+  min-height: 0;
 }
 
 .mdocs-loading {
@@ -262,9 +264,11 @@
 }
 
 .mdocs-settings {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 32px 40px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .mdocs-settings-header {
@@ -378,6 +382,8 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   position: relative;
 }
 
@@ -391,7 +397,8 @@
 .mdocs-editor {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .mdocs-editor-toolbar {
@@ -401,6 +408,7 @@
   padding: 12px 20px;
   border-bottom: 1px solid var(--mdocs-border);
   background: var(--mdocs-surface);
+  flex-shrink: 0;
 }
 
 .mdocs-editor-title-input {
@@ -461,8 +469,10 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 16px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .mdocs-toast {
@@ -584,7 +594,9 @@
 }
 
 .mdocs-welcome {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   align-items: center;

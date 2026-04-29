@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { Block } from "@lobehub/ui";
+
 import {
   INSERT_CODEINLINE_COMMAND,
   INSERT_CODEMIRROR_COMMAND,
@@ -271,17 +273,19 @@ export function DocumentEditor(props: DocumentEditorProps) {
       </div>
       <div className="mdocs-editor-inner">
         {editor && <Toolbar editor={editor} />}
-        <Editor
-          content={props.document.content}
-          type="markdown"
-          key={props.document.documentId}
-          editable={props.canEdit}
-          onInit={handleInit}
-          plugins={plugins}
-          lineEmptyPlaceholder={t("displayNamePlaceholder")}
-          placeholder={t("displayNamePlaceholder")}
-          slashOption={{ items: slashItems }}
-        />
+        <Block variant="outlined" style={{ borderRadius: 8 }}>
+          <Editor
+            content={props.document.content}
+            type="markdown"
+            key={props.document.documentId}
+            editable={props.canEdit}
+            onInit={handleInit}
+            plugins={plugins}
+            lineEmptyPlaceholder={t("displayNamePlaceholder")}
+            placeholder={t("displayNamePlaceholder")}
+            slashOption={{ items: slashItems }}
+          />
+        </Block>
       </div>
     </div>
   );

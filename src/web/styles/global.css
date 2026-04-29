@@ -19,6 +19,7 @@ html,
 body,
 #root {
   height: 100%;
+  min-height: 0;
   margin: 0;
 }
 
@@ -69,9 +70,13 @@ button.danger:hover {
 }
 
 .mdocs-playground-page {
-  min-height: 100%;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
   padding: 16px;
   background: var(--mdocs-bg);
+  -webkit-overflow-scrolling: touch;
 }
 
 .mdocs-playground-header {
