@@ -34,6 +34,7 @@ import type { DomainSummary } from "../../shared/types/domain";
 import { useI18n } from "../i18n";
 import { openFileSelector } from "./actions";
 import Toolbar from "./Toolbar";
+import OutlinePanel from "./OutlinePanel";
 
 interface DocumentEditorProps {
   document: DocumentDetail;
@@ -69,7 +70,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     if (!editor || !props.canEdit) return;
     setBusy(true);
     try {
-      const content = editor.getDocument("markdown") as string;
+      const content = (editor.getDocument("markdown") as string).trimEnd();
       await props.onSave(content, displayName, props.document.documentId);
     } finally {
       setBusy(false);
@@ -271,22 +272,36 @@ export function DocumentEditor(props: DocumentEditorProps) {
           </button>
         </div>
       </div>
-      <div className="mdocs-editor-inner">
-        {editor && <Toolbar editor={editor} />}
-        <Block variant="outlined" style={{ borderRadius: 8 }}>
-          <Editor
-            content={props.document.content}
-            type="markdown"
-            key={props.document.documentId}
-            editable={props.canEdit}
-            onInit={handleInit}
-            plugins={plugins}
-            lineEmptyPlaceholder={t("displayNamePlaceholder")}
-            placeholder={t("displayNamePlaceholder")}
-            slashOption={{ items: slashItems }}
-          />
-        </Block>
-      </div>
+      <Block flex={1} style={{ minHeight: 0 }}>
+        <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
+              overflow: "auto",
+            }}
+          >
+            {editor && <Toolbar editor={editor} />}
+            <Block variant="outlined" style={{ background: "var(--mdocs-surface)" }}>
+              <Editor
+                content={props.document.content}
+                type="markdown"
+                key={props.document.documentId}
+                editable={props.canEdit}
+                onInit={handleInit}
+                plugins={plugins}
+                lineEmptyPlaceholder={t("displayNamePlaceholder")}
+                placeholder={t("displayNamePlaceholder")}
+                slashOption={{ items: slashItems }}
+                style={{ padding: "0 20px" }}
+              />
+            </Block>
+          </div>
+          {editor && <OutlinePanel editor={editor} />}
+        </div>
+      </Block>
     </div>
   );
 }

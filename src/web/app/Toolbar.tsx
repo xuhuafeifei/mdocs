@@ -11,7 +11,6 @@ import {
   FloatActions,
   useEditorState,
 } from "@lobehub/editor/react";
-import { Block } from "@lobehub/ui";
 import {
   BoldIcon,
   CodeXmlIcon,
@@ -35,9 +34,8 @@ import { type CSSProperties, type FC, useMemo } from "react";
 import { openFileSelector } from "./actions";
 
 const stickyToolbarStyle: CSSProperties = {
-  marginBottom: 16,
   position: "sticky",
-  top: 12,
+  top: 0,
   zIndex: 10,
 };
 
@@ -206,15 +204,17 @@ const Toolbar: FC<ToolbarProps> = ({ editor, floating, style, className }) => {
   if (floating) return <FloatActions items={items} />;
 
   return (
-    <Block
+    <div
       className={className}
-      padding={4}
-      shadow
-      style={{ ...stickyToolbarStyle, ...style }}
-      variant="outlined"
+      style={{
+        ...stickyToolbarStyle,
+        background: "var(--mdocs-surface)",
+        borderBottom: "1px solid var(--mdocs-border)",
+        ...style,
+      }}
     >
       <ChatInputActions items={items} />
-    </Block>
+    </div>
   );
 };
 

@@ -19,6 +19,8 @@
   "dependencies": {
     "@lobehub/editor": "file:../my-lobe-editor",
     "@lobehub/ui": "^5.0.0",
+    "@lexical/rich-text": "0.42.0",
+    "lexical": "0.42.0",
     "antd": "^6.1.1",
     "antd-style": "^4.1.0",
     "better-sqlite3": "^11.3.0",

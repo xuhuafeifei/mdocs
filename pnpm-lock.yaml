@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@lexical/rich-text':
+        specifier: 0.42.0
+        version: 0.42.0
       '@lobehub/editor':
         specifier: file:../my-lobe-editor
         version: file:../my-lobe-editor(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)
@@ -29,6 +32,9 @@ importers:
       express:
         specifier: ^4.21.0
         version: 4.22.1
+      lexical:
+        specifier: 0.42.0
+        version: 0.42.0
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.5)
