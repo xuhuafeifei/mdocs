@@ -1,33 +1,37 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from "react";
-import Vditor from "vditor";
-import "vditor/dist/index.css";
+  INSERT_CODEINLINE_COMMAND,
+  INSERT_CODEMIRROR_COMMAND,
+  INSERT_FILE_COMMAND,
+  INSERT_HEADING_COMMAND,
+  INSERT_HORIZONTAL_RULE_COMMAND,
+  INSERT_LINK_COMMAND,
+  INSERT_MATH_COMMAND,
+  INSERT_TABLE_COMMAND,
+  ReactCodePlugin,
+  ReactCodemirrorPlugin,
+  ReactFilePlugin,
+  ReactHRPlugin,
+  ReactImagePlugin,
+  ReactLinkPlugin,
+  ReactListPlugin,
+  ReactMathPlugin,
+  ReactMeta2dPlugin,
+  ReactTablePlugin,
+  ReactToolbarPlugin,
+  enUS,
+  zhCN,
+} from "@lobehub/editor";
+import type { IEditor } from "@lobehub/editor";
+import { Editor, withProps } from "@lobehub/editor/react";
+import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, SigmaIcon, Table2Icon } from "lucide-react";
+
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
-import { getStoredToken } from "../api/client";
-import { findMeta2BlockRange } from "../diagram/meta2Markdown";
-import { useFlowRenderer } from "../hooks/useDiagramPreview";
 import { useI18n } from "../i18n";
-import { FlowDiagramModal } from "./FlowDiagramModal";
-
-/** Same fence as markdown-docs (`EditorPanel` / `useFlowRenderer`). */
-const FLOW_OPEN_FENCE = /^\s*```(meta2|meta)\b/;
-
-function withReadOnlyNotice(content: string, canEdit: boolean, prefix: string): string {
-  if (canEdit) return content;
-  if (content.startsWith(prefix)) return content;
-  return prefix + content;
-}
-
-export interface DocumentEditorHandle {
-  openInsertFlowEditor: () => void;
-}
+import { openFileSelector } from "./actions";
+import Toolbar from "./Toolbar";
 
 interface DocumentEditorProps {
   document: DocumentDetail;
@@ -39,380 +43,255 @@ interface DocumentEditorProps {
   onDelete: () => Promise<void>;
 }
 
-/**
- * Same order as `markdown-docs/frontend/src/hooks/useVditor.ts` `FULL_TOOLBAR`.
- * `upload` is omitted when the user cannot edit (no owner token / read-only).
- */
-const VDITOR_TOOLBAR_FULL: string[] = [
-  "undo",
-  "redo",
-  "table",
-  "outline",
-  "|",
-  "headings",
-  "bold",
-  "italic",
-  "strike",
-  "link",
-  "|",
-  "list",
-  "ordered-list",
-  "check",
-  "outdent",
-  "indent",
-  "|",
-  "quote",
-  "line",
-  "code",
-  "inline-code",
-  "insert-before",
-  "insert-after",
-  "|",
-  "upload",
-  "|",
-  "edit-mode",
-  "both",
-];
+export function DocumentEditor(props: DocumentEditorProps) {
+  const { t, lang } = useI18n();
+  const [displayName, setDisplayName] = useState(props.document.displayName);
+  const [busy, setBusy] = useState(false);
+  const [editor, setEditor] = useState<IEditor | null>(null);
 
-const UPLOAD_MAX_BYTES = 12 * 1024 * 1024;
+  // Sync editor locale with mdocs i18n language
+  useEffect(() => {
+    editor?.setLocale(lang === "zh" ? zhCN : enUS);
+  }, [editor, lang]);
 
-function buildToolbar(canEdit: boolean): string[] {
-  if (canEdit) return [...VDITOR_TOOLBAR_FULL];
-  return VDITOR_TOOLBAR_FULL.filter((x) => x !== "upload");
-}
+  // Sync displayName when switching documents
+  useEffect(() => {
+    setDisplayName(props.document.displayName);
+  }, [props.document.displayName, props.document.documentId]);
 
-export const DocumentEditor = forwardRef<DocumentEditorHandle, DocumentEditorProps>(
-  function DocumentEditor(props, ref) {
-    const { t, lang: currentLang } = useI18n();
-    const [displayName, setDisplayName] = useState(props.document.displayName);
-    const [busy, setBusy] = useState(false);
+  const handleInit = useCallback((e: IEditor) => {
+    setEditor(e);
+  }, []);
 
-    const hostRef = useRef<HTMLDivElement | null>(null);
-    const vditorRef = useRef<Vditor | null>(null);
-    const readyRef = useRef(false);
-    const pendingValueRef = useRef<string | null>(null);
+  async function save(): Promise<void> {
+    if (!editor || !props.canEdit) return;
+    setBusy(true);
+    try {
+      const content = editor.getDocument("markdown") as string;
+      await props.onSave(content, displayName, props.document.documentId);
+    } finally {
+      setBusy(false);
+    }
+  }
 
-    const [flowModalOpen, setFlowModalOpen] = useState(false);
-    const [editingFlowData, setEditingFlowData] = useState<unknown | null>(null);
-    const [editingLineNumber, setEditingLineNumber] = useState(-1);
-    const [editingBlockIndex, setEditingBlockIndex] = useState(-1);
-    const [editingRawJson, setEditingRawJson] = useState("");
+  async function saveDisplayNameIfChanged(): Promise<void> {
+    if (!props.canEdit) return;
+    const prev = props.document.displayName.trim();
+    const next = displayName.trim();
+    if (next === prev) return;
+    await save();
+  }
 
-    const flowEditCtxRef = useRef<{
-      data: unknown | null;
-      line: number;
-      blockIndex: number;
-      rawJson: string;
-    }>({
-      data: null,
-      line: -1,
-      blockIndex: -1,
-      rawJson: "",
-    });
-    flowEditCtxRef.current = {
-      data: editingFlowData,
-      line: editingLineNumber,
-      blockIndex: editingBlockIndex,
-      rawJson: editingRawJson,
-    };
-
-    const handleEditFlow = useCallback(
-      (_lineNumber: number, flowData: unknown, blockIndex: number, rawJson: string) => {
-        setEditingLineNumber(_lineNumber);
-        setEditingFlowData(flowData);
-        setEditingBlockIndex(blockIndex);
-        setEditingRawJson(rawJson);
-        setFlowModalOpen(true);
-      },
-      [],
-    );
-
-    useFlowRenderer(hostRef, handleEditFlow, !props.canEdit);
-
-    useEffect(() => {
-      if (!hostRef.current) return;
-      const host = hostRef.current;
-      readyRef.current = false;
-      pendingValueRef.current = null;
-
-      const uploadOpts = props.canEdit
-        ? {
-            upload: {
-              url: "/api/assets/upload",
-              linkToImgUrl: `/api/assets/link-to-img?documentId=${encodeURIComponent(props.document.documentId)}`,
-              max: UPLOAD_MAX_BYTES,
-              fieldName: "file[]",
-              accept: "image/*",
-              multiple: true,
-              filename: (name: string) => name,
-              extraData: { documentId: props.document.documentId },
-              setHeaders: () => ({
-                "x-visitor-token": getStoredToken() ?? "",
-              }),
-            },
-          }
-        : {};
-
-      const instance = new Vditor(host, {
-        height: "100%",
-        minHeight: 360,
-        mode: "wysiwyg",
-        lang: currentLang === "zh" ? "zh_CN" : "en_US",
-        /** 不设时 `fixTab` 不生效，按 Tab 会走浏览器默认＝焦点离开编辑器，代码块内既无缩进也「像丢了编辑区」。 */
-        tab: "    ",
-        typewriterMode: false,
-        outline: { enable: false, position: "left" },
-        toolbar: buildToolbar(props.canEdit),
-        cache: { enable: false },
-        toolbarConfig: { pin: false },
-        counter: { enable: false },
-        preview: {
-          actions: ["desktop", "tablet", "mobile"],
-          markdown: {
-            toc: true,
-            autoSpace: true,
-            footnotes: true,
-            /** Allow `![](http...)` in trusted self-hosted editor (markdown-docs relies on server-side hygiene). */
-            sanitize: false,
-          },
-        },
-        ...uploadOpts,
-        value: withReadOnlyNotice(props.document.content, props.canEdit, t("readOnlyNotice")),
-        after: () => {
-          readyRef.current = true;
-          window.vditorInstance = instance;
-          if (pendingValueRef.current !== null) {
-            instance.setValue(pendingValueRef.current);
-            pendingValueRef.current = null;
-          }
-        },
-      });
-      vditorRef.current = instance;
-
-      return () => {
-        readyRef.current = false;
-        if (window.vditorInstance === instance) {
-          window.vditorInstance = undefined;
-        }
-        try {
-          instance.destroy();
-        } catch {
-          // ignore
-        }
-        vditorRef.current = null;
-      };
-    }, [props.document.documentId, props.canEdit, currentLang]);
-
-    useEffect(() => {
-      setDisplayName(props.document.displayName);
-      const v = vditorRef.current;
-      if (!v) return;
-      const display = withReadOnlyNotice(props.document.content, props.canEdit, t("readOnlyNotice"));
-      if (readyRef.current) {
-        v.setValue(display);
-      } else {
-        pendingValueRef.current = display;
+  // Listen for Ctrl+S / Cmd+S
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        void saveRef.current();
       }
-    }, [props.document.documentId, props.document.content, props.document.displayName, props.canEdit, currentLang]);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
-    const handleFlowSave = useCallback(
-      (flowData: unknown) => {
-        if (!props.canEdit) {
-          setFlowModalOpen(false);
-          return;
-        }
-        setFlowModalOpen(false);
-        const v = vditorRef.current;
-        if (!v) return;
-
-        const { data: priorData, line: lineNo, blockIndex: blockIdx, rawJson } =
-          flowEditCtxRef.current;
-
-        if (!priorData) {
-          const block = `\n\n\`\`\`meta2\n${JSON.stringify(flowData)}\n\`\`\`\n\n`;
-          const current = v.getValue();
-          const next = current.endsWith("\n") ? current + block : `${current}\n${block}`;
-          v.setValue(next);
-        } else {
-          const md = v.getValue();
-          const newJsonLine = JSON.stringify(flowData);
-          let applied = false;
-
-          if (blockIdx >= 0) {
-            const range = findMeta2BlockRange(md, blockIdx);
-            if (range) {
-              const [start, end] = range;
-              const lines = md.split("\n");
-              const openLine = lines[start] ?? "```meta2";
-              const langMatch = /```\s*(meta2|meta)\b/.exec(openLine);
-              const lang = langMatch?.[1] ?? "meta2";
-              const newFence = [`\`\`\`${lang}`, newJsonLine, "```"];
-              lines.splice(start, end - start + 1, ...newFence);
-              v.setValue(lines.join("\n"));
-              applied = true;
-            }
-          }
-
-          if (!applied && rawJson && md.includes(rawJson)) {
-            v.setValue(md.replace(rawJson, newJsonLine));
-            applied = true;
-          }
-
-          if (!applied) {
-            const lines = md.split("\n");
-            if (
-              lineNo >= 1 &&
-              lineNo < lines.length &&
-              FLOW_OPEN_FENCE.test(lines[lineNo - 1] ?? "") &&
-              lines.slice(lineNo + 1).some((l) => /^\s*```\s*$/.test(l ?? ""))
-            ) {
-              let closeIdx = -1;
-              for (let k = lineNo + 1; k < lines.length; k++) {
-                if (/^\s*```\s*$/.test(lines[k] ?? "")) {
-                  closeIdx = k;
-                  break;
-                }
-              }
-              if (closeIdx > lineNo) {
-                const langMatch = /```\s*(meta2|meta)\b/.exec(lines[lineNo - 1] ?? "");
-                const lang = langMatch?.[1] ?? "meta2";
-                const newFence = [`\`\`\`${lang}`, newJsonLine, "```"];
-                lines.splice(lineNo - 1, closeIdx - (lineNo - 1) + 1, ...newFence);
-                v.setValue(lines.join("\n"));
-                applied = true;
-              }
-            }
-          }
-
-          if (!applied) {
-            const oldStr = JSON.stringify(priorData);
-            if (md.includes(oldStr)) {
-              v.setValue(md.replace(oldStr, newJsonLine));
-            }
-          }
-        }
-
-        setEditingFlowData(null);
-        setEditingLineNumber(-1);
-        setEditingBlockIndex(-1);
-        setEditingRawJson("");
+  const slashItems = useMemo(
+    () => [
+      {
+        icon: Heading1Icon,
+        key: "h1",
+        label: "Heading 1",
+        onSelect: (editor: IEditor) => {
+          editor.dispatchCommand(INSERT_HEADING_COMMAND, { tag: "h1" });
+        },
       },
-      [props.canEdit],
-    );
+      {
+        icon: Heading2Icon,
+        key: "h2",
+        label: "Heading 2",
+        onSelect: (editor: IEditor) => {
+          editor.dispatchCommand(INSERT_HEADING_COMMAND, { tag: "h2" });
+        },
+      },
+      {
+        icon: Heading3Icon,
+        key: "h3",
+        label: "Heading 3",
+        onSelect: (editor: IEditor) => {
+          editor.dispatchCommand(INSERT_HEADING_COMMAND, { tag: "h3" });
+        },
+      },
+      { type: "divider" },
+      {
+        icon: MinusIcon,
+        key: "hr",
+        label: "Hr",
+        onSelect: (editor: IEditor) => {
+          editor.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, {});
+        },
+      },
+      {
+        icon: Table2Icon,
+        key: "table",
+        label: "Table",
+        onSelect: (editor: IEditor) => {
+          editor.dispatchCommand(INSERT_TABLE_COMMAND, { columns: "3", rows: "3" });
+        },
+      },
+      {
+        icon: SigmaIcon,
+        key: "tex",
+        label: "TeX",
+        onSelect: (editor: IEditor) => {
+          editor.dispatchCommand(INSERT_MATH_COMMAND, { code: "x^2 + y^2 = z^2" });
+          queueMicrotask(() => editor.focus());
+        },
+      },
+      { type: "divider" },
+      {
+        key: "file",
+        label: "File",
+        onSelect: (editor: IEditor) => {
+          openFileSelector((files) => {
+            for (const file of files) {
+              editor.dispatchCommand(INSERT_FILE_COMMAND, { file });
+            }
+          });
+        },
+      },
+      {
+        key: "insert-link",
+        label: "Insert Link",
+        onSelect: (editor: IEditor) => {
+          editor.dispatchCommand(INSERT_LINK_COMMAND, { url: "https://example.com" });
+          queueMicrotask(() => editor.focus());
+        },
+      },
+      {
+        key: "insert-codeInline",
+        label: "Inline Code",
+        onSelect: (editor: IEditor) => {
+          editor.dispatchCommand(INSERT_CODEINLINE_COMMAND, undefined);
+          queueMicrotask(() => editor.focus());
+        },
+      },
+      {
+        key: "insert-codeBlock",
+        label: "Code Block",
+        onSelect: (editor: IEditor) => {
+          editor.dispatchCommand(INSERT_CODEMIRROR_COMMAND, undefined);
+          queueMicrotask(() => editor.focus());
+        },
+      },
+    ].map((item) => {
+      if ("type" in item && item.type === "divider") return item;
+      return {
+        ...item,
+        extra: (
+          <span style={{ color: "#8c8c8c", fontFamily: "monospace", fontSize: 12 }}>
+            {item.key}
+          </span>
+        ),
+      };
+    }),
+    [],
+  );
 
-    const handleFlowCancel = useCallback(() => {
-      setFlowModalOpen(false);
-      setEditingFlowData(null);
-      setEditingLineNumber(-1);
-      setEditingBlockIndex(-1);
-      setEditingRawJson("");
-    }, []);
-
-    useImperativeHandle(
-      ref,
-      () => ({
-        openInsertFlowEditor() {
-          setEditingFlowData(null);
-          setEditingLineNumber(-1);
-          setEditingBlockIndex(-1);
-          setEditingRawJson("");
-          setFlowModalOpen(true);
+  const plugins = useMemo(
+    () => [
+      ReactListPlugin,
+      ReactLinkPlugin,
+      ReactImagePlugin,
+      ReactCodemirrorPlugin,
+      ReactHRPlugin,
+      ReactTablePlugin,
+      ReactMathPlugin,
+      ReactMeta2dPlugin,
+      ReactCodePlugin,
+      withProps(ReactToolbarPlugin, {
+        children: editor ? <Toolbar editor={editor} floating /> : null,
+      }),
+      withProps(ReactFilePlugin, {
+        handleUpload: async (file: File) => {
+          return { url: URL.createObjectURL(file) };
         },
       }),
-      [],
-    );
+      withProps(ReactImagePlugin, {
+        defaultBlockImage: true,
+        needRehost: (url: string) => url.startsWith("blob:"),
+        handleRehost: async (url: string) => {
+          const res = await fetch(url);
+          const blob = await res.blob();
+          return new Promise<{ url: string }>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve({ url: reader.result as string });
+            reader.readAsDataURL(blob);
+          });
+        },
+      }),
+    ],
+    [editor],
+  );
 
-    async function save(): Promise<void> {
-      const v = vditorRef.current;
-      if (!v) return;
-      const content = v.getValue();
-      setBusy(true);
-      try {
-        await props.onSave(content, displayName, props.document.documentId);
-      } finally {
-        setBusy(false);
-      }
-    }
-
-    async function saveDisplayNameIfChanged(): Promise<void> {
-      if (!props.canEdit) return;
-      const prev = props.document.displayName.trim();
-      const next = displayName.trim();
-      if (next === prev) return;
-      const v = vditorRef.current;
-      if (!v) return;
-      setBusy(true);
-      try {
-        await props.onSave(v.getValue(), displayName, props.document.documentId);
-      } finally {
-        setBusy(false);
-      }
-    }
-
-    return (
-      <div className="mdocs-editor">
-        <div className="mdocs-editor-toolbar">
-          <input
-            className="mdocs-editor-title-input"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            onBlur={() => void saveDisplayNameIfChanged()}
-            placeholder={t("displayNamePlaceholder")}
-            disabled={!props.canEdit}
-          />
-          <select
-            className="mdocs-editor-domain-select"
-            aria-label={t("currentDomainAria")}
-            value={props.currentDomainId}
-            onChange={(e) => props.onDomainChange(e.target.value)}
-          >
-            {(props.domains.length ? props.domains : [{ domainId: "default", domainName: t("defaultDomain") }]).map((d) => (
+  return (
+    <div className="mdocs-editor">
+      <div className="mdocs-editor-toolbar">
+        <input
+          className="mdocs-editor-title-input"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          onBlur={() => void saveDisplayNameIfChanged()}
+          placeholder={t("displayNamePlaceholder")}
+          disabled={!props.canEdit}
+        />
+        <select
+          className="mdocs-editor-domain-select"
+          aria-label={t("currentDomainAria")}
+          value={props.currentDomainId}
+          onChange={(e) => props.onDomainChange(e.target.value)}
+        >
+          {(props.domains.length ? props.domains : [{ domainId: "default", domainName: t("defaultDomain") }]).map(
+            (d) => (
               <option key={d.domainId} value={d.domainId}>
-                {localizeDomainName(d.domainName, currentLang, t)}
+                {localizeDomainName(d.domainName, lang, t)}
               </option>
-            ))}
-          </select>
-          <span className="mdocs-editor-toolbar-spacer" aria-hidden />
-          <div className="mdocs-editor-toolbar-actions">
-            <button
-              type="button"
-              disabled={!props.canEdit || busy}
-              onClick={() => {
-                setEditingFlowData(null);
-                setEditingLineNumber(-1);
-                setEditingBlockIndex(-1);
-                setEditingRawJson("");
-                setFlowModalOpen(true);
-              }}
-            >
-              {t("insertDiagram")}
-            </button>
-            <button type="button" className="primary" disabled={!props.canEdit || busy} onClick={() => void save()}>
-              {busy ? t("saving") : t("save")}
-            </button>
-            <button type="button" className="danger" disabled={!props.canEdit || busy} onClick={props.onDelete}>
-              {t("delete")}
-            </button>
-          </div>
+            ),
+          )}
+        </select>
+        <span className="mdocs-editor-toolbar-spacer" aria-hidden />
+        <div className="mdocs-editor-toolbar-actions">
+          <button type="button" className="primary" disabled={!props.canEdit || busy} onClick={() => void save()}>
+            {busy ? t("saving") : t("save")}
+          </button>
+          <button type="button" className="danger" disabled={!props.canEdit || busy} onClick={props.onDelete}>
+            {t("delete")}
+          </button>
         </div>
-        <div className="mdocs-editor-body">
-          <div ref={hostRef} className="mdocs-vditor-host" />
-        </div>
-        <FlowDiagramModal
-          open={flowModalOpen}
-          flowKey={editingFlowData === null ? "flow-insert" : `flow-edit-${editingBlockIndex}-${editingLineNumber}`}
-          initialData={editingFlowData}
-          canEdit={props.canEdit}
-          saveLabel={!editingFlowData ? t("saveAndInsert") : t("save")}
-          onSave={handleFlowSave}
-          onCancel={handleFlowCancel}
+      </div>
+      <div className="mdocs-editor-inner">
+        {editor && <Toolbar editor={editor} />}
+        <Editor
+          content={props.document.content}
+          type="markdown"
+          key={props.document.documentId}
+          editable={props.canEdit}
+          onInit={handleInit}
+          plugins={plugins}
+          lineEmptyPlaceholder={t("displayNamePlaceholder")}
+          placeholder={t("displayNamePlaceholder")}
+          slashOption={{ items: slashItems }}
         />
       </div>
-    );
-  },
-);
+    </div>
+  );
+}
 
-function localizeDomainName(name: string, langCode: "en" | "zh", t: (k: import("../i18n/types").TranslationKey, vars?: Record<string, string>) => string): string {
+function localizeDomainName(
+  name: string,
+  langCode: "en" | "zh",
+  t: (k: string, vars?: Record<string, string>) => string,
+): string {
   if (name === "Default") return t("defaultDomain");
   const suffix = "个人域";
   if (name.endsWith(suffix)) {

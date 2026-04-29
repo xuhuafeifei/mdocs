@@ -68,6 +68,30 @@ button.danger:hover {
   background: #fbeae7;
 }
 
+.mdocs-playground-page {
+  min-height: 100%;
+  padding: 16px;
+  background: var(--mdocs-bg);
+}
+
+.mdocs-playground-header {
+  margin-bottom: 12px;
+}
+
+.mdocs-playground-back {
+  color: var(--mdocs-accent);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.mdocs-playground-back:hover {
+  text-decoration: underline;
+}
+
+.mdocs-playground-editor {
+  padding: 16px;
+}
+
 input,
 textarea {
   font-family: inherit;
