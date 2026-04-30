@@ -492,6 +492,11 @@
   flex-shrink: 0;
 }
 
+/* Suppress green focus ring on editor content click */
+.mdocs-editor-content-area :focus-visible {
+  outline: none;
+}
+
 .mdocs-editor-body {
   flex: 1;
   display: grid;

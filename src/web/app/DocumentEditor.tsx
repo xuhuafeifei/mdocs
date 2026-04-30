@@ -345,11 +345,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
           }}
         >
           {editor && <Toolbar editor={editor} />}
-          <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+          <div className="mdocs-editor-content-area" style={{ flex: 1, display: "flex", minHeight: 0 }}>
             <Block
               variant="outlined"
               horizontal
-              style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, overflow: "auto" }}
+              style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, overflow: "auto", outline: "none" }}
             >
               <div style={{ flex: 1 }}>
                 <Editor
@@ -362,7 +362,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                   lineEmptyPlaceholder={t("displayNamePlaceholder")}
                   placeholder={t("displayNamePlaceholder")}
                   slashOption={{ items: slashItems }}
-                  style={{ padding: "0 20px" }}
+                  style={{ padding: "24px 20px" }}
                 />
               </div>
               {editor && <OutlinePanel editor={editor} />}
