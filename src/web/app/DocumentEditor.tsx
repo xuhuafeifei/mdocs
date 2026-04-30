@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Block } from "@lobehub/ui";
+import { saveDraft as saveDraftToIdb } from "../storage/drafts";
 
 import {
   INSERT_CODEINLINE_COMMAND,
@@ -54,6 +55,7 @@ interface DocumentEditorProps {
   onDomainChange: (domainId: string) => void;
   onPublish: (content: string, displayName: string, documentId: string) => Promise<void>;
   onDelete: () => Promise<void>;
+  onDirtyChange?: (dirty: boolean, hasDraft: boolean) => void;
 }
 
 export function DocumentEditor(props: DocumentEditorProps) {
@@ -62,6 +64,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const [busy, setBusy] = useState(false);
   const [editor, setEditor] = useState<IEditor | null>(null);
   const [pubStatus, setPubStatus] = useState<"published" | "unpublished" | "publishing">("published");
+  const [draftSaved, setDraftSaved] = useState(false);
   const [initialContent, setInitialContent] = useState<string | null>(null);
   const { autoSave } = getAutoSaveSettings();
 
@@ -70,6 +73,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
     draftExists,
     clearDraft,
     loadDraftContent,
+    markDraftSaved,
+    draftCurrentRef,
   } = useAutoSave({
     editor,
     documentId: props.document.documentId,
@@ -78,6 +83,15 @@ export function DocumentEditor(props: DocumentEditorProps) {
   });
 
   usePublishGuard({ isDirty: _isDirty, draftExists });
+
+  // Report dirty state to parent for SPA navigation guard.
+  // hasDraft is only true when the IndexedDB draft matches CURRENT editor content,
+  // not when a stale draft from a previous session exists.
+  useLayoutEffect(() => {
+    const hasCurrentDraft = draftExists && draftCurrentRef.current;
+    // console.log("[onDirtyChange] isDirty=", _isDirty, "hasCurrentDraft=", hasCurrentDraft, "draftExists=", draftExists, "draftCurrent=", draftCurrentRef.current);
+    props.onDirtyChange?.(_isDirty, hasCurrentDraft);
+  }, [_isDirty, draftExists]);
 
   // Load draft content if available, otherwise use server content
   useEffect(() => {
@@ -111,8 +125,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
       await props.onPublish(content, displayName, props.document.documentId);
       await clearDraft();
       setPubStatus("published");
-    } catch {
+    } catch (err) {
       setPubStatus("unpublished");
+      throw err;
     } finally {
       setBusy(false);
     }
@@ -124,6 +139,21 @@ export function DocumentEditor(props: DocumentEditorProps) {
     const next = displayName.trim();
     if (next === prev) return;
     await publish();
+  }
+
+  async function saveDraft(): Promise<void> {
+    if (!editor || !props.canEdit) return;
+    const content = (editor.getDocument("markdown") as string).trimEnd();
+    await saveDraftToIdb({
+      documentId: props.document.documentId,
+      content,
+      displayName,
+      updatedAt: Date.now(),
+      published: false,
+    });
+    markDraftSaved();
+    setDraftSaved(true);
+    setTimeout(() => setDraftSaved(false), 2000);
   }
 
   // Listen for Ctrl+S / Cmd+S
@@ -309,12 +339,17 @@ export function DocumentEditor(props: DocumentEditorProps) {
               <span>
                 {pubStatus === "publishing"
                   ? t("publishing")
-                  : draftExists
-                    ? t("unsaved")
-                    : t("published")}
+                  : draftSaved
+                    ? t("saved")
+                    : draftExists
+                      ? t("unsaved")
+                      : t("published")}
               </span>
             </span>
           )}
+          <button type="button" disabled={!props.canEdit || busy} onClick={() => void saveDraft()}>
+            {t("saveDraft")}
+          </button>
           <button type="button" className="primary" disabled={!props.canEdit || busy} onClick={() => void publish()}>
             {busy ? t("publishing") : t("publish")}
           </button>

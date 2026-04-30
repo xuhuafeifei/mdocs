@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n";
 import { DraftListPage } from "./DraftListPage";
+import mdocsLogo from "../assets/mdocs-logo.svg";
 
 function getBool(key: string, def: boolean): boolean {
   const v = localStorage.getItem(key);
@@ -33,7 +34,10 @@ export function SettingsPage(props: {
     <>
       <aside className="mdocs-sidebar">
         <header className="mdocs-sidebar-header">
-          <div className="mdocs-brand">{t("brand")}</div>
+          <div className="mdocs-brand">
+            <img src={mdocsLogo} alt={t("brand")} className="mdocs-brand-logo" />
+            <span>{t("brand")}</span>
+          </div>
         </header>
         <nav className="mdocs-config-tree">
           <div

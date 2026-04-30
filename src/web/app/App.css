@@ -23,7 +23,7 @@
 }
 
 .mdocs-sidebar-header {
-  padding: 16px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--mdocs-border);
   flex-shrink: 0;
 }
@@ -33,13 +33,13 @@
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  font-size: 16px;
+  font-size: 24px;
   letter-spacing: 0.2px;
 }
 
 .mdocs-brand-logo {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   display: block;
   flex-shrink: 0;
 }

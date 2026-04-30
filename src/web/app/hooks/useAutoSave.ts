@@ -17,6 +17,10 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
 
+  // Tracks whether the IndexedDB draft matches the current editor content.
+  // Set to true when a save occurs (auto/manual), false when content changes.
+  const draftCurrentRef = useRef(false);
+
   // Check for existing draft on document change
   useEffect(() => {
     let cancelled = false;
@@ -25,9 +29,11 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
       if (draft) {
         setDraftExists(true);
         setLastSavedAt(draft.updatedAt);
+        draftCurrentRef.current = true; // draft matches loaded state
       } else {
         setDraftExists(false);
         setLastSavedAt(null);
+        draftCurrentRef.current = false;
       }
     });
     return () => { cancelled = true; };
@@ -41,8 +47,10 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
 
     cleanupRef.current?.();
     const unregister = lexical.registerUpdateListener(() => {
-      if (!enabled) return;
       setIsDirty(true);
+      draftCurrentRef.current = false; // content changed, draft is now stale
+      // console.log("[autoSave] set isDirty=true, enabled=", enabled, "draftExists=", draftExists, "draftCurrent=false");
+      if (!enabled) return;
 
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(async () => {
@@ -57,8 +65,10 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
           });
           setDraftExists(true);
           setLastSavedAt(Date.now());
-        } catch {
-          // IndexedDB write failed — silently ignore
+          draftCurrentRef.current = true; // draft now matches current content
+          // console.log("[autoSave] draft saved, draftCurrent=true");
+        } catch (err) {
+          console.error("mdocs auto-save failed", err);
         }
       }, debounceMs);
     });
@@ -78,6 +88,7 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
     await deleteDraft(documentId);
     setDraftExists(false);
     setIsDirty(false);
+    draftCurrentRef.current = false;
   }
 
   /** Load draft content if newer than server version */
@@ -87,5 +98,12 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
     return draft.content;
   }
 
-  return { isDirty, draftExists, lastSavedAt, clearDraft, loadDraftContent };
+  /** Call after externally saving a draft (e.g. manual "Save Draft" button) */
+  function markDraftSaved(): void {
+    setDraftExists(true);
+    setLastSavedAt(Date.now());
+    draftCurrentRef.current = true;
+  }
+
+  return { isDirty, draftExists, lastSavedAt, clearDraft, loadDraftContent, markDraftSaved, draftCurrentRef };
 }

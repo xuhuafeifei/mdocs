@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import {
@@ -80,6 +80,28 @@ export function App() {
   const [menu, setMenu] = useState<TreeContextMenuPayload | null>(null);
   const [selectedCreateParentPath, setSelectedCreateParentPath] = useState("");
   const [view, setView] = useState<"docs" | "settings">("docs");
+  const editorDirtyRef = useRef({ isDirty: false, hasDraft: false });
+  const [navGuard, setNavGuard] = useState<{ onProceed: () => void } | null>(null);
+
+  function guardNavigate(onProceed: () => void): void {
+    const { isDirty, hasDraft } = editorDirtyRef.current;
+    // console.log("[guardNavigate] isDirty=", isDirty, "hasCurrentDraft=", hasDraft, "willBlock=", isDirty && !hasDraft);
+    if (isDirty && !hasDraft) {
+      setNavGuard({ onProceed });
+      return;
+    }
+    onProceed();
+  }
+
+  function handleNavGuardProceed(): void {
+    const cb = navGuard?.onProceed;
+    setNavGuard(null);
+    cb?.();
+  }
+
+  function handleNavGuardCancel(): void {
+    setNavGuard(null);
+  }
 
   useEffect(() => {
     void bootstrap();
@@ -281,20 +303,26 @@ export function App() {
           nodes={tree}
           activeDocumentId={documentId ?? null}
           selectedParentPath={selectedCreateParentPath}
-          onOpen={(node) => navigate(`/doc/${node.documentId}`)}
+          onOpen={(node) => {
+            guardNavigate(() => navigate(`/doc/${node.documentId}`));
+          }}
           onOpenFolder={(folderPath, descDocumentId) => {
-            setSelectedCreateParentPath(folderPath);
-            if (descDocumentId) {
-              navigate(`/doc/${descDocumentId}`);
-            }
+            guardNavigate(() => {
+              setSelectedCreateParentPath(folderPath);
+              if (descDocumentId) {
+                navigate(`/doc/${descDocumentId}`);
+              }
+            });
           }}
           onContextMenu={setMenu}
           onDeselect={() => {
-            setSelectedCreateParentPath("");
-            navigate("/");
+            guardNavigate(() => {
+              setSelectedCreateParentPath("");
+              navigate("/");
+            });
           }}
         />
-        <footer className="mdocs-sidebar-footer" onClick={() => setView("settings")}>
+        <footer className="mdocs-sidebar-footer" onClick={() => { guardNavigate(() => setView("settings")); }}>
           <span className="mdocs-visitor-avatar">
             {visitor ? visitor.visitorName.charAt(0).toUpperCase() : "?"}
           </span>
@@ -310,13 +338,19 @@ export function App() {
             domains={domains}
             currentDomainId={currentDomainId}
             onDomainChange={(domainId) => {
-              setCurrentDomainId(domainId);
-              setActiveDoc(null);
-              setSelectedCreateParentPath("");
-              navigate("/");
-              void refreshTree(domainId);
+              guardNavigate(() => {
+                setCurrentDomainId(domainId);
+                setActiveDoc(null);
+                setSelectedCreateParentPath("");
+                navigate("/");
+                void refreshTree(domainId);
+              });
             }}
             onPublish={publishDocument}
+            onDirtyChange={(dirty, hasDraft) => {
+              // console.log("[onDirtyChange] isDirty=", dirty, "hasDraft=", hasDraft);
+              editorDirtyRef.current = { isDirty: dirty, hasDraft };
+            }}
             onDelete={() =>
               deleteDocumentById(activeDoc.documentId, activeDoc.relativePath)
             }
@@ -335,11 +369,13 @@ export function App() {
                 domains={domains.length ? domains : [{ domainId: "default", domainName: t("defaultDomain"), permission: "" }]}
                 value={currentDomainId}
                 onChange={(domainId) => {
-                  setCurrentDomainId(domainId);
-                  setActiveDoc(null);
-                  setSelectedCreateParentPath("");
-                  navigate("/");
-                  void refreshTree(domainId);
+                  guardNavigate(() => {
+                    setCurrentDomainId(domainId);
+                    setActiveDoc(null);
+                    setSelectedCreateParentPath("");
+                    navigate("/");
+                    void refreshTree(domainId);
+                  });
                 }}
                 ariaLabel={t("domainLabel")}
                 localizeName={(name: string) => localizeDomainName(name, lang, t)}
@@ -428,6 +464,27 @@ export function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {navGuard && (
+        <div
+          className="mdocs-dialog-backdrop"
+          role="presentation"
+          onMouseDown={(ev) => {
+            if (ev.target === ev.currentTarget) setNavGuard(null);
+          }}
+        >
+          <div className="mdocs-dialog card" role="dialog" aria-modal="true">
+            <p>{t("unsavedChanges")}</p>
+            <div className="mdocs-dialog-actions">
+              <button type="button" onClick={handleNavGuardCancel}>
+                {t("cancel")}
+              </button>
+              <button type="button" className="primary" onClick={handleNavGuardProceed}>
+                {t("continue")}
+              </button>
+            </div>
           </div>
         </div>
       )}
