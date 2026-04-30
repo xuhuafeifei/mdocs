@@ -273,33 +273,38 @@ export function DocumentEditor(props: DocumentEditorProps) {
         </div>
       </div>
       <Block flex={1} style={{ minHeight: 0 }}>
-        <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              minHeight: 0,
-              overflow: "auto",
-            }}
-          >
-            {editor && <Toolbar editor={editor} />}
-            <Block variant="outlined" style={{ background: "var(--mdocs-surface)" }}>
-              <Editor
-                content={props.document.content}
-                type="markdown"
-                key={props.document.documentId}
-                editable={props.canEdit}
-                onInit={handleInit}
-                plugins={plugins}
-                lineEmptyPlaceholder={t("displayNamePlaceholder")}
-                placeholder={t("displayNamePlaceholder")}
-                slashOption={{ items: slashItems }}
-                style={{ padding: "0 20px" }}
-              />
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            minHeight: 0,
+          }}
+        >
+          {editor && <Toolbar editor={editor} />}
+          <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+            <Block
+              variant="outlined"
+              horizontal
+              style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, overflow: "auto" }}
+            >
+              <div style={{ flex: 1 }}>
+                <Editor
+                  content={props.document.content}
+                  type="markdown"
+                  key={props.document.documentId}
+                  editable={props.canEdit}
+                  onInit={handleInit}
+                  plugins={plugins}
+                  lineEmptyPlaceholder={t("displayNamePlaceholder")}
+                  placeholder={t("displayNamePlaceholder")}
+                  slashOption={{ items: slashItems }}
+                  style={{ padding: "0 20px" }}
+                />
+              </div>
+              {editor && <OutlinePanel editor={editor} />}
             </Block>
           </div>
-          {editor && <OutlinePanel editor={editor} />}
         </div>
       </Block>
     </div>
