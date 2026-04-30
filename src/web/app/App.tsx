@@ -33,6 +33,7 @@ import { VisitorIdNotice } from "./VisitorIdNotice";
 import { DocumentTree, type TreeContextMenu as TreeContextMenuPayload } from "./DocumentTree";
 import { TreeContextMenu } from "./TreeContextMenu";
 import { DocumentEditor } from "./DocumentEditor";
+import { DomainSelect } from "./DomainSelect";
 import { SettingsPage } from "./SettingsPage";
 import { MessageDialog } from "./MessageDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
@@ -327,35 +328,22 @@ export function App() {
               {tree.length === 0 ? t("noDocsInDomain") : t("createDocToStart")}
             </p>
             <div className="mdocs-welcome-domain">
-              <label className="muted mdocs-welcome-domain-label" htmlFor="mdocs-welcome-domain">
+              <label className="muted mdocs-welcome-domain-label">
                 {t("domainLabel")}
               </label>
-              <select
-                id="mdocs-welcome-domain"
-                className="mdocs-editor-domain-select"
-                aria-label={t("domainLabel")}
+              <DomainSelect
+                domains={domains.length ? domains : [{ domainId: "default", domainName: t("defaultDomain"), permission: "" }]}
                 value={currentDomainId}
-                onChange={(e) => {
-                  const domainId = e.target.value;
+                onChange={(domainId) => {
                   setCurrentDomainId(domainId);
                   setActiveDoc(null);
                   setSelectedCreateParentPath("");
                   navigate("/");
                   void refreshTree(domainId);
                 }}
-              >
-                {(domains.length ? domains : [{ domainId: "default", domainName: t("defaultDomain"), permission: "" }]).map((d) => (
-                  <option key={d.domainId} value={d.domainId}>
-                    {localizeDomainName(d.domainName, lang, t)}
-                  </option>
-                ))}
-              </select>
-              {domains.find((d) => d.domainId === currentDomainId)?.permission === "private" && (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--mdocs-text-muted)" strokeWidth="2" style={{ flexShrink: 0 }} aria-label={t("permissionPrivate")}>
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-              )}
+                ariaLabel={t("domainLabel")}
+                localizeName={(name: string) => localizeDomainName(name, lang, t)}
+              />
             </div>
             <div className="mdocs-welcome-actions">
               <button type="button" className="primary" onClick={() => openNewDocumentModal()}>

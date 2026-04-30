@@ -35,6 +35,7 @@ import { useI18n } from "../i18n";
 import { openFileSelector } from "./actions";
 import Toolbar from "./Toolbar";
 import OutlinePanel from "./OutlinePanel";
+import { DomainSelect } from "./DomainSelect";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { usePublishGuard } from "./hooks/usePublishGuard";
 
@@ -288,26 +289,13 @@ export function DocumentEditor(props: DocumentEditorProps) {
           placeholder={t("displayNamePlaceholder")}
           disabled={!props.canEdit}
         />
-        <select
-          className="mdocs-editor-domain-select"
-          aria-label={t("currentDomainAria")}
+        <DomainSelect
+          domains={props.domains.length ? props.domains : [{ domainId: "default", domainName: t("defaultDomain"), permission: "" }]}
           value={props.currentDomainId}
-          onChange={(e) => props.onDomainChange(e.target.value)}
-        >
-          {(props.domains.length ? props.domains : [{ domainId: "default", domainName: t("defaultDomain"), permission: "" }]).map(
-            (d) => (
-              <option key={d.domainId} value={d.domainId}>
-                {localizeDomainName(d.domainName, lang, t)}
-              </option>
-            ),
-          )}
-        </select>
-        {props.domains.find((d) => d.domainId === props.currentDomainId)?.permission === "private" && (
-          <svg className="mdocs-domain-lock" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--mdocs-text-muted)" strokeWidth="2" aria-label={t("permissionPrivate")}>
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-        )}
+          onChange={props.onDomainChange}
+          ariaLabel={t("currentDomainAria")}
+          localizeName={(name: string) => localizeDomainName(name, lang, t)}
+        />
         <span className="mdocs-editor-toolbar-spacer" aria-hidden />
         <div className="mdocs-editor-toolbar-actions">
           {props.canEdit && (
