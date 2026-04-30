@@ -18,7 +18,7 @@ import {
   getStoredToken,
   getStoredVisitorId,
   storeIdentity,
-} from "../api/client";
+} from "../services/client";
 import {
   deleteDocumentApi,
   fetchDomainsApi,
@@ -27,7 +27,7 @@ import {
   getDocumentApi,
   registerVisitorApi,
   updateDocumentApi,
-} from "../api/endpoints";
+} from "../services/endpoints";
 import { VisitorRegisterDialog } from "./VisitorRegisterDialog";
 import { VisitorIdNotice } from "./VisitorIdNotice";
 import { DocumentTree, type TreeContextMenu as TreeContextMenuPayload } from "./DocumentTree";
@@ -36,6 +36,9 @@ import { DocumentEditor } from "./DocumentEditor";
 import { SettingsPage } from "./SettingsPage";
 import { MessageDialog } from "./MessageDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
+import { ConflictNotice } from "./ConflictNotice";
+import { getDraft, deleteDraft as deleteDraftRecord } from "../storage/drafts";
+import mdocsLogo from "../assets/mdocs-logo.svg";
 import "./App.css";
 
 type Phase = "loading" | "needsRegister" | "ready";
@@ -184,12 +187,31 @@ export function App() {
     refreshTree,
   });
 
-  async function saveDocument(content: string, displayName: string, documentId: string): Promise<void> {
+  const [conflict, setConflict] = useState(false);
+
+  async function publishDocument(content: string, displayName: string, documentId: string): Promise<void> {
     try {
       const updated = await updateDocumentApi(documentId, { content, displayName });
       setActiveDoc((prev) => (prev && prev.documentId === documentId ? updated : prev));
       await refreshTree();
-      setMessage(t("saved"));
+      setConflict(false);
+      setMessage(t("published"));
+      window.setTimeout(() => setMessage(null), 1200);
+    } catch (err) {
+      // Future: detect git conflict specifically, for now treat all publish failures as potential conflicts
+      setConflict(true);
+      throw err;
+    }
+  }
+
+  async function publishDraftFromList(docId: string): Promise<void> {
+    try {
+      const draft = await getDraft(docId);
+      if (!draft) return;
+      await updateDocumentApi(docId, { content: draft.content, displayName: draft.displayName });
+      await deleteDraftRecord(docId);
+      await refreshTree();
+      setMessage(t("published"));
       window.setTimeout(() => setMessage(null), 1200);
     } catch (err) {
       setAlertMessage(translateError(t, err));
@@ -235,12 +257,16 @@ export function App() {
       {view === "settings" ? (
         <SettingsPage
           onBack={() => setView("docs")}
+          onPublishDraft={publishDraftFromList}
         />
       ) : (
         <>
       <aside className="mdocs-sidebar">
         <header className="mdocs-sidebar-header">
-          <div className="mdocs-brand">{t("brand")}</div>
+          <div className="mdocs-brand">
+            <img src={mdocsLogo} alt={t("brand")} className="mdocs-brand-logo" />
+            <span>{t("brand")}</span>
+          </div>
         </header>
         <div className="mdocs-sidebar-actions">
           <button type="button" onClick={() => openNewDocumentModal()} className="primary">
@@ -289,7 +315,7 @@ export function App() {
               navigate("/");
               void refreshTree(domainId);
             }}
-            onSave={saveDocument}
+            onPublish={publishDocument}
             onDelete={() =>
               deleteDocumentById(activeDoc.documentId, activeDoc.relativePath)
             }
@@ -340,6 +366,9 @@ export function App() {
               </button>
             </div>
           </div>
+        )}
+        {conflict && (
+          <ConflictNotice onDismiss={() => setConflict(false)} />
         )}
         {message && (
           <div className="mdocs-toast" role="status">

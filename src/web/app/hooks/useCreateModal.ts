@@ -11,10 +11,9 @@ import {
 } from "../../../shared/storagePath";
 import { FOLDER_DESC_FILENAME, folderDescPathForFolder } from "../../../shared/folderDesc";
 import { stripDomainPathPrefix } from "../../../shared/personalDomain";
-import { getStoredVisitorId } from "../../api/client";
-import { createDocumentApi } from "../../api/endpoints";
+import { getStoredVisitorId, ApiRequestError } from "../../services/client";
+import { createDocumentApi } from "../../services/endpoints";
 import { ERROR_CODE_MAP, PATH_ERROR_MESSAGE_MAP, STORAGE_ERROR_MESSAGE_MAP } from "../../i18n/errors";
-import { ApiRequestError } from "../../api/client";
 
 export type CreateModalState =
   | { kind: "document"; parentMode: "selection" | "fixed"; parentPath: string; draft: string }

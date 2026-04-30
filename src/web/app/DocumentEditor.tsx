@@ -35,6 +35,15 @@ import { useI18n } from "../i18n";
 import { openFileSelector } from "./actions";
 import Toolbar from "./Toolbar";
 import OutlinePanel from "./OutlinePanel";
+import { useAutoSave } from "./hooks/useAutoSave";
+import { usePublishGuard } from "./hooks/usePublishGuard";
+
+function getAutoSaveSettings(): { autoSave: boolean; autoPublish: boolean } {
+  return {
+    autoSave: localStorage.getItem("mdocs.autoSave") !== "false",
+    autoPublish: localStorage.getItem("mdocs.autoPublish") === "true",
+  };
+}
 
 interface DocumentEditorProps {
   document: DocumentDetail;
@@ -42,7 +51,7 @@ interface DocumentEditorProps {
   domains: DomainSummary[];
   currentDomainId: string;
   onDomainChange: (domainId: string) => void;
-  onSave: (content: string, displayName: string, documentId: string) => Promise<void>;
+  onPublish: (content: string, displayName: string, documentId: string) => Promise<void>;
   onDelete: () => Promise<void>;
 }
 
@@ -51,7 +60,32 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const [displayName, setDisplayName] = useState(props.document.displayName);
   const [busy, setBusy] = useState(false);
   const [editor, setEditor] = useState<IEditor | null>(null);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "unsaved" | "saving">("saved");
+  const [pubStatus, setPubStatus] = useState<"published" | "unpublished" | "publishing">("published");
+  const [initialContent, setInitialContent] = useState<string | null>(null);
+  const { autoSave } = getAutoSaveSettings();
+
+  const {
+    isDirty: _isDirty,
+    draftExists,
+    clearDraft,
+    loadDraftContent,
+  } = useAutoSave({
+    editor,
+    documentId: props.document.documentId,
+    displayName,
+    enabled: autoSave && props.canEdit,
+  });
+
+  usePublishGuard({ isDirty: _isDirty, draftExists });
+
+  // Load draft content if available, otherwise use server content
+  useEffect(() => {
+    setInitialContent(null);
+    loadDraftContent().then((draft) => {
+      setInitialContent(draft ?? props.document.content);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.document.documentId]);
 
   // Sync editor locale with mdocs i18n language
   useEffect(() => {
@@ -65,23 +99,19 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
   const handleInit = useCallback((e: IEditor) => {
     setEditor(e);
-    // Track unsaved changes via Lexical update listener
-    const lexical = e.getLexicalEditor();
-    if (lexical) {
-      lexical.registerUpdateListener(() => {
-        setSaveStatus("unsaved");
-      });
-    }
   }, []);
 
-  async function save(): Promise<void> {
+  async function publish(): Promise<void> {
     if (!editor || !props.canEdit) return;
     setBusy(true);
-    setSaveStatus("saving");
+    setPubStatus("publishing");
     try {
       const content = (editor.getDocument("markdown") as string).trimEnd();
-      await props.onSave(content, displayName, props.document.documentId);
-      setSaveStatus("saved");
+      await props.onPublish(content, displayName, props.document.documentId);
+      await clearDraft();
+      setPubStatus("published");
+    } catch {
+      setPubStatus("unpublished");
     } finally {
       setBusy(false);
     }
@@ -92,17 +122,17 @@ export function DocumentEditor(props: DocumentEditorProps) {
     const prev = props.document.displayName.trim();
     const next = displayName.trim();
     if (next === prev) return;
-    await save();
+    await publish();
   }
 
   // Listen for Ctrl+S / Cmd+S
-  const saveRef = useRef(save);
-  saveRef.current = save;
+  const publishRef = useRef(publish);
+  publishRef.current = publish;
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
-        void saveRef.current();
+        void publishRef.current();
       }
     };
     window.addEventListener("keydown", handler);
@@ -280,8 +310,25 @@ export function DocumentEditor(props: DocumentEditorProps) {
         )}
         <span className="mdocs-editor-toolbar-spacer" aria-hidden />
         <div className="mdocs-editor-toolbar-actions">
-          <button type="button" className="primary" disabled={!props.canEdit || busy} onClick={() => void save()}>
-            {busy ? t("saving") : t("save")}
+          {props.canEdit && (
+            <span className="mdocs-save-indicator">
+              <span
+                className={
+                  "mdocs-save-dot " +
+                  (pubStatus === "publishing" ? "saving" : pubStatus === "unpublished" ? "unsaved" : "saved")
+                }
+              />
+              <span>
+                {pubStatus === "publishing"
+                  ? t("publishing")
+                  : draftExists
+                    ? t("unsaved")
+                    : t("published")}
+              </span>
+            </span>
+          )}
+          <button type="button" className="primary" disabled={!props.canEdit || busy} onClick={() => void publish()}>
+            {busy ? t("publishing") : t("publish")}
           </button>
           <button type="button" className="danger" disabled={!props.canEdit || busy} onClick={props.onDelete}>
             {t("delete")}
@@ -306,7 +353,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
             >
               <div style={{ flex: 1 }}>
                 <Editor
-                  content={props.document.content}
+                  content={initialContent ?? props.document.content}
                   type="markdown"
                   key={props.document.documentId}
                   editable={props.canEdit}
@@ -323,19 +370,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
           </div>
         </div>
       </Block>
-      {props.canEdit && (
-        <div className="mdocs-save-indicator">
-          <span
-            className={
-              "mdocs-save-dot " +
-              (saveStatus === "saving" ? "saving" : saveStatus === "unsaved" ? "unsaved" : "saved")
-            }
-          />
-          <span>
-            {saveStatus === "saving" ? t("saving") : saveStatus === "unsaved" ? t("unsaved") : t("saved")}
-          </span>
-        </div>
-      )}
     </div>
   );
 }
