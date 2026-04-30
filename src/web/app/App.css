@@ -41,7 +41,7 @@
 
 .mdocs-lang-switch {
   margin-top: 6px;
-  font-size: 11px;
+  font-size: 12px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -51,7 +51,7 @@
   background: none;
   border: none;
   padding: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--mdocs-text-muted);
   cursor: pointer;
 }
@@ -91,7 +91,7 @@
   width: 100%;
   text-align: left;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--mdocs-radius);
   background: transparent;
   border: 1px solid transparent;
   color: var(--mdocs-text);
@@ -99,12 +99,12 @@
 }
 
 .mdocs-doc-item:hover {
-  background: #f1f1ee;
+  background: var(--mdocs-bg);
 }
 
 .mdocs-doc-item.active {
   background: var(--mdocs-accent-soft);
-  border-color: #cfe5d9;
+  border-color: var(--mdocs-accent-secondary);
 }
 
 .mdocs-doc-item-title {
@@ -140,17 +140,17 @@
 }
 
 .mdocs-tree-row:hover {
-  background: #f1f1ee;
+  background: var(--mdocs-bg);
 }
 
 .mdocs-tree-row.active {
   background: var(--mdocs-accent-soft);
-  border-color: #cfe5d9;
+  border-color: var(--mdocs-accent-secondary);
 }
 
 .mdocs-tree-select-target {
-  background: #f7f7f4;
-  border-color: #e2e2dc;
+  background: var(--mdocs-bg);
+  border-color: var(--mdocs-border);
 }
 
 .mdocs-tree-caret {
@@ -172,8 +172,8 @@
   width: 18px;
   text-align: center;
   padding: 1px 3px;
-  border-radius: 4px;
-  background: #f1f1ee;
+  border-radius: var(--mdocs-radius-sm);
+  background: var(--mdocs-bg);
 }
 
 .mdocs-tree-icon-dir {
@@ -198,11 +198,11 @@
   gap: 8px;
   cursor: pointer;
   user-select: none;
-  transition: background 0.12s ease;
+  transition: background 0.15s ease;
 }
 
 .mdocs-sidebar-footer:hover {
-  background: #f1f1ee;
+  background: var(--mdocs-bg);
 }
 
 .mdocs-settings-sidebar-footer {
@@ -213,11 +213,11 @@
   color: var(--mdocs-text-muted);
   cursor: pointer;
   user-select: none;
-  transition: background 0.12s ease;
+  transition: background 0.15s ease;
 }
 
 .mdocs-settings-sidebar-footer:hover {
-  background: #f1f1ee;
+  background: var(--mdocs-bg);
   color: var(--mdocs-text);
 }
 
@@ -284,7 +284,6 @@
   font-weight: 600;
 }
 
-
 .mdocs-settings-section {
   display: flex;
   flex-direction: column;
@@ -347,6 +346,7 @@
   min-width: 0;
 }
 
+/* === Context menu === */
 .mdocs-context-menu {
   position: fixed;
   min-width: 200px;
@@ -367,17 +367,18 @@
 }
 
 .mdocs-context-item:hover {
-  background: #f1f1ee;
+  background: var(--mdocs-bg);
 }
 
 .mdocs-context-item.danger {
-  color: #b3261e;
+  color: var(--mdocs-error);
 }
 
 .mdocs-context-item.danger:hover {
-  background: #fbeae7;
+  background: var(--mdocs-error-soft);
 }
 
+/* === Main area === */
 .mdocs-main {
   display: flex;
   flex-direction: column;
@@ -394,6 +395,7 @@
   justify-content: center;
 }
 
+/* === Editor === */
 .mdocs-editor {
   display: flex;
   flex-direction: column;
@@ -464,30 +466,97 @@
   min-height: 0;
 }
 
+/* === Save indicator === */
+.mdocs-save-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  transition: background 0.3s ease;
+}
+
+.mdocs-save-dot.saved {
+  background: var(--mdocs-success);
+}
+
+.mdocs-save-dot.unsaved {
+  background: var(--mdocs-warning);
+}
+
+/* === Toast === */
 .mdocs-toast {
   position: absolute;
   right: 20px;
   bottom: 20px;
   padding: 8px 14px;
-  background: rgba(31, 31, 31, 0.9);
+  background: rgba(33, 33, 33, 0.9);
   color: #ffffff;
   border-radius: var(--mdocs-radius);
   font-size: 12px;
+  z-index: 20;
+  animation: toast-in 0.3s ease;
 }
 
+.mdocs-toast.success {
+  background: var(--mdocs-success-soft);
+  color: var(--mdocs-success-text);
+}
+
+.mdocs-toast.warning {
+  background: var(--mdocs-warning-soft);
+  color: var(--mdocs-warning-text);
+}
+
+.mdocs-toast.error {
+  background: var(--mdocs-error-soft);
+  color: var(--mdocs-error-text);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* === Dialog / Modal === */
 .mdocs-dialog-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(20, 20, 20, 0.1);
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
+  z-index: 40;
+  animation: backdrop-in 0.2s ease;
+}
+
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .mdocs-dialog {
   width: min(420px, 100%);
   padding: 24px;
+  animation: dialog-in 0.3s ease;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .mdocs-dialog h1 {
@@ -529,10 +598,11 @@
 }
 
 .mdocs-dialog-error {
-  color: #c0392b;
+  color: var(--mdocs-error);
   font-size: 12px;
 }
 
+/* === Message dialog (alert) === */
 .mdocs-message-dialog {
   width: min(360px, 92vw);
   padding: 20px 24px 16px;
@@ -558,6 +628,7 @@
   justify-content: flex-end;
 }
 
+/* === Notice bar === */
 .mdocs-notice {
   position: absolute;
   top: 12px;
@@ -572,12 +643,13 @@
 }
 
 .mdocs-notice code {
-  background: #f1f1ee;
+  background: var(--mdocs-bg);
   padding: 2px 6px;
   border-radius: 6px;
   font-size: 12px;
 }
 
+/* === Welcome page === */
 .mdocs-shell-single {
   grid-template-columns: 1fr;
 }
@@ -634,3 +706,48 @@
   align-items: stretch;
 }
 
+/* === Toolbar === */
+.mdocs-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--mdocs-surface);
+  border-bottom: 1px solid var(--mdocs-border);
+}
+
+/* === Outline panel === */
+.mdocs-outline {
+  flex-shrink: 0;
+  width: 200px;
+  padding: 16px 12px;
+  overflow-y: auto;
+}
+
+.mdocs-outline-title {
+  color: var(--mdocs-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
+
+.mdocs-outline-item {
+  border-radius: var(--mdocs-radius-sm);
+  color: var(--mdocs-text);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 28px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: none;
+  background: transparent;
+  display: block;
+  width: 100%;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.mdocs-outline-item:hover {
+  background: var(--mdocs-bg);
+}

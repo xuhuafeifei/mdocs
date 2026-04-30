@@ -103,41 +103,18 @@ const OutlinePanel: FC<OutlinePanelProps> = ({ editor }) => {
   if (headings.length === 0) return null;
 
   return (
-    <div style={{ flexShrink: 0, width: 200, padding: "16px 12px" }}>
-      <div
-        style={{
-          color: "rgba(0,0,0,0.45)",
-          fontSize: 12,
-          fontWeight: 600,
-          marginBottom: 8,
-        }}
-      >
-        OUTLINE
-      </div>
+    <div className="mdocs-outline">
+      <div className="mdocs-outline-title">OUTLINE</div>
       {headings.map((h) => (
-        <div
+        <button
+          type="button"
           key={h.key}
+          className="mdocs-outline-item"
+          style={{ paddingLeft: (h.level - 1) * 16 + 8 }}
           onClick={() => handleClick(h.key)}
-          style={{
-            borderRadius: 4,
-            color: "rgba(0,0,0,0.75)",
-            cursor: "pointer",
-            fontSize: 13,
-            lineHeight: "28px",
-            overflow: "hidden",
-            paddingLeft: (h.level - 1) * 16 + 8,
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(0,0,0,0.04)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-          }}
         >
           {h.text}
-        </div>
+        </button>
       ))}
     </div>
   );

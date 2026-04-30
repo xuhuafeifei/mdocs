@@ -29,15 +29,9 @@ import {
   UnderlineIcon,
   Undo2Icon,
 } from "lucide-react";
-import { type CSSProperties, type FC, useMemo } from "react";
+import { type FC, useMemo } from "react";
 
 import { openFileSelector } from "./actions";
-
-const stickyToolbarStyle: CSSProperties = {
-  position: "sticky",
-  top: 0,
-  zIndex: 10,
-};
 
 export interface ToolbarProps {
   className?: string;
@@ -204,15 +198,7 @@ const Toolbar: FC<ToolbarProps> = ({ editor, floating, style, className }) => {
   if (floating) return <FloatActions items={items} />;
 
   return (
-    <div
-      className={className}
-      style={{
-        ...stickyToolbarStyle,
-        background: "var(--mdocs-surface)",
-        borderBottom: "1px solid var(--mdocs-border)",
-        ...style,
-      }}
-    >
+    <div className={["mdocs-toolbar", className].filter(Boolean).join(" ")} style={style}>
       <ChatInputActions items={items} />
     </div>
   );

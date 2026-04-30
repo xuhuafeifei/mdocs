@@ -192,7 +192,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       return {
         ...item,
         extra: (
-          <span style={{ color: "#8c8c8c", fontFamily: "monospace", fontSize: 12 }}>
+          <span style={{ color: "var(--mdocs-text-muted)", fontFamily: "monospace", fontSize: 12 }}>
             {item.key}
           </span>
         ),

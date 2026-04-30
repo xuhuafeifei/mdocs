@@ -1,13 +1,44 @@
 :root {
-  --mdocs-bg: #f7f7f5;
+  /* === Primary colors === */
+  --mdocs-accent: #4CAF50;
+  --mdocs-accent-dark: #388E3C;
+  --mdocs-accent-secondary: #81C784;
+  --mdocs-accent-soft: #E8F5E9;
+  --mdocs-accent-ring: rgba(76, 175, 80, 0.25);
+
+  /* === Semantic colors === */
+  --mdocs-success: #66BB6A;
+  --mdocs-success-soft: #E8F5E9;
+  --mdocs-success-text: #2E7D32;
+  --mdocs-warning: #FFB74D;
+  --mdocs-warning-soft: #FFF3E0;
+  --mdocs-warning-text: #EF6C00;
+  --mdocs-error: #EF5350;
+  --mdocs-error-soft: #FFEBEE;
+  --mdocs-error-text: #C62828;
+
+  /* === Neutral === */
+  --mdocs-bg: #F5F5F5;
   --mdocs-surface: #ffffff;
-  --mdocs-border: #e5e5e2;
-  --mdocs-text: #1f1f1f;
-  --mdocs-text-muted: #6b6b6b;
-  --mdocs-accent: #2f9e75;
-  --mdocs-accent-soft: #eaf5ef;
-  --mdocs-radius: 10px;
-  --mdocs-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
+  --mdocs-border: #E0E0E0;
+  --mdocs-border-hover: #BDBDBD;
+
+  /* === Text === */
+  --mdocs-text: #212121;
+  --mdocs-text-muted: #616161;
+  --mdocs-text-disabled: #BDBDBD;
+
+  /* === Radius === */
+  --mdocs-radius-sm: 4px;
+  --mdocs-radius: 8px;
+  --mdocs-radius-lg: 12px;
+  --mdocs-radius-xl: 16px;
+
+  /* === Shadows === */
+  --mdocs-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --mdocs-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --mdocs-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+
   color-scheme: light;
 }
 
@@ -24,7 +55,7 @@ body,
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+  font-family: "Inter", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   background: var(--mdocs-bg);
   color: var(--mdocs-text);
@@ -34,6 +65,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* === Focus visible === */
+:focus-visible {
+  outline: 2px solid var(--mdocs-accent);
+  outline-offset: 2px;
+}
+
+/* === Button reset === */
 button {
   font-family: inherit;
   font-size: inherit;
@@ -41,15 +79,30 @@ button {
   border: 1px solid var(--mdocs-border);
   background: var(--mdocs-surface);
   color: var(--mdocs-text);
-  padding: 6px 12px;
+  padding: 6px 14px;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 
 button:hover {
-  border-color: #c9c9c3;
+  border-color: var(--mdocs-border-hover);
 }
 
+button:active {
+  transform: scale(0.98);
+}
+
+button:disabled {
+  background: var(--mdocs-bg);
+  border-color: var(--mdocs-border);
+  color: var(--mdocs-text-disabled);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* === Button variants === */
+
+/* Primary — solid green */
 button.primary {
   background: var(--mdocs-accent);
   border-color: var(--mdocs-accent);
@@ -57,18 +110,131 @@ button.primary {
 }
 
 button.primary:hover {
-  filter: brightness(0.96);
+  background: var(--mdocs-accent-dark);
+  border-color: var(--mdocs-accent-dark);
 }
 
+button.primary:active {
+  background: var(--mdocs-accent-dark);
+  transform: scale(0.98);
+}
+
+button.primary:focus-visible {
+  box-shadow: 0 0 0 3px var(--mdocs-accent-ring);
+}
+
+/* Secondary — outlined green */
+button.secondary {
+  background: transparent;
+  border-color: var(--mdocs-accent);
+  color: var(--mdocs-accent);
+}
+
+button.secondary:hover {
+  background: var(--mdocs-accent-soft);
+}
+
+button.secondary:focus-visible {
+  box-shadow: 0 0 0 3px var(--mdocs-accent-ring);
+}
+
+/* Danger — solid red */
 button.danger {
-  color: #b3261e;
-  border-color: #b3261e;
+  background: var(--mdocs-error);
+  border-color: var(--mdocs-error);
+  color: #ffffff;
 }
 
 button.danger:hover {
-  background: #fbeae7;
+  background: #d32f2f;
+  border-color: #d32f2f;
 }
 
+button.danger:focus-visible {
+  box-shadow: 0 0 0 3px rgba(239, 83, 80, 0.3);
+}
+
+/* Ghost — no border, no background */
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--mdocs-text-muted);
+}
+
+button.ghost:hover {
+  background: var(--mdocs-bg);
+  color: var(--mdocs-text);
+}
+
+/* === Input / textarea === */
+input,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  border-radius: var(--mdocs-radius);
+  border: 1px solid var(--mdocs-border);
+  background: var(--mdocs-surface);
+  color: var(--mdocs-text);
+  padding: 8px 12px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--mdocs-accent);
+  box-shadow: 0 0 0 3px var(--mdocs-accent-ring);
+}
+
+input:disabled,
+textarea:disabled {
+  background: var(--mdocs-bg);
+  color: var(--mdocs-text-disabled);
+  cursor: not-allowed;
+}
+
+/* === Select (global) === */
+select {
+  font-family: inherit;
+  font-size: inherit;
+  border-radius: var(--mdocs-radius);
+  border: 1px solid var(--mdocs-border);
+  background: var(--mdocs-surface);
+  color: var(--mdocs-text);
+  padding: 6px 12px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+select:focus {
+  border-color: var(--mdocs-accent);
+  box-shadow: 0 0 0 3px var(--mdocs-accent-ring);
+}
+
+/* === Links === */
+a {
+  color: var(--mdocs-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* === Utilities === */
+.muted {
+  color: var(--mdocs-text-muted);
+}
+
+.card {
+  background: var(--mdocs-surface);
+  border: 1px solid var(--mdocs-border);
+  border-radius: var(--mdocs-radius-lg);
+  box-shadow: var(--mdocs-shadow);
+}
+
+/* === Playground === */
 .mdocs-playground-page {
   box-sizing: border-box;
   height: 100%;
@@ -95,37 +261,4 @@ button.danger:hover {
 
 .mdocs-playground-editor {
   padding: 16px;
-}
-
-input,
-textarea {
-  font-family: inherit;
-  font-size: inherit;
-  border-radius: var(--mdocs-radius);
-  border: 1px solid var(--mdocs-border);
-  background: var(--mdocs-surface);
-  color: var(--mdocs-text);
-  padding: 8px 12px;
-  outline: none;
-}
-
-input:focus,
-textarea:focus {
-  border-color: #b8b8b2;
-}
-
-a {
-  color: var(--mdocs-accent);
-  text-decoration: none;
-}
-
-.muted {
-  color: var(--mdocs-text-muted);
-}
-
-.card {
-  background: var(--mdocs-surface);
-  border: 1px solid var(--mdocs-border);
-  border-radius: var(--mdocs-radius);
-  box-shadow: var(--mdocs-shadow);
 }
