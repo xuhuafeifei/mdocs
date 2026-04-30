@@ -234,6 +234,25 @@ a:hover {
   box-shadow: var(--mdocs-shadow);
 }
 
+/* === Scrollbar === */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--mdocs-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--mdocs-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--mdocs-border-hover);
+}
+
 /* === Playground === */
 .mdocs-playground-page {
   box-sizing: border-box;

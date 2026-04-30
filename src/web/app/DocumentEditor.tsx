@@ -51,6 +51,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const [displayName, setDisplayName] = useState(props.document.displayName);
   const [busy, setBusy] = useState(false);
   const [editor, setEditor] = useState<IEditor | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "unsaved" | "saving">("saved");
 
   // Sync editor locale with mdocs i18n language
   useEffect(() => {
@@ -64,14 +65,23 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
   const handleInit = useCallback((e: IEditor) => {
     setEditor(e);
+    // Track unsaved changes via Lexical update listener
+    const lexical = e.getLexicalEditor();
+    if (lexical) {
+      lexical.registerUpdateListener(() => {
+        setSaveStatus("unsaved");
+      });
+    }
   }, []);
 
   async function save(): Promise<void> {
     if (!editor || !props.canEdit) return;
     setBusy(true);
+    setSaveStatus("saving");
     try {
       const content = (editor.getDocument("markdown") as string).trimEnd();
       await props.onSave(content, displayName, props.document.documentId);
+      setSaveStatus("saved");
     } finally {
       setBusy(false);
     }
@@ -254,7 +264,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           value={props.currentDomainId}
           onChange={(e) => props.onDomainChange(e.target.value)}
         >
-          {(props.domains.length ? props.domains : [{ domainId: "default", domainName: t("defaultDomain") }]).map(
+          {(props.domains.length ? props.domains : [{ domainId: "default", domainName: t("defaultDomain"), permission: "" }]).map(
             (d) => (
               <option key={d.domainId} value={d.domainId}>
                 {localizeDomainName(d.domainName, lang, t)}
@@ -262,6 +272,12 @@ export function DocumentEditor(props: DocumentEditorProps) {
             ),
           )}
         </select>
+        {props.domains.find((d) => d.domainId === props.currentDomainId)?.permission === "private" && (
+          <svg className="mdocs-domain-lock" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--mdocs-text-muted)" strokeWidth="2" aria-label={t("permissionPrivate")}>
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        )}
         <span className="mdocs-editor-toolbar-spacer" aria-hidden />
         <div className="mdocs-editor-toolbar-actions">
           <button type="button" className="primary" disabled={!props.canEdit || busy} onClick={() => void save()}>
@@ -307,6 +323,19 @@ export function DocumentEditor(props: DocumentEditorProps) {
           </div>
         </div>
       </Block>
+      {props.canEdit && (
+        <div className="mdocs-save-indicator">
+          <span
+            className={
+              "mdocs-save-dot " +
+              (saveStatus === "saving" ? "saving" : saveStatus === "unsaved" ? "unsaved" : "saved")
+            }
+          />
+          <span>
+            {saveStatus === "saving" ? t("saving") : saveStatus === "unsaved" ? t("unsaved") : t("saved")}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

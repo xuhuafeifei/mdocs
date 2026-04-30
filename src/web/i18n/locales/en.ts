@@ -3,8 +3,9 @@ import type { TranslationKey } from "../types";
 export const en: Record<TranslationKey, string> = {
   // Common
   loading: "loading...",
-  saved: "saved",
-  saving: "saving...",
+  saved: "Saved",
+  saving: "Saving...",
+  unsaved: "Editing...",
   cancel: "Cancel",
   create: "Create",
   creating: "Creating...",

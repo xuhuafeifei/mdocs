@@ -5,6 +5,7 @@ export const zh: Record<TranslationKey, string> = {
   loading: "加载中...",
   saved: "已保存",
   saving: "保存中...",
+  unsaved: "编辑中...",
   cancel: "取消",
   create: "创建",
   creating: "创建中...",

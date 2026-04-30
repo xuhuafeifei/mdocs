@@ -105,6 +105,7 @@
 .mdocs-doc-item.active {
   background: var(--mdocs-accent-soft);
   border-color: var(--mdocs-accent-secondary);
+  border-left: 3px solid var(--mdocs-accent);
 }
 
 .mdocs-doc-item-title {
@@ -146,6 +147,7 @@
 .mdocs-tree-row.active {
   background: var(--mdocs-accent-soft);
   border-color: var(--mdocs-accent-secondary);
+  border-left: 3px solid var(--mdocs-accent);
 }
 
 .mdocs-tree-select-target {
@@ -154,11 +156,21 @@
 }
 
 .mdocs-tree-caret {
-  width: 12px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--mdocs-text-muted);
   font-size: 10px;
   cursor: pointer;
   user-select: none;
+  border-radius: var(--mdocs-radius-sm);
+  transition: background 0.15s ease;
+}
+
+.mdocs-tree-caret:hover {
+  background: var(--mdocs-bg);
 }
 
 .mdocs-tree-caret-spacer {
@@ -434,6 +446,11 @@
   color: var(--mdocs-text);
 }
 
+.mdocs-domain-lock {
+  flex-shrink: 0;
+  margin-left: -4px;
+}
+
 .mdocs-editor-permission-select {
   max-width: 160px;
   flex: 0 1 auto;
@@ -466,6 +483,51 @@
   min-height: 0;
 }
 
+/* === Editor content readability === */
+.mdocs-editor h1 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-top: 0;
+  margin-bottom: 0.5em;
+}
+
+.mdocs-editor h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.mdocs-editor h3 {
+  font-size: 18px;
+  font-weight: 500;
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+}
+
+.mdocs-editor p,
+.mdocs-editor li,
+.mdocs-editor blockquote {
+  line-height: 1.6;
+  margin-bottom: 1em;
+}
+
+.mdocs-editor ol,
+.mdocs-editor ul {
+  padding-left: 24px;
+  margin-bottom: 1em;
+}
+
+.mdocs-editor li {
+  margin-bottom: 0.5em;
+}
+
+strong.label {
+  color: var(--mdocs-accent);
+  font-weight: 600;
+  margin-right: 8px;
+}
+
 /* === Save indicator === */
 .mdocs-save-dot {
   width: 8px;
@@ -482,6 +544,35 @@
 
 .mdocs-save-dot.unsaved {
   background: var(--mdocs-warning);
+}
+
+.mdocs-save-dot.saving {
+  background: var(--mdocs-warning);
+  animation: save-dot-pulse 1s infinite;
+}
+
+@keyframes save-dot-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* === Auto-save indicator === */
+.mdocs-save-indicator {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--mdocs-surface);
+  border-radius: var(--mdocs-radius-lg);
+  box-shadow: var(--mdocs-shadow-md);
+  font-size: 12px;
+  color: var(--mdocs-text-muted);
+  z-index: 20;
+  transition: opacity 0.3s ease;
 }
 
 /* === Toast === */

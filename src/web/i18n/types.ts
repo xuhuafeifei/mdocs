@@ -3,6 +3,7 @@ export type TranslationKey =
   | "loading"
   | "saved"
   | "saving"
+  | "unsaved"
   | "cancel"
   | "create"
   | "creating"
