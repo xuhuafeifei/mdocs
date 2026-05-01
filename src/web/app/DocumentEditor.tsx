@@ -63,9 +63,23 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const [displayName, setDisplayName] = useState(props.document.displayName);
   const [busy, setBusy] = useState(false);
   const [editor, setEditor] = useState<IEditor | null>(null);
+  // Ref for latest content — used in handleInit (stable callback) to set content programmatically
+  const contentRef = useRef(props.document.content);
+  contentRef.current = props.document.content;
+
+  // Detect whether the incoming content is Lexical JSON or raw markdown.
+  // Drafts now store JSON; API-fetched documents contain markdown.
+  const contentType = useMemo<"json" | "markdown">(() => {
+    if (!props.document.content) return "json";
+    try {
+      const p = JSON.parse(props.document.content);
+      return p?.root?.children ? "json" : "markdown";
+    } catch {
+      return "markdown";
+    }
+  }, [props.document.content]);
   const [pubStatus, setPubStatus] = useState<"published" | "unpublished" | "publishing">("published");
   const [draftSaved, setDraftSaved] = useState(false);
-  const [initialContent, setInitialContent] = useState<string | null>(null);
   const { autoSave } = getAutoSaveSettings();
 
   const {
@@ -80,6 +94,12 @@ export function DocumentEditor(props: DocumentEditorProps) {
     documentId: props.document.documentId,
     displayName,
     enabled: autoSave && props.canEdit,
+    documentMeta: {
+      relativePath: props.document.relativePath,
+      permission: props.document.permission,
+      ownerVisitorId: props.document.ownerVisitorId,
+      domainId: props.document.domainId,
+    },
   });
 
   usePublishGuard({ isDirty: _isDirty, draftExists });
@@ -89,15 +109,20 @@ export function DocumentEditor(props: DocumentEditorProps) {
   // not when a stale draft from a previous session exists.
   useLayoutEffect(() => {
     const hasCurrentDraft = draftExists && draftCurrentRef.current;
-    // console.log("[onDirtyChange] isDirty=", _isDirty, "hasCurrentDraft=", hasCurrentDraft, "draftExists=", draftExists, "draftCurrent=", draftCurrentRef.current);
+    console.log("[onDirtyChange] isDirty=", _isDirty, "hasCurrentDraft=", hasCurrentDraft, "draftExists=", draftExists, "draftCurrent=", draftCurrentRef.current);
     props.onDirtyChange?.(_isDirty, hasCurrentDraft);
   }, [_isDirty, draftExists]);
 
   // Load draft content if available, otherwise use server content
+  // Note: App.tsx openDocument already provides draft content via props.document.content
+  // when a draft with cached metadata exists, so the async load below is redundant
+  // but kept as a fallback for the non-draft path.
   useEffect(() => {
-    setInitialContent(null);
     loadDraftContent().then((draft) => {
-      setInitialContent(draft ?? props.document.content);
+      if (draft) {
+        // In the rare case where App.tsx didn't provide draft content
+        // (e.g. draft without cached metadata), use it here
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.document.documentId]);
@@ -114,6 +139,19 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
   const handleInit = useCallback((e: IEditor) => {
     setEditor(e);
+    // Bypass buggy content prop — re-set content programmatically via editor API
+    // queueMicrotask ensures the editor has fully initialized first.
+    const initContent = contentRef.current;
+    if (initContent) {
+      const ct = initContent.trim().startsWith('{"root"') ? "json" : "markdown";
+      queueMicrotask(() => {
+        e.setDocument(ct, initContent);
+      });
+    }
+    queueMicrotask(() => {
+      const afterInit = e.getDocument("json");
+      console.log("[handleInit] editor content after setDocument:", JSON.stringify(afterInit?.root?.children?.slice(0, 2)));
+    });
   }, []);
 
   async function publish(): Promise<void> {
@@ -143,17 +181,26 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
   async function saveDraft(): Promise<void> {
     if (!editor || !props.canEdit) return;
-    const content = (editor.getDocument("markdown") as string).trimEnd();
-    await saveDraftToIdb({
-      documentId: props.document.documentId,
-      content,
-      displayName,
-      updatedAt: Date.now(),
-      published: false,
-    });
+    const jsonContent = JSON.stringify(editor.getDocument("json"));
+    const markdownContent = (editor.getDocument("markdown") as string).trimEnd();
+    console.log("[saveDraft] json preview:", jsonContent.slice(0, 100));
+    // Mark as saved synchronously BEFORE async IndexedDB write,
+    // so the navigation guard sees clean state immediately.
     markDraftSaved();
     setDraftSaved(true);
     setTimeout(() => setDraftSaved(false), 2000);
+    await saveDraftToIdb({
+      documentId: props.document.documentId,
+      content: jsonContent,
+      contentMarkdown: markdownContent,
+      displayName,
+      updatedAt: Date.now(),
+      published: false,
+      relativePath: props.document.relativePath,
+      permission: props.document.permission,
+      ownerVisitorId: props.document.ownerVisitorId,
+      domainId: props.document.domainId,
+    });
   }
 
   // Listen for Ctrl+S / Cmd+S
@@ -376,8 +423,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
             >
               <div style={{ flex: 1 }}>
                 <Editor
-                  content={initialContent ?? props.document.content}
-                  type="markdown"
+                  content={props.document.content}
+                  type={contentType}
                   key={props.document.documentId}
                   editable={props.canEdit}
                   onInit={handleInit}

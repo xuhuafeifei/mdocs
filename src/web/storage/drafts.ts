@@ -4,10 +4,18 @@ const STORE = "drafts";
 
 export interface DraftRecord {
   documentId: string;
+  /** Lexical JSON serialization (replaces raw markdown) */
   content: string;
+  /** Markdown version — used when publishing from the draft list */
+  contentMarkdown?: string;
   displayName: string;
   updatedAt: number;
   published: boolean;
+  // Cached document metadata — avoids a network fetch when re-opening a draft.
+  relativePath?: string;
+  permission?: number;
+  ownerVisitorId?: string;
+  domainId?: string;
 }
 
 function openDB(): Promise<IDBDatabase> {

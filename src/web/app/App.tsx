@@ -38,7 +38,7 @@ import { SettingsPage } from "./SettingsPage";
 import { MessageDialog } from "./MessageDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
 import { ConflictNotice } from "./ConflictNotice";
-import { getDraft, deleteDraft as deleteDraftRecord } from "../storage/drafts";
+import { getDraft, saveDraft as saveDraftRecord, deleteDraft as deleteDraftRecord } from "../storage/drafts";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 import "./App.css";
 
@@ -85,7 +85,7 @@ export function App() {
 
   function guardNavigate(onProceed: () => void): void {
     const { isDirty, hasDraft } = editorDirtyRef.current;
-    // console.log("[guardNavigate] isDirty=", isDirty, "hasCurrentDraft=", hasDraft, "willBlock=", isDirty && !hasDraft);
+    console.log("[guardNavigate] isDirty=", isDirty, "hasCurrentDraft=", hasDraft, "willBlock=", isDirty && !hasDraft);
     if (isDirty && !hasDraft) {
       setNavGuard({ onProceed });
       return;
@@ -170,9 +170,41 @@ export function App() {
 
   async function openDocument(docId: string): Promise<void> {
     try {
+      // 1. Local-first: if draft exists with cached metadata, skip network entirely
+      const draft = await getDraft(docId);
+      if (draft && !draft.published && draft.relativePath && draft.domainId && draft.ownerVisitorId) {
+        console.log("[openDocument] loaded from local draft, content preview:", draft.content.slice(0, 100));
+        setActiveDoc({
+          documentId: draft.documentId,
+          relativePath: draft.relativePath,
+          displayName: draft.displayName,
+          content: draft.content,
+          permission: draft.permission!,
+          ownerVisitorId: draft.ownerVisitorId!,
+          domainId: draft.domainId,
+        } as DocumentDetail);
+        setSelectedCreateParentPath(parentDirForCreates(draft.relativePath));
+        return;
+      }
+
+      // 2. No usable draft — fetch full document from server
       const doc = await getDocumentApi(docId);
-      setActiveDoc(doc);
       setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
+
+      // 3. Cache metadata into existing draft so next open skips the network
+      if (draft && !draft.published) {
+        await saveDraftRecord({
+          ...draft,
+          relativePath: doc.relativePath,
+          permission: doc.permission,
+          ownerVisitorId: doc.ownerVisitorId,
+          domainId: doc.domainId,
+        });
+      }
+
+      setActiveDoc(draft && !draft.published
+        ? { ...doc, content: draft.content, displayName: draft.displayName }
+        : doc);
     } catch (err) {
       setAlertMessage(translateError(t, err));
     }
@@ -231,7 +263,7 @@ export function App() {
     try {
       const draft = await getDraft(docId);
       if (!draft) return;
-      await updateDocumentApi(docId, { content: draft.content, displayName: draft.displayName });
+      await updateDocumentApi(docId, { content: draft.contentMarkdown ?? draft.content, displayName: draft.displayName });
       await deleteDraftRecord(docId);
       await refreshTree();
       setMessage(t("published"));
