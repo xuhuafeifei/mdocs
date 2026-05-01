@@ -8,6 +8,7 @@ import {
 import {
   ChatInputActions,
   CodeLanguageSelect,
+  ColorPickerBtn,
   FloatActions,
   useEditorState,
 } from "@lobehub/editor/react";
@@ -15,6 +16,7 @@ import {
   BoldIcon,
   CodeXmlIcon,
   FileUpIcon,
+  HighlighterIcon,
   ImageIcon,
   ItalicIcon,
   LinkIcon,
@@ -22,6 +24,7 @@ import {
   ListOrderedIcon,
   ListTodoIcon,
   MessageSquareQuote,
+  PaletteIcon,
   Redo2Icon,
   SigmaIcon,
   SquareDashedBottomCodeIcon,
@@ -94,6 +97,35 @@ const Toolbar: FC<ToolbarProps> = ({ editor, floating, style, className }) => {
           label: "Strikethrough",
           onClick: editorState.strikethrough,
           tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Strikethrough).keys },
+        },
+        { type: "divider" },
+        {
+          children: (
+            <ColorPickerBtn
+              active={!!editorState.textColor}
+              editor={editor}
+              icon={PaletteIcon}
+              label={"Text Color"}
+              onChange={editorState.setTextColor}
+              value={editorState.textColor}
+            />
+          ),
+          key: "textColor",
+          label: "Text Color",
+        },
+        {
+          children: (
+            <ColorPickerBtn
+              active={!!editorState.bgColor}
+              editor={editor}
+              icon={HighlighterIcon}
+              label={"Background Color"}
+              onChange={editorState.setBgColor}
+              value={editorState.bgColor}
+            />
+          ),
+          key: "bgColor",
+          label: "Background Color",
         },
         { type: "divider" },
         {
