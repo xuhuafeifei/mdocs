@@ -263,7 +263,7 @@ export function App() {
     try {
       const draft = await getDraft(docId);
       if (!draft) return;
-      await updateDocumentApi(docId, { content: draft.contentMarkdown ?? draft.content, displayName: draft.displayName });
+      await updateDocumentApi(docId, { content: draft.content, displayName: draft.displayName });
       await deleteDraftRecord(docId);
       await refreshTree();
       setMessage(t("published"));

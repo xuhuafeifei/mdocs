@@ -4,10 +4,8 @@ const STORE = "drafts";
 
 export interface DraftRecord {
   documentId: string;
-  /** Lexical JSON serialization (replaces raw markdown) */
+  /** Lexical JSON serialization */
   content: string;
-  /** Markdown version — used when publishing from the draft list */
-  contentMarkdown?: string;
   displayName: string;
   updatedAt: number;
   published: boolean;

@@ -15,6 +15,30 @@ import { getStoredVisitorId, ApiRequestError } from "../../services/client";
 import { createDocumentApi } from "../../services/endpoints";
 import { ERROR_CODE_MAP, PATH_ERROR_MESSAGE_MAP, STORAGE_ERROR_MESSAGE_MAP } from "../../i18n/errors";
 
+/** Build a minimal Lexical JSON document with a single h1 heading. */
+function buildLexicalJsonHeading(title: string): string {
+  return JSON.stringify({
+    root: {
+      children: [
+        {
+          children: [
+            { detail: 0, format: 0, mode: "normal", text: title, type: "text", version: 1 },
+          ],
+          direction: "ltr",
+          format: "",
+          indent: 0,
+          type: "heading",
+          tag: "h1",
+          version: 1,
+        },
+      ],
+      direction: "ltr",
+      type: "root",
+      version: 1,
+    },
+  });
+}
+
 export type CreateModalState =
   | { kind: "document"; parentMode: "selection" | "fixed"; parentPath: string; draft: string }
   | { kind: "folder"; parentMode: "selection" | "fixed"; parentPath: string; draft: string };
@@ -148,7 +172,7 @@ export function useCreateModal(opts: UseCreateModalOpts) {
         const doc = await createDocumentApi({
           relativePath,
           displayName: displayTitle,
-          content: `# ${displayTitle}\n\n`,
+          content: buildLexicalJsonHeading(displayTitle),
           domainId: currentDomainId,
         });
         await refreshTree();
@@ -182,7 +206,7 @@ export function useCreateModal(opts: UseCreateModalOpts) {
       const doc = await createDocumentApi({
         relativePath,
         displayName: folderTitle,
-        content: `# ${folderTitle}\n\n`,
+        content: buildLexicalJsonHeading(folderTitle),
         domainId: currentDomainId,
       });
       await refreshTree();

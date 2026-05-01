@@ -83,11 +83,9 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
       timerRef.current = setTimeout(async () => {
         try {
           const jsonContent = JSON.stringify(editor.getDocument("json"));
-          const markdownContent = (editor.getDocument("markdown") as string).trimEnd();
           await saveDraft({
             documentId,
             content: jsonContent,
-            contentMarkdown: markdownContent,
             displayName,
             updatedAt: Date.now(),
             published: false,

@@ -159,7 +159,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     setBusy(true);
     setPubStatus("publishing");
     try {
-      const content = (editor.getDocument("markdown") as string).trimEnd();
+      const content = JSON.stringify(editor.getDocument("json"));
       await props.onPublish(content, displayName, props.document.documentId);
       await clearDraft();
       setPubStatus("published");
@@ -182,7 +182,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
   async function saveDraft(): Promise<void> {
     if (!editor || !props.canEdit) return;
     const jsonContent = JSON.stringify(editor.getDocument("json"));
-    const markdownContent = (editor.getDocument("markdown") as string).trimEnd();
     console.log("[saveDraft] json preview:", jsonContent.slice(0, 100));
     // Mark as saved synchronously BEFORE async IndexedDB write,
     // so the navigation guard sees clean state immediately.
@@ -192,7 +191,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
     await saveDraftToIdb({
       documentId: props.document.documentId,
       content: jsonContent,
-      contentMarkdown: markdownContent,
       displayName,
       updatedAt: Date.now(),
       published: false,
