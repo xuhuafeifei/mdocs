@@ -82,15 +82,7 @@ export function SettingsPage(props: {
         </footer>
       </aside>
       <main className="mdocs-main">
-        {showDrafts ? (
-          <div className="mdocs-settings">
-            <DraftListPage
-              onPublish={onPublishDraft}
-              onClose={() => setShowDrafts(false)}
-              onCountChange={setDraftCount}
-            />
-          </div>
-        ) : tab === "general" ? (
+        {tab === "general" ? (
           <div className="mdocs-settings">
             <div className="mdocs-settings-header">
               <h2 className="mdocs-settings-title">{t("general")}</h2>
@@ -185,6 +177,15 @@ export function SettingsPage(props: {
               )}
             </div>
           </div>
+        )}
+
+        {/* DraftListPage overlay — always on top of settings content */}
+        {showDrafts && (
+          <DraftListPage
+            onPublish={onPublishDraft}
+            onClose={() => setShowDrafts(false)}
+            onCountChange={setDraftCount}
+          />
         )}
 
         {/* Warning modal for turning off auto-save */}
