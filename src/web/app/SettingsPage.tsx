@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "../i18n";
 import { DraftListPage } from "./DraftListPage";
+import { listAllDrafts } from "../storage/drafts";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 
 function getBool(key: string, def: boolean): boolean {
@@ -21,6 +22,8 @@ export function SettingsPage(props: {
   const [autoPublish, setAutoPublish] = useState(() => getBool("mdocs.autoPublish", false));
   const [showDrafts, setShowDrafts] = useState(false);
   const [tab, setTab] = useState<SettingsTab>("general");
+  const [warnModal, setWarnModal] = useState(false);
+  const [draftCount, setDraftCount] = useState(0);
 
   useEffect(() => {
     localStorage.setItem("mdocs.autoSave", String(autoSave));
@@ -29,6 +32,27 @@ export function SettingsPage(props: {
   useEffect(() => {
     localStorage.setItem("mdocs.autoPublish", String(autoPublish));
   }, [autoPublish]);
+
+  useEffect(() => {
+    if (tab === "savePublish") {
+      listAllDrafts().then((drafts) => {
+        setDraftCount(drafts.filter((d) => !d.published).length);
+      });
+    }
+  }, [tab]);
+
+  const handleAutoSaveToggle = useCallback(() => {
+    if (autoSave) {
+      setWarnModal(true);
+    } else {
+      setAutoSave(true);
+    }
+  }, [autoSave]);
+
+  function confirmTurnOff(): void {
+    setAutoSave(false);
+    setWarnModal(false);
+  }
 
   return (
     <>
@@ -70,71 +94,118 @@ export function SettingsPage(props: {
             <div className="mdocs-settings-header">
               <h2 className="mdocs-settings-title">{t("general")}</h2>
             </div>
-            <div className="mdocs-settings-section">
-              <label className="mdocs-settings-label">{t("language")}</label>
-              <div className="mdocs-settings-lang">
-                <button
-                  type="button"
-                  className={lang === "en" ? "active" : ""}
-                  onClick={() => setLang("en")}
-                >
-                  EN
-                </button>
-                <span>/</span>
-                <button
-                  type="button"
-                  className={lang === "zh" ? "active" : ""}
-                  onClick={() => setLang("zh")}
-                >
-                  中
-                </button>
-              </div>
+            <div className="mdocs-settings-card">
+              <label className="mdocs-settings-item">
+                <span className="mdocs-settings-item-info">
+                  <span className="mdocs-settings-card-title">{t("language")}</span>
+                </span>
+                <span className="mdocs-settings-lang">
+                  <button
+                    type="button"
+                    className={lang === "en" ? "active" : ""}
+                    onClick={() => setLang("en")}
+                  >
+                    EN
+                  </button>
+                  <span>/</span>
+                  <button
+                    type="button"
+                    className={lang === "zh" ? "active" : ""}
+                    onClick={() => setLang("zh")}
+                  >
+                    中
+                  </button>
+                </span>
+              </label>
             </div>
           </div>
         ) : (
           <div className="mdocs-settings">
             <div className="mdocs-settings-header">
               <h2 className="mdocs-settings-title">{t("saveAndPublish")}</h2>
-            </div>
-            <div className="mdocs-settings-section">
-              <label className="mdocs-settings-toggle">
-                <span>
-                  <div className="mdocs-settings-label">{t("autoSave")}</div>
-                  <div className="muted" style={{ fontSize: 12 }}>{t("autoSaveDesc")}</div>
-                </span>
-                <button
-                  type="button"
-                  className={"mdocs-toggle" + (autoSave ? " active" : "")}
-                  role="switch"
-                  aria-checked={autoSave}
-                  onClick={() => setAutoSave((v) => !v)}
-                >
-                  <span className="mdocs-toggle-knob" />
-                </button>
-              </label>
-            </div>
-            <div className="mdocs-settings-section">
-              <label className="mdocs-settings-toggle">
-                <span>
-                  <div className="mdocs-settings-label">{t("autoPublish")}</div>
-                  <div className="muted" style={{ fontSize: 12 }}>{t("autoPublishDesc")}</div>
-                </span>
-                <button
-                  type="button"
-                  className={"mdocs-toggle" + (autoPublish ? " active" : "")}
-                  role="switch"
-                  aria-checked={autoPublish}
-                  onClick={() => setAutoPublish((v) => !v)}
-                >
-                  <span className="mdocs-toggle-knob" />
-                </button>
-              </label>
-            </div>
-            <div className="mdocs-settings-section">
-              <label className="mdocs-settings-label">{t("unpublishedDrafts")}</label>
-              <button type="button" onClick={() => setShowDrafts(true)}>
-                {t("unpublishedDrafts")}
+              <button type="button" className="secondary" onClick={onBack}>
+                {t("backToDocs")}
               </button>
+            </div>
+
+            <div className="mdocs-settings-cards">
+              {/* Auto-save hero section */}
+              <div className="mdocs-settings-card mdocs-settings-hero">
+                <label className="mdocs-settings-item">
+                  <span className="mdocs-settings-item-info">
+                    <span className="mdocs-settings-card-title">
+                      <span className="mdocs-settings-hero-icon" aria-hidden="true">🛡️</span>
+                      {t("autoSave")}
+                      <span className="mdocs-settings-badge">{t("autoSaveBadge")}</span>
+                    </span>
+                    <span className="mdocs-settings-item-desc">{t("autoSaveDesc")}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className={"mdocs-toggle" + (autoSave ? " active" : "")}
+                    role="switch"
+                    aria-checked={autoSave}
+                    onClick={handleAutoSaveToggle}
+                  >
+                    <span className="mdocs-toggle-knob" />
+                  </button>
+                </label>
+              </div>
+
+              {/* Auto-publish standard item */}
+              <div className="mdocs-settings-card">
+                <label className="mdocs-settings-item">
+                  <span className="mdocs-settings-item-info">
+                    <span className="mdocs-settings-card-title">{t("autoPublish")}</span>
+                    <span className="mdocs-settings-item-desc">{t("autoPublishDesc")}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className={"mdocs-toggle" + (autoPublish ? " active" : "")}
+                    role="switch"
+                    aria-checked={autoPublish}
+                    onClick={() => setAutoPublish((v) => !v)}
+                  >
+                    <span className="mdocs-toggle-knob" />
+                  </button>
+                </label>
+              </div>
+
+              {/* Drafts */}
+              {draftCount > 0 ? (
+                <button className="mdocs-settings-card mdocs-settings-draft-link" onClick={() => setShowDrafts(true)}>
+                  <span className="mdocs-settings-draft-link-text">📄 {t("viewDrafts")} ({draftCount})</span>
+                  <span className="mdocs-settings-draft-arrow" aria-hidden="true">›</span>
+                </button>
+              ) : (
+                <div className="mdocs-settings-card mdocs-settings-draft-empty">
+                  <span className="mdocs-settings-item-desc">{t("noDrafts")}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Warning modal for turning off auto-save */}
+        {warnModal && (
+          <div
+            className="mdocs-dialog-backdrop"
+            role="presentation"
+            onMouseDown={(ev) => {
+              if (ev.target === ev.currentTarget) setWarnModal(false);
+            }}
+          >
+            <div className="mdocs-dialog card" role="dialog" aria-modal="true">
+              <h1>⚠️ {t("autoSaveTurnOffTitle")}</h1>
+              <p className="muted">{t("autoSaveTurnOffBody")}</p>
+              <div className="mdocs-dialog-actions">
+                <button type="button" className="primary" onClick={() => setWarnModal(false)}>
+                  {t("autoSaveTurnOffCancel")}
+                </button>
+                <button type="button" className="danger" onClick={confirmTurnOff}>
+                  {t("autoSaveTurnOffConfirm")}
+                </button>
+              </div>
             </div>
           </div>
         )}
