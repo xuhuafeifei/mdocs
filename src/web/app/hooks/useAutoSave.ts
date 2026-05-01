@@ -96,6 +96,7 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
           setIsDirty(false);
           setLastSavedAt(Date.now());
           draftCurrentRef.current = true; // draft now matches current content
+          console.log("[autoSave] draft saved for", documentId, "at", new Date(Date.now()).toLocaleTimeString(), "length:", jsonContent.length);
         } catch (err) {
           console.error("mdocs auto-save failed", err);
         }

@@ -82,7 +82,7 @@ export function App() {
   const [view, setView] = useState<"docs" | "settings">("docs");
   const editorDirtyRef = useRef({ isDirty: false, hasDraft: false });
   const [navGuard, setNavGuard] = useState<{ onProceed: () => void } | null>(null);
-  const saveBeforeNavRef = useRef<() => Promise<void>>();
+  const saveBeforeNavRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
   async function guardNavigate(onProceed: () => void): Promise<void> {
     const { isDirty, hasDraft } = editorDirtyRef.current;
