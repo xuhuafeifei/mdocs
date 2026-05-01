@@ -158,4 +158,8 @@ export const zh: Record<TranslationKey, string> = {
   saveDraft: "保存草稿",
   continue: "继续",
   draftDeleted: "草稿已删除",
+  confirmDeleteDraft: "确定要永久删除这篇草稿吗？此操作不可恢复。",
+  draftsEmptyState: "所有草稿已同步，当前无未发布内容。",
+  localSnapshot: "本地快照",
+  unknownTitle: "未命名文档",
 };

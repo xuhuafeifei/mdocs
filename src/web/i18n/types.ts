@@ -153,4 +153,8 @@ export type TranslationKey =
   | "unsavedChanges"
   | "saveDraft"
   | "continue"
-  | "draftDeleted";
+  | "draftDeleted"
+  | "confirmDeleteDraft"
+  | "draftsEmptyState"
+  | "localSnapshot"
+  | "unknownTitle";

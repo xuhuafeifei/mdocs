@@ -159,4 +159,8 @@ export const en: Record<TranslationKey, string> = {
   saveDraft: "Save Draft",
   continue: "Continue",
   draftDeleted: "Draft deleted",
+  confirmDeleteDraft: "Permanently delete this draft? This action cannot be undone.",
+  draftsEmptyState: "All drafts synced — no unpublished content.",
+  localSnapshot: "Local snapshot",
+  unknownTitle: "Untitled document",
 };

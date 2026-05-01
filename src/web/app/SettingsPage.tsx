@@ -87,6 +87,7 @@ export function SettingsPage(props: {
             <DraftListPage
               onPublish={onPublishDraft}
               onClose={() => setShowDrafts(false)}
+              onCountChange={setDraftCount}
             />
           </div>
         ) : tab === "general" ? (
