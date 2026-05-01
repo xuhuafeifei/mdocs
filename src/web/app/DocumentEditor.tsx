@@ -56,6 +56,8 @@ interface DocumentEditorProps {
   onPublish: (content: string, displayName: string, documentId: string) => Promise<void>;
   onDelete: () => Promise<void>;
   onDirtyChange?: (dirty: boolean, hasDraft: boolean) => void;
+  /** Called by App.tsx before navigation to flush pending changes */
+  saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
 }
 
 export function DocumentEditor(props: DocumentEditorProps) {
@@ -136,6 +138,13 @@ export function DocumentEditor(props: DocumentEditorProps) {
   useEffect(() => {
     setDisplayName(props.document.displayName);
   }, [props.document.displayName, props.document.documentId]);
+
+  // Expose saveDraft so App.tsx can flush pending changes before navigation
+  useEffect(() => {
+    if (props.saveBeforeNavRef) {
+      props.saveBeforeNavRef.current = saveDraft;
+    }
+  });
 
   const handleInit = useCallback((e: IEditor) => {
     setEditor(e);

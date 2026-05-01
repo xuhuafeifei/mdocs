@@ -82,11 +82,19 @@ export function App() {
   const [view, setView] = useState<"docs" | "settings">("docs");
   const editorDirtyRef = useRef({ isDirty: false, hasDraft: false });
   const [navGuard, setNavGuard] = useState<{ onProceed: () => void } | null>(null);
+  const saveBeforeNavRef = useRef<() => Promise<void>>();
 
-  function guardNavigate(onProceed: () => void): void {
+  async function guardNavigate(onProceed: () => void): Promise<void> {
     const { isDirty, hasDraft } = editorDirtyRef.current;
     console.log("[guardNavigate] isDirty=", isDirty, "hasCurrentDraft=", hasDraft, "willBlock=", isDirty && !hasDraft);
     if (isDirty && !hasDraft) {
+      // Auto-save enabled: flush pending changes before navigating, no dialog
+      const autoSave = localStorage.getItem("mdocs.autoSave") !== "false";
+      if (autoSave && saveBeforeNavRef.current) {
+        await saveBeforeNavRef.current();
+        onProceed();
+        return;
+      }
       setNavGuard({ onProceed });
       return;
     }
@@ -386,6 +394,7 @@ export function App() {
             onDelete={() =>
               deleteDocumentById(activeDoc.documentId, activeDoc.relativePath)
             }
+            saveBeforeNavRef={saveBeforeNavRef}
           />
         ) : (
           <div className="mdocs-welcome">
