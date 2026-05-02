@@ -155,6 +155,7 @@ export const zh: Record<TranslationKey, string> = {
   conflictTitle: "发布冲突",
   conflictBody: "云端版本与本地版本冲突，请手动处理合并后重新发布。",
   unsavedChanges: "您有未保存的内容。",
+  edit: "编辑",
   saveDraft: "保存草稿",
   continue: "继续",
   draftDeleted: "草稿已删除",

@@ -64,6 +64,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const { t, lang } = useI18n();
   const [displayName, setDisplayName] = useState(props.document.displayName);
   const [busy, setBusy] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const editing = props.canEdit && isEditing;
   const [editor, setEditor] = useState<IEditor | null>(null);
   // Ref for latest content — used in handleInit (stable callback) to set content programmatically
   const contentRef = useRef(props.document.content);
@@ -371,7 +373,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           onChange={(e) => setDisplayName(e.target.value)}
           onBlur={() => void saveDisplayNameIfChanged()}
           placeholder={t("displayNamePlaceholder")}
-          disabled={!props.canEdit}
+          disabled={!editing}
         />
         <DomainSelect
           domains={props.domains.length ? props.domains : [{ domainId: "default", domainName: t("defaultDomain"), permission: "" }]}
@@ -382,34 +384,44 @@ export function DocumentEditor(props: DocumentEditorProps) {
         />
         <span className="mdocs-editor-toolbar-spacer" aria-hidden />
         <div className="mdocs-editor-toolbar-actions">
-          {props.canEdit && (
-            <span className="mdocs-save-indicator">
-              <span
-                className={
-                  "mdocs-save-dot " +
-                  (pubStatus === "publishing" ? "saving" : pubStatus === "unpublished" ? "unsaved" : "saved")
-                }
-              />
-              <span>
-                {pubStatus === "publishing"
-                  ? t("publishing")
-                  : draftSaved
-                    ? t("saved")
-                    : draftExists
-                      ? t("unsaved")
-                      : t("published")}
+          {editing ? (
+            <>
+              <span className="mdocs-save-indicator">
+                <span
+                  className={
+                    "mdocs-save-dot " +
+                    (pubStatus === "publishing" ? "saving" : pubStatus === "unpublished" ? "unsaved" : "saved")
+                  }
+                />
+                <span>
+                  {pubStatus === "publishing"
+                    ? t("publishing")
+                    : draftSaved
+                      ? t("saved")
+                      : draftExists
+                        ? t("unsaved")
+                        : t("published")}
+                </span>
               </span>
-            </span>
+              {!autoSave && (
+                <button type="button" disabled={busy} onClick={() => void saveDraft()}>
+                  {t("saveDraft")}
+                </button>
+              )}
+              <button type="button" className="primary" disabled={busy} onClick={() => void publish()}>
+                {busy ? t("publishing") : t("publish")}
+              </button>
+              <button type="button" className="danger" disabled={busy} onClick={props.onDelete}>
+                {t("delete")}
+              </button>
+            </>
+          ) : (
+            props.canEdit && (
+              <button type="button" className="primary" onClick={() => setIsEditing(true)}>
+                {t("edit")}
+              </button>
+            )
           )}
-          <button type="button" disabled={!props.canEdit || busy} onClick={() => void saveDraft()}>
-            {t("saveDraft")}
-          </button>
-          <button type="button" className="primary" disabled={!props.canEdit || busy} onClick={() => void publish()}>
-            {busy ? t("publishing") : t("publish")}
-          </button>
-          <button type="button" className="danger" disabled={!props.canEdit || busy} onClick={props.onDelete}>
-            {t("delete")}
-          </button>
         </div>
       </div>
       <Block flex={1} style={{ minHeight: 0 }}>
@@ -421,7 +433,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
             minHeight: 0,
           }}
         >
-          {editor && <Toolbar editor={editor} />}
+          {editing && editor && <Toolbar editor={editor} />}
           <div className="mdocs-editor-content-area" style={{ flex: 1, display: "flex", minHeight: 0 }}>
             <Block
               variant="outlined"
@@ -433,7 +445,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                   content={props.document.content}
                   type={contentType}
                   key={props.document.documentId}
-                  editable={props.canEdit}
+                  editable={editing}
                   onInit={handleInit}
                   plugins={plugins}
                   lineEmptyPlaceholder={t("displayNamePlaceholder")}

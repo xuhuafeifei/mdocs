@@ -151,6 +151,7 @@ export type TranslationKey =
   | "conflictTitle"
   | "conflictBody"
   | "unsavedChanges"
+  | "edit"
   | "saveDraft"
   | "continue"
   | "draftDeleted"

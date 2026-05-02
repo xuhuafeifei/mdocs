@@ -156,6 +156,7 @@ export const en: Record<TranslationKey, string> = {
   conflictTitle: "Publish conflict",
   conflictBody: "Local version conflicts with remote. Please resolve the merge manually and re-publish.",
   unsavedChanges: "You have unsaved changes.",
+  edit: "Edit",
   saveDraft: "Save Draft",
   continue: "Continue",
   draftDeleted: "Draft deleted",
