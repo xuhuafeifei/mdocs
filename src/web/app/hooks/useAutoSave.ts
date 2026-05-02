@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { IEditor } from "@lobehub/editor";
 import { saveDraft, deleteDraft, getDraft } from "../../storage/drafts";
 
@@ -17,7 +17,7 @@ interface UseAutoSaveOptions {
   };
 }
 
-export function useAutoSave({ editor, documentId, displayName, enabled, debounceMs = 2000, documentMeta }: UseAutoSaveOptions) {
+export function useAutoSave({ editor, documentId, displayName, enabled, debounceMs = 1000, documentMeta }: UseAutoSaveOptions) {
   const [isDirty, setIsDirty] = useState(false);
   const [draftExists, setDraftExists] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -31,6 +31,30 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
   // Snapshot of editor content at last save/load — used to filter out
   // non-content updates (selection/cursor) from the Lexical update listener.
   const lastContentRef = useRef("");
+
+  // Refs for use in event handlers (avoid stale closure)
+  const dirtyRef = useRef(false);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+
+  const performSave = useCallback(async () => {
+    if (!editor) return;
+    const jsonContent = JSON.stringify(editor.getDocument("json"));
+    await saveDraft({
+      documentId,
+      content: jsonContent,
+      displayName,
+      updatedAt: Date.now(),
+      published: false,
+      ...documentMeta,
+    });
+    lastContentRef.current = jsonContent;
+    setDraftExists(true);
+    setIsDirty(false);
+    setLastSavedAt(Date.now());
+    draftCurrentRef.current = true;
+    dirtyRef.current = false;
+  }, [editor, documentId, displayName, documentMeta]);
 
   // Check for existing draft on document change
   useEffect(() => {
@@ -57,12 +81,13 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
         setLastSavedAt(null);
         draftCurrentRef.current = false;
         lastContentRef.current = "";
+        dirtyRef.current = false;
       }
     });
     return () => { cancelled = true; };
   }, [documentId]);
 
-  // Listen for editor changes
+  // Listen for editor changes (afterDelay mode)
   useEffect(() => {
     if (!editor) return;
     const lexical = editor.getLexicalEditor();
@@ -76,30 +101,14 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
       lastContentRef.current = jsonContent;
 
       setIsDirty(true);
+      dirtyRef.current = true;
       draftCurrentRef.current = false; // content changed, draft is now stale
       if (!enabled) return;
 
       if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(async () => {
-        try {
-          const jsonContent = JSON.stringify(editor.getDocument("json"));
-          await saveDraft({
-            documentId,
-            content: jsonContent,
-            displayName,
-            updatedAt: Date.now(),
-            published: false,
-            ...documentMeta,
-          });
-          lastContentRef.current = jsonContent;
-          setDraftExists(true);
-          setIsDirty(false);
-          setLastSavedAt(Date.now());
-          draftCurrentRef.current = true; // draft now matches current content
-          console.log("[autoSave] draft saved for", documentId, "at", new Date(Date.now()).toLocaleTimeString(), "length:", jsonContent.length);
-        } catch (err) {
-          console.error("mdocs auto-save failed", err);
-        }
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        performSave();
       }, debounceMs);
     });
 
@@ -112,12 +121,51 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
     };
 
     return () => cleanupRef.current?.();
-  }, [editor, documentId, displayName, enabled, debounceMs, documentMeta]);
+  }, [editor, documentId, displayName, enabled, debounceMs, documentMeta, performSave]);
+
+  // Blur save (onFocusChange mode)
+  useEffect(() => {
+    if (!editor) return;
+    const rootElement = editor.getLexicalEditor()?.getRootElement();
+    if (!rootElement) return;
+
+    const handleBlur = () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      if (dirtyRef.current && enabledRef.current) {
+        performSave();
+      }
+    };
+
+    rootElement.addEventListener("blur", handleBlur);
+    return () => rootElement.removeEventListener("blur", handleBlur);
+  }, [editor, performSave]);
+
+  // Window blur / tab switch save (onWindowChange mode)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+        if (dirtyRef.current && enabledRef.current) {
+          performSave();
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [performSave]);
 
   async function clearDraft(): Promise<void> {
     await deleteDraft(documentId);
     setDraftExists(false);
     setIsDirty(false);
+    dirtyRef.current = false;
     draftCurrentRef.current = false;
     lastContentRef.current = "";
   }
@@ -133,6 +181,7 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
   function markDraftSaved(): void {
     setDraftExists(true);
     setIsDirty(false);
+    dirtyRef.current = false;
     setLastSavedAt(Date.now());
     draftCurrentRef.current = true;
     if (editor) {
