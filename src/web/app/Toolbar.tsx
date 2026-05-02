@@ -8,7 +8,6 @@ import {
 import {
   ChatInputActions,
   CodeLanguageSelect,
-  ColorPickerBtn,
   FloatActions,
   useEditorState,
 } from "@lobehub/editor/react";
@@ -24,7 +23,6 @@ import {
   ListOrderedIcon,
   ListTodoIcon,
   MessageSquareQuote,
-  PaletteIcon,
   Redo2Icon,
   SigmaIcon,
   SquareDashedBottomCodeIcon,
@@ -100,32 +98,24 @@ const Toolbar: FC<ToolbarProps> = ({ editor, floating, style, className }) => {
         },
         { type: "divider" },
         {
-          children: (
-            <ColorPickerBtn
-              active={!!editorState.textColor}
-              editor={editor}
-              icon={PaletteIcon}
-              label={"Text Color"}
-              onChange={editorState.setTextColor}
-              value={editorState.textColor}
-            />
-          ),
+          active: !!editorState.textColor,
+          editor,
           key: "textColor",
           label: "Text Color",
+          onChange: editorState.setTextColor,
+          type: "colorPicker",
+          value: editorState.textColor,
         },
         {
-          children: (
-            <ColorPickerBtn
-              active={!!editorState.bgColor}
-              editor={editor}
-              icon={HighlighterIcon}
-              label={"Background Color"}
-              onChange={editorState.setBgColor}
-              value={editorState.bgColor}
-            />
-          ),
+          active: !!editorState.bgColor,
+          defaultColor: "#ffffff",
+          editor,
+          icon: HighlighterIcon,
           key: "bgColor",
           label: "Background Color",
+          onChange: editorState.setBgColor,
+          type: "colorPicker",
+          value: editorState.bgColor,
         },
         { type: "divider" },
         {
@@ -227,7 +217,63 @@ const Toolbar: FC<ToolbarProps> = ({ editor, floating, style, className }) => {
     [editor, editorState],
   );
 
-  if (floating) return <FloatActions items={items} />;
+  const floatingItems = useMemo(
+    () =>
+      [
+        {
+          active: editorState.isBold,
+          icon: BoldIcon,
+          key: "bold",
+          label: "Bold",
+          onClick: editorState.bold,
+        },
+        {
+          active: editorState.isItalic,
+          icon: ItalicIcon,
+          key: "italic",
+          label: "Italic",
+          onClick: editorState.italic,
+        },
+        {
+          active: editorState.isUnderline,
+          icon: UnderlineIcon,
+          key: "underline",
+          label: "Underline",
+          onClick: editorState.underline,
+        },
+        {
+          active: editorState.isStrikethrough,
+          icon: StrikethroughIcon,
+          key: "strikethrough",
+          label: "Strikethrough",
+          onClick: editorState.strikethrough,
+        },
+        { type: "divider" },
+        {
+          active: !!editorState.textColor,
+          editor,
+          key: "textColor",
+          label: "Text Color",
+          onChange: editorState.setTextColor,
+          type: "colorPicker",
+          value: editorState.textColor,
+        },
+        {
+          active: !!editorState.bgColor,
+          defaultColor: "#ffffff",
+          editor,
+          icon: HighlighterIcon,
+          key: "bgColor",
+          label: "Background Color",
+          onChange: editorState.setBgColor,
+          type: "colorPicker",
+          value: editorState.bgColor,
+        },
+      ] as any,
+    [editor, editorState],
+  );
+
+  if (floating) return <FloatActions items={floatingItems} />;
 
   return (
     <div className={["mdocs-toolbar", className].filter(Boolean).join(" ")} style={style}>
