@@ -157,6 +157,8 @@ export const en: Record<TranslationKey, string> = {
   conflictBody: "Local version conflicts with remote. Please resolve the merge manually and re-publish.",
   unsavedChanges: "You have unsaved changes.",
   edit: "Edit",
+  autoEdit: "Auto Edit",
+  autoEditDesc: "Automatically enter edit mode when opening a document",
   saveDraft: "Save Draft",
   continue: "Continue",
   draftDeleted: "Draft deleted",

@@ -64,7 +64,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const { t, lang } = useI18n();
   const [displayName, setDisplayName] = useState(props.document.displayName);
   const [busy, setBusy] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(() => localStorage.getItem("mdocs.autoEdit") !== "false");
   const editing = props.canEdit && isEditing;
   const [editor, setEditor] = useState<IEditor | null>(null);
   // Ref for latest content — used in handleInit (stable callback) to set content programmatically

@@ -20,6 +20,7 @@ export function SettingsPage(props: {
   const { onBack, onPublishDraft } = props;
   const [autoSave, setAutoSave] = useState(() => getBool("mdocs.autoSave", true));
   const [autoPublish, setAutoPublish] = useState(() => getBool("mdocs.autoPublish", false));
+  const [autoEdit, setAutoEdit] = useState(() => getBool("mdocs.autoEdit", true));
   const [showDrafts, setShowDrafts] = useState(false);
   const [tab, setTab] = useState<SettingsTab>("general");
   const [warnModal, setWarnModal] = useState(false);
@@ -32,6 +33,10 @@ export function SettingsPage(props: {
   useEffect(() => {
     localStorage.setItem("mdocs.autoPublish", String(autoPublish));
   }, [autoPublish]);
+
+  useEffect(() => {
+    localStorage.setItem("mdocs.autoEdit", String(autoEdit));
+  }, [autoEdit]);
 
   useEffect(() => {
     if (tab === "savePublish") {
@@ -109,6 +114,24 @@ export function SettingsPage(props: {
                     中
                   </button>
                 </span>
+              </label>
+            </div>
+
+            <div className="mdocs-settings-card">
+              <label className="mdocs-settings-item">
+                <span className="mdocs-settings-item-info">
+                  <span className="mdocs-settings-card-title">{t("autoEdit")}</span>
+                  <span className="mdocs-settings-item-desc">{t("autoEditDesc")}</span>
+                </span>
+                <button
+                  type="button"
+                  className={"mdocs-toggle" + (autoEdit ? " active" : "")}
+                  role="switch"
+                  aria-checked={autoEdit}
+                  onClick={() => setAutoEdit((v) => !v)}
+                >
+                  <span className="mdocs-toggle-knob" />
+                </button>
               </label>
             </div>
           </div>

@@ -152,6 +152,8 @@ export type TranslationKey =
   | "conflictBody"
   | "unsavedChanges"
   | "edit"
+  | "autoEdit"
+  | "autoEditDesc"
   | "saveDraft"
   | "continue"
   | "draftDeleted"
