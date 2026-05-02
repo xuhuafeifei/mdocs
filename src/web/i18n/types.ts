@@ -136,6 +136,7 @@ export type TranslationKey =
   // Auto-save & drafts
   | "autoSave"
   | "autoSaveDesc"
+  | "autoSaveAlwaysOnDesc"
   | "autoSaveBadge"
   | "autoSaveTurnOffTitle"
   | "autoSaveTurnOffBody"

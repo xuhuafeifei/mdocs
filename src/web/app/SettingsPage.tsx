@@ -128,6 +128,25 @@ export function SettingsPage(props: {
             </div>
 
             <div className="mdocs-settings-cards">
+              {/* Auto-save — always on, display only */}
+              <div className="mdocs-settings-card">
+                <label className="mdocs-settings-item">
+                  <span className="mdocs-settings-item-info">
+                    <span className="mdocs-settings-card-title">{t("autoSave")}</span>
+                    <span className="mdocs-settings-item-desc">{t("autoSaveAlwaysOnDesc")}</span>
+                  </span>
+                  <span
+                    className="mdocs-toggle active"
+                    role="switch"
+                    aria-checked="true"
+                    aria-disabled="true"
+                    style={{ opacity: 0.6, cursor: "not-allowed" }}
+                  >
+                    <span className="mdocs-toggle-knob" />
+                  </span>
+                </label>
+              </div>
+
               {/* Auto-publish standard item */}
               <div className="mdocs-settings-card">
                 <label className="mdocs-settings-item">

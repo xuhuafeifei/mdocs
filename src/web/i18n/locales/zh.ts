@@ -140,6 +140,7 @@ export const zh: Record<TranslationKey, string> = {
   saveAndPublish: "保存与发布",
   autoSave: "自动保存 (本地快照)",
   autoSaveDesc: "开启后，即使断网、崩溃或误刷新，内容也不会丢失。关闭此功能将面临极高的数据丢失风险。",
+  autoSaveAlwaysOnDesc: "始终开启 — 内容会持续保存到本地快照，永不会丢失。",
   autoSaveBadge: "强烈推荐",
   autoSaveTurnOffTitle: "高风险操作",
   autoSaveTurnOffBody: "关闭自动保存后，编辑内容仅在手动保存或发布时才会被存储。一旦浏览器崩溃、误关闭或刷新页面，所有未保存的内容将永久丢失。",

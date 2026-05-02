@@ -141,6 +141,7 @@ export const en: Record<TranslationKey, string> = {
   saveAndPublish: "Save & Publish",
   autoSave: "Auto Save (Local Snapshot)",
   autoSaveDesc: "When enabled, your content is protected from network outages, crashes, or accidental refreshes. Disabling this feature puts your data at high risk of loss.",
+  autoSaveAlwaysOnDesc: "Always enabled — your content is continuously saved to a local snapshot, so you never lose work.",
   autoSaveBadge: "Recommended",
   autoSaveTurnOffTitle: "High Risk Operation",
   autoSaveTurnOffBody: "Without auto-save, content is only stored when you manually save or publish. If the browser crashes, closes unexpectedly, or refreshes, all unsaved content will be permanently lost.",
