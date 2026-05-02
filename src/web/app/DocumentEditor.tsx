@@ -355,12 +355,14 @@ export function DocumentEditor(props: DocumentEditorProps) {
         <div className="mdocs-editor-toolbar-actions">
           {editing ? (
             <>
-              <span className="mdocs-save-indicator">
-                <span className={"mdocs-save-dot " + (busy ? "saving" : draftExists ? "unsaved" : "saved")} />
-                <span>
-                  {busy ? t("publishing") : draftExists ? t("unsaved") : t("published")}
+              {localStorage.getItem("mdocs.autoPublish") !== "true" && (
+                <span className="mdocs-save-indicator">
+                  <span className={"mdocs-save-dot " + (busy ? "saving" : draftExists ? "unsaved" : "saved")} />
+                  <span>
+                    {busy ? t("publishing") : draftExists ? t("unsaved") : t("published")}
+                  </span>
                 </span>
-              </span>
+              )}
               <button type="button" className="primary" disabled={busy} onClick={() => void publish()}>
                 {busy ? t("publishing") : t("publish")}
               </button>

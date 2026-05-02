@@ -32,8 +32,9 @@ import { SettingsPage } from "./SettingsPage";
 import { MessageDialog } from "./MessageDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
 import { ConflictNotice } from "./ConflictNotice";
-import { getDraft, saveDraft as saveDraftRecord, deleteDraft as deleteDraftRecord } from "../storage/drafts";
+import { getDraft, saveDraft as saveDraftRecord, deleteDraftIfUnchanged } from "../storage/drafts";
 import { translateError, localizeDomainName, parentDirForCreates } from "./utils";
+import { useAutoPublish } from "./hooks/useAutoPublish";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 import "./App.css";
 
@@ -87,6 +88,9 @@ export function App() {
   const [selectedCreateParentPath, setSelectedCreateParentPath] = useState("");
   const [view, setView] = useState<"docs" | "settings">("docs");
   const saveBeforeNavRef = useRef<(() => Promise<void>) | undefined>(undefined);
+
+  // Periodic draft scanner — publishes stale drafts (idle > 30 s) to the server
+  useAutoPublish(localStorage.getItem("mdocs.autoPublish") === "true", publishDraftFromList);
 
   async function guardNavigate(onProceed: () => void): Promise<void> {
     await saveBeforeNavRef.current?.();
@@ -238,7 +242,12 @@ export function App() {
       const draft = await getDraft(docId);
       if (!draft) return;
       await updateDocumentApi(docId, { content: draft.content, displayName: draft.displayName });
-      await deleteDraftRecord(docId);
+      // Optimistic lock: only delete if the draft wasn't modified during the API call
+      const deleted = await deleteDraftIfUnchanged(docId, draft.updatedAt);
+      if (!deleted) {
+        console.log("[publishDraftFromList] draft modified during publish, keeping:", docId);
+        // Draft was updated while publishing — keep it for the next scan/publish
+      }
       await refreshTree();
       setMessage(t("published"));
       window.setTimeout(() => setMessage(null), 1200);

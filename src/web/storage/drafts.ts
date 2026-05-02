@@ -62,6 +62,30 @@ export async function deleteDraft(documentId: string): Promise<void> {
   });
 }
 
+/** Delete a draft only if its updatedAt hasn't changed — optimistic lock. */
+export async function deleteDraftIfUnchanged(
+  documentId: string,
+  expectedUpdatedAt: number,
+): Promise<boolean> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    const getReq = store.get(documentId);
+    getReq.onsuccess = () => {
+      const existing = getReq.result;
+      if (!existing || existing.updatedAt !== expectedUpdatedAt) {
+        resolve(false);
+        return;
+      }
+      store.delete(documentId);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
+  });
+}
+
 export async function listAllDrafts(): Promise<DraftRecord[]> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
