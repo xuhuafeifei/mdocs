@@ -92,47 +92,49 @@ export function SettingsPage(props: {
             <div className="mdocs-settings-header">
               <h2 className="mdocs-settings-title">{t("general")}</h2>
             </div>
-            <div className="mdocs-settings-card">
-              <label className="mdocs-settings-item">
-                <span className="mdocs-settings-item-info">
-                  <span className="mdocs-settings-card-title">{t("language")}</span>
-                </span>
-                <span className="mdocs-settings-lang">
-                  <button
-                    type="button"
-                    className={lang === "en" ? "active" : ""}
-                    onClick={() => setLang("en")}
-                  >
-                    EN
-                  </button>
-                  <span>/</span>
-                  <button
-                    type="button"
-                    className={lang === "zh" ? "active" : ""}
-                    onClick={() => setLang("zh")}
-                  >
-                    中
-                  </button>
-                </span>
-              </label>
-            </div>
+            <div className="mdocs-settings-cards">
+              <div className="mdocs-settings-card">
+                <label className="mdocs-settings-item">
+                  <span className="mdocs-settings-item-info">
+                    <span className="mdocs-settings-card-title">{t("language")}</span>
+                  </span>
+                  <span className="mdocs-settings-lang">
+                    <button
+                      type="button"
+                      className={lang === "en" ? "active" : ""}
+                      onClick={() => setLang("en")}
+                    >
+                      EN
+                    </button>
+                    <span>/</span>
+                    <button
+                      type="button"
+                      className={lang === "zh" ? "active" : ""}
+                      onClick={() => setLang("zh")}
+                    >
+                      中
+                    </button>
+                  </span>
+                </label>
+              </div>
 
-            <div className="mdocs-settings-card">
-              <label className="mdocs-settings-item">
-                <span className="mdocs-settings-item-info">
-                  <span className="mdocs-settings-card-title">{t("autoEdit")}</span>
-                  <span className="mdocs-settings-item-desc">{t("autoEditDesc")}</span>
-                </span>
-                <button
-                  type="button"
-                  className={"mdocs-toggle" + (autoEdit ? " active" : "")}
-                  role="switch"
-                  aria-checked={autoEdit}
-                  onClick={() => setAutoEdit((v) => !v)}
-                >
-                  <span className="mdocs-toggle-knob" />
-                </button>
-              </label>
+              <div className="mdocs-settings-card">
+                <label className="mdocs-settings-item">
+                  <span className="mdocs-settings-item-info">
+                    <span className="mdocs-settings-card-title">{t("autoEdit")}</span>
+                    <span className="mdocs-settings-item-desc">{t("autoEditDesc")}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className={"mdocs-toggle" + (autoEdit ? " active" : "")}
+                    role="switch"
+                    aria-checked={autoEdit}
+                    onClick={() => setAutoEdit((v) => !v)}
+                  >
+                    <span className="mdocs-toggle-knob" />
+                  </button>
+                </label>
+              </div>
             </div>
           </div>
         ) : (
