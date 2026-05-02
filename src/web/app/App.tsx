@@ -86,35 +86,11 @@ export function App() {
   const [menu, setMenu] = useState<TreeContextMenuPayload | null>(null);
   const [selectedCreateParentPath, setSelectedCreateParentPath] = useState("");
   const [view, setView] = useState<"docs" | "settings">("docs");
-  const editorDirtyRef = useRef({ isDirty: false, hasDraft: false });
-  const [navGuard, setNavGuard] = useState<{ onProceed: () => void } | null>(null);
   const saveBeforeNavRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
   async function guardNavigate(onProceed: () => void): Promise<void> {
-    const { isDirty, hasDraft } = editorDirtyRef.current;
-    console.log("[guardNavigate] isDirty=", isDirty, "hasCurrentDraft=", hasDraft, "willBlock=", isDirty && !hasDraft);
-    if (isDirty && !hasDraft) {
-      // Auto-save enabled: flush pending changes before navigating, no dialog
-      const autoSave = localStorage.getItem("mdocs.autoSave") !== "false";
-      if (autoSave && saveBeforeNavRef.current) {
-        await saveBeforeNavRef.current();
-        onProceed();
-        return;
-      }
-      setNavGuard({ onProceed });
-      return;
-    }
+    await saveBeforeNavRef.current?.();
     onProceed();
-  }
-
-  function handleNavGuardProceed(): void {
-    const cb = navGuard?.onProceed;
-    setNavGuard(null);
-    cb?.();
-  }
-
-  function handleNavGuardCancel(): void {
-    setNavGuard(null);
   }
 
   useEffect(() => {
@@ -377,10 +353,6 @@ export function App() {
               });
             }}
             onPublish={publishDocument}
-            onDirtyChange={(dirty, hasDraft) => {
-              // console.log("[onDirtyChange] isDirty=", dirty, "hasDraft=", hasDraft);
-              editorDirtyRef.current = { isDirty: dirty, hasDraft };
-            }}
             onDelete={() =>
               deleteDocumentById(activeDoc.documentId, activeDoc.relativePath)
             }
@@ -495,27 +467,6 @@ export function App() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-      {navGuard && (
-        <div
-          className="mdocs-dialog-backdrop"
-          role="presentation"
-          onMouseDown={(ev) => {
-            if (ev.target === ev.currentTarget) setNavGuard(null);
-          }}
-        >
-          <div className="mdocs-dialog card" role="dialog" aria-modal="true">
-            <p>{t("unsavedChanges")}</p>
-            <div className="mdocs-dialog-actions">
-              <button type="button" onClick={handleNavGuardCancel}>
-                {t("cancel")}
-              </button>
-              <button type="button" className="primary" onClick={handleNavGuardProceed}>
-                {t("continue")}
-              </button>
-            </div>
           </div>
         </div>
       )}

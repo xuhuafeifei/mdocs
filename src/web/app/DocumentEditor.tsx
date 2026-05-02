@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Block } from "@lobehub/ui";
 import { saveDraft as saveDraftToIdb } from "../storage/drafts";
@@ -41,13 +41,6 @@ import { useAutoSave } from "./hooks/useAutoSave";
 import { usePublishGuard } from "./hooks/usePublishGuard";
 import { localizeDomainName } from "./utils";
 
-function getAutoSaveSettings(): { autoSave: boolean; autoPublish: boolean } {
-  return {
-    autoSave: localStorage.getItem("mdocs.autoSave") !== "false",
-    autoPublish: localStorage.getItem("mdocs.autoPublish") === "true",
-  };
-}
-
 interface DocumentEditorProps {
   document: DocumentDetail;
   canEdit: boolean;
@@ -56,7 +49,6 @@ interface DocumentEditorProps {
   onDomainChange: (domainId: string) => void;
   onPublish: (content: string, displayName: string, documentId: string) => Promise<void>;
   onDelete: () => Promise<void>;
-  onDirtyChange?: (dirty: boolean, hasDraft: boolean) => void;
   /** Called by App.tsx before navigation to flush pending changes */
   saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
 }
@@ -83,9 +75,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
       return "markdown";
     }
   }, [props.document.content]);
-  const [pubStatus, setPubStatus] = useState<"published" | "unpublished" | "publishing">("published");
-  const [draftSaved, setDraftSaved] = useState(false);
-  const { autoSave } = getAutoSaveSettings();
 
   const documentMeta = useMemo(() => ({
     relativePath: props.document.relativePath,
@@ -100,25 +89,15 @@ export function DocumentEditor(props: DocumentEditorProps) {
     clearDraft,
     loadDraftContent,
     markDraftSaved,
-    draftCurrentRef,
   } = useAutoSave({
     editor,
     documentId: props.document.documentId,
     displayName,
-    enabled: autoSave && props.canEdit,
+    enabled: props.canEdit,
     documentMeta,
   });
 
   usePublishGuard({ isDirty: _isDirty, draftExists });
-
-  // Report dirty state to parent for SPA navigation guard.
-  // hasDraft is only true when the IndexedDB draft matches CURRENT editor content,
-  // not when a stale draft from a previous session exists.
-  useLayoutEffect(() => {
-    const hasCurrentDraft = draftExists && draftCurrentRef.current;
-    console.log("[onDirtyChange] isDirty=", _isDirty, "hasCurrentDraft=", hasCurrentDraft, "draftExists=", draftExists, "draftCurrent=", draftCurrentRef.current);
-    props.onDirtyChange?.(_isDirty, hasCurrentDraft);
-  }, [_isDirty, draftExists]);
 
   // Load draft content if available, otherwise use server content
   // Note: App.tsx openDocument already provides draft content via props.document.content
@@ -177,14 +156,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
   async function publish(): Promise<void> {
     if (!editor || !props.canEdit) return;
     setBusy(true);
-    setPubStatus("publishing");
     try {
       const content = JSON.stringify(editor.getDocument("json"));
       await props.onPublish(content, displayName, props.document.documentId);
       await clearDraft();
-      setPubStatus("published");
     } catch (err) {
-      setPubStatus("unpublished");
       throw err;
     } finally {
       setBusy(false);
@@ -206,8 +182,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
     // Mark as saved synchronously BEFORE async IndexedDB write,
     // so the navigation guard sees clean state immediately.
     markDraftSaved();
-    setDraftSaved(true);
-    setTimeout(() => setDraftSaved(false), 2000);
     await saveDraftToIdb({
       documentId: props.document.documentId,
       content: jsonContent,
@@ -220,20 +194,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
       domainId: props.document.domainId,
     });
   }
-
-  // Listen for Ctrl+S / Cmd+S
-  const publishRef = useRef(publish);
-  publishRef.current = publish;
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-        e.preventDefault();
-        void publishRef.current();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
 
   const slashItems = useMemo(
     () => [
@@ -396,27 +356,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
           {editing ? (
             <>
               <span className="mdocs-save-indicator">
-                <span
-                  className={
-                    "mdocs-save-dot " +
-                    (pubStatus === "publishing" ? "saving" : pubStatus === "unpublished" ? "unsaved" : "saved")
-                  }
-                />
+                <span className={"mdocs-save-dot " + (busy ? "saving" : draftExists ? "unsaved" : "saved")} />
                 <span>
-                  {pubStatus === "publishing"
-                    ? t("publishing")
-                    : draftSaved
-                      ? t("saved")
-                      : draftExists
-                        ? t("unsaved")
-                        : t("published")}
+                  {busy ? t("publishing") : draftExists ? t("unsaved") : t("published")}
                 </span>
               </span>
-              {!autoSave && (
-                <button type="button" disabled={busy} onClick={() => void saveDraft()}>
-                  {t("saveDraft")}
-                </button>
-              )}
               <button type="button" className="primary" disabled={busy} onClick={() => void publish()}>
                 {busy ? t("publishing") : t("publish")}
               </button>

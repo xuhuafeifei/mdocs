@@ -6,7 +6,6 @@ interface UseAutoSaveOptions {
   editor: IEditor | null;
   documentId: string;
   displayName: string;
-  enabled: boolean;
   debounceMs?: number;
   /** Persisted alongside the draft so we can skip the network on re-open. */
   documentMeta?: {
@@ -17,7 +16,7 @@ interface UseAutoSaveOptions {
   };
 }
 
-export function useAutoSave({ editor, documentId, displayName, enabled, debounceMs = 1000, documentMeta }: UseAutoSaveOptions) {
+export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000, documentMeta }: UseAutoSaveOptions) {
   const [isDirty, setIsDirty] = useState(false);
   const [draftExists, setDraftExists] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -34,8 +33,6 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
 
   // Refs for use in event handlers (avoid stale closure)
   const dirtyRef = useRef(false);
-  const enabledRef = useRef(enabled);
-  enabledRef.current = enabled;
 
   const performSave = useCallback(async () => {
     if (!editor) return;
@@ -103,7 +100,6 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
       setIsDirty(true);
       dirtyRef.current = true;
       draftCurrentRef.current = false; // content changed, draft is now stale
-      if (!enabled) return;
 
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
@@ -121,7 +117,7 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
     };
 
     return () => cleanupRef.current?.();
-  }, [editor, documentId, displayName, enabled, debounceMs, documentMeta, performSave]);
+  }, [editor, documentId, displayName, debounceMs, documentMeta, performSave]);
 
   // Blur save (onFocusChange mode)
   useEffect(() => {
@@ -134,7 +130,7 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
-      if (dirtyRef.current && enabledRef.current) {
+      if (dirtyRef.current) {
         performSave();
       }
     };
@@ -151,7 +147,7 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
           clearTimeout(timerRef.current);
           timerRef.current = null;
         }
-        if (dirtyRef.current && enabledRef.current) {
+        if (dirtyRef.current) {
           performSave();
         }
       }
@@ -189,5 +185,5 @@ export function useAutoSave({ editor, documentId, displayName, enabled, debounce
     }
   }
 
-  return { isDirty, draftExists, lastSavedAt, clearDraft, loadDraftContent, markDraftSaved, draftCurrentRef };
+  return { isDirty, draftExists, lastSavedAt, clearDraft, loadDraftContent, markDraftSaved };
 }

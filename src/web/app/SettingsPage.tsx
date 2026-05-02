@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../i18n";
 import { DraftListPage } from "./DraftListPage";
 import { listAllDrafts } from "../storage/drafts";
@@ -18,17 +18,11 @@ export function SettingsPage(props: {
 }) {
   const { t, lang, setLang } = useI18n();
   const { onBack, onPublishDraft } = props;
-  const [autoSave, setAutoSave] = useState(() => getBool("mdocs.autoSave", true));
   const [autoPublish, setAutoPublish] = useState(() => getBool("mdocs.autoPublish", false));
   const [autoEdit, setAutoEdit] = useState(() => getBool("mdocs.autoEdit", true));
   const [showDrafts, setShowDrafts] = useState(false);
   const [tab, setTab] = useState<SettingsTab>("general");
-  const [warnModal, setWarnModal] = useState(false);
   const [draftCount, setDraftCount] = useState(0);
-
-  useEffect(() => {
-    localStorage.setItem("mdocs.autoSave", String(autoSave));
-  }, [autoSave]);
 
   useEffect(() => {
     localStorage.setItem("mdocs.autoPublish", String(autoPublish));
@@ -45,19 +39,6 @@ export function SettingsPage(props: {
       });
     }
   }, [tab]);
-
-  const handleAutoSaveToggle = useCallback(() => {
-    if (autoSave) {
-      setWarnModal(true);
-    } else {
-      setAutoSave(true);
-    }
-  }, [autoSave]);
-
-  function confirmTurnOff(): void {
-    setAutoSave(false);
-    setWarnModal(false);
-  }
 
   return (
     <>
@@ -147,29 +128,6 @@ export function SettingsPage(props: {
             </div>
 
             <div className="mdocs-settings-cards">
-              {/* Auto-save hero section */}
-              <div className="mdocs-settings-card mdocs-settings-hero">
-                <label className="mdocs-settings-item">
-                  <span className="mdocs-settings-item-info">
-                    <span className="mdocs-settings-card-title">
-                      <span className="mdocs-settings-hero-icon" aria-hidden="true">🛡️</span>
-                      {t("autoSave")}
-                      <span className="mdocs-settings-badge">{t("autoSaveBadge")}</span>
-                    </span>
-                    <span className="mdocs-settings-item-desc">{t("autoSaveDesc")}</span>
-                  </span>
-                  <button
-                    type="button"
-                    className={"mdocs-toggle" + (autoSave ? " active" : "")}
-                    role="switch"
-                    aria-checked={autoSave}
-                    onClick={handleAutoSaveToggle}
-                  >
-                    <span className="mdocs-toggle-knob" />
-                  </button>
-                </label>
-              </div>
-
               {/* Auto-publish standard item */}
               <div className="mdocs-settings-card">
                 <label className="mdocs-settings-item">
@@ -213,29 +171,6 @@ export function SettingsPage(props: {
           />
         )}
 
-        {/* Warning modal for turning off auto-save */}
-        {warnModal && (
-          <div
-            className="mdocs-dialog-backdrop"
-            role="presentation"
-            onMouseDown={(ev) => {
-              if (ev.target === ev.currentTarget) setWarnModal(false);
-            }}
-          >
-            <div className="mdocs-dialog card" role="dialog" aria-modal="true">
-              <h1>⚠️ {t("autoSaveTurnOffTitle")}</h1>
-              <p className="muted">{t("autoSaveTurnOffBody")}</p>
-              <div className="mdocs-dialog-actions">
-                <button type="button" className="primary" onClick={() => setWarnModal(false)}>
-                  {t("autoSaveTurnOffCancel")}
-                </button>
-                <button type="button" className="danger" onClick={confirmTurnOff}>
-                  {t("autoSaveTurnOffConfirm")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
     </>
   );
