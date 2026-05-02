@@ -39,6 +39,7 @@ import OutlinePanel from "./OutlinePanel";
 import { DomainSelect } from "./DomainSelect";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { usePublishGuard } from "./hooks/usePublishGuard";
+import { localizeDomainName } from "./utils";
 
 function getAutoSaveSettings(): { autoSave: boolean; autoPublish: boolean } {
   return {
@@ -86,6 +87,13 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const [draftSaved, setDraftSaved] = useState(false);
   const { autoSave } = getAutoSaveSettings();
 
+  const documentMeta = useMemo(() => ({
+    relativePath: props.document.relativePath,
+    permission: props.document.permission,
+    ownerVisitorId: props.document.ownerVisitorId,
+    domainId: props.document.domainId,
+  }), [props.document.relativePath, props.document.permission, props.document.ownerVisitorId, props.document.domainId]);
+
   const {
     isDirty: _isDirty,
     draftExists,
@@ -98,12 +106,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     documentId: props.document.documentId,
     displayName,
     enabled: autoSave && props.canEdit,
-    documentMeta: {
-      relativePath: props.document.relativePath,
-      permission: props.document.permission,
-      ownerVisitorId: props.document.ownerVisitorId,
-      domainId: props.document.domainId,
-    },
+    documentMeta,
   });
 
   usePublishGuard({ isDirty: _isDirty, draftExists });
@@ -154,7 +157,13 @@ export function DocumentEditor(props: DocumentEditorProps) {
     // queueMicrotask ensures the editor has fully initialized first.
     const initContent = contentRef.current;
     if (initContent) {
-      const ct = initContent.trim().startsWith('{"root"') ? "json" : "markdown";
+      let ct: "json" | "markdown" = "markdown";
+      try {
+        const p = JSON.parse(initContent);
+        ct = p?.root?.children ? "json" : "markdown";
+      } catch {
+        ct = "markdown";
+      }
       queueMicrotask(() => {
         e.setDocument(ct, initContent);
       });
@@ -461,18 +470,4 @@ export function DocumentEditor(props: DocumentEditorProps) {
       </Block>
     </div>
   );
-}
-
-function localizeDomainName(
-  name: string,
-  langCode: "en" | "zh",
-  t: (k: string, vars?: Record<string, string>) => string,
-): string {
-  if (name === "Default") return t("defaultDomain");
-  const suffix = "个人域";
-  if (name.endsWith(suffix)) {
-    const base = name.slice(0, -suffix.length);
-    return base + t("personalDomainSuffix");
-  }
-  return name;
 }

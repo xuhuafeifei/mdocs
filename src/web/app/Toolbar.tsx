@@ -41,6 +41,64 @@ export interface ToolbarProps {
   style?: CSSProperties;
 }
 
+function getFormatItems(editorState: ReturnType<typeof useEditorState>, editor: IEditor) {
+  return [
+    {
+      active: editorState.isBold,
+      icon: BoldIcon,
+      key: "bold",
+      label: "Bold",
+      onClick: editorState.bold,
+      tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Bold).keys },
+    },
+    {
+      active: editorState.isItalic,
+      icon: ItalicIcon,
+      key: "italic",
+      label: "Italic",
+      onClick: editorState.italic,
+      tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Italic).keys },
+    },
+    {
+      active: editorState.isUnderline,
+      icon: UnderlineIcon,
+      key: "underline",
+      label: "Underline",
+      onClick: editorState.underline,
+      tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Underline).keys },
+    },
+    {
+      active: editorState.isStrikethrough,
+      icon: StrikethroughIcon,
+      key: "strikethrough",
+      label: "Strikethrough",
+      onClick: editorState.strikethrough,
+      tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Strikethrough).keys },
+    },
+    { type: "divider" as const },
+    {
+      active: !!editorState.textColor,
+      editor,
+      key: "textColor",
+      label: "Text Color",
+      onChange: editorState.setTextColor,
+      type: "colorPicker" as const,
+      value: editorState.textColor,
+    },
+    {
+      active: !!editorState.bgColor,
+      defaultColor: "#ffffff",
+      editor,
+      icon: HighlighterIcon,
+      key: "bgColor",
+      label: "Background Color",
+      onChange: editorState.setBgColor,
+      type: "colorPicker" as const,
+      value: editorState.bgColor,
+    },
+  ];
+}
+
 const Toolbar: FC<ToolbarProps> = ({ editor, floating, style, className }) => {
   const editorState = useEditorState(editor);
 
@@ -64,59 +122,7 @@ const Toolbar: FC<ToolbarProps> = ({ editor, floating, style, className }) => {
           tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Redo).keys },
         },
         { type: "divider" },
-        {
-          active: editorState.isBold,
-          icon: BoldIcon,
-          key: "bold",
-          label: "Bold",
-          onClick: editorState.bold,
-          tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Bold).keys },
-        },
-        {
-          active: editorState.isItalic,
-          icon: ItalicIcon,
-          key: "italic",
-          label: "Italic",
-          onClick: editorState.italic,
-          tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Italic).keys },
-        },
-        {
-          active: editorState.isUnderline,
-          icon: UnderlineIcon,
-          key: "underline",
-          label: "Underline",
-          onClick: editorState.underline,
-          tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Underline).keys },
-        },
-        {
-          active: editorState.isStrikethrough,
-          icon: StrikethroughIcon,
-          key: "strikethrough",
-          label: "Strikethrough",
-          onClick: editorState.strikethrough,
-          tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Strikethrough).keys },
-        },
-        { type: "divider" },
-        {
-          active: !!editorState.textColor,
-          editor,
-          key: "textColor",
-          label: "Text Color",
-          onChange: editorState.setTextColor,
-          type: "colorPicker",
-          value: editorState.textColor,
-        },
-        {
-          active: !!editorState.bgColor,
-          defaultColor: "#ffffff",
-          editor,
-          icon: HighlighterIcon,
-          key: "bgColor",
-          label: "Background Color",
-          onChange: editorState.setBgColor,
-          type: "colorPicker",
-          value: editorState.bgColor,
-        },
+        ...getFormatItems(editorState, editor),
         { type: "divider" },
         {
           icon: ListIcon,
@@ -218,58 +224,7 @@ const Toolbar: FC<ToolbarProps> = ({ editor, floating, style, className }) => {
   );
 
   const floatingItems = useMemo(
-    () =>
-      [
-        {
-          active: editorState.isBold,
-          icon: BoldIcon,
-          key: "bold",
-          label: "Bold",
-          onClick: editorState.bold,
-        },
-        {
-          active: editorState.isItalic,
-          icon: ItalicIcon,
-          key: "italic",
-          label: "Italic",
-          onClick: editorState.italic,
-        },
-        {
-          active: editorState.isUnderline,
-          icon: UnderlineIcon,
-          key: "underline",
-          label: "Underline",
-          onClick: editorState.underline,
-        },
-        {
-          active: editorState.isStrikethrough,
-          icon: StrikethroughIcon,
-          key: "strikethrough",
-          label: "Strikethrough",
-          onClick: editorState.strikethrough,
-        },
-        { type: "divider" },
-        {
-          active: !!editorState.textColor,
-          editor,
-          key: "textColor",
-          label: "Text Color",
-          onChange: editorState.setTextColor,
-          type: "colorPicker",
-          value: editorState.textColor,
-        },
-        {
-          active: !!editorState.bgColor,
-          defaultColor: "#ffffff",
-          editor,
-          icon: HighlighterIcon,
-          key: "bgColor",
-          label: "Background Color",
-          onChange: editorState.setBgColor,
-          type: "colorPicker",
-          value: editorState.bgColor,
-        },
-      ] as any,
+    () => getFormatItems(editorState, editor) as any,
     [editor, editorState],
   );
 

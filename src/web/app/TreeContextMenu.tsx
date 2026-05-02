@@ -30,7 +30,7 @@ export function TreeContextMenu(props: {
       window.removeEventListener("mousedown", handle);
       window.removeEventListener("keydown", handleKey);
     };
-  }, [props]);
+  }, [props.onClose]);
 
   const isFolder = props.node.type === "folder";
   let folderHuman = "";

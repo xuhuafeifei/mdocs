@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DocumentDetail } from "../../../shared/types/document";
 import type { TreeNode } from "../../../shared/types/tree";
 import type { TranslationKey } from "../../i18n/types";
-import { DocPathError, normaliseDocRelativePath } from "../../../shared/docPath";
+import { normaliseDocRelativePath } from "../../../shared/docPath";
 import {
   normalisePathSegmentForStorage,
   normaliseRelativePathForStorage,
@@ -11,9 +11,10 @@ import {
 } from "../../../shared/storagePath";
 import { FOLDER_DESC_FILENAME, folderDescPathForFolder } from "../../../shared/folderDesc";
 import { stripDomainPathPrefix } from "../../../shared/personalDomain";
-import { getStoredVisitorId, ApiRequestError } from "../../services/client";
+import { getStoredVisitorId } from "../../services/client";
 import { createDocumentApi } from "../../services/endpoints";
-import { ERROR_CODE_MAP, PATH_ERROR_MESSAGE_MAP, STORAGE_ERROR_MESSAGE_MAP } from "../../i18n/errors";
+import { STORAGE_ERROR_MESSAGE_MAP } from "../../i18n/errors";
+import { translateError, parentDirForCreates } from "../utils";
 
 /** Build a minimal Lexical JSON document with a single h1 heading. */
 function buildLexicalJsonHeading(title: string): string {
@@ -50,11 +51,6 @@ function joinDocPath(parentPath: string, fileName: string): string {
   return p ? `${p}/${f}` : f;
 }
 
-function parentDirForCreates(relativePath: string): string {
-  const i = relativePath.lastIndexOf("/");
-  return i === -1 ? "" : relativePath.slice(0, i);
-}
-
 function docPathForSelection(doc: DocumentDetail): string {
   const vid = getStoredVisitorId();
   if (!vid || doc.domainId !== vid) return doc.relativePath;
@@ -70,25 +66,6 @@ function collectDocumentPaths(nodes: TreeNode[], out = new Set<string>()): Set<s
     }
   }
   return out;
-}
-
-function translateError(t: (k: TranslationKey, vars?: Record<string, string>) => string, err: unknown): string {
-  if (err instanceof ApiRequestError) {
-    const key = ERROR_CODE_MAP[err.code];
-    if (key) return t(key);
-    return err.message;
-  }
-  if (err instanceof DocPathError) {
-    const key = PATH_ERROR_MESSAGE_MAP[err.message];
-    if (key) return t(key);
-    return err.message;
-  }
-  if (err instanceof Error) {
-    const key = PATH_ERROR_MESSAGE_MAP[err.message] ?? STORAGE_ERROR_MESSAGE_MAP[err.message];
-    if (key) return t(key);
-    return err.message;
-  }
-  return String(err);
 }
 
 function translateStorageError(t: (k: TranslationKey, vars?: Record<string, string>) => string, message: string): string {

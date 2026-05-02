@@ -9,6 +9,7 @@ export function openFileSelector(handleFiles: (files: FileList) => void, accept 
     if (files && files.length > 0) {
       handleFiles(files);
     }
+    input.remove();
   };
   input.click();
 }

@@ -1,16 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
-import {
-  ERROR_CODE_MAP,
-  PATH_ERROR_MESSAGE_MAP,
-  STORAGE_ERROR_MESSAGE_MAP,
-} from "../i18n/errors";
 import type { VisitorPublic } from "../../shared/types/visitor";
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
 import type { TreeNode } from "../../shared/types/tree";
-import { DocPathError } from "../../shared/docPath";
 import { stripDomainPathPrefix } from "../../shared/personalDomain";
 import {
   ApiRequestError,
@@ -39,16 +33,11 @@ import { MessageDialog } from "./MessageDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
 import { ConflictNotice } from "./ConflictNotice";
 import { getDraft, saveDraft as saveDraftRecord, deleteDraft as deleteDraftRecord } from "../storage/drafts";
+import { translateError, localizeDomainName, parentDirForCreates } from "./utils";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 import "./App.css";
 
 type Phase = "loading" | "needsRegister" | "ready";
-
-/** Tree / create-modal paths are domain-relative; strip personal-domain storage prefix. */
-function parentDirForCreates(relativePath: string): string {
-  const i = relativePath.lastIndexOf("/");
-  return i === -1 ? "" : relativePath.slice(0, i);
-}
 
 function docPathForSelection(doc: DocumentDetail): string {
   const vid = getStoredVisitorId();
@@ -62,6 +51,23 @@ async function fetchDomainsSafe(): Promise<DomainSummary[]> {
   } catch {
     return [{ domainId: "default", domainName: "Default", permission: "public" }];
   }
+}
+
+async function initDomainsAndTree(
+  visitorId: string,
+  setDomains: (doms: DomainSummary[]) => void,
+  setCurrentDomainId: (id: string) => void,
+  refreshTree: (domainId?: string) => Promise<void>,
+): Promise<void> {
+  const doms = await fetchDomainsSafe();
+  setDomains(doms);
+  const initialDomain =
+    doms.find((d) => d.domainId === visitorId)?.domainId ??
+    doms.find((d) => d.domainId === "default")?.domainId ??
+    doms[0]?.domainId ??
+    "default";
+  setCurrentDomainId(initialDomain);
+  await refreshTree(initialDomain);
 }
 
 export function App() {
@@ -132,15 +138,7 @@ export function App() {
     try {
       const me = await fetchMe();
       setVisitor(me);
-      const doms = await fetchDomainsSafe();
-      setDomains(doms);
-      const initialDomain =
-        doms.find((d) => d.domainId === me.visitorId)?.domainId ??
-        doms.find((d) => d.domainId === "default")?.domainId ??
-        doms[0]?.domainId ??
-        "default";
-      setCurrentDomainId(initialDomain);
-      await refreshTree(initialDomain);
+      await initDomainsAndTree(me.visitorId, setDomains, setCurrentDomainId, refreshTree);
       setPhase("ready");
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 401) {
@@ -158,15 +156,7 @@ export function App() {
     storeIdentity(res.visitor.visitorId, res.visitorToken);
     setVisitor(res.visitor);
     setPendingVisitorId(res.visitor.visitorId);
-    const doms = await fetchDomainsSafe();
-    setDomains(doms);
-    const initialDomain =
-      doms.find((d) => d.domainId === res.visitor.visitorId)?.domainId ??
-      doms.find((d) => d.domainId === "default")?.domainId ??
-      doms[0]?.domainId ??
-      "default";
-    setCurrentDomainId(initialDomain);
-    await refreshTree(initialDomain);
+    await initDomainsAndTree(res.visitor.visitorId, setDomains, setCurrentDomainId, refreshTree);
     setPhase("ready");
   }
 
@@ -534,35 +524,4 @@ export function App() {
     </div>
   );
 }
-
-function translateError(t: (k: import("../i18n/types").TranslationKey, vars?: Record<string, string>) => string, err: unknown): string {
-  if (err instanceof ApiRequestError) {
-    const key = ERROR_CODE_MAP[err.code];
-    if (key) return t(key);
-    return err.message;
-  }
-  if (err instanceof DocPathError) {
-    const key = PATH_ERROR_MESSAGE_MAP[err.message];
-    if (key) return t(key);
-    return err.message;
-  }
-  if (err instanceof Error) {
-    const key = PATH_ERROR_MESSAGE_MAP[err.message] ?? STORAGE_ERROR_MESSAGE_MAP[err.message];
-    if (key) return t(key);
-    return err.message;
-  }
-  return String(err);
-}
-
-function localizeDomainName(name: string, lang: "en" | "zh", t: (k: import("../i18n/types").TranslationKey, vars?: Record<string, string>) => string): string {
-  if (name === "Default") return t("defaultDomain");
-  // Personal domain: strip Chinese suffix and re-apply localized suffix
-  const suffix = "个人域";
-  if (name.endsWith(suffix)) {
-    const base = name.slice(0, -suffix.length);
-    return base + t("personalDomainSuffix");
-  }
-  return name;
-}
-
 
