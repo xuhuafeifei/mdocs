@@ -1,11 +1,8 @@
 import { getDb } from "../db/connection.js";
-import {
-  listDocumentsByDomain,
-  findDocumentInvite,
-  type DocumentRow,
-} from "../db/repositories/document.repo.js";
-import { findDomainById } from "../db/repositories/domain.repo.js";
+import { listDocumentsByDomain, type DocumentRow } from "../db/repositories/document.repo.js";
+import { findDomainById, isDomainMember } from "../db/repositories/domain.repo.js";
 import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access.js";
+import { canReadDocument, type DomainAccessInfo } from "../access/access-control.js";
 import { getConfig } from "../config/index.js";
 import { FOLDER_DESC_FILENAME } from "../../shared/folderDesc.js";
 import { stripDomainPathPrefix } from "../../shared/personalDomain.js";
@@ -20,28 +17,24 @@ export function buildDocumentTree(domainId?: string, visitorId?: string | null):
   const db = getDb();
   const domain = findDomainById(db, effective);
   const access = resolveDomainAccess(db, domain, effective, visitorId);
-  if (!canEnterDomainTree(access)) {
-    return [];
-  }
+  if (!canEnterDomainTree(access)) return [];
+
+  // 预查域上下文（批量场景省得逐行查域成员）
+  const domainPermission = domain?.permission ?? "public";
+  const isMember = !!(
+    visitorId && domain && isDomainMember(db, domain.domain_id, visitorId)
+  );
+  const domainInfo: DomainAccessInfo = { domainPermission, isDomainMember: isMember };
+
   const rows = listDocumentsByDomain(db, effective);
   const root: TreeFolderNode = { type: "folder", name: "", path: "", children: [] };
   for (const row of rows) {
-    if (!canReadInTree(row, visitorId)) continue;
+    if (!canReadDocument(row, visitorId ?? null, domainInfo)) continue;
     const forTree = stripDomainPathPrefix(effective, row.relative_path);
     attachRow(root, row, forTree);
   }
   sortFolder(root);
   return root.children;
-}
-
-function canReadInTree(row: DocumentRow, visitorId: string | null | undefined): boolean {
-  if (row.owner_visitor_id === visitorId) return true;
-  if (row.permission === 1 || row.permission === 2) return true; // PUBLIC_READ or PUBLIC_EDIT
-  if (!visitorId) return false;
-  if (row.permission === 3) {
-    return !!findDocumentInvite(getDb(), row.document_id, visitorId);
-  }
-  return false;
 }
 
 function attachRow(root: TreeFolderNode, row: DocumentRow, forTree: string): void {

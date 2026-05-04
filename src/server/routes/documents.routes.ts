@@ -1,8 +1,8 @@
 import { Router, type Request, type Response } from "express";
+import { DocumentError } from "../access/access-control.js";
 import {
   addDocumentInvite,
   createDocument,
-  DocumentError,
   getDocument,
   getDocumentInvites,
   listDocuments,

@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { assertDocumentAccess, DocumentError } from "../documents/document.service.js";
+import { assertDocumentAccess, DocumentError } from "../access/access-control.js";
 
 export function requireDocumentAccess(action: "read" | "edit" | "delete") {
   return (req: Request, res: Response, next: NextFunction): void => {
