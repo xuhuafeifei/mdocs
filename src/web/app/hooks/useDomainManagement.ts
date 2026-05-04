@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n";
 import { getStoredVisitorId } from "../../services/client";
 import {
@@ -12,20 +12,22 @@ import type { DomainSummary } from "../../../shared/types/domain";
 import {
   DOMAIN_PERMISSIONS,
   type DomainPermissionFilter,
+  type DomainPermissionValue,
   isBuiltInDomainId,
   isDomainCreator,
   isDomainStructurallyLocked,
 } from "@shared/domainUi";
-import { localizeDomainName, domainPermissionLabel } from "../utils";
+import { localizeDomainName, domainPermissionLabel, translateError } from "../utils";
 
-export function useDomainManagement(active: boolean) {
+export function useDomainManagement() {
   const { t, lang } = useI18n();
   const visitorId = getStoredVisitorId();
+  const mountedRef = useRef(false);
 
   const [domains, setDomains] = useState<DomainSummary[]>([]);
   const [loadingDomains, setLoadingDomains] = useState(false);
   const [newDomainName, setNewDomainName] = useState("");
-  const [newDomainPermission, setNewDomainPermission] = useState<string>("restricted");
+  const [newDomainPermission, setNewDomainPermission] = useState<DomainPermissionValue>("restricted");
   const [creating, setCreating] = useState(false);
   const [domainError, setDomainError] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -34,21 +36,33 @@ export function useDomainManagement(active: boolean) {
   const [domainFilter, setDomainFilter] = useState<DomainPermissionFilter>("all");
   const [changeTypeForId, setChangeTypeForId] = useState<string | null>(null);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const loadDomains = useCallback(async (): Promise<void> => {
     setLoadingDomains(true);
     setDomainError(null);
     try {
-      setDomains(await fetchDomainsApi());
-    } catch {
-      setDomainError(t("domainLoadFailed"));
+      const doms = await fetchDomainsApi();
+      if (!mountedRef.current) return;
+      setDomains(doms);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setDomainError(translateError(t, err));
     } finally {
-      setLoadingDomains(false);
+      if (mountedRef.current) {
+        setLoadingDomains(false);
+      }
     }
   }, [t]);
 
   useEffect(() => {
-    if (active) void loadDomains();
-  }, [active, loadDomains]);
+    void loadDomains();
+  }, [loadDomains]);
 
   async function handleCreateDomain(e: React.FormEvent): Promise<void> {
     e.preventDefault();
@@ -60,13 +74,17 @@ export function useDomainManagement(active: boolean) {
     setDomainError(null);
     try {
       await createDomainApi({ domainName: newDomainName.trim(), permission: newDomainPermission });
+      if (!mountedRef.current) return;
       setNewDomainName("");
       setNewDomainPermission("restricted");
       await loadDomains();
     } catch (err) {
-      setDomainError(err instanceof Error ? err.message : String(err));
+      if (!mountedRef.current) return;
+      setDomainError(translateError(t, err));
     } finally {
-      setCreating(false);
+      if (mountedRef.current) {
+        setCreating(false);
+      }
     }
   }
 
@@ -75,11 +93,13 @@ export function useDomainManagement(active: boolean) {
     setDomainError(null);
     try {
       await renameDomainApi(domainId, renameDraft.trim());
+      if (!mountedRef.current) return;
       setRenamingId(null);
       setChangeTypeForId(null);
       await loadDomains();
     } catch (err) {
-      setDomainError(err instanceof Error ? err.message : String(err));
+      if (!mountedRef.current) return;
+      setDomainError(translateError(t, err));
     }
   }
 
@@ -94,14 +114,16 @@ export function useDomainManagement(active: boolean) {
     setChangeTypeForId(null);
   }
 
-  async function handlePermissionChange(domainId: string, permission: string): Promise<void> {
+  async function handlePermissionChange(domainId: string, permission: DomainPermissionValue): Promise<void> {
     setDomainError(null);
     try {
       await updateDomainPermissionApi(domainId, permission);
+      if (!mountedRef.current) return;
       setChangeTypeForId(null);
       await loadDomains();
     } catch (err) {
-      setDomainError(err instanceof Error ? err.message : String(err));
+      if (!mountedRef.current) return;
+      setDomainError(translateError(t, err));
     }
   }
 
@@ -110,9 +132,11 @@ export function useDomainManagement(active: boolean) {
     setDomainError(null);
     try {
       await deleteDomainApi(d.domainId);
+      if (!mountedRef.current) return;
       await loadDomains();
     } catch (err) {
-      setDomainError(err instanceof Error ? err.message : String(err));
+      if (!mountedRef.current) return;
+      setDomainError(translateError(t, err));
     }
   }
 

@@ -168,7 +168,6 @@ export const zh: Record<TranslationKey, string> = {
   domainTooltipTypeLocked: "已有 {{count}} 篇文档，不可修改类型",
   deleteDomainConfirmDetail: "确定删除域「{{name}}」吗？域内 {{count}} 篇文档将被永久删除。",
   domainNoMatch: "没有匹配的域",
-  domainLoadFailed: "加载域列表失败",
   shared: "共享",
   autoSave: "自动保存 (本地快照)",
   autoSaveDesc: "开启后，即使断网、崩溃或误刷新，内容也不会丢失。关闭此功能将面临极高的数据丢失风险。",

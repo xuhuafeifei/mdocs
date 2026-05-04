@@ -170,7 +170,6 @@ export const en: Record<TranslationKey, string> = {
   deleteDomainConfirmDetail:
     "Delete domain «{{name}}»? All {{count}} document(s) in it will be permanently removed.",
   domainNoMatch: "No matching domains.",
-  domainLoadFailed: "Could not load domains.",
   shared: "Shared",
   autoSave: "Auto Save (Local Snapshot)",
   autoSaveDesc: "When enabled, your content is protected from network outages, crashes, or accidental refreshes. Disabling this feature puts your data at high risk of loss.",

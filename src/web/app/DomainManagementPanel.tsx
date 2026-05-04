@@ -9,7 +9,7 @@ import {
 
 export function DomainManagementPanel() {
   const { t } = useI18n();
-  const dm = useDomainManagement(true);
+  const dm = useDomainManagement();
 
   return (
     <div className="mdocs-settings">
@@ -77,6 +77,7 @@ export function DomainManagementPanel() {
                 key={f}
                 type="button"
                 className={"mdocs-domain-mgmt-filter" + (dm.domainFilter === f ? " active" : "")}
+                aria-pressed={dm.domainFilter === f}
                 onClick={() => dm.setDomainFilter(f)}
               >
                 {f === "all" ? t("domainFilterAll") : dm.plabel(f)}

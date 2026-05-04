@@ -163,7 +163,6 @@ export type TranslationKey =
   | "domainTooltipTypeLocked"
   | "deleteDomainConfirmDetail"
   | "domainNoMatch"
-  | "domainLoadFailed"
   | "shared"
   // Auto-save & drafts
   | "autoSave"

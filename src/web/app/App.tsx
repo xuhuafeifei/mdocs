@@ -37,6 +37,7 @@ import { translateError, localizeDomainName, parentDirForCreates } from "./utils
 import { useAutoPublish } from "./hooks/useAutoPublish";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 import "./App.css";
+import "./domain.css";
 
 type Phase = "loading" | "needsRegister" | "ready";
 
