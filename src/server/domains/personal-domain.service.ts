@@ -9,8 +9,9 @@ export function ensurePersonalDomain(db: Database.Database, visitorId: string, v
   insertDomain(db, {
     domainId: visitorId,
     domainName: personalDomainDisplayName(visitorName),
-    createdBy: visitorId,
+    creatorVisitorId: visitorId,
     createdAt: now,
+    updatedAt: now,
     permission: "private",
   });
 }

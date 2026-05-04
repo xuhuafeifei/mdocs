@@ -14,8 +14,9 @@ const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS domains (
     domain_id TEXT PRIMARY KEY,
     domain_name TEXT NOT NULL,
-    created_by TEXT NOT NULL,
+    creator_visitor_id TEXT NOT NULL,
     created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
     permission TEXT NOT NULL DEFAULT 'public'
   )`,
   `CREATE TABLE IF NOT EXISTS documents (
@@ -76,9 +77,31 @@ export function applySchema(db: Database.Database): void {
     for (const stmt of SCHEMA_STATEMENTS) {
       db.exec(stmt);
     }
+    migrateDomainsTable(db);
     ensureDefaultDomain(db);
   });
   tx();
+}
+
+function domainColumnNames(db: Database.Database): Set<string> {
+  const rows = db.prepare(`PRAGMA table_info(domains)`).all() as { name: string }[];
+  return new Set(rows.map((r) => r.name));
+}
+
+/** Align legacy `domains` rows with creator_visitor_id + updated_at (SQLite ALTER / RENAME). */
+function migrateDomainsTable(db: Database.Database): void {
+  let names = domainColumnNames(db);
+  if (!names.has("domain_id")) return;
+
+  if (!names.has("updated_at")) {
+    db.exec(`ALTER TABLE domains ADD COLUMN updated_at TEXT`);
+    db.prepare(`UPDATE domains SET updated_at = created_at WHERE updated_at IS NULL`).run();
+    names = domainColumnNames(db);
+  }
+
+  if (names.has("created_by") && !names.has("creator_visitor_id")) {
+    db.exec(`ALTER TABLE domains RENAME COLUMN created_by TO creator_visitor_id`);
+  }
 }
 
 function ensureDefaultDomain(db: Database.Database): void {
@@ -86,8 +109,9 @@ function ensureDefaultDomain(db: Database.Database): void {
     .prepare(`SELECT domain_id FROM domains WHERE domain_id = ?`)
     .get("default");
   if (row) return;
+  const now = new Date().toISOString();
   db.prepare(
-    `INSERT INTO domains (domain_id, domain_name, created_by, created_at, permission)
-     VALUES (?, ?, ?, ?, ?)`,
-  ).run("default", "Default", "system", new Date().toISOString(), "public");
+    `INSERT INTO domains (domain_id, domain_name, creator_visitor_id, created_at, updated_at, permission)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run("default", "Default", "system", now, now, "public");
 }

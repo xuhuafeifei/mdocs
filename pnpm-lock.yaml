@@ -24,7 +24,7 @@ importers:
         specifier: ^4.1.0
         version: 4.1.0(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       better-sqlite3:
-        specifier: ^11.3.0
+        specifier: 11.10.0
         version: 11.10.0
       es-toolkit:
         specifier: ^1.46.1

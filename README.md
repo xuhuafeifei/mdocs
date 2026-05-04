@@ -8,6 +8,8 @@ Markdown knowledge base for small teams.
 - Lightweight visitor identity, no account system
 - Runs locally or on a small team server
 
+> 文档站点：[xuhuafeifei.github.io/mdocs-site](https://xuhuafeifei.github.io/mdocs-site/)
+
 ## Clean-room policy
 
 `mdocs` is implemented from scratch. It MUST NOT reuse any code from
