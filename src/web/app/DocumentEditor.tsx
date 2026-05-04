@@ -393,6 +393,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
             <Block
               variant="outlined"
               horizontal
+              padding={16}
               style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, overflow: "auto", outline: "none" }}
             >
               <div style={{ flex: 1 }}>
@@ -406,7 +407,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                   lineEmptyPlaceholder={t("displayNamePlaceholder")}
                   placeholder={t("displayNamePlaceholder")}
                   slashOption={{ items: slashItems }}
-                  style={{ padding: "24px 20px" }}
+                  className="mdocs-document-editor-root"
                 />
               </div>
               {editor && <OutlinePanel editor={editor} />}

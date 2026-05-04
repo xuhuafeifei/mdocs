@@ -663,6 +663,15 @@
   outline: none;
 }
 
+/* Document editor body inset — same idea as .mdocs-playground-editor in global.css */
+.mdocs-document-editor-root {
+  box-sizing: border-box;
+  /* padding: 80px 60px 60px; */
+  padding-left: 50px;
+  padding-right: 50px;
+  padding-top: 20px;
+}
+
 .mdocs-editor-body {
   flex: 1;
   display: grid;
