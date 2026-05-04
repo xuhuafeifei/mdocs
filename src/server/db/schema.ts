@@ -70,6 +70,14 @@ const SCHEMA_STATEMENTS: string[] = [
     PRIMARY KEY (document_id, visitor_id)
   )`,
   `CREATE INDEX IF NOT EXISTS idx_document_invites_doc ON document_invites (document_id)`,
+  `CREATE TABLE IF NOT EXISTS domain_members (
+    domain_id TEXT NOT NULL,
+    visitor_id TEXT NOT NULL,
+    joined_at TEXT NOT NULL,
+    PRIMARY KEY (domain_id, visitor_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_domain_members_domain ON domain_members (domain_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_domain_members_visitor ON domain_members (visitor_id)`,
 ];
 
 export function applySchema(db: Database.Database): void {

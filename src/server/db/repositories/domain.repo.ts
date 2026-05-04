@@ -47,3 +47,60 @@ export function insertDomain(
     input.permission ?? "public",
   );
 }
+
+export function updateDomainName(db: Database.Database, domainId: string, domainName: string): void {
+  const now = new Date().toISOString();
+  db.prepare(`UPDATE domains SET domain_name = ?, updated_at = ? WHERE domain_id = ?`).run(
+    domainName,
+    now,
+    domainId,
+  );
+}
+
+export function updateDomainPermission(db: Database.Database, domainId: string, permission: string): void {
+  const now = new Date().toISOString();
+  db.prepare(`UPDATE domains SET permission = ?, updated_at = ? WHERE domain_id = ?`).run(
+    permission,
+    now,
+    domainId,
+  );
+}
+
+export function deleteDomainRow(db: Database.Database, domainId: string): void {
+  db.prepare(`DELETE FROM domain_members WHERE domain_id = ?`).run(domainId);
+  db.prepare(`DELETE FROM domains WHERE domain_id = ?`).run(domainId);
+}
+
+export function addDomainMember(db: Database.Database, domainId: string, visitorId: string): void {
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT OR IGNORE INTO domain_members (domain_id, visitor_id, joined_at) VALUES (?, ?, ?)`,
+  ).run(domainId, visitorId, now);
+}
+
+export function isDomainMember(db: Database.Database, domainId: string, visitorId: string): boolean {
+  const row = db
+    .prepare<[string, string], { c: number }>(
+      `SELECT COUNT(*) as c FROM domain_members WHERE domain_id = ? AND visitor_id = ?`,
+    )
+    .get(domainId, visitorId);
+  return (row?.c ?? 0) > 0;
+}
+
+export function countDomainMembers(db: Database.Database, domainId: string): number {
+  const row = db
+    .prepare<string, { c: number }>(
+      `SELECT COUNT(*) as c FROM domain_members WHERE domain_id = ?`,
+    )
+    .get(domainId);
+  return row?.c ?? 0;
+}
+
+export function listDomainMemberIds(db: Database.Database, domainId: string): string[] {
+  const rows = db
+    .prepare<string, { visitor_id: string }>(
+      `SELECT visitor_id FROM domain_members WHERE domain_id = ?`,
+    )
+    .all(domainId);
+  return rows.map((r) => r.visitor_id);
+}

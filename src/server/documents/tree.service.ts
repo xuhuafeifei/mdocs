@@ -1,6 +1,11 @@
 import { getDb } from "../db/connection.js";
-import { listDocumentsByDomain, findDocumentInvite, type DocumentRow } from "../db/repositories/document.repo.js";
+import {
+  listDocumentsByDomain,
+  findDocumentInvite,
+  type DocumentRow,
+} from "../db/repositories/document.repo.js";
 import { findDomainById } from "../db/repositories/domain.repo.js";
+import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access.js";
 import { getConfig } from "../config/index.js";
 import { FOLDER_DESC_FILENAME } from "../../shared/folderDesc.js";
 import { stripDomainPathPrefix } from "../../shared/personalDomain.js";
@@ -14,7 +19,8 @@ export function buildDocumentTree(domainId?: string, visitorId?: string | null):
   const effective = domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
   const domain = findDomainById(db, effective);
-  if (domain && domain.permission === "private" && domain.domain_id !== visitorId) {
+  const access = resolveDomainAccess(db, domain, effective, visitorId);
+  if (!canEnterDomainTree(access)) {
     return [];
   }
   const rows = listDocumentsByDomain(db, effective);

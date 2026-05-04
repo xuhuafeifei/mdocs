@@ -42,6 +42,7 @@ import { DomainSelect } from "./DomainSelect";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { usePublishGuard } from "./hooks/usePublishGuard";
 import { localizeDomainName } from "./utils";
+import { FALLBACK_DOMAIN_SUMMARY } from "../services/domainsBootstrap";
 
 function OutlineSideRail({ editor }: { editor: IEditor }) {
   const { visible } = useOutlineVisibility();
@@ -374,7 +375,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           disabled={!editing}
         />
         <DomainSelect
-          domains={props.domains.length ? props.domains : [{ domainId: "default", domainName: t("defaultDomain"), permission: "" }]}
+          domains={props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY]}
           value={props.currentDomainId}
           onChange={props.onDomainChange}
           ariaLabel={t("currentDomainAria")}

@@ -24,6 +24,36 @@ export function fetchDomainsApi(): Promise<DomainSummary[]> {
   return api<DomainSummary[]>("/api/domains");
 }
 
+export function createDomainApi(input: {
+  domainName: string;
+  permission: string;
+}): Promise<DomainSummary> {
+  return api<DomainSummary>("/api/domains", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function renameDomainApi(domainId: string, domainName: string): Promise<void> {
+  return api<void>(`/api/domains/${encodeURIComponent(domainId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ domainName }),
+  });
+}
+
+export function updateDomainPermissionApi(domainId: string, permission: string): Promise<void> {
+  return api<void>(`/api/domains/${encodeURIComponent(domainId)}/permission`, {
+    method: "PUT",
+    body: JSON.stringify({ permission }),
+  });
+}
+
+export function deleteDomainApi(domainId: string): Promise<void> {
+  return api<void>(`/api/domains/${encodeURIComponent(domainId)}`, {
+    method: "DELETE",
+  });
+}
+
 export function fetchTreeApi(domainId?: string): Promise<TreeNode[]> {
   const q = domainId?.trim() ? `?domainId=${encodeURIComponent(domainId.trim())}` : "";
   return api<TreeNode[]>(`/api/tree${q}`);

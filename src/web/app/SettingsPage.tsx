@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../i18n";
 import { DraftListPage } from "./DraftListPage";
 import { listAllDrafts } from "../storage/drafts";
+import { DomainManagementPanel } from "./DomainManagementPanel";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 
 function getBool(key: string, def: boolean): boolean {
@@ -10,7 +11,7 @@ function getBool(key: string, def: boolean): boolean {
   return v === "true";
 }
 
-type SettingsTab = "general" | "savePublish";
+type SettingsTab = "general" | "domainManagement" | "savePublish";
 
 export function SettingsPage(props: {
   onBack: () => void;
@@ -55,6 +56,12 @@ export function SettingsPage(props: {
             onClick={() => setTab("general")}
           >
             {t("general")}
+          </div>
+          <div
+            className={"mdocs-config-item" + (tab === "domainManagement" ? " active" : "")}
+            onClick={() => setTab("domainManagement")}
+          >
+            {t("domainManagement")}
           </div>
           <div
             className={"mdocs-config-item" + (tab === "savePublish" ? " active" : "")}
@@ -118,6 +125,8 @@ export function SettingsPage(props: {
               </div>
             </div>
           </div>
+        ) : tab === "domainManagement" ? (
+          <DomainManagementPanel />
         ) : (
           <div className="mdocs-settings">
             <div className="mdocs-settings-header">
@@ -128,7 +137,6 @@ export function SettingsPage(props: {
             </div>
 
             <div className="mdocs-settings-cards">
-              {/* Auto-save — always on, display only */}
               <div className="mdocs-settings-card">
                 <label className="mdocs-settings-item">
                   <span className="mdocs-settings-item-info">
@@ -147,7 +155,6 @@ export function SettingsPage(props: {
                 </label>
               </div>
 
-              {/* Auto-publish standard item */}
               <div className="mdocs-settings-card">
                 <label className="mdocs-settings-item">
                   <span className="mdocs-settings-item-info">
@@ -166,11 +173,14 @@ export function SettingsPage(props: {
                 </label>
               </div>
 
-              {/* Drafts */}
               {draftCount > 0 ? (
                 <button className="mdocs-settings-card mdocs-settings-draft-link" onClick={() => setShowDrafts(true)}>
-                  <span className="mdocs-settings-draft-link-text">📄 {t("viewDrafts")} ({draftCount})</span>
-                  <span className="mdocs-settings-draft-arrow" aria-hidden="true">›</span>
+                  <span className="mdocs-settings-draft-link-text">
+                    📄 {t("viewDrafts")} ({draftCount})
+                  </span>
+                  <span className="mdocs-settings-draft-arrow" aria-hidden="true">
+                    ›
+                  </span>
                 </button>
               ) : (
                 <div className="mdocs-settings-card mdocs-settings-draft-empty">
@@ -181,7 +191,6 @@ export function SettingsPage(props: {
           </div>
         )}
 
-        {/* DraftListPage overlay — always on top of settings content */}
         {showDrafts && (
           <DraftListPage
             onPublish={onPublishDraft}
@@ -189,7 +198,6 @@ export function SettingsPage(props: {
             onCountChange={setDraftCount}
           />
         )}
-
       </main>
     </>
   );

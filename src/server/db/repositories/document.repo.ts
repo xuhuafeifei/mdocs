@@ -37,6 +37,15 @@ export interface UpdateDocumentContentInput {
   permission?: number;
 }
 
+export function countDocumentsByDomain(db: Database.Database, domainId: string): number {
+  const row = db
+    .prepare<string, { c: number }>(
+      `SELECT COUNT(*) as c FROM documents WHERE domain_id = ?`,
+    )
+    .get(domainId);
+  return row?.c ?? 0;
+}
+
 export function listDocumentsByDomain(db: Database.Database, domainId: string): DocumentRow[] {
   return db
     .prepare<string, DocumentRow>(
@@ -148,4 +157,41 @@ export function listDocumentInvites(db: Database.Database, documentId: string): 
       `SELECT document_id, visitor_id, permission FROM document_invites WHERE document_id = ?`,
     )
     .all(documentId);
+}
+
+/**
+ * 查的是什么：当前访客在「文档邀请」里涉及到的所有域 ID（同一域多篇邀请只算一次）。
+ * 怎么实现：`document_invites` 按 `document_id` 关联 `documents`，用 `visitor_id = ?` 过滤，`DISTINCT` 取 `domain_id`。
+ */
+export function listDomainIdsWithDocumentInviteForVisitor(db: Database.Database, visitorId: string): string[] {
+  const rows = db
+    .prepare<string, { domain_id: string }>(
+      `SELECT DISTINCT d.domain_id AS domain_id
+       FROM document_invites di
+       INNER JOIN documents d ON d.document_id = di.document_id
+       WHERE di.visitor_id = ?`,
+    )
+    .all(visitorId);
+  return rows.map((r) => r.domain_id);
+}
+
+/**
+ * 查的是什么：给定域里，是否存在至少一篇文档对当前访客有邀请记录。
+ * 怎么实现：同样的 invite 联 documents，加上 `domain_id = ?` 与 `visitor_id = ?`，用 `EXISTS` 只判断有无一行。
+ */
+export function hasDocumentInviteInDomain(
+  db: Database.Database,
+  domainId: string,
+  visitorId: string,
+): boolean {
+  const row = db
+    .prepare<[string, string], { ok: number }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM document_invites di
+         INNER JOIN documents d ON d.document_id = di.document_id
+         WHERE d.domain_id = ? AND di.visitor_id = ?
+       ) AS ok`,
+    )
+    .get(domainId, visitorId);
+  return (row?.ok ?? 0) === 1;
 }

@@ -39,6 +39,16 @@ export function localizeDomainName(
   return name;
 }
 
+export function domainPermissionLabel(
+  permission: string,
+  t: (k: TranslationKey, vars?: Record<string, string>) => string,
+): string {
+  if (permission === "public") return t("domainPublic");
+  if (permission === "restricted") return t("domainRestricted");
+  if (permission === "private") return t("domainPrivate");
+  return permission;
+}
+
 export function parentDirForCreates(relativePath: string): string {
   const i = relativePath.lastIndexOf("/");
   return i === -1 ? "" : relativePath.slice(0, i);

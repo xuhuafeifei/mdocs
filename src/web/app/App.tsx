@@ -13,9 +13,9 @@ import {
   getStoredVisitorId,
   storeIdentity,
 } from "../services/client";
+import { fetchDomainsSafe, pickInitialDomainId } from "../services/domainsBootstrap";
 import {
   deleteDocumentApi,
-  fetchDomainsApi,
   fetchMe,
   fetchTreeApi,
   getDocumentApi,
@@ -46,14 +46,6 @@ function docPathForSelection(doc: DocumentDetail): string {
   return stripDomainPathPrefix(vid, doc.relativePath);
 }
 
-async function fetchDomainsSafe(): Promise<DomainSummary[]> {
-  try {
-    return await fetchDomainsApi();
-  } catch {
-    return [{ domainId: "default", domainName: "Default", permission: "public" }];
-  }
-}
-
 async function initDomainsAndTree(
   visitorId: string,
   setDomains: (doms: DomainSummary[]) => void,
@@ -62,13 +54,9 @@ async function initDomainsAndTree(
 ): Promise<void> {
   const doms = await fetchDomainsSafe();
   setDomains(doms);
-  const initialDomain =
-    doms.find((d) => d.domainId === visitorId)?.domainId ??
-    doms.find((d) => d.domainId === "default")?.domainId ??
-    doms[0]?.domainId ??
-    "default";
-  setCurrentDomainId(initialDomain);
-  await refreshTree(initialDomain);
+  const initial = pickInitialDomainId(doms, visitorId);
+  setCurrentDomainId(initial);
+  await refreshTree(initial);
 }
 
 export function App() {
@@ -378,7 +366,7 @@ export function App() {
                 {t("domainLabel")}
               </label>
               <DomainSelect
-                domains={domains.length ? domains : [{ domainId: "default", domainName: t("defaultDomain"), permission: "" }]}
+                domains={domains.length ? domains : [{ domainId: "default", domainName: t("defaultDomain"), permission: "", creatorVisitorId: "", docCount: 0 }]}
                 value={currentDomainId}
                 onChange={(domainId) => {
                   guardNavigate(() => {

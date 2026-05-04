@@ -14,6 +14,7 @@ import {
   type DocumentRow,
 } from "../db/repositories/document.repo.js";
 import { findDomainById } from "../db/repositories/domain.repo.js";
+import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access.js";
 import { insertAuditLog } from "../db/repositories/audit.repo.js";
 import {
   deleteDocumentFile,
@@ -98,6 +99,11 @@ export function listDocuments(domainId?: string, visitorId?: string | null): Doc
   const cfg = getConfig();
   const effective = domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
+  const domain = findDomainById(db, effective);
+  const access = resolveDomainAccess(db, domain, effective, visitorId);
+  if (!canEnterDomainTree(access)) {
+    return [];
+  }
   const rows = listDocumentsByDomain(db, effective);
   const filtered = visitorId
     ? rows.filter((r) => canReadDocument(r, visitorId))

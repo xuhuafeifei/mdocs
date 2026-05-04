@@ -2,6 +2,8 @@ export interface DomainSummary {
   domainId: string;
   domainName: string;
   permission: string;
+  creatorVisitorId: string;
+  docCount: number;
 }
 
 /** Private-type domains: exactly one domain member (the domain owner). No multi-member list. */
