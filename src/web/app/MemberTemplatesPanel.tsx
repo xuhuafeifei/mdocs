@@ -42,16 +42,37 @@ export function MemberTemplatesPanel() {
   /* 当前访客 ID */
   const myVisitorId = getStoredVisitorId();
 
-  /* ---- 第 2 步：访客目录 ---- */
+  /* ---- 访客目录（供模板标签展示名称 + 向导第 2 步使用） ---- */
   const [visitors, setVisitors] = useState<VisitorDirectoryEntry[]>([]);
   const [visitorLoadState, setVisitorLoadState] = useState<"idle" | "loading" | "ok" | "err">("idle");
   const [searchFilter, setSearchFilter] = useState("");
-  const visitorsLoadedRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+
+  /* 启动时加载访客目录 */
+  useEffect(() => {
+    setVisitorLoadState("loading");
+    fetchVisitorsDirectoryApi()
+      .then((rows) => {
+        if (!mountedRef.current) return;
+        setVisitors(rows);
+        setVisitorLoadState("ok");
+      })
+      .catch(() => {
+        if (!mountedRef.current) return;
+        setVisitorLoadState("err");
+      });
+  }, []);
+
+  /* visitorId → displayName 映射 */
+  const visitorNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of visitors) map.set(v.visitorId, v.visitorName);
+    return map;
+  }, [visitors]);
 
   /* 加载模板列表 */
   const reload = useCallback(async () => {
@@ -68,24 +89,6 @@ export function MemberTemplatesPanel() {
   }, [t]);
 
   useEffect(() => { void reload(); }, [reload]);
-
-  /* 进入第 2 步时首次加载访客目录 */
-  useEffect(() => {
-    if (currentStep === 2 && !visitorsLoadedRef.current) {
-      visitorsLoadedRef.current = true;
-      setVisitorLoadState("loading");
-      fetchVisitorsDirectoryApi()
-        .then((rows) => {
-          if (!mountedRef.current) return;
-          setVisitors(rows);
-          setVisitorLoadState("ok");
-        })
-        .catch(() => {
-          if (!mountedRef.current) return;
-          setVisitorLoadState("err");
-        });
-    }
-  }, [currentStep]);
 
   /* 已选成员的行数据（给共享组件用） */
   const selectedPickedRows = useMemo(() => {
@@ -404,15 +407,12 @@ export function MemberTemplatesPanel() {
                           {t("memberTemplateCount", { count: String(row.visitorIds.length) })}
                         </span>
                         {row.visitorIds.length > 0 && (
-                          <div className="mdocs-member-template-tags">
-                            {row.visitorIds.slice(0, 3).map((id) => (
-                              <span key={id} className="mdocs-member-template-tag">{idPrefix6(id)}</span>
-                            ))}
-                            {row.visitorIds.length > 3 && (
-                              <span className="mdocs-member-template-tag mdocs-member-template-tag-more">
-                                +{row.visitorIds.length - 3}
+                          <div className="mdocs-member-template-tags mdocs-member-template-tags-scroll">
+                            {row.visitorIds.map((id) => (
+                              <span key={id} className="mdocs-member-template-tag">
+                                {visitorNameMap.get(id) ?? idPrefix6(id)}
                               </span>
-                            )}
+                            ))}
                           </div>
                         )}
                       </div>

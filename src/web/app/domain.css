@@ -810,19 +810,21 @@
   gap: 6px;
   margin-top: 8px;
 }
+.mdocs-member-template-tags-scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
 .mdocs-member-template-tag {
   display: inline-block;
   padding: 2px 8px;
   font-size: 11px;
-  font-family: ui-monospace, monospace;
   background: color-mix(in srgb, var(--mdocs-accent, #2563eb) 12%, transparent);
   color: var(--mdocs-accent, #2563eb);
   border-radius: 4px;
   line-height: 1.6;
-}
-.mdocs-member-template-tag-more {
-  background: color-mix(in srgb, var(--mdocs-border) 50%, transparent);
-  color: var(--mdocs-muted, #666);
+  white-space: nowrap;
 }
 
 /* === 删除确认行 === */
