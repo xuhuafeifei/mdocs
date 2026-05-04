@@ -4,12 +4,9 @@ import type { DomainMemberListEntry } from "../../shared/types/domain";
 import type { DomainMemberTemplate } from "../../shared/types/domainMemberTemplate";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { fetchVisitorsDirectoryApi } from "../services/endpoints";
+import { getStoredVisitorId } from "../services/client";
 import { translateError } from "./utils";
-
-function idPrefix6(id: string): string {
-  if (id.length <= 6) return id;
-  return `${id.slice(0, 6)}…`;
-}
+import { VisitorPickerContent } from "./VisitorPickerContent";
 
 export interface VisitorPickerModalProps {
   open: boolean;
@@ -45,6 +42,7 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
   const tRef = useRef(t);
   tRef.current = t;
   const locked = useMemo(() => new Set(lockedIds), [lockedIds]);
+  const myVisitorId = getStoredVisitorId();
 
   const [allVisitors, setAllVisitors] = useState<VisitorDirectoryEntry[]>([]);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "ok" | "err">("idle");
@@ -90,15 +88,6 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
       cancelled = true;
     };
   }, [open]);
-
-  const filteredLeft = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return allVisitors;
-    return allVisitors.filter(
-      (v) =>
-        v.visitorName.toLowerCase().includes(q) || v.visitorId.toLowerCase().includes(q),
-    );
-  }, [allVisitors, filter]);
 
   const selectedDisplayRows: SelectedDisplayRow[] = useMemo(() => {
     const dirMap = new Map(allVisitors.map((v) => [v.visitorId, v]));
@@ -196,14 +185,6 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
         </header>
 
         <div className="mdocs-visitor-picker-toolbar">
-          <input
-            type="search"
-            className="mdocs-visitor-picker-search"
-            placeholder={t("visitorPickerSearchPlaceholder")}
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            disabled={loadState !== "ok"}
-          />
           <div className="mdocs-visitor-picker-template-bar">
             <select
               className="mdocs-visitor-picker-template-select"
@@ -236,112 +217,19 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
           </div>
         )}
 
-        {loadState === "loading" && <div className="mdocs-visitor-picker-loading">{t("loading")}</div>}
-        {loadState === "err" && <div className="mdocs-visitor-picker-error">{t("visitorPickerLoadError")}</div>}
-
-        {loadState === "ok" && (
-          <div className="mdocs-visitor-picker-columns">
-            <div className="mdocs-visitor-picker-col">
-              <h3 className="mdocs-visitor-picker-col-title">{t("visitorPickerColumnAll")}</h3>
-              <div className="mdocs-visitor-picker-table-wrap">
-                <table className="mdocs-visitor-picker-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("visitorPickerColIdShort")}</th>
-                      <th scope="col">{t("visitorPickerColName")}</th>
-                      <th scope="col" className="mdocs-visitor-picker-check-col">
-                        {t("visitorPickerColPick")}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredLeft.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="mdocs-visitor-picker-empty-cell">
-                          {allVisitors.length === 0 ? t("visitorPickerEmptyDirectory") : t("domainNoMatch")}
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredLeft.map((v) => {
-                        const isLocked = locked.has(v.visitorId);
-                        const checked = selectedIds.has(v.visitorId);
-                        return (
-                          <tr key={v.visitorId}>
-                            <td>
-                              <code className="mdocs-visitor-picker-id-short">{idPrefix6(v.visitorId)}</code>
-                            </td>
-                            <td>{v.visitorName}</td>
-                            <td className="mdocs-visitor-picker-check-col">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                disabled={isLocked}
-                                onChange={() => toggle(v.visitorId)}
-                                aria-label={v.visitorName}
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div className="mdocs-visitor-picker-col mdocs-visitor-picker-col-selected">
-              <h3 className="mdocs-visitor-picker-col-title">{t("visitorPickerColumnSelected")}</h3>
-              <div className="mdocs-visitor-picker-table-wrap">
-                <table className="mdocs-visitor-picker-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("visitorPickerColIdFull")}</th>
-                      <th scope="col">{t("visitorPickerColName")}</th>
-                      <th scope="col" className="mdocs-visitor-picker-check-col" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedDisplayRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="mdocs-visitor-picker-empty-cell">
-                          {t("visitorPickerNoSelection")}
-                        </td>
-                      </tr>
-                    ) : (
-                      selectedDisplayRows.map((row) => {
-                        const isLocked = locked.has(row.visitorId);
-                        return (
-                          <tr key={row.visitorId}>
-                            <td>
-                              <code className="mdocs-visitor-picker-id-full">{row.visitorId}</code>
-                            </td>
-                            <td className={row.muted ? "mdocs-visitor-picker-name-muted" : undefined}>{row.name}</td>
-                            <td className="mdocs-visitor-picker-check-col">
-                              {!isLocked && (
-                                <button
-                                  type="button"
-                                  className="mdocs-visitor-picker-remove"
-                                  onClick={() => toggle(row.visitorId)}
-                                  aria-label={t("visitorPickerRemove")}
-                                >
-                                  ×
-                                </button>
-                              )}
-                              {isLocked && (
-                                <span className="mdocs-visitor-picker-locked" title={t("visitorPickerLockedHint")}>
-                                  —
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+        <div style={{ padding: "8px 18px 12px" }}>
+          <VisitorPickerContent
+            visitors={allVisitors}
+            loadState={loadState}
+            searchFilter={filter}
+            onSearchChange={setFilter}
+            selectedIds={selectedIds}
+            onToggle={toggle}
+            selectedRows={selectedDisplayRows}
+            lockedIds={locked}
+            myVisitorId={myVisitorId}
+          />
+        </div>
 
         <footer className="mdocs-visitor-picker-footer">
           <button type="button" className="secondary" onClick={onClose} disabled={confirmBusy}>

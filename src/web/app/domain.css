@@ -597,6 +597,261 @@
   color: var(--mdocs-text);
 }
 
+/* === 多步向导（新建 / 编辑模板） === */
+.mdocs-wizard-card {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 进度条 */
+.mdocs-wizard-progress {
+  margin-bottom: 20px;
+  padding: 0 4px;
+}
+.mdocs-wizard-progress-track {
+  height: 3px;
+  background: color-mix(in srgb, var(--mdocs-border) 60%, transparent);
+  border-radius: 2px;
+  margin-bottom: 12px;
+  position: relative;
+}
+.mdocs-wizard-progress-fill {
+  height: 100%;
+  background: var(--mdocs-accent, #2563eb);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.mdocs-wizard-progress-steps {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.mdocs-wizard-step-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.mdocs-wizard-step-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  border: 2px solid var(--mdocs-border);
+  color: var(--mdocs-muted, #999);
+  background: var(--mdocs-surface);
+  transition: all 0.2s ease;
+}
+.mdocs-wizard-step-circle.current {
+  border-color: var(--mdocs-accent, #2563eb);
+  background: var(--mdocs-accent, #2563eb);
+  color: #fff;
+}
+.mdocs-wizard-step-circle.done {
+  border-color: #16a34a;
+  background: #16a34a;
+  color: #fff;
+}
+.mdocs-wizard-step-label {
+  font-size: 11px;
+  color: var(--mdocs-muted, #999);
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+.mdocs-wizard-step-label.current {
+  color: var(--mdocs-text);
+  font-weight: 600;
+}
+.mdocs-wizard-step-label.done {
+  color: #16a34a;
+}
+
+/* 步骤内容区 */
+.mdocs-wizard-step-content {
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 0;
+}
+
+/* 步骤 1：名称输入 */
+.mdocs-wizard-name-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--mdocs-border);
+  border-radius: 8px;
+  font-size: 16px;
+  background: var(--mdocs-surface);
+  color: var(--mdocs-text);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.mdocs-wizard-name-input:focus {
+  border-color: var(--mdocs-accent, #2563eb);
+}
+.mdocs-wizard-name-input[aria-invalid="true"] {
+  border-color: var(--mdocs-danger);
+  box-shadow: 0 0 0 1px var(--mdocs-danger);
+}
+.mdocs-wizard-name-input:disabled {
+  opacity: 0.6;
+}
+
+/* 成员选择区 */
+.mdocs-wizard-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--mdocs-muted, #999);
+  line-height: 1.4;
+}
+.mdocs-wizard-hint.danger {
+  color: var(--mdocs-danger);
+}
+
+/* 预览卡片（步骤 3） */
+.mdocs-wizard-preview-card {
+  border: 1px solid var(--mdocs-border);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--mdocs-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mdocs-wizard-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mdocs-wizard-preview-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mdocs-muted, #999);
+  min-width: 60px;
+  flex-shrink: 0;
+}
+.mdocs-wizard-preview-value {
+  font-size: 14px;
+  color: var(--mdocs-text);
+  font-weight: 500;
+}
+.mdocs-wizard-preview-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.mdocs-wizard-preview-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  background: color-mix(in srgb, var(--mdocs-accent, #2563eb) 12%, transparent);
+  color: var(--mdocs-accent, #2563eb);
+  border-radius: 4px;
+  line-height: 1.5;
+}
+.mdocs-wizard-preview-tag-more {
+  background: color-mix(in srgb, var(--mdocs-border) 50%, transparent);
+  color: var(--mdocs-muted, #666);
+}
+
+/* 底部导航 */
+.mdocs-wizard-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--mdocs-border) 50%, transparent);
+}
+
+/* 按钮 tooltip（禁用时悬浮显示） */
+.mdocs-wizard-tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.mdocs-wizard-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  background: #333;
+  color: #fff;
+  font-size: 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+}
+.mdocs-wizard-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #333;
+}
+
+/* === 成员 ID 标签 === */
+.mdocs-member-template-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.mdocs-member-template-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  background: color-mix(in srgb, var(--mdocs-accent, #2563eb) 12%, transparent);
+  color: var(--mdocs-accent, #2563eb);
+  border-radius: 4px;
+  line-height: 1.6;
+}
+.mdocs-member-template-tag-more {
+  background: color-mix(in srgb, var(--mdocs-border) 50%, transparent);
+  color: var(--mdocs-muted, #666);
+}
+
+/* === 删除确认行 === */
+.mdocs-member-template-confirm-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 4px 0;
+}
+.mdocs-member-template-confirm-text {
+  font-size: 13px;
+  color: var(--mdocs-danger);
+  line-height: 1.4;
+}
+.mdocs-member-template-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* === 空状态 === */
+.mdocs-member-template-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
 /* Visitor picker modal (template + restricted domain) */
 .mdocs-visitor-picker-overlay {
   position: fixed;
@@ -808,4 +1063,10 @@
   gap: 10px;
   padding: 14px 18px;
   border-top: 1px solid var(--mdocs-border);
+}
+
+.mdocs-visitor-picker-self-marker {
+  color: #16a34a;
+  font-weight: 500;
+  margin-left: 4px;
 }
