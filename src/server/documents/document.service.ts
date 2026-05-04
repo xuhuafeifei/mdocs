@@ -121,8 +121,14 @@ export function createDocument(params: {
 }): DocumentDetail {
   const cfg = getConfig();
   const domainId = params.domainId?.trim() || cfg.defaultDomainId;
+  const db = getDb();
 
-  if (domainId !== cfg.defaultDomainId && domainId !== params.actorVisitorId) {
+  const domainRow = findDomainById(db, domainId);
+  if (!domainRow) {
+    throw new DocumentError("DOMAIN_NOT_FOUND", "domain not found", 404);
+  }
+  const access = resolveDomainAccess(db, domainRow, domainId, params.actorVisitorId);
+  if (access.kind !== "full") {
     throw new DocumentError("FORBIDDEN", "cannot create documents in this domain", 403);
   }
 
@@ -139,7 +145,6 @@ export function createDocument(params: {
     domainId === params.actorVisitorId
       ? normaliseDocRelativePath(prefixPersonalDomainStoragePath(params.actorVisitorId, pathFromUser))
       : normaliseDocRelativePath(pathFromUser);
-  const db = getDb();
 
   const existing = findDocumentByPath(db, relativePath);
   if (existing) {

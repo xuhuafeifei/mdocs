@@ -37,11 +37,13 @@ export function resolveDomainAccess(
 
   if (domain.permission === "private") {
     if (domain.domain_id === visitorId) return { kind: "full" };
+    if (domain.creator_visitor_id === visitorId) return { kind: "full" };
     if (hasDocInviteInDomain) return { kind: "viaDocumentInvites" };
     return { kind: "none" };
   }
   if (domain.permission === "restricted") {
     if (isDomainMember(db, domainId, visitorId)) return { kind: "full" };
+    if (domain.creator_visitor_id === visitorId) return { kind: "full" };
     if (hasDocInviteInDomain) return { kind: "viaDocumentInvites" };
     return { kind: "none" };
   }

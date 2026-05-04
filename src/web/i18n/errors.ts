@@ -10,6 +10,9 @@ export const ERROR_CODE_MAP: Record<string, TranslationKey> = {
   INTERNAL: "errInternal",
   INVALID_PATH: "errInvalidPath",
   UNKNOWN: "errUnknown",
+  UNKNOWN_VISITOR_IDS: "errUnknownVisitorIds",
+  TEMPLATE_NOT_FOUND: "errTemplateNotFound",
+  DOMAIN_NOT_RESTRICTED: "errDomainNotRestricted",
 };
 
 export const PATH_ERROR_MESSAGE_MAP: Record<string, TranslationKey> = {

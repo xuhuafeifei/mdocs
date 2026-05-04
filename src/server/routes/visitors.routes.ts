@@ -5,6 +5,7 @@ import {
   VisitorValidationError,
 } from "../identity/visitor.service.js";
 import { getDb } from "../db/connection.js";
+import { listActiveVisitorsDirectory } from "../db/repositories/visitor.repo.js";
 import { ensurePersonalDomain } from "../domains/personal-domain.service.js";
 import { useLogger } from "../logger/logger.js";
 
@@ -30,6 +31,22 @@ export function buildVisitorsRouter(): Router {
       log.error("register failed: %s", err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: { code: "INTERNAL", message: "failed to register visitor" } });
     }
+  });
+
+  router.get("/", (req: Request, res: Response) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+      return;
+    }
+    const rows = listActiveVisitorsDirectory(getDb());
+    res.json({
+      data: {
+        visitors: rows.map((r) => ({
+          visitorId: r.visitor_id,
+          visitorName: r.visitor_name,
+        })),
+      },
+    });
   });
 
   router.get("/me", (req: Request, res: Response) => {

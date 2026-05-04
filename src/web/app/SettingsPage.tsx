@@ -3,6 +3,7 @@ import { useI18n } from "../i18n";
 import { DraftListPage } from "./DraftListPage";
 import { listAllDrafts } from "../storage/drafts";
 import { DomainManagementPanel } from "./DomainManagementPanel";
+import { MemberTemplatesPanel } from "./MemberTemplatesPanel";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 
 function getBool(key: string, def: boolean): boolean {
@@ -11,7 +12,7 @@ function getBool(key: string, def: boolean): boolean {
   return v === "true";
 }
 
-type SettingsTab = "general" | "domainManagement" | "savePublish";
+type SettingsTab = "general" | "domainManagement" | "memberTemplates" | "savePublish";
 
 export function SettingsPage(props: {
   onBack: () => void;
@@ -62,6 +63,12 @@ export function SettingsPage(props: {
             onClick={() => setTab("domainManagement")}
           >
             {t("domainManagement")}
+          </div>
+          <div
+            className={"mdocs-config-item" + (tab === "memberTemplates" ? " active" : "")}
+            onClick={() => setTab("memberTemplates")}
+          >
+            {t("memberTemplates")}
           </div>
           <div
             className={"mdocs-config-item" + (tab === "savePublish" ? " active" : "")}
@@ -127,6 +134,8 @@ export function SettingsPage(props: {
           </div>
         ) : tab === "domainManagement" ? (
           <DomainManagementPanel />
+        ) : tab === "memberTemplates" ? (
+          <MemberTemplatesPanel />
         ) : (
           <div className="mdocs-settings">
             <div className="mdocs-settings-header">

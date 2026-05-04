@@ -78,6 +78,15 @@ const SCHEMA_STATEMENTS: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_domain_members_domain ON domain_members (domain_id)`,
   `CREATE INDEX IF NOT EXISTS idx_domain_members_visitor ON domain_members (visitor_id)`,
+  `CREATE TABLE IF NOT EXISTS domain_member_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    display_name TEXT NOT NULL,
+    domain_visitor_ids TEXT NOT NULL DEFAULT '',
+    create_visitor_id TEXT NOT NULL,
+    create_time TEXT NOT NULL,
+    update_time TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_domain_member_templates_owner ON domain_member_templates (create_visitor_id)`,
 ];
 
 export function applySchema(db: Database.Database): void {

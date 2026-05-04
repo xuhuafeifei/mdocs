@@ -104,3 +104,22 @@ export function listDomainMemberIds(db: Database.Database, domainId: string): st
     .all(domainId);
   return rows.map((r) => r.visitor_id);
 }
+
+/** 替换域成员表（先删后插）；调用方保证 visitorId 列表已校验。 */
+export function replaceDomainMembers(
+  db: Database.Database,
+  domainId: string,
+  visitorIds: string[],
+  joinedAt: string,
+): void {
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM domain_members WHERE domain_id = ?`).run(domainId);
+    const ins = db.prepare(
+      `INSERT INTO domain_members (domain_id, visitor_id, joined_at) VALUES (?, ?, ?)`,
+    );
+    for (const vid of visitorIds) {
+      ins.run(domainId, vid, joinedAt);
+    }
+  });
+  tx();
+}

@@ -1,12 +1,14 @@
 import { api } from "./client";
 import type { DocumentDetail } from "../../shared/types/document";
 import type {
+  VisitorDirectoryEntry,
   VisitorMeResponse,
   VisitorPublic,
   VisitorRegisterResponse,
 } from "../../shared/types/visitor";
 import type { TreeNode } from "../../shared/types/tree";
-import type { DomainSummary } from "../../shared/types/domain";
+import type { DomainSummary, DomainMemberListEntry } from "../../shared/types/domain";
+import type { DomainMemberTemplate } from "../../shared/types/domainMemberTemplate";
 
 export function registerVisitorApi(visitorName: string): Promise<VisitorRegisterResponse> {
   return api<VisitorRegisterResponse>("/api/visitors/register", {
@@ -18,6 +20,10 @@ export function registerVisitorApi(visitorName: string): Promise<VisitorRegister
 export async function fetchMe(): Promise<VisitorPublic> {
   const res = await api<VisitorMeResponse>("/api/visitors/me");
   return res.visitor;
+}
+
+export function fetchVisitorsDirectoryApi(): Promise<VisitorDirectoryEntry[]> {
+  return api<{ visitors: VisitorDirectoryEntry[] }>("/api/visitors").then((d) => d.visitors);
 }
 
 export function fetchDomainsApi(): Promise<DomainSummary[]> {
@@ -50,6 +56,49 @@ export function updateDomainPermissionApi(domainId: string, permission: string):
 
 export function deleteDomainApi(domainId: string): Promise<void> {
   return api<void>(`/api/domains/${encodeURIComponent(domainId)}`, {
+    method: "DELETE",
+  });
+}
+
+export function fetchDomainMembersApi(domainId: string): Promise<DomainMemberListEntry[]> {
+  return api<{ members: DomainMemberListEntry[] }>(
+    `/api/domains/${encodeURIComponent(domainId)}/members`,
+  ).then((d) => d.members);
+}
+
+export function putDomainMembersApi(domainId: string, visitorIds: string[]): Promise<{ memberCount: number }> {
+  return api<{ memberCount: number }>(`/api/domains/${encodeURIComponent(domainId)}/members`, {
+    method: "PUT",
+    body: JSON.stringify({ visitorIds }),
+  });
+}
+
+export function fetchDomainMemberTemplatesApi(): Promise<DomainMemberTemplate[]> {
+  return api<DomainMemberTemplate[]>("/api/domain-member-templates");
+}
+
+export function createDomainMemberTemplateApi(input: {
+  displayName: string;
+  visitorIds: string[];
+}): Promise<DomainMemberTemplate> {
+  return api<DomainMemberTemplate>("/api/domain-member-templates", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateDomainMemberTemplateApi(
+  id: number,
+  input: { displayName: string; visitorIds: string[] },
+): Promise<DomainMemberTemplate> {
+  return api<DomainMemberTemplate>(`/api/domain-member-templates/${encodeURIComponent(String(id))}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteDomainMemberTemplateApi(id: number): Promise<void> {
+  return api<void>(`/api/domain-member-templates/${encodeURIComponent(String(id))}`, {
     method: "DELETE",
   });
 }

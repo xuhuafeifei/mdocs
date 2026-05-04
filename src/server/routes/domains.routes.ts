@@ -9,13 +9,31 @@ import {
   updateDomainPermission,
   deleteDomainRow,
   addDomainMember,
+  listDomainMemberIds,
+  replaceDomainMembers,
 } from "../db/repositories/domain.repo.js";
 import {
   countDocumentsByDomain,
   listDomainIdsWithDocumentInviteForVisitor,
 } from "../db/repositories/document.repo.js";
+import { findVisitorById } from "../db/repositories/visitor.repo.js";
 import { resolveDomainAccess } from "../access/domain-access.js";
-import { useLogger } from "../logger/logger.js";
+
+function normaliseVisitorIdsBody(body: unknown): string[] | null {
+  if (!body || typeof body !== "object") return null;
+  const v = (body as { visitorIds?: unknown }).visitorIds;
+  if (!Array.isArray(v)) return null;
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of v) {
+    if (typeof item !== "string") return null;
+    const id = item.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
 
 export function buildDomainsRouter(): Router {
   const router = Router();
@@ -81,6 +99,98 @@ export function buildDomainsRouter(): Router {
         docCount: 0,
       },
     });
+  });
+
+  router.get("/:id/members", (req: Request, res: Response) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+      return;
+    }
+    const domainId = req.params.id!;
+    const db = getDb();
+    const domain = findDomainById(db, domainId);
+    if (!domain) {
+      res.status(404).json({ error: { code: "NOT_FOUND", message: "domain not found" } });
+      return;
+    }
+    if (domain.creator_visitor_id !== req.visitor.visitor_id) {
+      res.status(403).json({ error: { code: "FORBIDDEN", message: "only the creator can view domain members" } });
+      return;
+    }
+    if (domain.permission !== "restricted") {
+      res.status(400).json({
+        error: { code: "DOMAIN_NOT_RESTRICTED", message: "member list applies to restricted domains only" },
+      });
+      return;
+    }
+    const ids = listDomainMemberIds(db, domainId);
+    const members: { visitorId: string; visitorName: string; missing: boolean; disabled: boolean }[] = [];
+    for (const id of ids) {
+      const v = findVisitorById(db, id);
+      if (!v) {
+        members.push({ visitorId: id, visitorName: "", missing: true, disabled: false });
+      } else {
+        members.push({
+          visitorId: id,
+          visitorName: v.visitor_name,
+          missing: false,
+          disabled: v.disabled_at != null,
+        });
+      }
+    }
+    res.json({ data: { members } });
+  });
+
+  router.put("/:id/members", (req: Request, res: Response) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+      return;
+    }
+    const domainId = req.params.id!;
+    const ids = normaliseVisitorIdsBody(req.body);
+    if (ids === null) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "visitorIds must be an array of strings" } });
+      return;
+    }
+    const db = getDb();
+    const domain = findDomainById(db, domainId);
+    if (!domain) {
+      res.status(404).json({ error: { code: "NOT_FOUND", message: "domain not found" } });
+      return;
+    }
+    if (domain.creator_visitor_id !== req.visitor.visitor_id) {
+      res.status(403).json({ error: { code: "FORBIDDEN", message: "only the creator can modify domain members" } });
+      return;
+    }
+    if (domain.permission !== "restricted") {
+      res.status(400).json({
+        error: { code: "DOMAIN_NOT_RESTRICTED", message: "member list applies to restricted domains only" },
+      });
+      return;
+    }
+    const mergedSet = new Set(ids);
+    mergedSet.add(domain.creator_visitor_id);
+    const merged = [...mergedSet];
+    const invalid: string[] = [];
+    for (const vid of merged) {
+      const v = findVisitorById(db, vid);
+      if (!v) {
+        invalid.push(vid);
+      }
+    }
+    if (invalid.length > 0) {
+      res.status(400).json({
+        error: {
+          code: "UNKNOWN_VISITOR_IDS",
+          message: "one or more visitor ids do not exist",
+          details: { invalidVisitorIds: invalid },
+        },
+      });
+      return;
+    }
+    const joinedAt = new Date().toISOString();
+    replaceDomainMembers(db, domainId, merged, joinedAt);
+    res.json({ data: { memberCount: merged.length } });
   });
 
   // rename domain

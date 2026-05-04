@@ -74,3 +74,16 @@ export function listVisitors(db: Database.Database): VisitorRow[] {
     .prepare<[], VisitorRow>(`SELECT * FROM visitors ORDER BY created_at DESC`)
     .all();
 }
+
+/** 目录用：未停用访客，按显示名排序 */
+export function listActiveVisitorsDirectory(
+  db: Database.Database,
+): { visitor_id: string; visitor_name: string }[] {
+  return db
+    .prepare<[], { visitor_id: string; visitor_name: string }>(
+      `SELECT visitor_id, visitor_name FROM visitors
+       WHERE disabled_at IS NULL
+       ORDER BY visitor_name COLLATE NOCASE`,
+    )
+    .all();
+}

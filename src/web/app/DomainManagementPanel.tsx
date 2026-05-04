@@ -1,21 +1,68 @@
+import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "../i18n";
 import { useDomainManagement } from "./hooks/useDomainManagement";
+import {
+  fetchDomainMemberTemplatesApi,
+  fetchDomainMembersApi,
+  putDomainMembersApi,
+} from "../services/endpoints";
+import type { DomainMemberListEntry, DomainSummary } from "../../shared/types/domain";
+import type { DomainMemberTemplate } from "../../shared/types/domainMemberTemplate";
 import {
   DOMAIN_PERMISSIONS,
   isBuiltInDomainId,
   isDomainCreator,
   isDomainStructurallyLocked,
 } from "@shared/domainUi";
+import { translateError } from "./utils";
+import { VisitorPickerModal } from "./VisitorPickerModal";
 
 export function DomainManagementPanel() {
   const { t } = useI18n();
   const dm = useDomainManagement();
+  const [templates, setTemplates] = useState<DomainMemberTemplate[]>([]);
+  const [importBanner, setImportBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [memberModal, setMemberModal] = useState<{
+    domainId: string;
+    creatorVisitorId: string;
+    initialIds: string[];
+    memberRows: DomainMemberListEntry[];
+  } | null>(null);
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      const rows = await fetchDomainMemberTemplatesApi();
+      setTemplates(rows);
+    } catch {
+      setTemplates([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTemplates();
+  }, [loadTemplates]);
+
+  async function openMemberModal(d: DomainSummary): Promise<void> {
+    setImportBanner(null);
+    try {
+      const members = await fetchDomainMembersApi(d.domainId);
+      setMemberModal({
+        domainId: d.domainId,
+        creatorVisitorId: d.creatorVisitorId,
+        initialIds: members.map((m) => m.visitorId),
+        memberRows: members,
+      });
+    } catch (err) {
+      setImportBanner({ kind: "err", text: translateError(t, err) });
+    }
+  }
 
   return (
     <div className="mdocs-settings">
       <div className="mdocs-settings-header">
         <h2 className="mdocs-settings-title">{t("domainManagement")}</h2>
       </div>
+      <p className="mdocs-domain-mgmt-restricted-hint">{t("domainMgmtRestrictedMemberHint")}</p>
       <div className="mdocs-settings-cards">
         <div className="mdocs-settings-card mdocs-domain-mgmt-create">
           <div className="mdocs-settings-card-title">{t("createDomain")}</div>
@@ -53,6 +100,17 @@ export function DomainManagementPanel() {
             </button>
           </form>
         </div>
+
+        {importBanner && (
+          <div
+            className="mdocs-settings-card"
+            style={{
+              color: importBanner.kind === "ok" ? "var(--mdocs-success, #0a7)" : "var(--mdocs-danger)",
+            }}
+          >
+            <span className="mdocs-settings-item-desc">{importBanner.text}</span>
+          </div>
+        )}
 
         {dm.domainError && (
           <div className="mdocs-settings-card mdocs-domain-error">
@@ -223,6 +281,11 @@ export function DomainManagementPanel() {
                               >
                                 {t("deleteDomain")}
                               </button>
+                              {d.permission === "restricted" && !isBuiltIn && (
+                                <button type="button" className="secondary" onClick={() => void openMemberModal(d)}>
+                                  {t("domainMembersManageButton")}
+                                </button>
+                              )}
                             </div>
                           )}
                       </td>
@@ -234,6 +297,24 @@ export function DomainManagementPanel() {
           </div>
         )}
       </div>
+
+      <VisitorPickerModal
+        open={memberModal !== null}
+        title={t("domainMembersPickerTitle")}
+        initialSelectedIds={memberModal?.initialIds ?? []}
+        lockedIds={memberModal ? [memberModal.creatorVisitorId] : []}
+        seedMembers={memberModal?.memberRows}
+        templates={templates}
+        onClose={() => setMemberModal(null)}
+        onConfirm={async (visitorIds) => {
+          if (!memberModal) return;
+          await putDomainMembersApi(memberModal.domainId, visitorIds);
+          setImportBanner({
+            kind: "ok",
+            text: t("domainMembersSaved", { count: String(visitorIds.length) }),
+          });
+        }}
+      />
     </div>
   );
 }
