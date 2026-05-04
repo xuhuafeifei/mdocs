@@ -322,32 +322,22 @@ export function MemberTemplatesPanel() {
               type="button"
               className="secondary"
               onClick={goBack}
-              disabled={currentStep === 1 || saving}
             >
               {"\u2190 "}{t("memberTemplateWizardBack")}
             </button>
             {currentStep < 3 ? (
-              <span className="mdocs-wizard-tooltip-wrap">
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={goNext}
-                  disabled={!canGoNext || saving}
-                >
-                  {t("memberTemplateWizardNext")}{" \u2192"}
-                </button>
-                {!canGoNext && (
-                  <span className="mdocs-wizard-tooltip">
-                    {currentStep === 1 ? t("domainNameRequired") : t("memberTemplateStep2Hint")}
-                  </span>
-                )}
-              </span>
+              <button
+                type="button"
+                className="primary"
+                onClick={goNext}
+              >
+                {t("memberTemplateWizardNext")}{" \u2192"}
+              </button>
             ) : (
               <button
                 type="button"
                 className="primary"
                 onClick={() => void handleSave()}
-                disabled={saving}
               >
                 {saving ? t("saving") : editingId === null ? t("memberTemplateCreate") : t("memberTemplateUpdate")}
               </button>
@@ -384,7 +374,6 @@ export function MemberTemplatesPanel() {
                           type="button"
                           className="secondary"
                           style={{ color: "var(--mdocs-danger)" }}
-                          disabled={saving}
                           onClick={() => void handleDeleteConfirmed(row.id)}
                         >
                           {saving ? t("saving") : t("memberTemplateConfirmDeleteSubmit")}
@@ -392,7 +381,6 @@ export function MemberTemplatesPanel() {
                         <button
                           type="button"
                           className="secondary"
-                          disabled={saving}
                           onClick={() => setConfirmDeleteId(null)}
                         >
                           {t("memberTemplateConfirmDeleteCancel")}

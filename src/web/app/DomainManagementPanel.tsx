@@ -302,7 +302,7 @@ export function DomainManagementPanel() {
         open={memberModal !== null}
         title={t("domainMembersPickerTitle")}
         initialSelectedIds={memberModal?.initialIds ?? []}
-        lockedIds={memberModal ? [memberModal.creatorVisitorId] : []}
+        lockedIds={memberModal ? [memberModal.creatorVisitorId] : []} /* 域创建者不可取消勾选 */
         seedMembers={memberModal?.memberRows}
         templates={templates}
         onClose={() => setMemberModal(null)}

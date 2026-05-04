@@ -38,6 +38,7 @@ export function buildVisitorsRouter(): Router {
       res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
       return;
     }
+    /* 取「活跃」访客目录：WHERE disabled_at IS NULL，停用/已删除的不在左栏出现 */
     const rows = listActiveVisitorsDirectory(getDb());
     res.json({
       data: {

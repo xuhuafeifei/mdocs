@@ -128,12 +128,14 @@ export function buildDomainsRouter(): Router {
     for (const id of ids) {
       const v = findVisitorById(db, id);
       if (!v) {
+        /* 1) visitors 表中已无此行（物理删除）→ missing，右栏显示「库中无记录」 */
         members.push({ visitorId: id, visitorName: "", missing: true, disabled: false });
       } else {
         members.push({
           visitorId: id,
           visitorName: v.visitor_name,
           missing: false,
+          /* 2) disabled_at 非空 → 已停用（被 migrate 合并到了其他访客）*/
           disabled: v.disabled_at != null,
         });
       }
@@ -168,6 +170,7 @@ export function buildDomainsRouter(): Router {
       });
       return;
     }
+    /* 无论模板/前端传了哪些成员，域创建者必须保留在成员列表中 */
     const mergedSet = new Set(ids);
     mergedSet.add(domain.creator_visitor_id);
     const merged = [...mergedSet];
