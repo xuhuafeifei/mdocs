@@ -44,6 +44,8 @@ export const en: Record<TranslationKey, string> = {
   displayNamePlaceholder: "Display name",
   currentDomainAria: "Current domain",
   insertDiagram: "Insert diagram",
+  outlineHide: "Hide outline",
+  outlineShow: "Show outline",
   readOnlyNotice: "> You don't have permission to edit\n\n",
   // Create modal
   newDocumentTitle: "New document",

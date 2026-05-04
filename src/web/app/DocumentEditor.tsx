@@ -23,8 +23,11 @@ import {
   ReactMeta2dPlugin,
   ReactTablePlugin,
   ReactToolbarPlugin,
+  OutlinePanel,
+  OutlineProvider,
   enUS,
   zhCN,
+  useOutlineVisibility,
 } from "@lobehub/editor";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
@@ -35,11 +38,29 @@ import type { DomainSummary } from "../../shared/types/domain";
 import { useI18n } from "../i18n";
 import { openFileSelector } from "./actions";
 import Toolbar from "./Toolbar";
-import OutlinePanel from "./OutlinePanel";
 import { DomainSelect } from "./DomainSelect";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { usePublishGuard } from "./hooks/usePublishGuard";
 import { localizeDomainName } from "./utils";
+
+function OutlineSideRail({ editor }: { editor: IEditor }) {
+  const { visible } = useOutlineVisibility();
+
+  return (
+    <div
+      style={{
+        flexShrink: 0,
+        overflow: "hidden",
+        transition: "width 0.2s ease",
+        width: visible ? 200 : 0,
+      }}
+    >
+      <div style={{ width: 200 }}>
+        <OutlinePanel editor={editor} />
+      </div>
+    </div>
+  );
+}
 
 interface DocumentEditorProps {
   document: DocumentDetail;
@@ -309,7 +330,15 @@ export function DocumentEditor(props: DocumentEditorProps) {
       ReactMeta2dPlugin,
       ReactCodePlugin,
       withProps(ReactToolbarPlugin, {
-        children: editor ? <Toolbar editor={editor} floating /> : null,
+        children: editor ? (
+          <Toolbar
+            editor={editor}
+            floating
+            outlineCollapseTitle={t("outlineHide")}
+            outlineExpandTitle={t("outlineShow")}
+            outlineToggle
+          />
+        ) : null,
       }),
       withProps(ReactFilePlugin, {
         handleUpload: async (file: File) => {
@@ -330,7 +359,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
         },
       }),
     ],
-    [editor],
+    [editor, t],
   );
 
   return (
@@ -379,42 +408,51 @@ export function DocumentEditor(props: DocumentEditorProps) {
           )}
         </div>
       </div>
-      <Block flex={1} style={{ minHeight: 0 }}>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            height: "100%",
-            minHeight: 0,
-          }}
-        >
-          {editing && editor && <Toolbar editor={editor} />}
-          <div className="mdocs-editor-content-area" style={{ flex: 1, display: "flex", minHeight: 0 }}>
-            <Block
-              variant="outlined"
-              horizontal
-              padding={16}
-              style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, overflow: "auto", outline: "none" }}
-            >
-              <div style={{ flex: 1 }}>
-                <Editor
-                  content={props.document.content}
-                  type={contentType}
-                  key={props.document.documentId}
-                  editable={editing}
-                  onInit={handleInit}
-                  plugins={plugins}
-                  lineEmptyPlaceholder={t("displayNamePlaceholder")}
-                  placeholder={t("displayNamePlaceholder")}
-                  slashOption={{ items: slashItems }}
-                  className="mdocs-document-editor-root"
-                />
-              </div>
-              {editor && <OutlinePanel editor={editor} />}
-            </Block>
-          </div>
+      <OutlineProvider>
+        <Block flex={1} style={{ minHeight: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              height: "100%",
+              minHeight: 0,
+            }}
+          >
+            {editing && editor && (
+              <Toolbar
+                editor={editor}
+                outlineCollapseTitle={t("outlineHide")}
+                outlineExpandTitle={t("outlineShow")}
+                outlineToggle
+              />
+            )}
+            <div className="mdocs-editor-content-area" style={{ flex: 1, display: "flex", minHeight: 0 }}>
+              <Block
+                variant="outlined"
+                horizontal
+                padding={16}
+                style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, overflow: "auto", outline: "none" }}
+              >
+                <div style={{ flex: 1 }}>
+                  <Editor
+                    content={props.document.content}
+                    type={contentType}
+                    key={props.document.documentId}
+                    editable={editing}
+                    onInit={handleInit}
+                    plugins={plugins}
+                    lineEmptyPlaceholder={t("displayNamePlaceholder")}
+                    placeholder={t("displayNamePlaceholder")}
+                    slashOption={{ items: slashItems }}
+                    className="mdocs-document-editor-root"
+                  />
+                </div>
+                {editor && <OutlineSideRail editor={editor} />}
+              </Block>
+            </div>
         </div>
       </Block>
+      </OutlineProvider>
     </div>
   );
 }

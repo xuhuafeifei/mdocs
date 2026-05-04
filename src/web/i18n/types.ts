@@ -40,6 +40,8 @@ export type TranslationKey =
   | "displayNamePlaceholder"
   | "currentDomainAria"
   | "insertDiagram"
+  | "outlineHide"
+  | "outlineShow"
   | "readOnlyNotice"
   // Create modal
   | "newDocumentTitle"

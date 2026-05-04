@@ -43,6 +43,8 @@ export const zh: Record<TranslationKey, string> = {
   displayNamePlaceholder: "显示名称",
   currentDomainAria: "当前域",
   insertDiagram: "插入图表",
+  outlineHide: "隐藏大纲",
+  outlineShow: "显示大纲",
   readOnlyNotice: "> 您无权限编辑\n\n",
   // Create modal
   newDocumentTitle: "新建文档",

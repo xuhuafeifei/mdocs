@@ -504,7 +504,14 @@
 .mdocs-context-item.danger:hover {
   background: var(--mdocs-error-soft);
 }
-
+/* Document editor body inset — same idea as .mdocs-playground-editor in global.css */
+.mdocs-document-editor-root {
+  box-sizing: border-box;
+  /* padding: 80px 60px 60px; */
+  padding-left: 50px;
+  padding-right: 50px;
+  padding-top: 20px;
+}
 /* === Main area === */
 .mdocs-main {
   display: flex;
@@ -661,15 +668,6 @@
 /* Suppress green focus ring on editor content click */
 .mdocs-editor-content-area :focus-visible {
   outline: none;
-}
-
-/* Document editor body inset — same idea as .mdocs-playground-editor in global.css */
-.mdocs-document-editor-root {
-  box-sizing: border-box;
-  /* padding: 80px 60px 60px; */
-  padding-left: 50px;
-  padding-right: 50px;
-  padding-top: 20px;
 }
 
 .mdocs-editor-body {
@@ -1311,39 +1309,3 @@ strong.label {
   border-bottom: 1px solid var(--mdocs-border);
 }
 
-/* === Outline panel === */
-.mdocs-outline {
-  flex-shrink: 0;
-  width: 200px;
-  padding: 16px 12px;
-  overflow-y: auto;
-}
-
-.mdocs-outline-title {
-  color: var(--mdocs-text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  letter-spacing: 0.5px;
-}
-
-.mdocs-outline-item {
-  border-radius: var(--mdocs-radius-sm);
-  color: var(--mdocs-text);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 28px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border: none;
-  background: transparent;
-  display: block;
-  width: 100%;
-  text-align: left;
-  transition: background 0.12s ease;
-}
-
-.mdocs-outline-item:hover {
-  background: var(--mdocs-bg);
-}

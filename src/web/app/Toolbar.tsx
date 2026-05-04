@@ -4,12 +4,14 @@ import {
   INSERT_FILE_COMMAND,
   INSERT_IMAGE_COMMAND,
   getHotkeyById,
+  useOutlineActionItem,
 } from "@lobehub/editor";
 import {
   ChatInputActions,
   CodeLanguageSelect,
   FloatActions,
   useEditorState,
+  type ChatInputActionsProps,
 } from "@lobehub/editor/react";
 import {
   BoldIcon,
@@ -30,7 +32,7 @@ import {
   UnderlineIcon,
   Undo2Icon,
 } from "lucide-react";
-import { type FC, useMemo } from "react";
+import { type CSSProperties, type FC, useMemo } from "react";
 
 import { openFileSelector } from "./actions";
 
@@ -38,6 +40,9 @@ export interface ToolbarProps {
   className?: string;
   editor: IEditor;
   floating?: boolean;
+  outlineCollapseTitle?: string;
+  outlineExpandTitle?: string;
+  outlineToggle?: boolean;
   style?: CSSProperties;
 }
 
@@ -99,8 +104,20 @@ function getFormatItems(editorState: ReturnType<typeof useEditorState>, editor: 
   ];
 }
 
-const Toolbar: FC<ToolbarProps> = ({ editor, floating, style, className }) => {
+const Toolbar: FC<ToolbarProps> = ({
+  editor,
+  floating,
+  outlineCollapseTitle,
+  outlineExpandTitle,
+  outlineToggle,
+  style,
+  className,
+}) => {
   const editorState = useEditorState(editor);
+  const outlineAction = useOutlineActionItem({
+    collapseTitle: outlineCollapseTitle,
+    expandTitle: outlineExpandTitle,
+  });
 
   const items = useMemo(
     () =>
@@ -219,13 +236,15 @@ const Toolbar: FC<ToolbarProps> = ({ editor, floating, style, className }) => {
             });
           },
         },
-      ].filter(Boolean) as any,
-    [editor, editorState],
+        ...(outlineToggle && outlineAction ? [{ type: "divider" as const }, outlineAction] : []),
+      ].filter(Boolean) as ChatInputActionsProps["items"],
+    [editor, editorState, outlineAction, outlineToggle],
   );
 
   const floatingItems = useMemo(
-    () => getFormatItems(editorState, editor) as any,
-    [editor, editorState],
+    () =>
+      [...getFormatItems(editorState, editor), ...(outlineToggle && outlineAction ? [{ type: "divider" as const }, outlineAction] : [])] as ChatInputActionsProps["items"],
+    [editor, editorState, outlineAction, outlineToggle],
   );
 
   if (floating) return <FloatActions items={floatingItems} />;

@@ -6,6 +6,7 @@
   "scripts": {
     "dev:server": "tsx watch src/server/main.ts",
     "dev:web": "vite",
+    "dev:web:fresh": "vite --force",
     "dev": "pnpm dev:server & pnpm dev:web",
     "build:web": "vite build",
     "build:server": "tsc -p tsconfig.server.json",
