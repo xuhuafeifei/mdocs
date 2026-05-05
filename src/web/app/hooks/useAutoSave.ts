@@ -27,8 +27,9 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
   // Set to true when a save occurs (auto/manual), false when content changes.
   const draftCurrentRef = useRef(false);
 
-  // Snapshot of editor content at last save/load — used to filter out
-  // non-content updates (selection/cursor) from the Lexical update listener.
+  // 上次保存/加载时的编辑器内容快照，用于过滤掉 Lexical 的非内容更新（选区、光标移动等）。
+  // 存储 markdown 而非 JSON，因为 JSON 包含 Lexical 内部状态（node key 等），
+  // 编辑器挂载/初始化时 node key 会重新生成导致 JSON 变化，但文章实际内容没变。
   const lastContentRef = useRef("");
 
   // Refs for use in event handlers (avoid stale closure)
@@ -36,7 +37,13 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
 
   const performSave = useCallback(async () => {
     if (!editor) return;
+    // 基线还没初始化（非空 markdown 字符串不会为 falsy），兜底跳过，防止挂载时误写草稿
+    if (!lastContentRef.current) {
+      console.log("[useAutoSave] performSave blocked: lastContentRef is empty");
+      return;
+    }
     const jsonContent = JSON.stringify(editor.getDocument("json"));
+    console.log("[useAutoSave] performSave saving draft, documentId:", documentId, "content preview:", jsonContent.slice(0, 80));
     await saveDraft({
       documentId,
       content: jsonContent,
@@ -45,7 +52,7 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
       published: false,
       ...documentMeta,
     });
-    lastContentRef.current = jsonContent;
+    lastContentRef.current = (editor.getDocument("markdown") as string) ?? "";
     setDraftExists(true);
     setIsDirty(false);
     setLastSavedAt(Date.now());
@@ -62,22 +69,10 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
         setDraftExists(true);
         setLastSavedAt(draft.updatedAt);
         draftCurrentRef.current = true; // draft matches loaded state
-        // Normalize: if the stored content is already Lexical JSON, keep it for
-        // comparison; if it's legacy markdown, start fresh so the first content
-        // change triggers a re-save that upgrades the format.
-        let normalized = "";
-        try {
-          const p = JSON.parse(draft.content);
-          if (p?.root?.children) normalized = draft.content;
-        } catch {
-          // legacy markdown — leave empty, will be upgraded on next save
-        }
-        lastContentRef.current = normalized;
       } else {
         setDraftExists(false);
         setLastSavedAt(null);
         draftCurrentRef.current = false;
-        lastContentRef.current = "";
         dirtyRef.current = false;
       }
     });
@@ -91,11 +86,17 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
     if (!lexical) return;
 
     cleanupRef.current?.();
+
+    // 注册 listener 前立即同步基线为当前编辑器的 markdown 内容。
+    // 用 markdown 而非 JSON，避免 Lexical 内部状态抖动（node key 重新生成等）误触发草稿保存。
+    lastContentRef.current = editor.getDocument("markdown") ?? "";
+
     const unregister = lexical.registerUpdateListener(() => {
-      const jsonContent = JSON.stringify(editor.getDocument("json"));
-      // Only react when text content actually changed (ignore selection/cursor moves)
-      if (jsonContent === lastContentRef.current) return;
-      lastContentRef.current = jsonContent;
+      const md = (editor.getDocument("markdown") as string) ?? "";
+      // 仅在文档文本实际变化时才标记 dirty。忽略选区/光标移动，以及 Lexical 内部状态抖动（node key 重新生成等）
+      if (md === lastContentRef.current) return;
+      console.log("[useAutoSave] updateListener dirty, documentId:", documentId, "oldLen:", lastContentRef.current.length, "newLen:", md.length);
+      lastContentRef.current = md;
 
       setIsDirty(true);
       dirtyRef.current = true;
@@ -195,7 +196,7 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
     setLastSavedAt(Date.now());
     draftCurrentRef.current = true;
     if (editor) {
-      lastContentRef.current = JSON.stringify(editor.getDocument("json"));
+      lastContentRef.current = (editor.getDocument("markdown") as string) ?? "";
     }
   }
 

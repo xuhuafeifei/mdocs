@@ -23,6 +23,7 @@ import {
   ReactMeta2dPlugin,
   ReactTablePlugin,
   ReactToolbarPlugin,
+  ReactMarkdownPlugin,
   OutlinePanel,
   OutlineProvider,
   enUS,
@@ -174,6 +175,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       const afterInit = e.getDocument("json");
       console.log("[handleInit] editor content after setDocument:", JSON.stringify(afterInit?.root?.children?.slice(0, 2)));
     });
+
   }, []);
 
   async function publish(): Promise<void> {
@@ -200,8 +202,13 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
   async function saveDraft(): Promise<void> {
     if (!editor || !props.canEdit) return;
+    // 内容没有变更则跳过，防止切文章时 guardNavigate 无条件触发保存
+    if (!_isDirty) {
+      console.log("[DocumentEditor.saveDraft] skipped: not dirty, documentId:", props.document.documentId);
+      return;
+    }
     const jsonContent = JSON.stringify(editor.getDocument("json"));
-    console.log("[saveDraft] json preview:", jsonContent.slice(0, 100));
+    console.log("[DocumentEditor.saveDraft] saving draft, documentId:", props.document.documentId, "content preview:", jsonContent.slice(0, 80));
     // Mark as saved synchronously BEFORE async IndexedDB write,
     // so the navigation guard sees clean state immediately.
     markDraftSaved();
@@ -322,6 +329,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
   const plugins = useMemo(
     () => [
+      ReactMarkdownPlugin,
       ReactListPlugin,
       ReactLinkPlugin,
       ReactImagePlugin,
@@ -439,6 +447,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     content={props.document.content}
                     type={contentType}
                     key={props.document.documentId}
+                    confirmPasteMarkdown
                     editable={editing}
                     onInit={handleInit}
                     plugins={plugins}

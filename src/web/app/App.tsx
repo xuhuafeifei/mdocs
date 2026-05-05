@@ -160,6 +160,7 @@ export function App() {
 
       // 3. Cache metadata into existing draft so next open skips the network
       if (draft && !draft.published) {
+        console.log("[App.openDocument] saveDraftRecord (cache metadata), documentId:", docId);
         await saveDraftRecord({
           ...draft,
           relativePath: doc.relativePath,
