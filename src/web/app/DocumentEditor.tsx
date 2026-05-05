@@ -39,6 +39,7 @@ import { useI18n } from "../i18n";
 import { openFileSelector } from "./actions";
 import Toolbar from "./Toolbar";
 import { DomainSelect } from "./DomainSelect";
+import { uploadAssetApi } from "../services/endpoints";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { usePublishGuard } from "./hooks/usePublishGuard";
 import { localizeDomainName } from "./utils";
@@ -343,7 +344,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
       }),
       withProps(ReactFilePlugin, {
         handleUpload: async (file: File) => {
-          return { url: URL.createObjectURL(file) };
+          const url = await uploadAssetApi(file, props.document.documentId);
+          return { url };
         },
       }),
       withProps(ReactImagePlugin, {
@@ -352,11 +354,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
         handleRehost: async (url: string) => {
           const res = await fetch(url);
           const blob = await res.blob();
-          return new Promise<{ url: string }>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve({ url: reader.result as string });
-            reader.readAsDataURL(blob);
-          });
+          const file = new File([blob], "image.png", { type: blob.type });
+          const serverUrl = await uploadAssetApi(file, props.document.documentId);
+          return { url: serverUrl };
         },
       }),
     ],

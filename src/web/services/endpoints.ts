@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, ApiRequestError, getStoredToken } from "./client";
 import type { DocumentDetail } from "../../shared/types/document";
 import type {
   VisitorDirectoryEntry,
@@ -160,4 +160,36 @@ export function removeDocumentInviteApi(documentId: string, targetVisitorId: str
   return api<void>(`/api/documents/${encodeURIComponent(documentId)}/invites/${encodeURIComponent(targetVisitorId)}`, {
     method: "DELETE",
   });
+}
+
+/**
+ * Upload files to the server asset store.
+ * Uses raw fetch (not `api()`) because FormData must NOT have `Content-Type: application/json`.
+ * Returns the server URL of the first uploaded file.
+ */
+export async function uploadAssetApi(file: File, documentId: string): Promise<string> {
+  const formData = new FormData();
+  formData.append("file[]", file);
+  formData.append("documentId", documentId);
+
+  const headers = new Headers();
+  const token = getStoredToken();
+  if (token) headers.set("x-visitor-token", token);
+
+  const res = await fetch("/api/assets/upload", {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  const body: unknown = await res.json();
+  if (!res.ok) {
+    const err = (body as { error?: { code: string; message: string } } | null)?.error;
+    throw new ApiRequestError(res.status, err?.code ?? "UNKNOWN", err?.message ?? "upload failed");
+  }
+
+  const succMap = (body as { data: { succMap: Record<string, string> } }).data.succMap;
+  const urls = Object.values(succMap);
+  if (urls.length === 0) throw new Error("upload succeeded but no URL returned");
+  return urls[0]!;
 }

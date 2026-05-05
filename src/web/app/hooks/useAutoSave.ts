@@ -139,7 +139,7 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
     return () => rootElement.removeEventListener("blur", handleBlur);
   }, [editor, performSave]);
 
-  // Window blur / tab switch save (onWindowChange mode)
+  // Tab switch / refresh / close save
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -153,8 +153,22 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
       }
     };
 
+    const handleBeforeUnload = () => {
+      if (dirtyRef.current) {
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+        performSave();
+      }
+    };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
   }, [performSave]);
 
   async function clearDraft(): Promise<void> {

@@ -135,3 +135,18 @@ Vitest with jsdom environment. Test files live alongside source (`src/**/*.test.
 ## Clean-room policy
 
 This project is implemented independently from `markdown-docs` (`~/ddmc/markdown-docs`). Code must not be copied or mechanically adapted from that project. The Vditor + Meta2d flow is the only acknowledged port — everything else is from scratch.
+
+## fgbg-docs (本项目开发文档)
+
+`fgbg-docs/` 是 mdocs 项目专用的开发文档，**不要把这个目录名当成通用惯例去其他项目找**。讨论以下主题时先读对应文档：
+
+| Topic | Read this |
+|-------|-----------|
+| Architecture, data flow, runtime layout | `fgbg-docs/architecture-overview.md` |
+| DB tables, fields, indexes, migration strategy | `fgbg-docs/database-schema.md` |
+| HTTP API endpoints, types, error codes | `fgbg-docs/api-reference.md` |
+| Frontend structure, key components, routing | `fgbg-docs/frontend-structure.md` |
+| Visitor identity, token lifecycle, 5-level permission model | `fgbg-docs/auth-and-access-control.md` |
+| Dev setup, build, debug | `fgbg-docs/development-environment.md` |
+| Test strategy, running tests | `fgbg-docs/testing-strategy.md` |
+| Technical decision records | `fgbg-docs/adr/` |

@@ -1,2 +1,7 @@
 allowBuilds:
   better-sqlite3: true
+
+onlyBuiltDependencies:
+  - '@lobehub/editor'
+  - better-sqlite3
+  - esbuild
