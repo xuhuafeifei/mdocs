@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 
+/** 域成员模板在数据库中的行结构。 */
 export interface DomainMemberTemplateRow {
   id: number;
   display_name: string;
@@ -36,6 +37,10 @@ export function visitorIdsFromStoredCsv(stored: string): string[] {
   return out;
 }
 
+/**
+ * 列出指定创建者拥有的所有域成员模板。
+ * 结果按 update_time 降序排列。
+ */
 export function listDomainMemberTemplates(db: Database.Database, createVisitorId: string): DomainMemberTemplateRow[] {
   return db
     .prepare<string, DomainMemberTemplateRow>(
@@ -47,6 +52,10 @@ export function listDomainMemberTemplates(db: Database.Database, createVisitorId
     .all(createVisitorId);
 }
 
+/**
+ * 根据 ID 与创建者查询单个域成员模板。
+ * 返回对应行或 undefined（无权限或不存在）。
+ */
 export function findDomainMemberTemplateById(
   db: Database.Database,
   id: number,
@@ -61,6 +70,10 @@ export function findDomainMemberTemplateById(
     .get(id, createVisitorId);
 }
 
+/**
+ * 插入一条新的域成员模板记录。
+ * 返回新插入行的自增 ID。
+ */
 export function insertDomainMemberTemplate(
   db: Database.Database,
   input: {
@@ -86,6 +99,10 @@ export function insertDomainMemberTemplate(
   return Number(info.lastInsertRowid);
 }
 
+/**
+ * 更新指定域成员模板的信息。
+ * 仅当 ID 与创建者均匹配时才更新；返回是否实际修改了行。
+ */
 export function updateDomainMemberTemplate(
   db: Database.Database,
   id: number,
@@ -102,6 +119,10 @@ export function updateDomainMemberTemplate(
   return info.changes > 0;
 }
 
+/**
+ * 删除指定域成员模板。
+ * 仅当 ID 与创建者均匹配时才删除；返回是否实际删除了行。
+ */
 export function deleteDomainMemberTemplate(db: Database.Database, id: number, createVisitorId: string): boolean {
   const info = db
     .prepare(`DELETE FROM domain_member_templates WHERE id = ? AND create_visitor_id = ?`)

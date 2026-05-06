@@ -179,6 +179,7 @@ export function createDocumentApi(input: {
   content: string;
   domainId?: string;
   permission?: number;
+  parentId?: string;
 }): Promise<DocumentDetail> {
   return api<DocumentDetail>("/api/documents", {
     method: "POST",
@@ -274,4 +275,28 @@ export async function uploadAssetApi(file: File, documentId: string): Promise<st
   const urls = Object.values(succMap);
   if (urls.length === 0) throw new Error("upload succeeded but no URL returned");
   return urls[0]!;
+}
+
+/**
+ * 创建目录。
+ */
+export function createFolderApi(input: {
+  name: string;
+  parentId?: string;
+  domainId?: string;
+  description?: string;
+}): Promise<{ folderId: string; path: string }> {
+  return api<{ folderId: string; path: string }>("/api/folders", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * 删除空目录。
+ */
+export function deleteFolderApi(folderId: string): Promise<void> {
+  return api<void>(`/api/folders/${encodeURIComponent(folderId)}`, {
+    method: "DELETE",
+  });
 }

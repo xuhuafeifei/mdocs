@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 
+/** 域（domain）在数据库中的行结构。 */
 export interface DomainRow {
   domain_id: string;
   domain_name: string;
@@ -9,6 +10,9 @@ export interface DomainRow {
   permission: string;
 }
 
+/**
+ * 列出所有域，按 domain_id 排序。
+ */
 export function listDomains(db: Database.Database): DomainRow[] {
   return db
     .prepare(
@@ -17,6 +21,10 @@ export function listDomains(db: Database.Database): DomainRow[] {
     .all() as DomainRow[];
 }
 
+/**
+ * 根据域 ID 查找单个域。
+ * 返回对应行或 undefined。
+ */
 export function findDomainById(db: Database.Database, domainId: string): DomainRow | undefined {
   return db
     .prepare<string, DomainRow>(
@@ -25,6 +33,10 @@ export function findDomainById(db: Database.Database, domainId: string): DomainR
     .get(domainId);
 }
 
+/**
+ * 插入一条新的域记录。
+ * permission 未提供时默认为 public。
+ */
 export function insertDomain(
   db: Database.Database,
   input: {
@@ -48,6 +60,9 @@ export function insertDomain(
   );
 }
 
+/**
+ * 更新指定域的名称，并自动将 updated_at 设为当前时间。
+ */
 export function updateDomainName(db: Database.Database, domainId: string, domainName: string): void {
   const now = new Date().toISOString();
   db.prepare(`UPDATE domains SET domain_name = ?, updated_at = ? WHERE domain_id = ?`).run(
@@ -57,6 +72,9 @@ export function updateDomainName(db: Database.Database, domainId: string, domain
   );
 }
 
+/**
+ * 更新指定域的权限，并自动将 updated_at 设为当前时间。
+ */
 export function updateDomainPermission(db: Database.Database, domainId: string, permission: string): void {
   const now = new Date().toISOString();
   db.prepare(`UPDATE domains SET permission = ?, updated_at = ? WHERE domain_id = ?`).run(
@@ -66,11 +84,18 @@ export function updateDomainPermission(db: Database.Database, domainId: string, 
   );
 }
 
+/**
+ * 删除指定域及其关联的成员记录。
+ * 先清理 domain_members，再删除 domains 行。
+ */
 export function deleteDomainRow(db: Database.Database, domainId: string): void {
   db.prepare(`DELETE FROM domain_members WHERE domain_id = ?`).run(domainId);
   db.prepare(`DELETE FROM domains WHERE domain_id = ?`).run(domainId);
 }
 
+/**
+ * 向指定域添加一位成员；若已存在则忽略（INSERT OR IGNORE）。
+ */
 export function addDomainMember(db: Database.Database, domainId: string, visitorId: string): void {
   const now = new Date().toISOString();
   db.prepare(
@@ -78,6 +103,9 @@ export function addDomainMember(db: Database.Database, domainId: string, visitor
   ).run(domainId, visitorId, now);
 }
 
+/**
+ * 判断指定访客是否是指定域的成员。
+ */
 export function isDomainMember(db: Database.Database, domainId: string, visitorId: string): boolean {
   const row = db
     .prepare<[string, string], { c: number }>(
@@ -87,6 +115,9 @@ export function isDomainMember(db: Database.Database, domainId: string, visitorI
   return (row?.c ?? 0) > 0;
 }
 
+/**
+ * 统计指定域的成员数量。
+ */
 export function countDomainMembers(db: Database.Database, domainId: string): number {
   const row = db
     .prepare<string, { c: number }>(
@@ -96,6 +127,9 @@ export function countDomainMembers(db: Database.Database, domainId: string): num
   return row?.c ?? 0;
 }
 
+/**
+ * 列出指定域的所有成员 visitor_id。
+ */
 export function listDomainMemberIds(db: Database.Database, domainId: string): string[] {
   const rows = db
     .prepare<string, { visitor_id: string }>(
@@ -105,7 +139,10 @@ export function listDomainMemberIds(db: Database.Database, domainId: string): st
   return rows.map((r) => r.visitor_id);
 }
 
-/** 替换域成员表（先删后插）；调用方保证 visitorId 列表已校验。 */
+/**
+ * 替换域成员表（先删后插）；调用方保证 visitorId 列表已校验。
+ * 整个操作在单个事务中完成。
+ */
 export function replaceDomainMembers(
   db: Database.Database,
   domainId: string,

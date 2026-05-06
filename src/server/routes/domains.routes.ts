@@ -19,6 +19,12 @@ import {
 import { findVisitorById } from "../db/repositories/visitor.repo.js";
 import { resolveDomainAccess } from "../access/domain-access.js";
 
+/**
+ * 规范化请求体中的访客ID数组。
+ * 去重、去空字符串，并校验元素类型。
+ * @param body - 请求体
+ * @returns 规范化后的访客ID数组；格式不合法时返回 null
+ */
 function normaliseVisitorIdsBody(body: unknown): string[] | null {
   if (!body || typeof body !== "object") return null;
   const v = (body as { visitorIds?: unknown }).visitorIds;
@@ -35,16 +41,27 @@ function normaliseVisitorIdsBody(body: unknown): string[] | null {
   return out;
 }
 
+/**
+ * 构建域（Domain）相关路由。
+ * 包含域的列表查询、创建、成员管理、重命名、权限修改及删除等接口。
+ * @returns Express Router 实例
+ */
 export function buildDomainsRouter(): Router {
   const router = Router();
 
+  /**
+   * GET /
+   * 列出当前访客可见的所有域。
+   */
   // list visible domains
   router.get("/", (req: Request, res: Response) => {
     const visitorId = req.visitor?.visitor_id ?? null;
     const db = getDb();
     const rows = listDomains(db);
+    // 收集当前访客被邀请的域ID集合，用于后续权限判断
     const documentInviteDomainIds =
       visitorId ? new Set(listDomainIdsWithDocumentInviteForVisitor(db, visitorId)) : undefined;
+    // 过滤掉访客完全无权访问的域
     const filtered = rows.filter(
       (r) =>
         resolveDomainAccess(db, r, r.domain_id, visitorId, { documentInviteDomainIds }).kind !== "none",
@@ -60,6 +77,11 @@ export function buildDomainsRouter(): Router {
     });
   });
 
+  /**
+   * POST /
+   * 创建新域。仅已登录访客可操作。
+   * restricted 权限的域会自动将创建者加入成员列表。
+   */
   // create domain
   router.post("/", (req: Request, res: Response) => {
     if (!req.visitor) {
@@ -67,10 +89,12 @@ export function buildDomainsRouter(): Router {
       return;
     }
     const body = (req.body ?? {}) as { domainName?: unknown; permission?: unknown };
+    // 校验域名称
     if (typeof body.domainName !== "string" || !body.domainName.trim()) {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "domainName is required" } });
       return;
     }
+    // 校验并默认权限为 restricted
     const permission = typeof body.permission === "string" ? body.permission : "restricted";
     if (!["public", "restricted", "private"].includes(permission)) {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "invalid permission" } });
@@ -87,6 +111,7 @@ export function buildDomainsRouter(): Router {
       updatedAt: now,
       permission,
     });
+    // restricted 域需将创建者自动设为成员，确保其能继续管理该域
     if (permission === "restricted") {
       addDomainMember(db, domainId, req.visitor.visitor_id);
     }
@@ -101,6 +126,10 @@ export function buildDomainsRouter(): Router {
     });
   });
 
+  /**
+   * GET /:id/members
+   * 获取 restricted 域的成员列表。仅域创建者可查看。
+   */
   router.get("/:id/members", (req: Request, res: Response) => {
     if (!req.visitor) {
       res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
@@ -113,6 +142,7 @@ export function buildDomainsRouter(): Router {
       res.status(404).json({ error: { code: "NOT_FOUND", message: "domain not found" } });
       return;
     }
+    // 只有域创建者才有权查看成员列表
     if (domain.creator_visitor_id !== req.visitor.visitor_id) {
       res.status(403).json({ error: { code: "FORBIDDEN", message: "only the creator can view domain members" } });
       return;
@@ -143,6 +173,10 @@ export function buildDomainsRouter(): Router {
     res.json({ data: { members } });
   });
 
+  /**
+   * PUT /:id/members
+   * 批量替换 restricted 域的成员列表。仅域创建者可操作，创建者始终保留在成员中。
+   */
   router.put("/:id/members", (req: Request, res: Response) => {
     if (!req.visitor) {
       res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
@@ -174,6 +208,7 @@ export function buildDomainsRouter(): Router {
     const mergedSet = new Set(ids);
     mergedSet.add(domain.creator_visitor_id);
     const merged = [...mergedSet];
+    // 校验所有待添加的访客ID是否真实存在
     const invalid: string[] = [];
     for (const vid of merged) {
       const v = findVisitorById(db, vid);
@@ -196,6 +231,10 @@ export function buildDomainsRouter(): Router {
     res.json({ data: { memberCount: merged.length } });
   });
 
+  /**
+   * PUT /:id
+   * 重命名域。仅域创建者可操作，且域内不能有文档。
+   */
   // rename domain
   router.put("/:id", (req: Request, res: Response) => {
     if (!req.visitor) {
@@ -218,6 +257,7 @@ export function buildDomainsRouter(): Router {
       res.status(403).json({ error: { code: "FORBIDDEN", message: "only the creator can modify this domain" } });
       return;
     }
+    // 已有文档的域不允许重命名，防止路径引用混乱
     const docCount = countDocumentsByDomain(db, domainId);
     if (docCount > 0) {
       res.status(400).json({ error: { code: "DOMAIN_HAS_DOCUMENTS", message: "cannot modify domain with documents" } });
@@ -227,6 +267,10 @@ export function buildDomainsRouter(): Router {
     res.json({ data: { domainId, domainName: body.domainName.trim() } });
   });
 
+  /**
+   * PUT /:id/permission
+   * 修改域的访问权限。仅域创建者可操作，且域内不能有文档。
+   */
   // change domain permission
   router.put("/:id/permission", (req: Request, res: Response) => {
     if (!req.visitor) {
@@ -249,6 +293,7 @@ export function buildDomainsRouter(): Router {
       res.status(403).json({ error: { code: "FORBIDDEN", message: "only the creator can modify this domain" } });
       return;
     }
+    // 已有文档的域不允许修改权限
     const docCount = countDocumentsByDomain(db, domainId);
     if (docCount > 0) {
       res.status(400).json({ error: { code: "DOMAIN_HAS_DOCUMENTS", message: "cannot modify domain with documents" } });
@@ -258,6 +303,10 @@ export function buildDomainsRouter(): Router {
     res.json({ data: { domainId, permission: body.permission } });
   });
 
+  /**
+   * DELETE /:id
+   * 删除域。仅域创建者可操作，且域内不能有文档。
+   */
   // delete domain
   router.delete("/:id", (req: Request, res: Response) => {
     if (!req.visitor) {
@@ -275,6 +324,7 @@ export function buildDomainsRouter(): Router {
       res.status(403).json({ error: { code: "FORBIDDEN", message: "only the creator can delete this domain" } });
       return;
     }
+    // 已有文档的域不允许删除
     const docCount = countDocumentsByDomain(db, domainId);
     if (docCount > 0) {
       res.status(400).json({ error: { code: "DOMAIN_HAS_DOCUMENTS", message: "cannot delete domain with documents" } });

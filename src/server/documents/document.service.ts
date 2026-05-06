@@ -34,8 +34,6 @@ import type {
   DocumentSummary,
 } from "../../shared/types/document.js";
 import { DocPathError } from "../../shared/docPath.js";
-import { normaliseRelativePathForStorage } from "../../shared/storagePath.js";
-import { prefixPersonalDomainStoragePath } from "../../shared/personalDomain.js";
 import { getConfig } from "../config/index.js";
 
 // ============================================================
@@ -47,12 +45,10 @@ export function listDocuments(domainId?: string, visitorId?: string | null): Doc
   const effective = domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
 
-  // 域入口过滤
   const domain = findDomainById(db, effective);
   const access = resolveDomainAccess(db, domain, effective, visitorId);
   if (!canEnterDomainTree(access)) return [];
 
-  // 构建域上下文（一次查成员身份，避免逐行查库）
   const domainPermission = domain?.permission ?? "public";
   const isMember = !!(
     visitorId && domain && isDomainMember(db, domain.domain_id, visitorId)
@@ -75,6 +71,8 @@ export function createDocument(params: {
   content: string;
   domainId?: string;
   permission?: number;
+  fileType?: string;
+  parentId?: string | null;
 }): DocumentDetail {
   const cfg = getConfig();
   const domainId = params.domainId?.trim() || cfg.defaultDomainId;
@@ -91,19 +89,18 @@ export function createDocument(params: {
 
   let pathFromUser: string;
   try {
-    pathFromUser = normaliseRelativePathForStorage(params.relativePath);
+    pathFromUser = normaliseDocRelativePath(params.relativePath);
   } catch (e) {
     if (e instanceof DocPathError) {
       throw new DocumentError("INVALID_PATH", e.message, 400);
     }
     throw e;
   }
-  const relativePath =
-    domainId === params.actorVisitorId
-      ? normaliseDocRelativePath(prefixPersonalDomainStoragePath(params.actorVisitorId, pathFromUser))
-      : normaliseDocRelativePath(pathFromUser);
 
-  const existing = findDocumentByPath(db, relativePath);
+  // 现在所有域都使用 {domain_id}/ 前缀隔离，不再需要个人域特殊处理
+  const relativePath = pathFromUser;
+
+  const existing = findDocumentByPath(db, domainId, relativePath);
   if (existing) {
     throw new DocumentError("DOC_EXISTS", "文档已存在", 409);
   }
@@ -112,7 +109,6 @@ export function createDocument(params: {
   const documentId = randomUUID();
   const now = new Date().toISOString();
 
-  // 默认权限：private 域 → 0 (private)，public 域 → 3 (public_read)，restricted → 1 (domain_read)
   const defaultPermission =
     domainId === params.actorVisitorId
       ? Permission.PRIVATE
@@ -122,7 +118,6 @@ export function createDocument(params: {
 
   let permission: number;
   if (params.permission !== undefined) {
-    // 调用方指定了权限 → 校验是否在域允许范围内
     if (!validateDomainPermission(domainRow.permission, params.permission)) {
       throw new DocumentError(
         "INVALID_PERMISSION",
@@ -135,7 +130,8 @@ export function createDocument(params: {
     permission = defaultPermission;
   }
 
-  const write = writeDocument(relativePath, params.content);
+  // 磁盘路径现在自动带上 {domain_id}/ 前缀
+  const write = writeDocument(domainId, relativePath, params.content);
 
   const tx = db.transaction(() => {
     insertDocument(db, {
@@ -150,6 +146,8 @@ export function createDocument(params: {
       createdAt: now,
       updatedAt: now,
       permission,
+      fileType: params.fileType ?? 'md',
+      parentId: params.parentId ?? null,
     });
     insertAuditLog(db, {
       actorVisitorId: params.actorVisitorId,
@@ -184,7 +182,7 @@ export function createDocument(params: {
 export function getDocument(documentId: string): DocumentDetail {
   const row = findDocumentById(getDb(), documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
-  const { content, contentHash } = readDocument(row.relative_path);
+  const { content, contentHash } = readDocument(row.domain_id, row.relative_path);
   return {
     ...rowToSummary(row),
     content,
@@ -208,7 +206,6 @@ export function updateDocument(params: {
   const row = findDocumentById(db, params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
-  // 构建域上下文校验编辑权限
   const domain = findDomainById(db, row.domain_id);
   const domainPermission = domain?.permission ?? "public";
   const isMember = !!(domain && isDomainMember(db, domain.domain_id, params.actorVisitorId));
@@ -217,7 +214,6 @@ export function updateDocument(params: {
     throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
   }
 
-  // 如果改了权限值，校验是否在域允许范围内
   if (params.permission !== undefined && !validateDomainPermission(domainPermission, params.permission)) {
     throw new DocumentError(
       "INVALID_PERMISSION",
@@ -227,7 +223,7 @@ export function updateDocument(params: {
   }
 
   const displayName = params.displayName?.trim() || row.display_name;
-  const write = writeDocument(row.relative_path, params.content);
+  const write = writeDocument(row.domain_id, row.relative_path, params.content);
   const now = new Date().toISOString();
 
   const tx = db.transaction(() => {
@@ -292,7 +288,7 @@ export function removeDocument(params: {
     });
   });
   tx();
-  deleteDocumentFile(row.relative_path);
+  deleteDocumentFile(row.domain_id, row.relative_path);
 }
 
 // ============================================================
@@ -314,7 +310,6 @@ export function addDocumentInvite(
 
   const domain = findDomainById(db, row.domain_id);
 
-  // 邀请与域成员互斥：已是该域成员则禁止 invite
   if (domain && isDomainMember(db, domain.domain_id, targetVisitorId)) {
     throw new DocumentError(
       "BAD_REQUEST",

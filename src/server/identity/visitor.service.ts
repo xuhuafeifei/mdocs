@@ -19,25 +19,38 @@ import type { VisitorPublic } from "../../shared/types/visitor.js";
 
 const log = useLogger("identity");
 
+/** 注册访客后的返回结果 */
 export interface RegisteredVisitor {
   visitor: VisitorPublic;
   visitorToken: string;
 }
 
+/**
+ * 注册一个新访客。
+ * 校验名称合法性后，生成访客 ID 与令牌，在数据库中创建记录并为其建立个人域。
+ *
+ * @param visitorName - 访客名称
+ * @returns 包含访客公开信息与原始令牌的注册结果
+ */
 export function registerVisitor(visitorName: string): RegisteredVisitor {
   const trimmed = visitorName.trim();
+  // 校验名称非空
   if (!trimmed) {
     throw new VisitorValidationError("visitor name is required");
   }
+  // 校验名称长度不超过 60 字符
   if (trimmed.length > 60) {
     throw new VisitorValidationError("visitor name is too long");
   }
+
   const db = getDb();
+  // 生成访客唯一标识、原始令牌及其哈希
   const visitorId = newVisitorId();
   const rawToken = newVisitorToken();
   const tokenHash = hashVisitorToken(rawToken);
   const createdAt = new Date().toISOString();
 
+  // 在事务中插入访客记录、创建个人域并记录审计日志
   const tx = db.transaction(() => {
     insertVisitor(db, {
       visitorId,
@@ -72,25 +85,51 @@ export function registerVisitor(visitorName: string): RegisteredVisitor {
   };
 }
 
+/**
+ * 根据原始访客令牌解析对应的访客记录，并更新最后访问时间。
+ * 若令牌无效或对应访客已被禁用，则返回 null。
+ *
+ * @param rawToken - 原始访客令牌
+ * @returns 访客数据库记录，解析失败时返回 null
+ */
 export function resolveVisitorByToken(rawToken: string): VisitorRow | null {
   const tokenHash = hashVisitorToken(rawToken);
   const db = getDb();
   const row = findVisitorByTokenHash(db, tokenHash);
+  // 未找到记录或访客已禁用均视为无效
   if (!row) return null;
   if (row.disabled_at) return null;
+  // 更新最后访问时间戳
   updateVisitorLastSeen(db, row.visitor_id, new Date().toISOString());
   return row;
 }
 
+/**
+ * 根据访客 ID 获取访客记录。
+ *
+ * @param visitorId - 访客 ID
+ * @returns 访客数据库记录，不存在时返回 null
+ */
 export function getVisitorById(visitorId: string): VisitorRow | null {
   const row = findVisitorById(getDb(), visitorId);
   return row ?? null;
 }
 
+/**
+ * 列出系统中所有访客记录。
+ *
+ * @returns 访客数据库记录数组
+ */
 export function listAllVisitors(): VisitorRow[] {
   return listVisitors(getDb());
 }
 
+/**
+ * 将数据库中的访客行转换为对外公开的访客信息结构。
+ *
+ * @param row - 访客数据库行
+ * @returns 访客公开信息对象
+ */
 export function toPublic(row: VisitorRow): VisitorPublic {
   return {
     visitorId: row.visitor_id,
@@ -102,6 +141,7 @@ export function toPublic(row: VisitorRow): VisitorPublic {
   };
 }
 
+/** 访客信息校验失败的自定义错误 */
 export class VisitorValidationError extends Error {
   constructor(message: string) {
     super(message);

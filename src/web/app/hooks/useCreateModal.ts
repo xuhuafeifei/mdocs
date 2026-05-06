@@ -2,7 +2,7 @@
  * 新建文档/文件夹模态框 Hook
  * 封装新建文档和文件夹的表单状态、验证逻辑与 API 调用。
  * 路径规范化：用户输入的显示名称会映射为存储路径（空格转下划线等）。
- * 新建文件夹时自动在其下创建一个描述文档（folder_desc.md）。
+ * 新建文件夹时调用独立的 /api/folders 接口。
  */
 import { useEffect, useRef, useState } from "react";
 import type { DocumentDetail } from "../../../shared/types/document";
@@ -18,7 +18,7 @@ import {
 import { FOLDER_DESC_FILENAME, folderDescPathForFolder } from "../../../shared/folderDesc";
 import { stripDomainPathPrefix } from "../../../shared/personalDomain";
 import { getStoredVisitorId } from "../../services/client";
-import { createDocumentApi } from "../../services/endpoints";
+import { createDocumentApi, createFolderApi } from "../../services/endpoints";
 import { STORAGE_ERROR_MESSAGE_MAP } from "../../i18n/errors";
 import { translateError, parentDirForCreates } from "../utils";
 
@@ -90,6 +90,20 @@ function collectDocumentPaths(nodes: TreeNode[], out = new Set<string>()): Set<s
     }
   }
   return out;
+}
+
+/**
+ * 根据父路径在树中查找父文件夹节点，返回其 documentId。
+ */
+function findFolderIdByPath(nodes: TreeNode[], path: string): string | null {
+  for (const n of nodes) {
+    if (n.type === "folder" && n.path === path) return n.documentId;
+    if (n.type === "folder") {
+      const found = findFolderIdByPath(n.children, path);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 /**
@@ -217,12 +231,14 @@ export function useCreateModal(opts: UseCreateModalOpts) {
           return;
         }
         // 调用后端 API 创建文档
+        const parentId = effectiveParent ? findFolderIdByPath(tree, effectiveParent) : undefined;
         const doc = await createDocumentApi({
           relativePath,
           displayName: displayTitle,
           // 默认内容为一个 h1 标题
           content: buildLexicalJsonHeading(displayTitle),
           domainId: currentDomainId,
+          parentId,
         });
         // 刷新侧边栏文档树
         await refreshTree();
@@ -246,35 +262,24 @@ export function useCreateModal(opts: UseCreateModalOpts) {
         setCreateModalError(t("invalidFolderName"));
         return;
       }
-      // 拼接父路径和文件夹名
-      const folderPrefix = joinDocPath(effectiveParent, storageSeg);
-      let relativePath: string;
-      try {
-        // 文件夹在内部表示为一个描述文档（folder_desc.md）
-        relativePath = normaliseRelativePathForStorage(joinDocPath(folderPrefix, FOLDER_DESC_FILENAME));
-      } catch (e) {
-        setCreateModalError(translateError(t, e));
-        return;
-      }
-      // 检查文件夹是否已存在
-      if (paths.has(relativePath)) {
+
+      // 查重：检查树中是否已有同名路径
+      const folderPath = joinDocPath(effectiveParent, storageSeg);
+      if (paths.has(folderPath)) {
         setCreateModalError(t("folderExists"));
         return;
       }
-      // 使用用户输入的原始名称作为显示名称
-      const folderTitle = parsed.display;
-      // 创建文件夹（实际上是创建一个 folder_desc.md 文档）
-      const doc = await createDocumentApi({
-        relativePath,
-        displayName: folderTitle,
-        content: buildLexicalJsonHeading(folderTitle),
+
+      // 调用独立的创建目录接口
+      await createFolderApi({
+        name: storageSeg,
+        parentId: effectiveParent || undefined,
         domainId: currentDomainId,
       });
-      // 刷新文档树，新文件夹会显示出来
+
+      // 刷新文档树
       await refreshTree();
-      // 打开文件夹的描述文档
-      onDocCreated(doc);
-      // 关闭模态框
+      // 关闭模态框（文件夹没有文档 ID，不需要打开编辑器）
       setCreateModal(null);
     } catch (err) {
       // 创建失败（如网络错误、权限不足），显示错误提示

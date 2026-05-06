@@ -28,6 +28,23 @@ import { createDocument, addDocumentInvite } from "./document.service.js";
 import { findDocumentById } from "../db/repositories/document.repo.js";
 import { findDomainById } from "../db/repositories/domain.repo.js";
 
+/* ── 测试辅助：直接在数据库建文件夹 ── */
+
+function createFolderInDb(domainId: string, name: string, parentId: string | null = null): string {
+  const db = testDbRef.db!;
+  const folderId = "folder-" + Math.random().toString(36).slice(2, 10);
+  const now = new Date().toISOString();
+  const path = parentId
+    ? `${findDocumentById(db, parentId)!.relative_path}/${name}`
+    : name;
+  db.prepare(
+    `INSERT INTO documents (document_id, domain_id, relative_path, display_name, owner_visitor_id,
+     created_by, updated_by, content_hash, created_at, updated_at, permission, file_type, parent_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(folderId, domainId, path, name, OWNER, OWNER, OWNER, '', now, now, 1, 'dir', parentId);
+  return folderId;
+}
+
 /* ── 生命周期 ── */
 
 const OWNER = "owner-1";
@@ -215,6 +232,20 @@ describe("createDocument 域权限校验", () => {
       domainId: OWNER,
     });
     expect(doc.permission).toBe(Permission.PRIVATE);
+  });
+
+  it("传入 parentId 后文档挂在对应父目录下", () => {
+    const folderId = createFolderInDb("public-domain", "my-folder");
+    const doc = createDocument({
+      actorVisitorId: OWNER,
+      relativePath: "my-folder/child.md",
+      content: "# child",
+      domainId: "public-domain",
+      parentId: folderId,
+    });
+    // 验证数据库中 parent_id 已设置
+    const row = findDocumentById(testDbRef.db!, doc.documentId);
+    expect(row?.parent_id).toBe(folderId);
   });
 });
 
