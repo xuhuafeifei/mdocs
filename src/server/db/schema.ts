@@ -91,6 +91,15 @@ const SCHEMA_STATEMENTS: string[] = [
     update_time TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_domain_member_templates_owner ON domain_member_templates (create_visitor_id)`,
+  `CREATE TABLE IF NOT EXISTS cli_tokens (
+    token_id TEXT PRIMARY KEY,
+    visitor_id TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    revoked INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_cli_tokens_visitor ON cli_tokens (visitor_id)`,
 ];
 
 /**

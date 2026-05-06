@@ -262,4 +262,15 @@ export const zh: Record<TranslationKey, string> = {
   draftsEmptyState: "所有草稿已同步，当前无未发布内容。",
   localSnapshot: "本地快照",
   unknownTitle: "未命名文档",
+  // CLI Token
+  cliToken: "CLI Token",
+  cliTokenDesc: "用于命令行工具和 Agent 的身份令牌，继承你的所有权限",
+  cliTokenCreate: "创建",
+  cliTokenReset: "重置",
+  cliTokenGenerated: "已生成新的 CLI Token",
+  cliTokenCopy: "复制",
+  cliTokenCopied: "已复制",
+  cliTokenResetConfirm: "重置将吊销当前所有已有 Token，并生成新的 Token。确认重置？",
+  cliTokenActive: "活跃",
+  cliTokenRevoked: "已吊销",
 };

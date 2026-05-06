@@ -300,3 +300,37 @@ export function deleteFolderApi(folderId: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+/**
+ * 创建 CLI Token。
+ * 创建前会自动吊销该访客的所有已有 Token。
+ */
+export function createCliTokenApi(input?: {
+  name?: string;
+}): Promise<{ tokenId: string; token: string; name: string; createdAt: string }> {
+  return api<{ tokenId: string; token: string; name: string; createdAt: string }>("/api/cli/tokens", {
+    method: "POST",
+    body: JSON.stringify(input ?? {}),
+  });
+}
+
+/**
+ * 列出当前访客的所有 CLI Token（含已吊销的）。
+ */
+export function listCliTokensApi(): Promise<{
+  tokenId: string;
+  name: string;
+  revoked: boolean;
+  createdAt: string;
+}[]> {
+  return api<{ tokenId: string; name: string; revoked: boolean; createdAt: string }[]>("/api/cli/tokens");
+}
+
+/**
+ * 吊销指定的 CLI Token。
+ */
+export function revokeCliTokenApi(tokenId: string): Promise<void> {
+  return api<void>(`/api/cli/tokens/${encodeURIComponent(tokenId)}`, {
+    method: "DELETE",
+  });
+}

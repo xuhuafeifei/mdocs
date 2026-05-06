@@ -254,4 +254,15 @@ export type TranslationKey =
   | "confirmDeleteDraft"
   | "draftsEmptyState"
   | "localSnapshot"
-  | "unknownTitle";
+  | "unknownTitle"
+  // CLI Token
+  | "cliToken"
+  | "cliTokenDesc"
+  | "cliTokenCreate"
+  | "cliTokenReset"
+  | "cliTokenGenerated"
+  | "cliTokenCopy"
+  | "cliTokenCopied"
+  | "cliTokenResetConfirm"
+  | "cliTokenActive"
+  | "cliTokenRevoked";

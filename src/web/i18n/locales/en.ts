@@ -264,4 +264,15 @@ export const en: Record<TranslationKey, string> = {
   draftsEmptyState: "All drafts synced — no unpublished content.",
   localSnapshot: "Local snapshot",
   unknownTitle: "Untitled document",
+  // CLI Token
+  cliToken: "CLI Token",
+  cliTokenDesc: "Identity token for CLI and Agent tools, inherits all your permissions",
+  cliTokenCreate: "Create",
+  cliTokenReset: "Reset",
+  cliTokenGenerated: "New CLI Token generated",
+  cliTokenCopy: "Copy",
+  cliTokenCopied: "Copied",
+  cliTokenResetConfirm: "Resetting will revoke all existing tokens and generate a new one. Confirm?",
+  cliTokenActive: "Active",
+  cliTokenRevoked: "Revoked",
 };
