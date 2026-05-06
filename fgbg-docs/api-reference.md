@@ -55,6 +55,18 @@
 - 返回 `TreeNode[]`，树结构由 `parent_id` 递归构建。
 - `type='dir'` → 目录节点；`type='md'` → 文档节点；`desc.md` 内容作为目录的默认展示内容。
 
+### 全文检索
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/documents/search` | 全文检索文档（FTS5 + 权限过滤） |
+
+**`POST /api/documents/search`**
+- Body: `{ query: string, domainId?: string, topN?: number }`
+- Response: `{ data: SearchResult[] }`
+- SearchResult: `{ documentId, displayName, relativePath, domainId, snippet, bm25Score }`
+- 结果按 BM25 相关性排序，自动过滤当前访客无权阅读的文档。
+
 ### 文档 (Documents)
 
 | 方法 | 路径 | 说明 |
@@ -86,6 +98,23 @@
 - Content-Type: `multipart/form-data`
 - Fields: `file[]`（二进制文件）, `documentId`
 - Response: `{ data: { succMap: { "原始文件名": "/api/assets/xxx" } } }`
+
+### CLI Token
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/cli/tokens` | 列出当前访客的所有 CLI Token（含已吊销） |
+| POST | `/api/cli/tokens` | 创建新 CLI Token（自动吊销已有） |
+| DELETE | `/api/cli/tokens/:tokenId` | 吊销指定 CLI Token |
+
+**`POST /api/cli/tokens`**
+- Body: `{ name?: string }`（可选别名，默认 `"cli-token"`）
+- Response: `{ data: { tokenId: string, token: string, name: string, createdAt: string } }`
+- 原始 `token` 仅在此返回一次，前端需立即展示给用户。
+
+**认证方式**
+- CLI 端使用 `x-cli-token` header，与 Web 端 `x-visitor-token` header 并存。
+- 中间件先尝试 `x-visitor-token`，失败后尝试 `x-cli-token`。
 
 ### 域成员模板 (Domain Member Templates)
 

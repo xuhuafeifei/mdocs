@@ -106,6 +106,18 @@
 - **约束**：与域成员互斥。已是域成员的人不能被 invite。
 - **检查时机**：每次读/写前重算，不缓存。
 
+## CLI Token
+
+- **用途**：命令行工具（CLI）和 Agent（如 Claude Code）使用的身份令牌，继承访客的所有权限。
+- **与 Web Token 的关系**：Web 端使用 `x-visitor-token`（创建访客时生成），CLI 端使用 `x-cli-token`（在设置页手动创建）。两者在服务端最终解析为同一个 `visitor_id`，业务代码无需区分来源。
+- **鉴权中间件**（`src/server/identity/auth.middleware.ts`）：
+  1. 先尝试 `x-visitor-token`。
+  2. 若无效，再尝试 `x-cli-token`。
+  3. 均失败则返回 401。
+- **Token 强度**：32 字节随机字符串（`crypto.randomBytes(32).toString("base64url")`），与 Web Token 同级。
+- **存储**：服务端只存 `SHA-256(token)`，原始 token 仅在创建时展示一次。
+- **吊销**：重置操作会吊销所有已有 token 并生成新 token。
+
 ## 安全要点
 
 - Token 是高熵随机字符串，不暴露给前端逻辑（除保存在 localStorage）。

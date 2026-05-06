@@ -12,6 +12,7 @@ import { buildDomainMemberTemplatesRouter } from "./routes/domain-member-templat
 import { buildFoldersRouter } from "./routes/folders.routes.js";
 import { buildCliTokensRouter } from "./routes/cli-tokens.routes.js";
 import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
+import { startIndexTimer } from "./search/document-index-manager.js";
 import { useLogger } from "./logger/logger.js";
 
 const log = useLogger("app");
@@ -24,6 +25,8 @@ export function buildApp(): Application {
   const cfg = getConfig();
   ensureRuntimeDirs();
   getDb();
+  // 启动 FTS5 全文索引定时重建
+  startIndexTimer();
 
   const app = express();
   app.disable("x-powered-by");

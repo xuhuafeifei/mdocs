@@ -10,6 +10,7 @@ import {
   removeDocumentInvite,
   updateDocument,
 } from "../documents/document.service.js";
+import { searchDocuments } from "../search/search.service.js";
 import { requireDocumentAccess } from "../middleware/document-auth.middleware.js";
 import { StoragePathError } from "../storage/paths.js";
 import { useLogger } from "../logger/logger.js";
@@ -182,6 +183,32 @@ export function buildDocumentsRouter(): Router {
     } catch (err) {
       respondError(res, err, "documents-route.delete");
     }
+  });
+
+  /**
+   * POST /search
+   * 全文检索文档。支持关键词搜索，结果按 BM25 相关性排序，
+   * 自动过滤当前访客无权阅读的文档。
+   *
+   * 请求体字段：
+   * - query: string     必填，搜索关键词
+   * - domainId?: string  可选，限定搜索域
+   * - topN?: number     可选，返回数量，默认 10
+   */
+  router.post("/search", (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as { query?: unknown; domainId?: unknown; topN?: unknown };
+    if (typeof body.query !== "string" || !body.query.trim()) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "query is required" } });
+      return;
+    }
+    const visitorId = req.visitor?.visitor_id ?? null;
+    const results = searchDocuments({
+      query: body.query,
+      visitorId,
+      domainId: typeof body.domainId === "string" ? body.domainId : undefined,
+      topN: typeof body.topN === "number" ? body.topN : undefined,
+    });
+    res.json({ data: results });
   });
 
   /**

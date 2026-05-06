@@ -334,3 +334,27 @@ export function revokeCliTokenApi(tokenId: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+/** 搜索结果条目 */
+export interface SearchResult {
+  documentId: string;
+  displayName: string;
+  relativePath: string;
+  domainId: string;
+  snippet: string;
+  bm25Score: number;
+}
+
+/**
+ * 全文检索文档。
+ */
+export function searchDocumentsApi(input: {
+  query: string;
+  domainId?: string;
+  topN?: number;
+}): Promise<SearchResult[]> {
+  return api<SearchResult[]>("/api/documents/search", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}

@@ -32,6 +32,7 @@ src/
 | `access/` | 统一访问控制：五级权限 + invite | `src/server/access/access-control.ts` |
 | `identity/` | 访客注册、Token 签发与校验 | `src/server/identity/auth.middleware.ts`, `visitor.service.ts` |
 | `documents/` | 文档业务逻辑（CRUD、树构建） | `src/server/documents/document.service.ts`, `tree.service.ts` |
+| `search/` | FTS5 全文索引与检索 | `src/server/search/document-index-manager.ts`, `search.service.ts` |
 | `domains/` | 域管理 | `src/server/domains/personal-domain.service.ts` |
 | `storage/` | 文件系统读写（Markdown、附件） | `src/server/storage/` |
 | `middleware/` | Express 通用中间件 | `src/server/middleware/` |

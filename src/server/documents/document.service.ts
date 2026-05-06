@@ -28,6 +28,7 @@ import {
   readDocument,
   writeDocument,
 } from "../storage/file-store.js";
+import { markDirty, removeIndex } from "../search/document-index-manager.js";
 import { normaliseDocRelativePath } from "../storage/paths.js";
 import type {
   DocumentDetail,
@@ -246,6 +247,9 @@ export function updateDocument(params: {
   });
   tx();
 
+  // 标记需要重建索引
+  markDirty(row.document_id);
+
   return {
     documentId: row.document_id,
     domainId: row.domain_id,
@@ -289,6 +293,8 @@ export function removeDocument(params: {
   });
   tx();
   deleteDocumentFile(row.domain_id, row.relative_path);
+  // 从全文索引中移除
+  removeIndex(row.document_id);
 }
 
 // ============================================================

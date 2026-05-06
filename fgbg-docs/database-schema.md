@@ -53,6 +53,7 @@
 | `created_at` | TEXT | ISO 时间 |
 | `updated_at` | TEXT | ISO 时间 |
 | `permission` | INTEGER DEFAULT 1 | 0~4，见 `auth-and-access-control.md` |
+| `is_dirty` | INTEGER DEFAULT 1 | 索引脏标记（1=待重建，0=已同步），用于 FTS5 增量索引 |
 
 **索引**：
 - `idx_documents_domain` — 按域查文档
@@ -132,6 +133,44 @@
 | `update_time` | TEXT | ISO 时间 |
 
 **索引**：`idx_domain_member_templates_owner`
+
+### 10. `documents_fts` — 全文检索索引 (FTS5)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `content` | TEXT (indexed) | 文档正文，FTS5 全文索引列 |
+| `document_id` | TEXT (UNINDEXED) | 关联的文档 ID |
+| `display_name` | TEXT (UNINDEXED) | 文档展示名 |
+| `relative_path` | TEXT (UNINDEXED) | 文档相对路径 |
+| `domain_id` | TEXT (UNINDEXED) | 所属域 ID |
+| `owner_visitor_id` | TEXT (UNINDEXED) | 文档创建者 |
+| `permission` | INTEGER (UNINDEXED) | 权限档位 (0-4) |
+
+**配置**：`tokenize='unicode61'`，BM25 排名。
+
+### 11. `documents_fts_rowid` — FTS rowid 映射
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `document_id` | TEXT PK | 文档 ID |
+| `fts_rowid` | INTEGER | FTS5 虚拟表中对应的 rowid |
+
+> 用途：FTS5 删除/更新条目需要通过 rowid 定位，此表维护 document_id → rowid 映射。
+
+### 12. `cli_tokens` — CLI 身份令牌
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `token_id` | TEXT PK | UUID |
+| `visitor_id` | TEXT NOT NULL | 绑定的访客 ID |
+| `token_hash` | TEXT UNIQUE NOT NULL | `SHA-256(原始token)`，服务端只存哈希 |
+| `name` | TEXT NOT NULL | 别名（默认 `"cli-token"`） |
+| `revoked` | INTEGER DEFAULT 0 | 是否已吊销（0=活跃，1=已吊销） |
+| `created_at` | TEXT NOT NULL | ISO 时间 |
+
+**索引**：`idx_cli_tokens_visitor` — 按访客查所有 token。
+
+**逻辑**：重置时在事务中先 `revokeAllCliTokensByVisitor`，再插入新记录。同一访客同一时刻只有一个活跃 token。
 
 ## Schema 演进
 

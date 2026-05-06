@@ -34,6 +34,7 @@ const SCHEMA_STATEMENTS: string[] = [
     permission INTEGER NOT NULL DEFAULT 1,
     file_type TEXT NOT NULL DEFAULT 'md',
     parent_id TEXT,
+    is_dirty INTEGER NOT NULL DEFAULT 1,
     UNIQUE(domain_id, relative_path)
   )`,
   `CREATE INDEX IF NOT EXISTS idx_documents_domain ON documents (domain_id)`,
@@ -91,6 +92,20 @@ const SCHEMA_STATEMENTS: string[] = [
     update_time TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_domain_member_templates_owner ON domain_member_templates (create_visitor_id)`,
+  `CREATE TABLE IF NOT EXISTS documents_fts_rowid (
+    document_id TEXT PRIMARY KEY,
+    fts_rowid INTEGER NOT NULL
+  )`,
+  `CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
+    content,
+    document_id UNINDEXED,
+    display_name UNINDEXED,
+    relative_path UNINDEXED,
+    domain_id UNINDEXED,
+    owner_visitor_id UNINDEXED,
+    permission UNINDEXED,
+    tokenize='unicode61'
+  )`,
   `CREATE TABLE IF NOT EXISTS cli_tokens (
     token_id TEXT PRIMARY KEY,
     visitor_id TEXT NOT NULL,
@@ -113,6 +128,7 @@ export function applySchema(db: Database.Database): void {
     }
     migrateDomainsTable(db);
     migrateDocumentsTable(db);
+    migrateDocumentsDirty(db);
     ensureDefaultDomain(db);
   });
   tx();
@@ -193,6 +209,13 @@ function migrateDocumentsTable(db: Database.Database): void {
   // 重建索引
   db.exec(`CREATE INDEX IF NOT EXISTS idx_documents_domain ON documents (domain_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_documents_owner ON documents (owner_visitor_id)`);
+}
+
+/** 为旧版 documents 表添加 is_dirty 列（若不存在）。现有文档默认标记为 dirty（1），由索引器首次启动时全量重建。 */
+function migrateDocumentsDirty(db: Database.Database): void {
+  const names = documentColumnNames(db);
+  if (names.has("is_dirty")) return;
+  db.exec(`ALTER TABLE documents ADD COLUMN is_dirty INTEGER NOT NULL DEFAULT 1`);
 }
 
 function documentColumnNames(db: Database.Database): Set<string> {

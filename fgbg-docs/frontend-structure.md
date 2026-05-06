@@ -45,6 +45,8 @@
 | `VisitorPickerModal` | `src/web/app/VisitorPickerModal.tsx` | 访客选择弹窗（邀请/添加成员） |
 | `VisitorRegisterDialog` | `src/web/app/VisitorRegisterDialog.tsx` | 首次访问的昵称输入弹窗 |
 | `ConflictNotice` | `src/web/app/ConflictNotice.tsx` | 保存冲突提示 |
+| `ConfirmDialog` | `src/web/app/ConfirmDialog.tsx` | 通用确认弹窗（标题、消息、取消/确认按钮、busy 状态） |
+| `MessageDialog` | `src/web/app/MessageDialog.tsx` | 通用消息弹窗（标题、消息、「知道了」按钮） |
 
 ## 状态管理
 
