@@ -1,3 +1,9 @@
+/**
+ * 访客选择器内容组件
+ * 被 VisitorPickerModal 和 MemberTemplatesPanel 共享。
+ * 提供搜索栏 + 左右双栏表格（全部访客 / 已选成员），不包含外层容器。
+ * 当前登录访客在左栏置顶并标记「(你)」。
+ */
 import { useMemo } from "react";
 import { useI18n } from "../i18n";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
@@ -47,8 +53,13 @@ export function VisitorPickerContent(props: VisitorPickerContentProps) {
   } = props;
   const { t } = useI18n();
 
+  /**
+   * 左侧访客列表：按搜索词过滤，并把当前登录访客置顶。
+   */
   const filteredLeft = useMemo(() => {
+    // 去除首尾空格并转为小写，用于不区分大小写的搜索
     const q = searchFilter.trim().toLowerCase();
+    // 如果没有搜索词，显示全部访客；否则按昵称或 ID 过滤
     let result = !q
       ? visitors
       : visitors.filter(
@@ -57,6 +68,7 @@ export function VisitorPickerContent(props: VisitorPickerContentProps) {
     /* 自己置顶 */
     if (myVisitorId) {
       result = [...result].sort((a, b) => {
+        // 当前登录访客排最前面
         if (a.visitorId === myVisitorId) return -1;
         if (b.visitorId === myVisitorId) return 1;
         return 0;
@@ -67,18 +79,23 @@ export function VisitorPickerContent(props: VisitorPickerContentProps) {
 
   return (
     <>
+      {/* 搜索输入框 */}
       <input
         type="search"
         className="mdocs-visitor-picker-search"
         placeholder={t("visitorPickerSearchPlaceholder")}
         value={searchFilter}
         onChange={(e) => onSearchChange(e.target.value)}
+        // 访客目录未加载完成时禁用搜索
         disabled={loadState !== "ok"}
       />
 
+      {/* 加载中提示 */}
       {loadState === "loading" && <div className="mdocs-visitor-picker-loading">{t("loading")}</div>}
+      {/* 加载失败提示 */}
       {loadState === "err" && <div className="mdocs-visitor-picker-error">{t("visitorPickerLoadError")}</div>}
 
+      {/* 加载完成后渲染双栏表格 */}
       {loadState === "ok" && (
         <div className="mdocs-visitor-picker-columns">
           {/* 左侧：全部访客，表格式勾选 */}
@@ -94,21 +111,26 @@ export function VisitorPickerContent(props: VisitorPickerContentProps) {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* 没有匹配的访客时显示空状态 */}
                   {filteredLeft.length === 0 ? (
                     <tr>
                       <td colSpan={3} className="mdocs-visitor-picker-empty-cell">
+                        {/* 根据 visitors 是否为空判断是「无访客」还是「无匹配」 */}
                         {visitors.length === 0 ? t("visitorPickerEmptyDirectory") : t("domainNoMatch")}
                       </td>
                     </tr>
                   ) : (
                     filteredLeft.map((v) => {
+                      // 判断是否被锁定（不可取消勾选）
                       const isLocked = lockedIds.has(v.visitorId);
+                      // 判断是否已选中
                       const checked = selectedIds.has(v.visitorId);
                       return (
                         <tr key={v.visitorId}>
                           <td><code className="mdocs-visitor-picker-id-short">{idPrefix6(v.visitorId)}</code></td>
                           <td>
                             {v.visitorName}
+                            {/* 当前登录访客标记「(你)」 */}
                             {v.visitorId === myVisitorId && (
                               <span className="mdocs-visitor-picker-self-marker">{t("visitorPickerSelfMarker")}</span>
                             )}
@@ -152,15 +174,19 @@ export function VisitorPickerContent(props: VisitorPickerContentProps) {
                     </tr>
                   ) : (
                     selectedRows.map((row) => {
+                      // 判断是否被锁定（不可移除）
                       const isLocked = lockedIds.has(row.visitorId);
                       return (
                         <tr key={row.visitorId}>
                           <td><code className="mdocs-visitor-picker-id-full">{row.visitorId}</code></td>
+                          {/* muted 状态（已停用/已删除）使用灰色斜体 */}
                           <td className={row.muted ? "mdocs-visitor-picker-name-muted" : undefined}>{row.name}</td>
                           <td className="mdocs-visitor-picker-check-col">
                             {isLocked ? (
+                              // 锁定成员显示「—」不可移除
                               <span className="mdocs-visitor-picker-locked" title={t("visitorPickerLockedHint")}>—</span>
                             ) : (
+                              // 非锁定成员显示移除按钮
                               <button
                                 type="button"
                                 className="mdocs-visitor-picker-remove"

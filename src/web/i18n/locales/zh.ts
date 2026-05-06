@@ -1,3 +1,7 @@
+/**
+ * 中文翻译字典
+ * 所有 UI 文本的中文版本，键必须与 TranslationKey 完全一致。
+ */
 import type { TranslationKey } from "../types";
 
 export const zh: Record<TranslationKey, string> = {

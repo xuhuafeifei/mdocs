@@ -1,3 +1,7 @@
+/**
+ * 翻译键类型定义
+ * 所有 UI 中使用的文本键必须在此定义，以保证 en.ts 和 zh.ts 的完整性检查。
+ */
 export type TranslationKey =
   // Common
   | "loading"

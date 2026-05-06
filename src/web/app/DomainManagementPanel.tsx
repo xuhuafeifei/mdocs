@@ -1,3 +1,9 @@
+/**
+ * 域管理面板
+ * 设置页面中的「域管理」Tab 内容。
+ * 支持：创建新域、搜索/过滤域列表、重命名、修改权限、删除域。
+ * 受限域支持通过弹窗管理成员（访客选择器）。
+ */
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "../i18n";
 import { useDomainManagement } from "./hooks/useDomainManagement";
@@ -19,9 +25,17 @@ import { VisitorPickerModal } from "./VisitorPickerModal";
 
 export function DomainManagementPanel() {
   const { t } = useI18n();
+
+  // ---- 使用 DomainManagement Hook 管理域列表和相关操作 ----
   const dm = useDomainManagement();
+
+  // ---- 成员模板列表（用于成员管理弹窗中的模板套用） ----
   const [templates, setTemplates] = useState<DomainMemberTemplate[]>([]);
+
+  // ---- 导入成员后的提示横幅（成功/失败） ----
   const [importBanner, setImportBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  // ---- 成员管理弹窗状态 ----
   const [memberModal, setMemberModal] = useState<{
     domainId: string;
     creatorVisitorId: string;
@@ -29,6 +43,9 @@ export function DomainManagementPanel() {
     memberRows: DomainMemberListEntry[];
   } | null>(null);
 
+  /**
+   * 加载成员模板列表（容错：失败时清空）。
+   */
   const loadTemplates = useCallback(async () => {
     try {
       const rows = await fetchDomainMemberTemplatesApi();
@@ -38,17 +55,26 @@ export function DomainManagementPanel() {
     }
   }, []);
 
+  /**
+   * 挂载后自动加载成员模板列表。
+   */
   useEffect(() => {
     void loadTemplates();
   }, [loadTemplates]);
 
+  /**
+   * 打开成员管理弹窗：加载该域的现有成员列表作为初始已选项。
+   */
   async function openMemberModal(d: DomainSummary): Promise<void> {
+    // 清空之前的导入提示
     setImportBanner(null);
     try {
+      // 从后端获取该域的当前成员列表
       const members = await fetchDomainMembersApi(d.domainId);
       setMemberModal({
         domainId: d.domainId,
         creatorVisitorId: d.creatorVisitorId,
+        // 提取成员 ID 作为初始已选项
         initialIds: members.map((m) => m.visitorId),
         memberRows: members,
       });
@@ -59,14 +85,18 @@ export function DomainManagementPanel() {
 
   return (
     <div className="mdocs-settings">
+      {/* 头部标题 */}
       <div className="mdocs-settings-header">
         <h2 className="mdocs-settings-title">{t("domainManagement")}</h2>
       </div>
+      {/* 受限域成员管理提示 */}
       <p className="mdocs-domain-mgmt-restricted-hint">{t("domainMgmtRestrictedMemberHint")}</p>
       <div className="mdocs-settings-cards">
+        {/* 创建新域表单 */}
         <div className="mdocs-settings-card mdocs-domain-mgmt-create">
           <div className="mdocs-settings-card-title">{t("createDomain")}</div>
           <form onSubmit={dm.handleCreateDomain} className="mdocs-domain-mgmt-create-form">
+            {/* 域名称输入 */}
             <label className="mdocs-domain-mgmt-field">
               <span className="mdocs-domain-mgmt-label">{t("domainName")}</span>
               <input
@@ -78,6 +108,7 @@ export function DomainManagementPanel() {
                 className="mdocs-domain-name-input"
               />
             </label>
+            {/* 域权限选择 */}
             <fieldset className="mdocs-domain-mgmt-fieldset">
               <legend className="mdocs-domain-mgmt-label">{t("domainPermission")}</legend>
               <div className="mdocs-domain-mgmt-type-radios">
@@ -95,12 +126,14 @@ export function DomainManagementPanel() {
                 ))}
               </div>
             </fieldset>
+            {/* 提交按钮 */}
             <button type="submit" className="primary mdocs-domain-mgmt-submit" disabled={dm.creating}>
               {dm.creating ? t("creating") : t("create")}
             </button>
           </form>
         </div>
 
+        {/* 导入成员结果提示 */}
         {importBanner && (
           <div
             className="mdocs-settings-card"
@@ -112,6 +145,7 @@ export function DomainManagementPanel() {
           </div>
         )}
 
+        {/* 域操作错误提示 */}
         {dm.domainError && (
           <div className="mdocs-settings-card mdocs-domain-error">
             <span className="mdocs-settings-item-desc" style={{ color: "var(--mdocs-danger)" }}>
@@ -120,6 +154,7 @@ export function DomainManagementPanel() {
           </div>
         )}
 
+        {/* 搜索和过滤工具栏 */}
         <div className="mdocs-settings-card mdocs-domain-mgmt-toolbar">
           <input
             type="search"
@@ -130,6 +165,7 @@ export function DomainManagementPanel() {
             aria-label={t("domainSearchPlaceholder")}
           />
           <div className="mdocs-domain-mgmt-filters" role="group" aria-label={t("domainPermission")}>
+            {/* 全部 + 三种权限类型的过滤按钮 */}
             {(["all", ...DOMAIN_PERMISSIONS] as const).map((f) => (
               <button
                 key={f}
@@ -144,6 +180,7 @@ export function DomainManagementPanel() {
           </div>
         </div>
 
+        {/* 域列表表格 */}
         {dm.loadingDomains ? (
           <div className="mdocs-settings-card">
             <span className="mdocs-settings-item-desc">{t("loading")}</span>
@@ -171,14 +208,20 @@ export function DomainManagementPanel() {
               </thead>
               <tbody>
                 {dm.filteredDomains.map((d) => {
+                  // 判断当前访客是否是该域的创建者
                   const isOwner = isDomainCreator(d, dm.visitorId);
+                  // 判断是否是系统内置域（如 Default、个人域）
                   const isBuiltIn = isBuiltInDomainId(d.domainId);
+                  // 判断域是否被锁定（有文档时不可修改类型或删除）
                   const locked = isDomainStructurallyLocked(d);
+                  // 锁定时的提示文字
                   const typeTitle = locked ? t("domainTooltipTypeLocked", { count: String(d.docCount) }) : undefined;
                   return (
                     <tr key={d.domainId} className={isBuiltIn ? "mdocs-domain-table-row-builtin" : undefined}>
+                      {/* 域名列 */}
                       <td>
                         {dm.renamingId === d.domainId ? (
+                          // 重命名状态：显示输入框和保存/取消按钮
                           <div className="mdocs-domain-table-rename">
                             <input
                               value={dm.renameDraft}
@@ -197,18 +240,22 @@ export function DomainManagementPanel() {
                         ) : (
                           <div className="mdocs-domain-table-name-cell">
                             <span className="mdocs-domain-table-name">{dm.localizeDomain(d)}</span>
+                            {/* 内置域标记 */}
                             {isBuiltIn && <span className="mdocs-domain-badge-builtin">{t("domainBuiltIn")}</span>}
+                            {/* 共享域标记（非内置且非创建者） */}
                             {!isOwner && !isBuiltIn && (
                               <span className="mdocs-domain-badge-shared">{t("shared")}</span>
                             )}
                           </div>
                         )}
                       </td>
+                      {/* 权限类型列 */}
                       <td>
                         <span className="mdocs-domain-table-type" title={typeTitle}>
                           <span className="mdocs-domain-permission-badge" data-permission={d.permission}>
                             {dm.domainTypeLabel(d, isBuiltIn)}
                           </span>
+                          {/* 锁定图标 */}
                           {locked && !isBuiltIn && (
                             <span className="mdocs-domain-type-lock" aria-hidden="true">
                               &#128274;
@@ -216,14 +263,19 @@ export function DomainManagementPanel() {
                           )}
                         </span>
                       </td>
+                      {/* 文档数量列 */}
                       <td className="mdocs-domain-table-num">{d.docCount}</td>
+                      {/* 操作列 */}
                       <td className="mdocs-domain-table-actions">
+                        {/* 内置域不可修改 */}
                         {isBuiltIn && (
                           <span className="mdocs-domain-not-modifiable">{t("domainNotModifiable")}</span>
                         )}
+                        {/* 非内置域且非创建者时提示无权修改 */}
                         {!isBuiltIn && !isOwner && (
                           <span className="mdocs-domain-not-creator-inline">{t("domainNotCreator")}</span>
                         )}
+                        {/* 修改权限面板 */}
                         {!isBuiltIn && isOwner && dm.changeTypeForId === d.domainId && (
                           <div className="mdocs-domain-change-type-panel">
                             <div className="mdocs-domain-permission-select">
@@ -243,6 +295,7 @@ export function DomainManagementPanel() {
                             </button>
                           </div>
                         )}
+                        {/* 操作按钮组：重命名、改类型、删除、管理成员 */}
                         {!isBuiltIn &&
                           isOwner &&
                           dm.renamingId !== d.domainId &&
@@ -281,6 +334,7 @@ export function DomainManagementPanel() {
                               >
                                 {t("deleteDomain")}
                               </button>
+                              {/* 受限域显示成员管理按钮 */}
                               {d.permission === "restricted" && !isBuiltIn && (
                                 <button type="button" className="secondary" onClick={() => void openMemberModal(d)}>
                                   {t("domainMembersManageButton")}
@@ -298,16 +352,19 @@ export function DomainManagementPanel() {
         )}
       </div>
 
+      {/* 成员管理弹窗 */}
       <VisitorPickerModal
         open={memberModal !== null}
         title={t("domainMembersPickerTitle")}
         initialSelectedIds={memberModal?.initialIds ?? []}
-        lockedIds={memberModal ? [memberModal.creatorVisitorId] : []} /* 域创建者不可取消勾选 */
+        // 域创建者不可取消勾选
+        lockedIds={memberModal ? [memberModal.creatorVisitorId] : []}
         seedMembers={memberModal?.memberRows}
         templates={templates}
         onClose={() => setMemberModal(null)}
         onConfirm={async (visitorIds) => {
           if (!memberModal) return;
+          // 调用 API 更新域成员列表
           await putDomainMembersApi(memberModal.domainId, visitorIds);
           setImportBanner({
             kind: "ok",
