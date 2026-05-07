@@ -12,19 +12,29 @@ import { applySchema } from "../db/schema.js";
 
 const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
 
+const fileStoreMocks = vi.hoisted(() => ({
+  lastWriteContent: "",
+  reset() {
+    fileStoreMocks.lastWriteContent = "";
+  },
+}));
+
 vi.mock("../db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
-// mock file-store：不写磁盘
+// mock file-store：不写磁盘（记录最近一次写入正文，供 contentFormat 断言）
 vi.mock("../storage/file-store.js", () => ({
-  writeDocument: () => ({ contentHash: "mock-hash", bytes: 0 }),
+  writeDocument: (_domainId: string, _relativePath: string, content: string) => {
+    fileStoreMocks.lastWriteContent = content;
+    return { contentHash: "mock-hash", bytes: 0 };
+  },
   readDocument: () => ({ content: "", contentHash: "mock-hash" }),
   deleteDocumentFile: () => {},
 }));
 
 import { DocumentError, Permission } from "../access/access-control.js";
-import { createDocument, addDocumentInvite } from "./document.service.js";
+import { createDocument, addDocumentInvite, updateDocument } from "./document.service.js";
 import { findDocumentById } from "../db/repositories/document.repo.js";
 import { findDomainById } from "../db/repositories/domain.repo.js";
 
@@ -83,6 +93,7 @@ afterEach(() => {
   db.exec("DELETE FROM documents");
   db.exec("DELETE FROM document_invites");
   db.exec("DELETE FROM audit_logs");
+  fileStoreMocks.reset();
 });
 
 // ============================================================
@@ -302,5 +313,59 @@ describe("addDocumentInvite 域成员互斥", () => {
     expect(() =>
       addDocumentInvite(OWNER, doc.documentId, OUTSIDER, "read"),
     ).not.toThrow();
+  });
+});
+
+// ============================================================
+//  contentFormat：markdown → Lexical JSON
+// ============================================================
+
+describe("createDocument / updateDocument contentFormat", () => {
+  it("createDocument：contentFormat=markdown 时写入 Lexical JSON", () => {
+    createDocument({
+      actorVisitorId: OWNER,
+      fileName: "md-format.md",
+      content: "## Title",
+      domainId: "public-domain",
+      contentFormat: "markdown",
+    });
+    const parsed = JSON.parse(fileStoreMocks.lastWriteContent) as {
+      root: { children: { type: string; tag?: string }[] };
+    };
+    expect(parsed.root.children[0]?.type).toBe("heading");
+    expect(parsed.root.children[0]?.tag).toBe("h2");
+  });
+
+  it("createDocument：省略 contentFormat 时正文原样写入", () => {
+    const lexical =
+      '{"root":{"type":"root","direction":"ltr","format":"","indent":0,"version":1,"children":[]}}';
+    createDocument({
+      actorVisitorId: OWNER,
+      fileName: "raw-lexical.md",
+      content: lexical,
+      domainId: "public-domain",
+    });
+    expect(fileStoreMocks.lastWriteContent).toBe(lexical);
+  });
+
+  it("updateDocument：contentFormat=markdown 时写入转换结果", () => {
+    const created = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "update-md.md",
+      content: "{}",
+      domainId: "public-domain",
+    });
+    fileStoreMocks.reset();
+    updateDocument({
+      actorVisitorId: OWNER,
+      documentId: created.documentId,
+      content: "# Updated",
+      contentFormat: "markdown",
+    });
+    const parsed = JSON.parse(fileStoreMocks.lastWriteContent) as {
+      root: { children: { type: string; tag?: string }[] };
+    };
+    expect(parsed.root.children[0]?.type).toBe("heading");
+    expect(parsed.root.children[0]?.tag).toBe("h1");
   });
 });

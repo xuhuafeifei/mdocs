@@ -12,8 +12,14 @@ import {
   updateDocumentContent,
   type DocumentRow,
 } from "../db/repositories/document.repo.js";
-import { findDomainById, isDomainMember } from "../db/repositories/domain.repo.js";
-import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access.js";
+import {
+  findDomainById,
+  isDomainMember,
+} from "../db/repositories/domain.repo.js";
+import {
+  resolveDomainAccess,
+  canEnterDomainTree,
+} from "../access/domain-access.js";
 import {
   DocumentError,
   Permission,
@@ -28,20 +34,26 @@ import {
   readDocument,
   writeDocument,
 } from "../storage/file-store.js";
-import { markDirty, removeIndex, rebuildDocument } from "../search/document-index-manager.js";
-import { normaliseDocRelativePath } from "../storage/paths.js";
+import {
+  markDirty,
+  removeIndex,
+  rebuildDocument,
+} from "../search/document-index-manager.js";
 import type {
   DocumentDetail,
   DocumentSummary,
 } from "../../shared/types/document.js";
-import { DocPathError } from "../../shared/docPath.js";
 import { getConfig } from "../config/index.js";
+import { markdownToLexicalJson } from "./markdown-to-lexical.js";
 
 // ============================================================
 //  列文档（域内可见列表）
 // ============================================================
 
-export function listDocuments(domainId?: string, visitorId?: string | null): DocumentSummary[] {
+export function listDocuments(
+  domainId?: string,
+  visitorId?: string | null,
+): DocumentSummary[] {
   const cfg = getConfig();
   const effective = domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
@@ -52,12 +64,19 @@ export function listDocuments(domainId?: string, visitorId?: string | null): Doc
 
   const domainPermission = domain?.permission ?? "public";
   const isMember = !!(
-    visitorId && domain && isDomainMember(db, domain.domain_id, visitorId)
+    visitorId &&
+    domain &&
+    isDomainMember(db, domain.domain_id, visitorId)
   );
-  const domainInfo: DomainAccessInfo = { domainPermission, isDomainMember: isMember };
+  const domainInfo: DomainAccessInfo = {
+    domainPermission,
+    isDomainMember: isMember,
+  };
 
   const rows = listDocumentsByDomain(db, effective);
-  const filtered = rows.filter((r) => canReadDocument(r, visitorId ?? null, domainInfo));
+  const filtered = rows.filter((r) =>
+    canReadDocument(r, visitorId ?? null, domainInfo),
+  );
   return filtered.map(rowToSummary);
 }
 
@@ -72,19 +91,19 @@ function normalizeFileName(fileName: string): string {
   let normalized = fileName.trim();
 
   // 移除路径字符，只保留文件名
-  normalized = normalized.split(/[\\/]/).pop() || 'untitled';
+  normalized = normalized.split(/[\\/]/).pop() || "untitled";
 
   // 替换非法字符
-  normalized = normalized.replace(/[^\w\u4e00-\u9fa5\-_.]/g, '_');
+  normalized = normalized.replace(/[^\w\u4e00-\u9fa5\-_.]/g, "_");
 
   // 确保以 .md 结尾
-  if (!normalized.toLowerCase().endsWith('.md')) {
-    normalized += '.md';
+  if (!normalized.toLowerCase().endsWith(".md")) {
+    normalized += ".md";
   }
 
   // 避免空文件名
-  if (normalized === '.md') {
-    normalized = 'untitled.md';
+  if (normalized === ".md") {
+    normalized = "untitled.md";
   }
 
   return normalized;
@@ -99,7 +118,14 @@ export function createDocument(params: {
   permission?: number;
   fileType?: string;
   parentId?: string | null;
+  /** 内容格式，默认 'lexical'；传 'markdown' 时自动转换为 Lexical JSON */
+  contentFormat?: "markdown" | "lexical";
 }): DocumentDetail {
+  // 如果 markdown 格式，先转为 Lexical JSON
+  const content =
+    params.contentFormat === "markdown"
+      ? markdownToLexicalJson(params.content)
+      : params.content;
   const cfg = getConfig();
   const domainId = params.domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
@@ -108,7 +134,12 @@ export function createDocument(params: {
   if (!domainRow) {
     throw new DocumentError("DOMAIN_NOT_FOUND", "域不存在", 404);
   }
-  const access = resolveDomainAccess(db, domainRow, domainId, params.actorVisitorId);
+  const access = resolveDomainAccess(
+    db,
+    domainRow,
+    domainId,
+    params.actorVisitorId,
+  );
   if (access.kind !== "full") {
     throw new DocumentError("FORBIDDEN", "无权在该域创建文档", 403);
   }
@@ -123,13 +154,17 @@ export function createDocument(params: {
   } else {
     // 有 parentId，找到父节点路径并拼接
     const parentDoc = findDocumentById(db, params.parentId);
-    if (!parentDoc || parentDoc.file_type !== 'dir') {
-      throw new DocumentError("INVALID_PARENT", "无效的父节点或父节点不是文件夹", 400);
+    if (!parentDoc || parentDoc.file_type !== "dir") {
+      throw new DocumentError(
+        "INVALID_PARENT",
+        "无效的父节点或父节点不是文件夹",
+        400,
+      );
     }
     // 确保父节点路径以 / 结尾
-    const parentPath = parentDoc.relative_path.endsWith('/')
+    const parentPath = parentDoc.relative_path.endsWith("/")
       ? parentDoc.relative_path
-      : parentDoc.relative_path + '/';
+      : parentDoc.relative_path + "/";
     relativePath = parentPath + normalizedFileName;
   }
 
@@ -164,7 +199,7 @@ export function createDocument(params: {
   }
 
   // 磁盘路径现在自动带上 {domain_id}/ 前缀
-  const write = writeDocument(domainId, relativePath, params.content);
+  const write = writeDocument(domainId, relativePath, content);
 
   const tx = db.transaction(() => {
     insertDocument(db, {
@@ -179,7 +214,7 @@ export function createDocument(params: {
       createdAt: now,
       updatedAt: now,
       permission,
-      fileType: params.fileType ?? 'md',
+      fileType: params.fileType ?? "md",
       parentId: params.parentId ?? null,
     });
     insertAuditLog(db, {
@@ -212,7 +247,7 @@ export function createDocument(params: {
     updatedBy: params.actorVisitorId,
     updatedAt: now,
     createdAt: now,
-    content: params.content,
+    content,
     contentHash: write.contentHash,
     permission,
   };
@@ -225,7 +260,10 @@ export function createDocument(params: {
 export function getDocument(documentId: string): DocumentDetail {
   const row = findDocumentById(getDb(), documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
-  const { content, contentHash } = readDocument(row.domain_id, row.relative_path);
+  const { content, contentHash } = readDocument(
+    row.domain_id,
+    row.relative_path,
+  );
   return {
     ...rowToSummary(row),
     content,
@@ -244,20 +282,35 @@ export function updateDocument(params: {
   content: string;
   displayName?: string;
   permission?: number;
+  /** 内容格式，默认 'lexical'；传 'markdown' 时自动转换为 Lexical JSON */
+  contentFormat?: "markdown" | "lexical";
 }): DocumentDetail {
+  // 如果 markdown 格式，先转为 Lexical JSON
+  const content =
+    params.contentFormat === "markdown"
+      ? markdownToLexicalJson(params.content)
+      : params.content;
   const db = getDb();
   const row = findDocumentById(db, params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
   const domain = findDomainById(db, row.domain_id);
   const domainPermission = domain?.permission ?? "public";
-  const isMember = !!(domain && isDomainMember(db, domain.domain_id, params.actorVisitorId));
-  const domainInfo: DomainAccessInfo = { domainPermission, isDomainMember: isMember };
+  const isMember = !!(
+    domain && isDomainMember(db, domain.domain_id, params.actorVisitorId)
+  );
+  const domainInfo: DomainAccessInfo = {
+    domainPermission,
+    isDomainMember: isMember,
+  };
   if (!canEditDocument(row, params.actorVisitorId, domainInfo)) {
     throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
   }
 
-  if (params.permission !== undefined && !validateDomainPermission(domainPermission, params.permission)) {
+  if (
+    params.permission !== undefined &&
+    !validateDomainPermission(domainPermission, params.permission)
+  ) {
     throw new DocumentError(
       "INVALID_PERMISSION",
       `域类型"${domainPermission}"不允许权限值 ${params.permission}`,
@@ -266,7 +319,7 @@ export function updateDocument(params: {
   }
 
   const displayName = params.displayName?.trim() || row.display_name;
-  const write = writeDocument(row.domain_id, row.relative_path, params.content);
+  const write = writeDocument(row.domain_id, row.relative_path, content);
   const now = new Date().toISOString();
 
   const tx = db.transaction(() => {
@@ -308,9 +361,10 @@ export function updateDocument(params: {
     updatedBy: params.actorVisitorId,
     updatedAt: now,
     createdAt: row.created_at,
-    content: params.content,
+    content,
     contentHash: write.contentHash,
-    permission: params.permission !== undefined ? params.permission : row.permission,
+    permission:
+      params.permission !== undefined ? params.permission : row.permission,
   };
 }
 
@@ -390,10 +444,15 @@ export function removeDocumentInvite(
   deleteDocumentInvite(db, documentId, targetVisitorId);
 }
 
-export function getDocumentInvites(documentId: string): { visitorId: string; permission: string }[] {
+export function getDocumentInvites(
+  documentId: string,
+): { visitorId: string; permission: string }[] {
   const db = getDb();
   const rows = listDocumentInvites(db, documentId);
-  return rows.map((r) => ({ visitorId: r.visitor_id, permission: r.permission }));
+  return rows.map((r) => ({
+    visitorId: r.visitor_id,
+    permission: r.permission,
+  }));
 }
 
 // ============================================================
@@ -414,7 +473,10 @@ function rowToSummary(row: DocumentRow): DocumentSummary {
   };
 }
 
-function deriveDisplayName(raw: string | undefined, relativePath: string): string {
+function deriveDisplayName(
+  raw: string | undefined,
+  relativePath: string,
+): string {
   const t = raw?.trim();
   if (t) return t.slice(0, 200);
   const base = relativePath.split("/").pop() ?? relativePath;

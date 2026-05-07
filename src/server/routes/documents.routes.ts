@@ -80,6 +80,7 @@ export function buildDocumentsRouter(): Router {
       domainId?: unknown;
       permission?: unknown;
       parentId?: unknown;
+      contentFormat?: unknown;
     };
     // 校验必填字段：文件名和内容必须是字符串
     if (typeof body.fileName !== "string" || typeof body.content !== "string") {
@@ -96,6 +97,7 @@ export function buildDocumentsRouter(): Router {
         domainId: typeof body.domainId === "string" ? body.domainId : undefined,
         permission: typeof body.permission === "number" ? body.permission : undefined,
         parentId: typeof body.parentId === "string" ? body.parentId : undefined,
+        contentFormat: body.contentFormat === 'markdown' ? 'markdown' : undefined,
       });
       // 201 Created 返回新建文档的完整详情
       res.status(201).json({ data: doc });
@@ -140,7 +142,7 @@ export function buildDocumentsRouter(): Router {
       res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
       return;
     }
-    const body = (req.body ?? {}) as { content?: unknown; displayName?: unknown; permission?: unknown };
+    const body = (req.body ?? {}) as { content?: unknown; displayName?: unknown; permission?: unknown; contentFormat?: unknown };
     // 更新时 content 是必填项（即使是空字符串也要显式传）
     if (typeof body.content !== "string") {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "content is required" } });
@@ -154,6 +156,7 @@ export function buildDocumentsRouter(): Router {
         content: body.content,
         displayName: typeof body.displayName === "string" ? body.displayName : undefined,
         permission: typeof body.permission === "number" ? body.permission : undefined,
+        contentFormat: body.contentFormat === 'markdown' ? 'markdown' : undefined,
       });
       res.json({ data: doc });
     } catch (err) {
