@@ -53,17 +53,12 @@ function elementNode(
   return { ...BASE, ...extra, children, type };
 }
 
-function rootNode(children: LexicalNode[]): LexicalNode {
-  // return elementNode("root", children);
-  return {
-    root: {
-      children: children,
-      direction: "ltr",
-      format: "",
-      indent: 0,
-      type: "root",
-    },
-  };
+/**
+ * Lexical 根节点的序列化片段（`type: "root"`）。
+ * SerializedEditorState 必须是 `{ root: 本对象 }`；仅在外层入口处包一层 `{ root }`。
+ */
+function lexicalSerializedRoot(children: LexicalNode[]): LexicalNode {
+  return { ...BASE, type: "root", children };
 }
 
 function paragraphNode(children: LexicalNode[]): LexicalNode {
@@ -112,8 +107,24 @@ function horizontalRuleNode(): LexicalNode {
   return { ...BASE, type: "horizontalrule" };
 }
 
-function tableNode(children: LexicalNode[]): LexicalNode {
-  return elementNode("table", children, { colWidths: [] });
+function tableNode(children: LexicalNode[], colWidths: number[]): LexicalNode {
+  return elementNode("table", children, { colWidths });
+}
+
+/** 从 mdast table 推断列数，列宽一律 floor(825 / 列数) */
+function columnWidthsFromMdastTable(table: Record<string, unknown>): number[] {
+  const rows = table.children as unknown[] | undefined;
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  let colCount = 0;
+  for (const row of rows) {
+    const r = row as Record<string, unknown>;
+    if (r.type !== "tableRow" || !Array.isArray(r.children)) continue;
+    colCount = r.children.length;
+    break;
+  }
+  if (colCount <= 0) return [];
+  const w = Math.floor(825 / colCount);
+  return Array.from({ length: colCount }, () => w);
 }
 
 function tableRowNode(children: LexicalNode[]): LexicalNode {
@@ -251,8 +262,9 @@ function convert(
       return horizontalRuleNode();
 
     case "table": {
+      const colWidths = columnWidthsFromMdastTable(child);
       const rows = children ? convertBlockChildren(children) : [];
-      return tableNode(rows);
+      return tableNode(rows, colWidths);
     }
 
     case "tableRow":
@@ -292,8 +304,10 @@ function convertBlockChildren(nodes: unknown[]): LexicalNode[] {
 /**
  * 将 markdown 字符串转换为 Lexical SerializedEditorState JSON 字符串。
  *
+ * 解析后应为 `{ root: { type: "root", children: [...], ... } }`。若调试时只打印解构出的 `.root`，
+ * 会看到 `{ type: "root", ... }`（内层节点），并非丢了一层 `root`。
+ *
  * @param markdown - 原始 markdown 文本
- * @returns 可直接存入磁盘 / 传回前端的 Lexical JSON 字符串
  */
 export function markdownToLexicalJson(markdown: string): string {
   const ast = remark().use(remarkGfm).use(remarkMath).parse(markdown);
@@ -301,7 +315,5 @@ export function markdownToLexicalJson(markdown: string): string {
   const children = convertBlockChildren(
     (ast as unknown as Record<string, unknown>).children as unknown[],
   );
-  /** rootNode 已产出 `{ root: SerializedRootNode }`，勿再包一层 `{ root }` */
-  const json = rootNode(children);
-  return JSON.stringify(json);
+  return JSON.stringify({ root: lexicalSerializedRoot(children) });
 }
