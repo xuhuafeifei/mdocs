@@ -78,8 +78,11 @@ async function initDomainsAndTree(
   const doms = await fetchDomainsSafe();
   // 更新 React 状态，让侧边栏显示域列表
   setDomains(doms);
-  // 按优先级挑选默认域：个人域 > 系统默认域 > 第一个域
-  const initial = pickInitialDomainId(doms, visitorId);
+  // 优先从 localStorage 恢复上次保存的域 ID，检查是否仍在当前域列表中
+  const saved = localStorage.getItem("mdocs.currentDomainId");
+  const savedStillValid = saved && doms.some((d) => d.domainId === saved);
+  // 取有效值：上次保存的域 > 个人域 > 系统默认域 > 第一个域
+  const initial = savedStillValid ? saved : pickInitialDomainId(doms, visitorId);
   // 设置当前激活的域 ID
   setCurrentDomainId(initial);
   // 加载该域的文档树数据
@@ -533,6 +536,7 @@ export function App() {
                 // 切换域：清空当前文档，加载新域的树
                 onDomainChange={(domainId) => {
                   guardNavigate(() => {
+                    localStorage.setItem("mdocs.currentDomainId", domainId);
                     setCurrentDomainId(domainId);
                     setActiveDoc(null);
                     setSelectedCreateParentPath("");
@@ -564,6 +568,7 @@ export function App() {
                     value={currentDomainId}
                     onChange={(domainId) => {
                       guardNavigate(() => {
+                        localStorage.setItem("mdocs.currentDomainId", domainId);
                         setCurrentDomainId(domainId);
                         setActiveDoc(null);
                         setSelectedCreateParentPath("");
