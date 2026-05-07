@@ -110,13 +110,74 @@
 
 - **用途**：命令行工具（CLI）和 Agent（如 Claude Code）使用的身份令牌，继承访客的所有权限。
 - **与 Web Token 的关系**：Web 端使用 `x-visitor-token`（创建访客时生成），CLI 端使用 `x-cli-token`（在设置页手动创建）。两者在服务端最终解析为同一个 `visitor_id`，业务代码无需区分来源。
+- **两种 Token 的查表路径不同**：
+  - **Web Token**：`SHA-256(token)` → 直接查 `visitors.visitor_token_hash` → 得到访客。
+  - **CLI Token**：`SHA-256(token)` → 查 `cli_tokens.token_hash` → 得到 `visitor_id` → 再查 `visitors` 表 → 得到访客。
+  - 原因：一个访客可能有多个历史 CLI Token（带 `revoked` 状态），需要独立管理，不能塞进 `visitors` 表的单字段。
 - **鉴权中间件**（`src/server/identity/auth.middleware.ts`）：
-  1. 先尝试 `x-visitor-token`。
-  2. 若无效，再尝试 `x-cli-token`。
+  1. 先尝试 `x-visitor-token`（查 `visitors` 表）。
+  2. 若无效或未提供，再尝试 `x-cli-token`（查 `cli_tokens` 表 → 再查 `visitors` 表）。
   3. 均失败则返回 401。
 - **Token 强度**：32 字节随机字符串（`crypto.randomBytes(32).toString("base64url")`），与 Web Token 同级。
 - **存储**：服务端只存 `SHA-256(token)`，原始 token 仅在创建时展示一次。
 - **吊销**：重置操作会吊销所有已有 token 并生成新 token。
+- **请求时无需额外携带 `visitor_id`**：Token 本身已绑定 `visitor_id`，服务端解析后挂载到 `req.visitor`，后续业务代码直接读取即可。
+
+## 全文检索权限控制
+
+### 搜索过程的权限验证
+
+搜索功能的权限控制在以下阶段进行：
+
+1. **文档索引阶段**：
+   - 索引管理器会自动跳过无权限访问的文档
+   - 只有具有阅读权限的文档内容才会被索引
+
+2. **搜索查询阶段**：
+   - 搜索结果返回前会进行权限验证
+   - 只返回当前访客有权阅读的文档
+   - 使用与文档读取相同的权限判断逻辑：
+     - `canReadDocument` 函数
+     - 考虑域权限、文档权限和邀请机制
+
+3. **权限过滤逻辑**：
+   - 公开域文档（public 域）：所有用户均可搜索到
+   - 受限域文档（restricted 域）：只有域成员或被邀请用户可搜索到
+   - 私有域文档（private 域）：只有文档所有者或被邀请用户可搜索到
+
+### 搜索功能的 API 接口
+
+```typescript
+// 请求示例
+POST /api/documents/search
+{
+  "query": "搜索关键词",
+  "domainId": "可选，域ID",
+  "topN": "可选，返回结果数量，默认10"
+}
+
+// 返回示例
+{
+  "data": [
+    {
+      "documentId": "xxx",
+      "displayName": "文档标题",
+      "relativePath": "文档路径",
+      "domainId": "所属域ID",
+      "snippet": "包含关键词的内容片段",
+      "bm25Score": "BM25相关性分数"
+    }
+  ]
+}
+```
+
+### 搜索结果的权限信息
+
+搜索结果中只包含访客有权访问的文档，并且会根据权限过滤掉无法访问的内容。搜索功能确保了：
+
+1. **信息安全**：无权限的文档不会出现在搜索结果中
+2. **搜索结果完整性**：对于有权限的文档，搜索结果会包含完整的信息（标题、路径、内容片段等）
+3. **性能优化**：权限验证在搜索结果返回前进行，避免了不必要的数据传输
 
 ## 安全要点
 

@@ -74,23 +74,23 @@ export function buildDocumentsRouter(): Router {
     }
     // 从请求体中解构可能存在的字段
     const body = (req.body ?? {}) as {
-      relativePath?: unknown;
+      fileName?: unknown;
       displayName?: unknown;
       content?: unknown;
       domainId?: unknown;
       permission?: unknown;
       parentId?: unknown;
     };
-    // 校验必填字段：相对路径和内容必须是字符串
-    if (typeof body.relativePath !== "string" || typeof body.content !== "string") {
-      res.status(400).json({ error: { code: "BAD_REQUEST", message: "relativePath and content are required" } });
+    // 校验必填字段：文件名和内容必须是字符串
+    if (typeof body.fileName !== "string" || typeof body.content !== "string") {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "fileName and content are required" } });
       return;
     }
     try {
       // 调用服务层创建文档，把请求参数映射为服务参数
       const doc = createDocument({
         actorVisitorId: req.visitor.visitor_id,
-        relativePath: body.relativePath,
+        fileName: body.fileName,
         displayName: typeof body.displayName === "string" ? body.displayName : undefined,
         content: body.content,
         domainId: typeof body.domainId === "string" ? body.domainId : undefined,

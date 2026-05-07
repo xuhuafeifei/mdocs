@@ -18,3 +18,4 @@
 |------|------|------|-----------|
 | 001 | [访客身份替代账号系统](./001-visitor-identity.md) | accepted | 用高熵 Token + 本地存储替代传统账号密码，降低使用门槛 |
 | 002 | [显式目录模型 + parentId 全链路](./002-explicit-folder-model.md) | accepted | TreeFolderNode 暴露 documentId，前端创建文档时传 parentId，文件夹始终创建 ___desc___.md |
+| 003 | [后端自动计算文档路径](./003-api-path-calculation.md) | accepted | createDocument 改为接收 fileName + parentId，relativePath 由后端自动计算 |

@@ -174,7 +174,7 @@ export function getDocumentApi(documentId: string): Promise<DocumentDetail> {
  * 创建新文档。
  */
 export function createDocumentApi(input: {
-  relativePath: string;
+  fileName: string;
   displayName?: string;
   content: string;
   domainId?: string;

@@ -80,8 +80,9 @@
 | DELETE | `/api/documents/:documentId/invites/:visitorId` | 移除文档邀请 |
 
 **`POST /api/documents`**
-- Body: `{ relativePath: string, displayName?: string, content: string, domainId?: string, permission?: number }`
+- Body: `{ fileName: string, displayName?: string, content: string, domainId?: string, permission?: number, parentId?: string }`
 - Response: `DocumentDetail`
+- 说明：路径现在由后端自动计算，根据提供的 `parentId` 确定文档在树中的位置。如果不提供 `parentId`，文档将位于域的顶层。
 
 **`PUT /api/documents/:documentId`**
 - Body: `{ content: string, displayName?: string, permission?: number }`

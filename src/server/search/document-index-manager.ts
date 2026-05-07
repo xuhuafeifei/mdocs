@@ -3,14 +3,22 @@
  *
  * 职责：
  * - 标记 dirty：文档创建/更新时将 is_dirty=1
- * - 定时重建：扫描 is_dirty=1 的文档，读取 .md 文件内容，重建 FTS5 索引
+ * - 定时重建：扫描 is_dirty=1 的文档，读取 .md 文件内容，从 Lexical JSON 提取纯文本后写入 FTS5
  * - 外部触发：导出 rebuildAllDirty() 供路由或其他模块主动调用
  * - 乐观锁：通过 updated_at 防止 rebuild 期间并发更新导致的索引覆盖
  * - 内存锁：Set<documentId> 防止 timer 与外部触发同时重建同一文档
  */
+import { Jieba } from "@node-rs/jieba";
+import { dict } from "@node-rs/jieba/dict";
 import { getDb } from "../db/connection.js";
 import { readDocument } from "../storage/file-store.js";
 import { useLogger } from "../logger/logger.js";
+
+/** 递归遍历 Lexical JSON 的最大深度，防止爆栈 */
+const MAX_LEXICAL_DEPTH = 40;
+
+/** Jieba 分词实例，使用搜索引擎模式提高召回率 */
+const JIEBA = Jieba.withDict(dict);
 
 const log = useLogger("document-index-manager");
 
@@ -85,7 +93,7 @@ export function removeIndex(documentId: string): void {
 export async function rebuildAllDirty(): Promise<number> {
   const db = getDb();
   const dirtyIds = db
-    .prepare(`SELECT document_id FROM documents WHERE is_dirty = 1`)
+    .prepare(`SELECT document_id FROM documents WHERE is_dirty = 1 AND file_type = 'md'`)
     .all() as { document_id: string }[];
 
   let count = 0;
@@ -111,7 +119,16 @@ export async function rebuildAllDirty(): Promise<number> {
  * 3. 删除旧 FTS 条目 → 插入新 FTS 条目
  * 4. 用 updated_at 条件清除 is_dirty，若不匹配说明索引期间文档被更新，保留 dirty
  */
-function rebuildDocument(documentId: string): void {
+/**
+ * 重建单篇文档的全文索引。
+ *
+ * 乐观锁流程：
+ * 1. 记录当前 updated_at（版本号）
+ * 2. 读取磁盘文件内容
+ * 3. 删除旧 FTS 条目 → 插入新 FTS 条目
+ * 4. 用 updated_at 条件清除 is_dirty，若不匹配说明索引期间文档被更新，保留 dirty
+ */
+export function rebuildDocument(documentId: string): void {
   const db = getDb();
 
   // ---- 获取文档元数据 ----
@@ -133,8 +150,9 @@ function rebuildDocument(documentId: string): void {
   // 记录本次索引的版本
   const version = doc.updated_at;
 
-  // ---- 读取磁盘文件内容 ----
+  // ---- 读取磁盘文件内容 ---- 从 Lexical JSON 中提取纯文本用于 FTS5 索引
   const { content } = readDocument(doc.domain_id, doc.relative_path);
+  const plainText = extractLexicalText(content);
 
   // ---- 重建 FTS 条目 ----
   // 1. 删除旧条目（含映射表记录）
@@ -142,7 +160,12 @@ function rebuildDocument(documentId: string): void {
     .prepare(`SELECT fts_rowid FROM documents_fts_rowid WHERE document_id = ?`)
     .get(documentId) as { fts_rowid: number } | undefined;
   if (oldMap) {
-    db.prepare(`INSERT INTO documents_fts(documents_fts, rowid) VALUES('delete', ?)`).run(oldMap.fts_rowid);
+    try {
+      // FTS5 删除语法：INSERT INTO table(table, rowid) VALUES('delete', ?)
+      db.prepare(`INSERT INTO documents_fts(documents_fts, rowid) VALUES('delete', ?)`).run(oldMap.fts_rowid);
+    } catch {
+      // 忽略删除失败
+    }
     db.prepare(`DELETE FROM documents_fts_rowid WHERE document_id = ?`).run(documentId);
   }
 
@@ -153,7 +176,7 @@ function rebuildDocument(documentId: string): void {
        VALUES(?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
-      content,
+      plainText,
       documentId,
       doc.display_name,
       doc.relative_path,
@@ -176,5 +199,79 @@ function rebuildDocument(documentId: string): void {
   // 如果没有行被修改，说明此文档在索引期间被并发更新了，保留 is_dirty 由下个周期重建
   if (changed.changes === 0) {
     log.debug("index rebuild skipped for %s: document was concurrently updated", documentId);
+  }
+}
+
+// ============================================================
+//  Lexical JSON → 纯文本提取
+// ============================================================
+
+/**
+ * 从文件原始内容中提取用于 FTS5 索引的纯文本。
+ *
+ * mdocs 文档以 Lexical 编辑器的 JSON 格式存储，如果直接索引原始 JSON，
+ * 会污染索引（如 children、format、direction 等元数据键名）。
+ *
+ * 本函数尝试将内容解析为 Lexical JSON：
+ * - 解析成功 → 递归遍历 children 树，收集 type="text" 节点的 text 字段
+ * - 解析失败 → 返回原文（兼容非 Lexical 格式的老数据、Markdown 文件）
+ *
+ * 提取的文本通过 Jieba 搜索引擎模式分词，使中文关键词可被 FTS5 正确匹配。
+ * 递归深度上限 40 层，防止恶意构造的超深 JSON 导致爆栈。
+ */
+function extractLexicalText(rawContent: string): string {
+  let doc: unknown;
+  try {
+    doc = JSON.parse(rawContent);
+  } catch {
+    // 非 JSON 格式（老数据、纯 Markdown 等），分词后用于索引
+    return tokenizeForSearch(rawContent);
+  }
+
+  // 必须是对象且有 root 节点，才是 Lexical JSON
+  if (!doc || typeof doc !== "object" || !("root" in doc)) {
+    return tokenizeForSearch(rawContent);
+  }
+
+  const parts: string[] = [];
+  collectLexicalText((doc as { root: unknown }).root, parts, 0);
+  return tokenizeForSearch(parts.join(""));
+}
+
+/**
+ * 通过 Jieba 搜索引擎模式对文本分词，返回空格分隔的 tokens。
+ *
+ * 搜索引擎模式会在精确分词的基础上进一步拆分复合词（如"数据库"→"数据 据库 数据库"），
+ * 提高搜索召回率，使长尾词也能命中。
+ */
+function tokenizeForSearch(text: string): string {
+  return JIEBA.cutForSearch(text, true).join(" ");
+}
+
+/**
+ * 递归收集 Lexical 节点树中的所有文本。
+ *
+ * @param node 当前遍历的 Lexical 节点
+ * @param parts 累积文本的数组，type="text" 节点的 text 字段追加到此数组
+ * @param depth 当前递归深度，超过 MAX_LEXICAL_DEPTH 时截断
+ */
+function collectLexicalText(node: unknown, parts: string[], depth: number): void {
+  if (depth > MAX_LEXICAL_DEPTH) return;
+  if (!node || typeof node !== "object") return;
+
+  const n = node as Record<string, unknown>;
+
+  // 文本节点：提取实际内容
+  if (n.type === "text") {
+    if (typeof n.text === "string" && n.text.length > 0) {
+      parts.push(n.text);
+    }
+  }
+
+  // 递归处理子节点
+  if (Array.isArray(n.children)) {
+    for (const child of n.children) {
+      collectLexicalText(child, parts, depth + 1);
+    }
   }
 }

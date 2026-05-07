@@ -18,15 +18,16 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@lexical/rich-text": "0.42.0",
     "@lobehub/editor": "file:../my-lobe-editor",
     "@lobehub/ui": "^5.0.0",
-    "@lexical/rich-text": "0.42.0",
-    "lexical": "0.42.0",
+    "@node-rs/jieba": "^2.0.1",
     "antd": "^6.1.1",
     "antd-style": "^4.1.0",
     "better-sqlite3": "11.10.0",
     "es-toolkit": "^1.46.1",
     "express": "^4.21.0",
+    "lexical": "0.42.0",
     "lucide-react": "^0.562.0",
     "motion": "^12.0.0",
     "multer": "^2.1.1",

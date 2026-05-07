@@ -93,7 +93,7 @@ describe("createDocument 域权限校验", () => {
   it("public 域：允许创建 public_read(3) 文档", () => {
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "public-doc.md",
+      fileName: "public-doc.md",
       content: "# hello",
       domainId: "public-domain",
       permission: Permission.PUBLIC_READ,
@@ -104,7 +104,7 @@ describe("createDocument 域权限校验", () => {
   it("public 域：允许创建 public_write(4) 文档", () => {
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "public-write-doc.md",
+      fileName: "public-write-doc.md",
       content: "# hello",
       domainId: "public-domain",
       permission: Permission.PUBLIC_WRITE,
@@ -116,7 +116,7 @@ describe("createDocument 域权限校验", () => {
     expect(() =>
       createDocument({
         actorVisitorId: OWNER,
-        relativePath: "invalid.md",
+        fileName: "invalid.md",
         content: "# hello",
         domainId: "public-domain",
         permission: Permission.DOMAIN_READ,
@@ -125,7 +125,7 @@ describe("createDocument 域权限校验", () => {
     try {
       createDocument({
         actorVisitorId: OWNER,
-        relativePath: "invalid.md",
+        fileName: "invalid.md",
         content: "# hello",
         domainId: "public-domain",
         permission: Permission.DOMAIN_READ,
@@ -140,7 +140,7 @@ describe("createDocument 域权限校验", () => {
     expect(() =>
       createDocument({
         actorVisitorId: OWNER,
-        relativePath: "invalid2.md",
+        fileName: "invalid2.md",
         content: "# hello",
         domainId: "public-domain",
         permission: Permission.PRIVATE,
@@ -151,7 +151,7 @@ describe("createDocument 域权限校验", () => {
   it("restricted 域：允许创建 domain_read(1) 文档", () => {
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "restricted-doc.md",
+      fileName: "restricted-doc.md",
       content: "# hello",
       domainId: "restricted-domain",
       permission: Permission.DOMAIN_READ,
@@ -162,7 +162,7 @@ describe("createDocument 域权限校验", () => {
   it("restricted 域：允许创建 domain_write(2) 文档", () => {
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "restricted-write.md",
+      fileName: "restricted-write.md",
       content: "# hello",
       domainId: "restricted-domain",
       permission: Permission.DOMAIN_WRITE,
@@ -174,7 +174,7 @@ describe("createDocument 域权限校验", () => {
     expect(() =>
       createDocument({
         actorVisitorId: OWNER,
-        relativePath: "invalid3.md",
+        fileName: "invalid3.md",
         content: "# hello",
         domainId: "restricted-domain",
         permission: Permission.PUBLIC_READ,
@@ -185,7 +185,7 @@ describe("createDocument 域权限校验", () => {
   it("private 域：允许创建 private(0) 文档", () => {
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "private-doc.md",
+      fileName: "private-doc.md",
       content: "# hello",
       domainId: OWNER,
       permission: Permission.PRIVATE,
@@ -196,7 +196,7 @@ describe("createDocument 域权限校验", () => {
   it("private 域：允许创建 public_write(4) 文档", () => {
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "private-public.md",
+      fileName: "private-public.md",
       content: "# hello",
       domainId: OWNER,
       permission: Permission.PUBLIC_WRITE,
@@ -207,7 +207,7 @@ describe("createDocument 域权限校验", () => {
   it("不传 permission 时使用域默认值：public 域默认 public_read(3)", () => {
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "default-public.md",
+      fileName: "default-public.md",
       content: "# hello",
       domainId: "public-domain",
     });
@@ -217,7 +217,7 @@ describe("createDocument 域权限校验", () => {
   it("不传 permission 时使用域默认值：restricted 域默认 domain_read(1)", () => {
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "default-restricted.md",
+      fileName: "default-restricted.md",
       content: "# hello",
       domainId: "restricted-domain",
     });
@@ -227,7 +227,7 @@ describe("createDocument 域权限校验", () => {
   it("不传 permission 时使用域默认值：private 域默认 private(0)", () => {
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "default-private.md",
+      fileName: "default-private.md",
       content: "# hello",
       domainId: OWNER,
     });
@@ -238,7 +238,7 @@ describe("createDocument 域权限校验", () => {
     const folderId = createFolderInDb("public-domain", "my-folder");
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "my-folder/child.md",
+      fileName: "child.md",
       content: "# child",
       domainId: "public-domain",
       parentId: folderId,
@@ -258,7 +258,7 @@ describe("addDocumentInvite 域成员互斥", () => {
     // 在 restricted 域中建一篇文档
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "invite-test.md",
+      fileName: "invite-test.md",
       content: "# hello",
       domainId: "restricted-domain",
       permission: Permission.DOMAIN_READ,
@@ -279,7 +279,7 @@ describe("addDocumentInvite 域成员互斥", () => {
   it("restricted 域：非域成员可以被 invite", () => {
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "invite-ok.md",
+      fileName: "invite-ok.md",
       content: "# hello",
       domainId: "restricted-domain",
       permission: Permission.DOMAIN_READ,
@@ -293,7 +293,7 @@ describe("addDocumentInvite 域成员互斥", () => {
   it("public 域：非域成员可以被 invite", () => {
     const doc = createDocument({
       actorVisitorId: OWNER,
-      relativePath: "public-invite.md",
+      fileName: "public-invite.md",
       content: "# hello",
       domainId: "public-domain",
       permission: Permission.PUBLIC_READ,

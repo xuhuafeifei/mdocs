@@ -146,7 +146,12 @@
 | `owner_visitor_id` | TEXT (UNINDEXED) | 文档创建者 |
 | `permission` | INTEGER (UNINDEXED) | 权限档位 (0-4) |
 
-**配置**：`tokenize='unicode61'`，BM25 排名。
+**配置**：使用 `@node-rs/jieba` 中文分词库进行中文文本分词，然后存储到 FTS5 索引中。
+**分词特点**：
+- 使用 Jieba 分词器进行中文文本分词
+- 支持搜索引擎模式（cutForSearch），提高召回率
+- 英文和数字使用默认的 unicode61 分词器
+- 处理 Lexical 编辑器的 JSON 格式内容，提取纯文本后分词
 
 ### 11. `documents_fts_rowid` — FTS rowid 映射
 

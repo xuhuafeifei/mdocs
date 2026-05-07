@@ -28,7 +28,7 @@ import {
   readDocument,
   writeDocument,
 } from "../storage/file-store.js";
-import { markDirty, removeIndex } from "../search/document-index-manager.js";
+import { markDirty, removeIndex, rebuildDocument } from "../search/document-index-manager.js";
 import { normaliseDocRelativePath } from "../storage/paths.js";
 import type {
   DocumentDetail,
@@ -65,9 +65,34 @@ export function listDocuments(domainId?: string, visitorId?: string | null): Doc
 //  创建文档
 // ============================================================
 
+/**
+ * 规范化文件名：确保文件名有效且以 .md 结尾
+ */
+function normalizeFileName(fileName: string): string {
+  let normalized = fileName.trim();
+
+  // 移除路径字符，只保留文件名
+  normalized = normalized.split(/[\\/]/).pop() || 'untitled';
+
+  // 替换非法字符
+  normalized = normalized.replace(/[^\w\u4e00-\u9fa5\-_.]/g, '_');
+
+  // 确保以 .md 结尾
+  if (!normalized.toLowerCase().endsWith('.md')) {
+    normalized += '.md';
+  }
+
+  // 避免空文件名
+  if (normalized === '.md') {
+    normalized = 'untitled.md';
+  }
+
+  return normalized;
+}
+
 export function createDocument(params: {
   actorVisitorId: string;
-  relativePath: string;
+  fileName: string; // 改为只接受文件名，后端自动计算路径
   displayName?: string;
   content: string;
   domainId?: string;
@@ -88,18 +113,25 @@ export function createDocument(params: {
     throw new DocumentError("FORBIDDEN", "无权在该域创建文档", 403);
   }
 
-  let pathFromUser: string;
-  try {
-    pathFromUser = normaliseDocRelativePath(params.relativePath);
-  } catch (e) {
-    if (e instanceof DocPathError) {
-      throw new DocumentError("INVALID_PATH", e.message, 400);
-    }
-    throw e;
-  }
+  // 自动计算 relativePath
+  let relativePath: string;
+  const normalizedFileName = normalizeFileName(params.fileName);
 
-  // 现在所有域都使用 {domain_id}/ 前缀隔离，不再需要个人域特殊处理
-  const relativePath = pathFromUser;
+  if (!params.parentId) {
+    // 没有 parentId，是域的顶层文件
+    relativePath = normalizedFileName;
+  } else {
+    // 有 parentId，找到父节点路径并拼接
+    const parentDoc = findDocumentById(db, params.parentId);
+    if (!parentDoc || parentDoc.file_type !== 'dir') {
+      throw new DocumentError("INVALID_PARENT", "无效的父节点或父节点不是文件夹", 400);
+    }
+    // 确保父节点路径以 / 结尾
+    const parentPath = parentDoc.relative_path.endsWith('/')
+      ? parentDoc.relative_path
+      : parentDoc.relative_path + '/';
+    relativePath = parentPath + normalizedFileName;
+  }
 
   const existing = findDocumentByPath(db, domainId, relativePath);
   if (existing) {
@@ -160,6 +192,16 @@ export function createDocument(params: {
     });
   });
   tx();
+
+  // 异步标记并重建索引（不阻塞 API 响应）
+  markDirty(documentId);
+  process.nextTick(() => {
+    try {
+      rebuildDocument(documentId);
+    } catch (err) {
+      // 忽略索引失败，定时器会再次扫描 dirty
+    }
+  });
 
   return {
     documentId,
@@ -247,8 +289,15 @@ export function updateDocument(params: {
   });
   tx();
 
-  // 标记需要重建索引
+  // 异步标记并重建索引（不阻塞 API 响应）
   markDirty(row.document_id);
+  process.nextTick(() => {
+    try {
+      rebuildDocument(row.document_id);
+    } catch (err) {
+      // 忽略索引失败，定时器会再次扫描 dirty
+    }
+  });
 
   return {
     documentId: row.document_id,
