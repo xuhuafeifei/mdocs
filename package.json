@@ -10,7 +10,7 @@
     "dev": "pnpm dev:server & pnpm dev:web",
     "dev:demo": "VITE_DEMO_MODE=true vite",
     "build:web": "vite build",
-    "build:gh-pages": "VITE_DEMO_MODE=true vite build",
+    "build:gh-pages": "VITE_DEMO_MODE=true VITE_BASE_PATH=/mdocs/ vite build",
     "build:server": "tsc -p tsconfig.server.json",
     "build": "pnpm build:web && pnpm build:server",
     "start": "node dist/server/main.js",
