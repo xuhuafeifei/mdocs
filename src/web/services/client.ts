@@ -155,6 +155,60 @@ async function demoApi<T>(
     return [] as unknown as T;
   }
 
+  // ==== 设置页相关 API（返回空数据，让 UI 展示"无数据"状态） ====
+
+  // 访客目录
+  if (path === "/api/visitors" && method === "GET") {
+    return { visitors: [await mockFetchMe()] } as unknown as T;
+  }
+
+  // 域成员
+  if (path.match(/^\/api\/domains\/[^/]+\/members$/) && method === "GET") {
+    return { members: [] } as unknown as T;
+  }
+  if (path.match(/^\/api\/domains\/[^/]+\/members$/) && method === "PUT") {
+    return { memberCount: (body?.visitorIds as string[] | undefined)?.length ?? 0 } as unknown as T;
+  }
+
+  // 域操作（只返回成功，不做实际存储）
+  if (path.match(/^\/api\/domains\/[^/]+\/permission$/) && method === "PUT") {
+    return { success: true } as unknown as T;
+  }
+  if (path.match(/^\/api\/domains\/[^/]+$/) && method === "PUT") {
+    return { success: true } as unknown as T;
+  }
+  if (path.match(/^\/api\/domains\/[^/]+$/) && method === "DELETE") {
+    return undefined as T;
+  }
+  if (path === "/api/domains" && method === "POST") {
+    return { domainId: `demo-domain-${Date.now()}`, domainName: body?.domainName ?? "", permission: body?.permission ?? "restricted" } as unknown as T;
+  }
+
+  // 成员模板
+  if (path === "/api/domain-member-templates" && method === "GET") {
+    return [] as unknown as T;
+  }
+  if (path === "/api/domain-member-templates" && method === "POST") {
+    return { id: Date.now(), displayName: body?.displayName ?? "", visitorIds: body?.visitorIds ?? [] } as unknown as T;
+  }
+  if (path.match(/^\/api\/domain-member-templates\/\d+$/) && method === "PUT") {
+    return { success: true } as unknown as T;
+  }
+  if (path.match(/^\/api\/domain-member-templates\/\d+$/) && method === "DELETE") {
+    return undefined as T;
+  }
+
+  // CLI Token
+  if (path === "/api/cli/tokens" && method === "GET") {
+    return [] as unknown as T;
+  }
+  if (path === "/api/cli/tokens" && method === "POST") {
+    return { tokenId: `demo-token-${Date.now()}`, token: "demo-token-placeholder", name: body?.name ?? "default", createdAt: new Date().toISOString() } as unknown as T;
+  }
+  if (path.match(/^\/api\/cli\/tokens\/[^/]+$/) && method === "DELETE") {
+    return undefined as T;
+  }
+
   // 其他 API 返回空或抛出友好错误
   console.warn(`[Demo Mode] API not mocked: ${method} ${path}`);
   throw new ApiRequestError(501, "DEMO_MODE", "此功能在 Demo 模式下暂不可用");

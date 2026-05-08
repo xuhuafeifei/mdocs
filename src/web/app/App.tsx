@@ -454,7 +454,7 @@ export function App() {
 
   // ========== 主界面渲染 ==========
   return (
-    <>
+    <div className="mdocs-app-root">
       {/* Demo Mode 提示横幅 — 在 grid 外面 */}
       {isDemoMode() && (
         <div className="mdocs-demo-banner">
@@ -705,6 +705,6 @@ export function App() {
         </>
       )}
     </div>
-    </>
+    </div>
   );
 }

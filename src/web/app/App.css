@@ -1,8 +1,15 @@
+.mdocs-app-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+}
+
 .mdocs-shell {
   display: grid;
   grid-template-columns: 260px 1fr;
   grid-template-rows: 1fr;
-  height: 100vh;
+  flex: 1;
   min-height: 0;
 }
 
