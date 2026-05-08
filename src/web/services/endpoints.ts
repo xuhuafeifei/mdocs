@@ -14,6 +14,7 @@ import type {
   VisitorDirectoryEntry,
   VisitorMeResponse,
   VisitorPublic,
+  VisitorRecoverResponse,
   VisitorRegisterResponse,
 } from "../../shared/types/visitor";
 import type { TreeNode } from "../../shared/types/tree";
@@ -21,12 +22,32 @@ import type { DomainSummary, DomainMemberListEntry } from "../../shared/types/do
 import type { DomainMemberTemplate } from "../../shared/types/domainMemberTemplate";
 
 /**
- * 访客注册：创建新访客并返回身份令牌。
+ * 访客注册：创建新访客并返回身份令牌和恢复码。
  */
 export function registerVisitorApi(visitorName: string): Promise<VisitorRegisterResponse> {
   return api<VisitorRegisterResponse>("/api/visitors/register", {
     method: "POST",
     body: JSON.stringify({ visitorName }),
+  });
+}
+
+/**
+ * 使用恢复码找回访客身份（无需已有 Token）。
+ * 返回新的身份令牌，旧 Token 失效。
+ */
+export function recoverVisitorApi(recoveryCode: string): Promise<VisitorRecoverResponse> {
+  return api<VisitorRecoverResponse>("/api/visitors/recover", {
+    method: "POST",
+    body: JSON.stringify({ recoveryCode }),
+  });
+}
+
+/**
+ * 为当前已登录访客生成新的恢复码（覆盖旧的）。
+ */
+export function generateRecoveryCodeApi(): Promise<{ recoveryCode: string }> {
+  return api<{ recoveryCode: string }>("/api/visitors/recovery-code", {
+    method: "POST",
   });
 }
 

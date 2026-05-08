@@ -260,6 +260,17 @@ export async function mockRegisterVisitor(_visitorName: string) {
   return {
     visitor: DEMO_VISITOR,
     visitorToken: "demo-token",
+    recoveryCode: "ABCD-EFGH-IJKL-MNOP",
+  };
+}
+
+/**
+ * 恢复码找回访客（Demo 模式模拟）
+ */
+export async function mockRecoverVisitor(_recoveryCode: string) {
+  return {
+    visitor: DEMO_VISITOR,
+    visitorToken: "demo-token-recovered",
   };
 }
 

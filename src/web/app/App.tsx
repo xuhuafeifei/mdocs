@@ -106,6 +106,9 @@ export function App() {
   // ---- 注册成功后临时展示访客 ID 的提示条 ----
   const [pendingVisitorId, setPendingVisitorId] = useState<string | null>(null);
 
+  // ---- 注册成功后显示的恢复码（仅展示一次） ----
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+
   // ---- 侧边栏文档树数据 ----
   const [tree, setTree] = useState<TreeNode[]>([]);
 
@@ -233,9 +236,19 @@ export function App() {
     setVisitor(res.visitor);
     // 触发访客 ID 提示条，提醒用户保存 ID 以便恢复
     setPendingVisitorId(res.visitor.visitorId);
+    // 保存恢复码用于展示
+    setRecoveryCode(res.recoveryCode);
     // 加载域列表和文档树
     await initDomainsAndTree(res.visitor.visitorId, setDomains, setCurrentDomainId, refreshTree);
     // 切换到 ready 阶段，展示主界面
+    setPhase("ready");
+  }
+
+  /** 恢复码找回：已通过 storeIdentity 保存身份，只需加载数据进入主界面 */
+  async function handleRecover(visitorId: string): Promise<void> {
+    const me = await fetchMe();
+    setVisitor(me);
+    await initDomainsAndTree(me.visitorId, setDomains, setCurrentDomainId, refreshTree);
     setPhase("ready");
   }
 
@@ -354,6 +367,9 @@ export function App() {
     refreshTree,
   });
 
+  // ---- 退出确认弹窗 ----
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
   // ---- 发布冲突标记 ----
   const [conflict, setConflict] = useState(false);
 
@@ -447,6 +463,7 @@ export function App() {
     return (
       <VisitorRegisterDialog
         onSubmit={handleRegister}
+        onRecover={handleRecover}
         error={message}
       />
     );
@@ -475,6 +492,55 @@ export function App() {
           visitorId={pendingVisitorId}
           onDismiss={() => setPendingVisitorId(null)}
         />
+      )}
+
+      {/* 恢复码展示弹窗（注册后仅展示一次） */}
+      {recoveryCode && (
+        <div
+          className="mdocs-dialog-backdrop"
+          style={{ position: "fixed", zIndex: 9999 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setRecoveryCode(null); }}
+        >
+          <div className="mdocs-dialog card" style={{ maxWidth: 480, textAlign: "center" }}>
+            <h1 style={{ fontSize: "1.25rem", marginBottom: 8 }}>🔑 保存你的恢复码</h1>
+            <p className="muted" style={{ marginBottom: 16, lineHeight: 1.5 }}>
+              恢复码是你的唯一凭证，当 Token 丢失时可用它找回身份。
+              <br />
+              <strong>请立即复制保存，此弹窗关闭后不可再查看。</strong>
+            </p>
+            <div
+              style={{
+                background: "#f5f5f5",
+                borderRadius: 8,
+                padding: "12px 16px",
+                fontFamily: "monospace",
+                fontSize: "1.25rem",
+                letterSpacing: "0.1em",
+                marginBottom: 20,
+                userSelect: "all",
+              }}
+            >
+              {recoveryCode}
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  navigator.clipboard.writeText(recoveryCode);
+                }}
+              >
+                复制恢复码
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecoveryCode(null)}
+              >
+                已保存，关闭
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 根据当前视图渲染设置页或文档页 */}
@@ -535,12 +601,35 @@ export function App() {
             />
 
             {/* 底部访客信息：点击进入设置页 */}
-            <footer className="mdocs-sidebar-footer" onClick={() => { guardNavigate(() => setView("settings")); }}>
-              <span className="mdocs-visitor-avatar">
-                {/* 显示访客名称首字母作为头像 */}
-                {visitor ? visitor.visitorName.charAt(0).toUpperCase() : "?"}
-              </span>
-              <span className="mdocs-visitor-footer-name">{visitor ? visitor.visitorName : ""}</span>
+            <footer className="mdocs-sidebar-footer">
+              <div
+                style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, cursor: "pointer" }}
+                onClick={() => guardNavigate(() => setView("settings"))}
+              >
+                <span className="mdocs-visitor-avatar">
+                  {/* 显示访客名称首字母作为头像 */}
+                  {visitor ? visitor.visitorName.charAt(0).toUpperCase() : "?"}
+                </span>
+                <span className="mdocs-visitor-footer-name">{visitor ? visitor.visitorName : ""}</span>
+              </div>
+              <button
+                type="button"
+                className="mdocs-sidebar-logout"
+                title="退出登录"
+                onClick={() => setShowLogoutConfirm(true)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "6px",
+                  color: "var(--mdocs-text-muted, #999)",
+                  fontSize: "1rem",
+                  lineHeight: 1,
+                  borderRadius: 4,
+                }}
+              >
+                ⏻
+              </button>
             </footer>
           </aside>
 
@@ -637,6 +726,41 @@ export function App() {
               />
             )}
           </main>
+
+          {/* ========== 退出确认弹窗 ========== */}
+          {showLogoutConfirm && (
+            <div
+              className="mdocs-dialog-backdrop"
+              onClick={(e) => { if (e.target === e.currentTarget) setShowLogoutConfirm(false); }}
+            >
+              <div className="mdocs-dialog card" style={{ maxWidth: 440 }}>
+                <h1 style={{ fontSize: "1.125rem", marginBottom: 8 }}>退出当前登录身份？</h1>
+                <p style={{ lineHeight: 1.6, color: "var(--mdocs-text-secondary, #666)", marginBottom: 20 }}>
+                  这将会导致您无法修改以前的文章。如果想找回账号，需要恢复码或联系管理员执行合并用户脚本。
+                </p>
+                <div className="mdocs-dialog-actions" style={{ justifyContent: "flex-end" }}>
+                  <button type="button" onClick={() => setShowLogoutConfirm(false)}>
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    style={{ background: "#d32f2f" }}
+                    onClick={() => {
+                      clearIdentity();
+                      setActiveDoc(null);
+                      setVisitor(null);
+                      setTree([]);
+                      setShowLogoutConfirm(false);
+                      setPhase("needsRegister");
+                    }}
+                  >
+                    确认退出
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ========== 右键菜单浮层 ========== */}
           {menu && (

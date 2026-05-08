@@ -13,7 +13,7 @@ import { DraftListPage } from "./DraftListPage";
 import { listAllDrafts } from "../storage/drafts";
 import { DomainManagementPanel } from "./DomainManagementPanel";
 import { MemberTemplatesPanel } from "./MemberTemplatesPanel";
-import { createCliTokenApi, listCliTokensApi } from "../services/endpoints";
+import { createCliTokenApi, generateRecoveryCodeApi, listCliTokensApi } from "../services/endpoints";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 
 /**
@@ -61,6 +61,11 @@ export function SettingsPage(props: {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   // 是否刚复制成功（用于按钮文字切换）
   const [cliTokenCopied, setCliTokenCopied] = useState(false);
+
+  // ---- 恢复码相关 ----
+  const [recoveryCodeResult, setRecoveryCodeResult] = useState<string | null>(null);
+  const [recoveryCodeCopied, setRecoveryCodeCopied] = useState(false);
+  const [recoveryCodeBusy, setRecoveryCodeBusy] = useState(false);
 
   // ---- 未发布草稿数量（用于徽标显示） ----
   const [draftCount, setDraftCount] = useState(0);
@@ -138,6 +143,17 @@ export function SettingsPage(props: {
       await loadCliTokens();
     } finally {
       setCliTokenBusy(false);
+    }
+  }
+
+  /** 生成新的恢复码 */
+  async function handleGenerateRecoveryCode(): Promise<void> {
+    try {
+      setRecoveryCodeBusy(true);
+      const result = await generateRecoveryCodeApi();
+      setRecoveryCodeResult(result.recoveryCode);
+    } finally {
+      setRecoveryCodeBusy(false);
     }
   }
 
@@ -275,6 +291,26 @@ export function SettingsPage(props: {
                   </button>
                 </div>
               </div>
+
+              {/* 恢复码管理卡片 */}
+              <div className="mdocs-settings-card">
+                <div className="mdocs-settings-item">
+                  <span className="mdocs-settings-item-info">
+                    <span className="mdocs-settings-card-title">🔑 恢复码</span>
+                    <span className="mdocs-settings-item-desc">
+                      当 Token 丢失时，可用恢复码找回身份。生成后请立即保存，仅显示一次。
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={handleGenerateRecoveryCode}
+                    disabled={recoveryCodeBusy}
+                  >
+                    {recoveryCodeBusy ? "…" : "生成恢复码"}
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* CLI Token 生成结果弹窗：仅展示一次，关闭后不可再查看 */}
@@ -304,6 +340,52 @@ export function SettingsPage(props: {
                     <button
                       type="button"
                       onClick={() => setCliTokenResult(null)}
+                    >
+                      {t("close")}
+                    </button>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* 恢复码生成结果：仅展示一次 */}
+            {recoveryCodeResult && (
+              <div className="mdocs-settings-card" style={{ marginTop: 16, borderColor: "#e67e22", background: "#fef9f0" }}>
+                <div className="mdocs-settings-item">
+                  <span className="mdocs-settings-item-info">
+                    <span className="mdocs-settings-card-title">🔑 你的恢复码</span>
+                    <span className="mdocs-settings-item-desc" style={{ marginTop: 8 }}>
+                      请立即复制保存，关闭后不可再查看。
+                    </span>
+                    <div style={{
+                      fontFamily: "monospace",
+                      fontSize: "1.25rem",
+                      letterSpacing: "0.1em",
+                      background: "#fff",
+                      border: "1px solid #e0e0e0",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                      marginTop: 8,
+                      userSelect: "all",
+                    }}>
+                      {recoveryCodeResult}
+                    </div>
+                  </span>
+                  <span style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => {
+                        navigator.clipboard.writeText(recoveryCodeResult);
+                        setRecoveryCodeCopied(true);
+                        setTimeout(() => setRecoveryCodeCopied(false), 2000);
+                      }}
+                    >
+                      {recoveryCodeCopied ? "已复制" : "复制恢复码"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecoveryCodeResult(null)}
                     >
                       {t("close")}
                     </button>

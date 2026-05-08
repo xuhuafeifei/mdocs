@@ -15,6 +15,7 @@ import {
   mockCreateDocument,
   mockUpdateDocument,
   mockDeleteDocument,
+  mockRecoverVisitor,
   mockRegisterVisitor,
   mockCreateFolder,
   mockDeleteFolder,
@@ -95,6 +96,16 @@ async function demoApi<T>(
   // 访客注册
   if (path === "/api/visitors/register" && method === "POST") {
     return mockRegisterVisitor(body.visitorName) as unknown as T;
+  }
+
+  // 恢复码找回
+  if (path === "/api/visitors/recover" && method === "POST") {
+    return mockRecoverVisitor(body.recoveryCode) as unknown as T;
+  }
+
+  // 生成恢复码
+  if (path === "/api/visitors/recovery-code" && method === "POST") {
+    return { recoveryCode: "ABCD-EFGH-IJKL-MNOP" } as unknown as T;
   }
 
   // 获取当前访客信息

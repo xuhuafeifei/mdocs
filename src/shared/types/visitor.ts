@@ -16,6 +16,12 @@ export interface VisitorRegisterRequest {
 export interface VisitorRegisterResponse {
   visitor: VisitorPublic;
   visitorToken: string;
+  recoveryCode: string;
+}
+
+export interface VisitorRecoverResponse {
+  visitor: VisitorPublic;
+  visitorToken: string;
 }
 
 export interface VisitorMeResponse {
