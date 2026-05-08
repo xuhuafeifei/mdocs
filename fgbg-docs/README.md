@@ -15,6 +15,7 @@
 | 如何本地运行、构建、调试、常用脚本 | [`development-environment.md`](./development-environment.md) |
 | 测试分层、运行方式、关键用例 | [`testing-strategy.md`](./testing-strategy.md) |
 | 与 `markdown-docs` 的代码隔离红线 | [`clean-room-policy.md`](./clean-room-policy.md) |
+| 恢复码设计、API、DB 变更、涉及文件清单 | [`recovery-code.md`](./recovery-code.md) |
 | 重大技术决策的历史记录 | [`adr/`](./adr/) |
 
 ## 项目坐标
