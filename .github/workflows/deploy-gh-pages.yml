@@ -2,22 +2,19 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]  # 当推送到 main 分支时触发
-  workflow_dispatch:  # 允许手动触发
+    branches: [main]
+  workflow_dispatch:
 
-# 权限配置（GitHub Pages 需要）
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# 确保同一时间只有一个部署任务运行
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  # 构建任务
   build:
     runs-on: ubuntu-latest
     steps:
@@ -27,7 +24,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: latest  # 或指定版本如 9.0.0
+          version: latest
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -35,11 +32,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Approve build scripts
-        run: echo "y" | pnpm approve-builds || true
-
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --no-ignore-scripts # 关键修改
 
       - name: Build project
         run: VITE_DEMO_MODE=true pnpm build:web
@@ -47,9 +41,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist/web  # 你的构建输出目录
+          path: dist/web
 
-  # 部署任务
   deploy:
     needs: build
     runs-on: ubuntu-latest
