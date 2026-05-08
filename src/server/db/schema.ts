@@ -129,6 +129,7 @@ export function applySchema(db: Database.Database): void {
     migrateDomainsTable(db);
     migrateDocumentsTable(db);
     migrateDocumentsDirty(db);
+    migrateVisitorsRecoveryCode(db);
     ensureDefaultDomain(db);
   });
   tx();
@@ -220,5 +221,17 @@ function migrateDocumentsDirty(db: Database.Database): void {
 
 function documentColumnNames(db: Database.Database): Set<string> {
   const rows = db.prepare(`PRAGMA table_info(documents)`).all() as { name: string }[];
+  return new Set(rows.map((r) => r.name));
+}
+
+/** 为 visitors 表添加 recovery_code_hash 列（若不存在）。 */
+function migrateVisitorsRecoveryCode(db: Database.Database): void {
+  const names = visitorColumnNames(db);
+  if (names.has("recovery_code_hash")) return;
+  db.exec(`ALTER TABLE visitors ADD COLUMN recovery_code_hash TEXT`);
+}
+
+function visitorColumnNames(db: Database.Database): Set<string> {
+  const rows = db.prepare(`PRAGMA table_info(visitors)`).all() as { name: string }[];
   return new Set(rows.map((r) => r.name));
 }

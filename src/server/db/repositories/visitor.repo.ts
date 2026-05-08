@@ -5,6 +5,7 @@ export interface VisitorRow {
   visitor_id: string;
   visitor_name: string;
   visitor_token_hash: string;
+  recovery_code_hash: string | null;
   created_at: string;
   last_seen_at: string | null;
   disabled_at: string | null;
@@ -16,6 +17,7 @@ export interface InsertVisitorInput {
   visitorId: string;
   visitorName: string;
   visitorTokenHash: string;
+  recoveryCodeHash?: string;
   createdAt: string;
 }
 
@@ -25,9 +27,9 @@ export interface InsertVisitorInput {
 export function insertVisitor(db: Database.Database, input: InsertVisitorInput): void {
   db.prepare(
     `INSERT INTO visitors (
-      visitor_id, visitor_name, visitor_token_hash, created_at
-    ) VALUES (?, ?, ?, ?)`,
-  ).run(input.visitorId, input.visitorName, input.visitorTokenHash, input.createdAt);
+      visitor_id, visitor_name, visitor_token_hash, recovery_code_hash, created_at
+    ) VALUES (?, ?, ?, ?, ?)`,
+  ).run(input.visitorId, input.visitorName, input.visitorTokenHash, input.recoveryCodeHash ?? null, input.createdAt);
 }
 
 /**
@@ -93,6 +95,34 @@ export function listVisitors(db: Database.Database): VisitorRow[] {
   return db
     .prepare<[], VisitorRow>(`SELECT * FROM visitors ORDER BY created_at DESC`)
     .all();
+}
+
+/**
+ * 根据恢复码哈希查找访客。
+ */
+export function findVisitorByRecoveryCodeHash(
+  db: Database.Database,
+  recoveryCodeHash: string,
+): VisitorRow | undefined {
+  return db
+    .prepare<string, VisitorRow>(
+      `SELECT * FROM visitors WHERE recovery_code_hash = ? AND disabled_at IS NULL`,
+    )
+    .get(recoveryCodeHash);
+}
+
+/**
+ * 更新访客的恢复码哈希。
+ */
+export function updateRecoveryCodeHash(
+  db: Database.Database,
+  visitorId: string,
+  hash: string | null,
+): void {
+  db.prepare(`UPDATE visitors SET recovery_code_hash = ? WHERE visitor_id = ?`).run(
+    hash,
+    visitorId,
+  );
 }
 
 /** 目录用：未停用访客，按显示名排序 */

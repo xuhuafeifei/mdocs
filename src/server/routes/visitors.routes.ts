@@ -1,5 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import {
+  generateRecoveryCode,
+  recoverVisitor,
   registerVisitor,
   toPublic,
   VisitorValidationError,
@@ -13,7 +15,7 @@ const log = useLogger("visitors-route");
 
 /**
  * 构建访客相关路由。
- * 包含注册、查询活跃访客目录、获取当前访客信息等接口。
+ * 包含注册、恢复、查询活跃访客目录、获取当前访客信息等接口。
  * @returns Express Router 实例
  */
 export function buildVisitorsRouter(): Router {
@@ -22,6 +24,7 @@ export function buildVisitorsRouter(): Router {
   /**
    * POST /register
    * 注册新访客。
+   * 返回 { visitor, visitorToken, recoveryCode }
    */
   router.post("/register", (req: Request, res: Response) => {
     const body = (req.body ?? {}) as { visitorName?: unknown };
@@ -32,7 +35,13 @@ export function buildVisitorsRouter(): Router {
     }
     try {
       const result = registerVisitor(body.visitorName);
-      res.json({ data: { visitor: result.visitor, visitorToken: result.visitorToken } });
+      res.json({
+        data: {
+          visitor: result.visitor,
+          visitorToken: result.visitorToken,
+          recoveryCode: result.recoveryCode,
+        },
+      });
     } catch (err) {
       if (err instanceof VisitorValidationError) {
         res.status(400).json({ error: { code: "INVALID_VISITOR_NAME", message: err.message } });
@@ -42,6 +51,45 @@ export function buildVisitorsRouter(): Router {
       log.error("register failed: %s", err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: { code: "INTERNAL", message: "failed to register visitor" } });
     }
+  });
+
+  /**
+   * POST /recover
+   * 使用恢复码找回访客身份。
+   * 请求体: { recoveryCode: string }
+   * 返回: { visitor, visitorToken } 或 404
+   */
+  router.post("/recover", (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as { recoveryCode?: unknown };
+    if (typeof body.recoveryCode !== "string" || !body.recoveryCode.trim()) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "recoveryCode is required" } });
+      return;
+    }
+    const result = recoverVisitor(body.recoveryCode.trim());
+    if (!result) {
+      res.status(404).json({ error: { code: "INVALID_RECOVERY_CODE", message: "recovery code is invalid or expired" } });
+      return;
+    }
+    res.json({
+      data: {
+        visitor: result.visitor,
+        visitorToken: result.visitorToken,
+      },
+    });
+  });
+
+  /**
+   * POST /recovery-code
+   * 为当前已登录的访客生成新的恢复码（覆盖旧的）。
+   * 需要认证。返回 { recoveryCode: string }
+   */
+  router.post("/recovery-code", (req: Request, res: Response) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+      return;
+    }
+    const code = generateRecoveryCode(req.visitor.visitor_id);
+    res.json({ data: { recoveryCode: code } });
   });
 
   /**

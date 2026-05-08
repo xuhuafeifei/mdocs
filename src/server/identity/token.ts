@@ -29,3 +29,34 @@ export function newVisitorToken(): string {
 export function hashVisitorToken(rawToken: string): string {
   return createHash("sha256").update(rawToken, "utf8").digest("hex");
 }
+
+/**
+ * 生成一个新的恢复码。
+ * 格式：XXXX-XXXX-XXXX-XXXX（4 组 4 位大写字母+数字，共 20 字符）
+ * 熵值约 80 bit，适合人类抄写。
+ *
+ * @returns 恢复码字符串
+ */
+export function newRecoveryCode(): string {
+  const groups: string[] = [];
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去掉易混淆的 0/O/1/I
+  for (let g = 0; g < 4; g++) {
+    let group = "";
+    for (let i = 0; i < 4; i++) {
+      group += chars[Math.floor(Math.random() * chars.length)];
+    }
+    groups.push(group);
+  }
+  return groups.join("-");
+}
+
+/**
+ * 对恢复码进行 SHA-256 哈希，用于安全存储。
+ * 数据库中保存哈希值，原始恢复码仅在注册时展示一次。
+ *
+ * @param code - 原始恢复码
+ * @returns SHA-256 十六进制哈希字符串
+ */
+export function hashRecoveryCode(code: string): string {
+  return createHash("sha256").update(code.toUpperCase(), "utf8").digest("hex");
+}
