@@ -4,7 +4,7 @@
  */
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { HashRouter } from "react-router-dom";
 import { ConfigProvider, ThemeProvider } from "@lobehub/ui";
 import { motion } from "motion/react";
 import { Router } from "./app/Router";
@@ -22,9 +22,9 @@ createRoot(container).render(
     <ConfigProvider motion={motion}>
       <ThemeProvider>
         <I18nProvider>
-          <BrowserRouter>
+          <HashRouter>
             <Router />
-          </BrowserRouter>
+          </HashRouter>
         </I18nProvider>
       </ThemeProvider>
     </ConfigProvider>
