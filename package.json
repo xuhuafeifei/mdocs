@@ -40,7 +40,7 @@
     "zod": "^3.23.8"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@fgbg/lobe-editor"]
+    "onlyBuiltDependencies": ["@fgbg/lobe-editor", "esbuild"]
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
