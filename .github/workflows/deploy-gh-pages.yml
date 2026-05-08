@@ -1,42 +1,55 @@
-name: Deploy to GitHub Pages (Demo)
+name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches: [main]  # 当推送到 main 分支时触发
+  workflow_dispatch:  # 允许手动触发
 
+# 权限配置（GitHub Pages 需要）
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# 确保同一时间只有一个部署任务运行
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
+  # 构建任务
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          version: latest
+          version: latest  # 或指定版本如 9.0.0
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install
+      - name: Approve build scripts
+        run: echo "y" | pnpm approve-builds || true
 
-      - run: VITE_DEMO_MODE=true pnpm build:web
+      - name: Install dependencies
+        run: pnpm install
 
-      - uses: actions/upload-pages-artifact@v3
+      - name: Build project
+        run: VITE_DEMO_MODE=true pnpm build:web
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          path: dist/web
+          path: dist/web  # 你的构建输出目录
 
+  # 部署任务
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -44,5 +57,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
+      - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
