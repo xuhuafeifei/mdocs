@@ -12,8 +12,8 @@ importers:
         specifier: 0.42.0
         version: 0.42.0
       '@lobehub/editor':
-        specifier: file:../my-lobe-editor
-        version: file:../my-lobe-editor(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)
+        specifier: npm:@fgbg/lobe-editor@1.0.0-fork.1
+        version: '@fgbg/lobe-editor@1.0.0-fork.1(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)'
       '@lobehub/ui':
         specifier: ^5.0.0
         version: 5.10.0(@lobehub/fluent-emoji@4.1.0(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@lobehub/icons@5.6.0)(@types/mdast@4.0.4)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -729,6 +729,15 @@ packages:
       '@noble/hashes':
         optional: true
 
+  '@fgbg/lobe-editor@1.0.0-fork.1':
+    resolution: {integrity: sha512-wB7gCTnex+Je6vDsIjJ72K4ckWDYRmu+0ovs/+F2Bs+FITjEpCuN5ehZ4i0hjKWUWA1jkoZtznzjlXlmOCiOOg==}
+    peerDependencies:
+      '@lobehub/ui': ^5.0.0
+      antd: ^6.1.1
+      motion: ^12.0.0
+      react: ^19.0.0
+      react-dom: ^19.0.0
+
   '@floating-ui/core@1.7.5':
     resolution: {integrity: sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ==}
 
@@ -822,15 +831,6 @@ packages:
 
   '@lit/reactive-element@2.1.2':
     resolution: {integrity: sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A==}
-
-  '@lobehub/editor@file:../my-lobe-editor':
-    resolution: {directory: ../my-lobe-editor, type: directory}
-    peerDependencies:
-      '@lobehub/ui': ^5.0.0
-      antd: ^6.1.1
-      motion: ^12.0.0
-      react: ^19.0.0
-      react-dom: ^19.0.0
 
   '@lobehub/emojilib@1.0.0':
     resolution: {integrity: sha512-s9KnjaPjsEefaNv150G3aifvB+J3P4eEKG+epY9zDPS2BeB6+V2jELWqAZll+nkogMaVovjEE813z3V751QwGw==}
@@ -958,28 +958,24 @@ packages:
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
-    libc: [glibc]
 
   '@node-rs/jieba-linux-arm64-musl@2.0.1':
     resolution: {integrity: sha512-K4EDyNixSLVdTNYnHwD+7I/ytvzpo7tt+vdCLqwQViiek2PMpL/FFRvA39uU2tk99jXIxvkczdxARG20BRZppg==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
-    libc: [musl]
 
   '@node-rs/jieba-linux-x64-gnu@2.0.1':
     resolution: {integrity: sha512-sq3J6L2ANTE25I9eVFq/nb57OtXcvUIeUD1CTKJxwgTKIVmcB2LyOZpWf20AjHRUfbMER9Klqg5dgyyO+Six+w==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
-    libc: [glibc]
 
   '@node-rs/jieba-linux-x64-musl@2.0.1':
     resolution: {integrity: sha512-0zfP9Qy68yEXrhBFknfhF6WUJDPU/8eRuyIrkMGdMjfRpxhpSbr2fMfnsqhOQLvhuK4w3iDFvTy4t5d0s6JKMA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
-    libc: [musl]
 
   '@node-rs/jieba-wasm32-wasi@2.0.1':
     resolution: {integrity: sha512-7I5rJya5rlQNJIhv8PvPzIVT1/gVc0vFzHmlfRGwCPGDJ3tHVxkSPW34dDx3OgDmbIeadNpmgIyC1RaS9djPJg==}
@@ -1602,79 +1598,66 @@ packages:
     resolution: {integrity: sha512-2QxQrM+KQ7DAW4o22j+XZ6RKdxjLD7BOWTP0Bv0tmjdyhXSsr2Ul1oJDQqh9Zf5qOwTuTc7Ek83mOFaKnodPjg==}
     cpu: [arm]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-arm-musleabihf@4.60.2':
     resolution: {integrity: sha512-TbziEu2DVsTEOPif2mKWkMeDMLoYjx95oESa9fkQQK7r/Orta0gnkcDpzwufEcAO2BLBsD7mZkXGFqEdMRRwfw==}
     cpu: [arm]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-arm64-gnu@4.60.2':
     resolution: {integrity: sha512-bO/rVDiDUuM2YfuCUwZ1t1cP+/yqjqz+Xf2VtkdppefuOFS2OSeAfgafaHNkFn0t02hEyXngZkxtGqXcXwO8Rg==}
     cpu: [arm64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-arm64-musl@4.60.2':
     resolution: {integrity: sha512-hr26p7e93Rl0Za+JwW7EAnwAvKkehh12BU1Llm9Ykiibg4uIr2rbpxG9WCf56GuvidlTG9KiiQT/TXT1yAWxTA==}
     cpu: [arm64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-loong64-gnu@4.60.2':
     resolution: {integrity: sha512-pOjB/uSIyDt+ow3k/RcLvUAOGpysT2phDn7TTUB3n75SlIgZzM6NKAqlErPhoFU+npgY3/n+2HYIQVbF70P9/A==}
     cpu: [loong64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-loong64-musl@4.60.2':
     resolution: {integrity: sha512-2/w+q8jszv9Ww1c+6uJT3OwqhdmGP2/4T17cu8WuwyUuuaCDDJ2ojdyYwZzCxx0GcsZBhzi3HmH+J5pZNXnd+Q==}
     cpu: [loong64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-ppc64-gnu@4.60.2':
     resolution: {integrity: sha512-11+aL5vKheYgczxtPVVRhdptAM2H7fcDR5Gw4/bTcteuZBlH4oP9f5s9zYO9aGZvoGeBpqXI/9TZZihZ609wKw==}
     cpu: [ppc64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-ppc64-musl@4.60.2':
     resolution: {integrity: sha512-i16fokAGK46IVZuV8LIIwMdtqhin9hfYkCh8pf8iC3QU3LpwL+1FSFGej+O7l3E/AoknL6Dclh2oTdnRMpTzFQ==}
     cpu: [ppc64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-riscv64-gnu@4.60.2':
     resolution: {integrity: sha512-49FkKS6RGQoriDSK/6E2GkAsAuU5kETFCh7pG4yD/ylj9rKhTmO3elsnmBvRD4PgJPds5W2PkhC82aVwmUcJ7A==}
     cpu: [riscv64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-riscv64-musl@4.60.2':
     resolution: {integrity: sha512-mjYNkHPfGpUR00DuM1ZZIgs64Hpf4bWcz9Z41+4Q+pgDx73UwWdAYyf6EG/lRFldmdHHzgrYyge5akFUW0D3mQ==}
     cpu: [riscv64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-s390x-gnu@4.60.2':
     resolution: {integrity: sha512-ALyvJz965BQk8E9Al/JDKKDLH2kfKFLTGMlgkAbbYtZuJt9LU8DW3ZoDMCtQpXAltZxwBHevXz5u+gf0yA0YoA==}
     cpu: [s390x]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-x64-gnu@4.60.2':
     resolution: {integrity: sha512-UQjrkIdWrKI626Du8lCQ6MJp/6V1LAo2bOK9OTu4mSn8GGXIkPXk/Vsp4bLHCd9Z9Iz2OTEaokUE90VweJgIYQ==}
     cpu: [x64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-x64-musl@4.60.2':
     resolution: {integrity: sha512-bTsRGj6VlSdn/XD4CGyzMnzaBs9bsRxy79eTqTCBsA8TMIEky7qg48aPkvJvFe1HyzQ5oMZdg7AnVlWQSKLTnw==}
     cpu: [x64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-openbsd-x64@4.60.2':
     resolution: {integrity: sha512-6d4Z3534xitaA1FcMWP7mQPq5zGwBmGbhphh2DwaA1aNIXUu3KTOfwrWpbwI4/Gr0uANo7NTtaykFyO2hPuFLg==}
@@ -2754,7 +2737,7 @@ packages:
 
   glob@7.2.3:
     resolution: {integrity: sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   gopd@1.2.0:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
@@ -4960,6 +4943,67 @@ snapshots:
 
   '@exodus/bytes@1.15.0': {}
 
+  '@fgbg/lobe-editor@1.0.0-fork.1(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)':
+    dependencies:
+      '@floating-ui/dom': 1.7.6
+      '@floating-ui/react': 0.27.19(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@lexical/clipboard': 0.42.0
+      '@lexical/code-core': 0.42.0
+      '@lexical/dragon': 0.42.0
+      '@lexical/headless': 0.42.0
+      '@lexical/history': 0.42.0
+      '@lexical/link': 0.42.0
+      '@lexical/list': 0.42.0
+      '@lexical/rich-text': 0.42.0
+      '@lexical/selection': 0.42.0
+      '@lexical/table': 0.42.0
+      '@lexical/utils': 0.42.0
+      '@lobehub/ui': 5.10.0(@lobehub/fluent-emoji@4.1.0(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@lobehub/icons@5.6.0)(@types/mdast@4.0.4)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@meta2d/activity-diagram': 1.0.1(@meta2d/core@1.1.19)
+      '@meta2d/chart-diagram': 1.0.21(@meta2d/core@1.1.19)
+      '@meta2d/class-diagram': 1.0.2(@meta2d/core@1.1.19)
+      '@meta2d/core': 1.1.19
+      '@meta2d/flow-diagram': 1.0.2(@meta2d/core@1.1.19)
+      '@meta2d/form-diagram': 1.0.30(@meta2d/core@1.1.19)
+      '@meta2d/fta-diagram': 1.0.1(@meta2d/core@1.1.19)
+      '@meta2d/le5le-charts': 1.0.5(@meta2d/core@1.1.19)
+      '@meta2d/sequence-diagram': 1.0.1(@meta2d/core@1.1.19)
+      '@shikijs/core': 3.23.0
+      '@shikijs/engine-javascript': 3.23.0
+      ahooks: 3.9.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      antd: 6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      antd-style: 4.1.0(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      canvas2svg: 1.0.16
+      debug: 4.4.3
+      es-toolkit: 1.46.1
+      eventemitter3: 5.0.4
+      fuse.js: 7.3.0
+      katex: 0.16.45
+      lexical: 0.42.0
+      lucide-react: 0.562.0(react@19.2.5)
+      mermaid: 11.14.0
+      motion: 12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      polished: 4.3.1
+      re-resizable: 6.11.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      react: 19.2.5
+      react-dom: 19.2.5(react@19.2.5)
+      react-error-boundary: 6.1.1(react@19.2.5)
+      react-merge-refs: 3.0.2(react@19.2.5)
+      remark-cjk-friendly: 1.2.3(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(unified@11.0.5)
+      remark-supersub: 1.0.0
+      shiki: 3.23.0
+      ts-key-enum: 3.0.13
+      use-merge-value: 1.2.0(react@19.2.5)
+    transitivePeerDependencies:
+      - '@types/mdast'
+      - '@types/react'
+      - bufferutil
+      - micromark
+      - micromark-util-types
+      - supports-color
+      - unified
+      - utf-8-validate
+
   '@floating-ui/core@1.7.5':
     dependencies:
       '@floating-ui/utils': 0.2.11
@@ -5103,67 +5147,6 @@ snapshots:
   '@lit/reactive-element@2.1.2':
     dependencies:
       '@lit-labs/ssr-dom-shim': 1.5.1
-
-  '@lobehub/editor@file:../my-lobe-editor(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)':
-    dependencies:
-      '@floating-ui/dom': 1.7.6
-      '@floating-ui/react': 0.27.19(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@lexical/clipboard': 0.42.0
-      '@lexical/code-core': 0.42.0
-      '@lexical/dragon': 0.42.0
-      '@lexical/headless': 0.42.0
-      '@lexical/history': 0.42.0
-      '@lexical/link': 0.42.0
-      '@lexical/list': 0.42.0
-      '@lexical/rich-text': 0.42.0
-      '@lexical/selection': 0.42.0
-      '@lexical/table': 0.42.0
-      '@lexical/utils': 0.42.0
-      '@lobehub/ui': 5.10.0(@lobehub/fluent-emoji@4.1.0(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@lobehub/icons@5.6.0)(@types/mdast@4.0.4)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@meta2d/activity-diagram': 1.0.1(@meta2d/core@1.1.19)
-      '@meta2d/chart-diagram': 1.0.21(@meta2d/core@1.1.19)
-      '@meta2d/class-diagram': 1.0.2(@meta2d/core@1.1.19)
-      '@meta2d/core': 1.1.19
-      '@meta2d/flow-diagram': 1.0.2(@meta2d/core@1.1.19)
-      '@meta2d/form-diagram': 1.0.30(@meta2d/core@1.1.19)
-      '@meta2d/fta-diagram': 1.0.1(@meta2d/core@1.1.19)
-      '@meta2d/le5le-charts': 1.0.5(@meta2d/core@1.1.19)
-      '@meta2d/sequence-diagram': 1.0.1(@meta2d/core@1.1.19)
-      '@shikijs/core': 3.23.0
-      '@shikijs/engine-javascript': 3.23.0
-      ahooks: 3.9.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      antd: 6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      antd-style: 4.1.0(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      canvas2svg: 1.0.16
-      debug: 4.4.3
-      es-toolkit: 1.46.1
-      eventemitter3: 5.0.4
-      fuse.js: 7.3.0
-      katex: 0.16.45
-      lexical: 0.42.0
-      lucide-react: 0.562.0(react@19.2.5)
-      mermaid: 11.14.0
-      motion: 12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      polished: 4.3.1
-      re-resizable: 6.11.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      react: 19.2.5
-      react-dom: 19.2.5(react@19.2.5)
-      react-error-boundary: 6.1.1(react@19.2.5)
-      react-merge-refs: 3.0.2(react@19.2.5)
-      remark-cjk-friendly: 1.2.3(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(unified@11.0.5)
-      remark-supersub: 1.0.0
-      shiki: 3.23.0
-      ts-key-enum: 3.0.13
-      use-merge-value: 1.2.0(react@19.2.5)
-    transitivePeerDependencies:
-      - '@types/mdast'
-      - '@types/react'
-      - bufferutil
-      - micromark
-      - micromark-util-types
-      - supports-color
-      - unified
-      - utf-8-validate
 
   '@lobehub/emojilib@1.0.0': {}
 

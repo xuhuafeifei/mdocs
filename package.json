@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@lexical/rich-text": "0.42.0",
-    "@lobehub/editor": "file:../my-lobe-editor",
+    "@lobehub/editor": "npm:@fgbg/lobe-editor@1.0.0-fork.1",
     "@lobehub/ui": "^5.0.0",
     "@node-rs/jieba": "^2.0.1",
     "antd": "^6.1.1",
@@ -38,6 +38,9 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "zod": "^3.23.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@fgbg/lobe-editor"]
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
