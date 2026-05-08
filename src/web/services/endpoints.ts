@@ -8,7 +8,7 @@
  * - 资源：文件上传
  * - 成员模板：批量管理受限域成员
  */
-import { api, ApiRequestError, getStoredToken } from "./client";
+import { api, ApiRequestError, getStoredToken, isDemoMode } from "./client";
 import type { DocumentDetail } from "../../shared/types/document";
 import type {
   VisitorDirectoryEntry,
@@ -243,8 +243,19 @@ export function removeDocumentInviteApi(documentId: string, targetVisitorId: str
  * 上传文件到服务器资源存储。
  * 使用原生 fetch（而非 `api()`），因为 FormData 不能带 `Content-Type: application/json`。
  * 返回首个上传文件的服务器 URL。
+ * Demo Mode 下返回 Data URL。
  */
 export async function uploadAssetApi(file: File, documentId: string): Promise<string> {
+  // Demo Mode 下将文件转为 Data URL
+  if (isDemoMode()) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
+  }
+
   // 构建 FormData，包含文件和文档 ID
   const formData = new FormData();
   formData.append("file[]", file);

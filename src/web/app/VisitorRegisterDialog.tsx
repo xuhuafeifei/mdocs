@@ -15,7 +15,7 @@ export function VisitorRegisterDialog(props: {
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-/**
+  /**
    * 提交注册：校验名称非空 → 调用注册接口 → 处理错误。
    */
   async function submit(e: React.FormEvent): Promise<void> {

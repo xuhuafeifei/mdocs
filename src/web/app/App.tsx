@@ -22,6 +22,7 @@ import {
   getStoredToken,
   getStoredVisitorId,
   storeIdentity,
+  isDemoMode,
 } from "../services/client";
 import { fetchDomainsSafe, pickInitialDomainId } from "../services/domainsBootstrap";
 import {
@@ -180,8 +181,18 @@ export function App() {
   /**
    * 应用启动引导：检查本地 Token → 获取访客信息 → 加载域与文档树。
    * 若 Token 无效（401）则清除身份并回到注册页。
+   * Demo 模式由构建参数 VITE_DEMO_MODE 控制，编译后固定。
    */
   async function bootstrap(): Promise<void> {
+    // Demo 模式由构建参数 VITE_DEMO_MODE 决定，编译后固定
+    if (isDemoMode()) {
+      const me = await fetchMe();
+      setVisitor(me);
+      await initDomainsAndTree(me.visitorId, setDomains, setCurrentDomainId, refreshTree);
+      setPhase("ready");
+      return;
+    }
+
     // 从 localStorage 读取访客 Token，如果没有则直接进入注册页
     if (!getStoredToken()) {
       setPhase("needsRegister");
@@ -443,7 +454,21 @@ export function App() {
 
   // ========== 主界面渲染 ==========
   return (
-    <div className="mdocs-shell">
+    <>
+      {/* Demo Mode 提示横幅 — 在 grid 外面 */}
+      {isDemoMode() && (
+        <div className="mdocs-demo-banner">
+          <span>🎮 Demo 模式</span>
+          <span>·</span>
+          <span>数据保存在浏览器本地</span>
+          <span>·</span>
+          <a href="https://github.com" target="_blank" rel="noopener noreferrer">
+            部署自己的实例 →
+          </a>
+        </div>
+      )}
+
+      <div className="mdocs-shell">
       {/* 注册成功后的访客 ID 提示条 */}
       {pendingVisitorId && visitor && (
         <VisitorIdNotice
@@ -680,5 +705,6 @@ export function App() {
         </>
       )}
     </div>
+    </>
   );
 }
