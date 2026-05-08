@@ -1,3 +1,8 @@
+/**
+ * 未发布草稿列表抽屉页
+ * 从 IndexedDB 读取所有未发布的草稿，支持单篇发布、全部发布、删除草稿。
+ * 发布成功的草稿会从 IndexedDB 中移除（由 onPublish 回调负责）。
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import { listAllDrafts, deleteDraft, type DraftRecord } from "../storage/drafts";
@@ -12,50 +17,86 @@ type ToastType = "success" | "error";
 
 export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPageProps) {
   const { t } = useI18n();
+
+  // ---- 草稿列表数据 ----
   const [drafts, setDrafts] = useState<DraftRecord[]>([]);
+
+  // ---- 正在发布的文档 ID 集合（用于显示加载状态） ----
   const [publishingIds, setPublishingIds] = useState<Set<string>>(new Set());
+
+  // ---- 是否正在执行「全部发布」 ----
   const [publishingAll, setPublishingAll] = useState(false);
+
+  // ---- 待删除确认的草稿 ID ----
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // ---- 临时提示消息 ----
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+
+  // ---- Toast 定时器引用 ----
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * 首次加载时从 IndexedDB 读取所有未发布草稿。
+   */
   useEffect(() => {
     listAllDrafts().then((list) => {
+      // 过滤掉已标记为发布的草稿
       const unpublished = list.filter((d) => !d.published);
+      // 更新草稿列表
       setDrafts(unpublished);
+      // 通知父组件未发布数量（用于设置页徽标）
       onCountChange?.(unpublished.length);
     });
   }, []);
 
-  // Close on Escape
+  /**
+   * 按 Escape 键关闭草稿抽屉。
+   */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handler);
+    // 清理函数：移除键盘监听
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  /**
+   * 展示临时提示（3 秒后自动消失）。
+   */
   const showToast = useCallback((message: string, type: ToastType) => {
     setToast({ message, type });
+    // 清除之前的定时器，防止多个 Toast 时间冲突
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    // 3 秒后自动隐藏 Toast
     toastTimerRef.current = setTimeout(() => setToast(null), 3000);
   }, []);
 
+  /**
+   * 发布单篇草稿：调用 onPublish（会删除 IndexedDB 记录），成功后从列表移除。
+   */
   async function handlePublish(docId: string): Promise<void> {
+    // 将该文档 ID 加入正在发布集合，UI 显示加载状态
     setPublishingIds((prev) => new Set(prev).add(docId));
     try {
+      // 调用 App.tsx 传入的发布函数
       await onPublish(docId);
       // onPublish (publishDraftFromList) already deletes the IndexedDB record
+      // 从列表中移除已发布的草稿
       setDrafts((prev) => {
         const next = prev.filter((d) => d.documentId !== docId);
+        // 通知父组件更新数量
         onCountChange?.(next.length);
         return next;
       });
+      // 显示发布成功提示
       showToast(t("published"), "success");
     } catch {
+      // 发布失败，显示错误提示
       showToast(t("publishFailed"), "error");
     } finally {
+      // 无论成功失败，都要从发布集合中移除该 ID
       setPublishingIds((prev) => {
         const next = new Set(prev);
         next.delete(docId);
@@ -64,21 +105,34 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
     }
   }
 
+  /**
+   * 删除草稿：从 IndexedDB 移除并从列表中过滤掉。
+   */
   async function handleDelete(docId: string): Promise<void> {
+    // 关闭删除确认弹窗
     setDeleteConfirmId(null);
+    // 从 IndexedDB 删除草稿
     await deleteDraft(docId);
+    // 从列表中过滤掉已删除的草稿
     setDrafts((prev) => {
       const next = prev.filter((d) => d.documentId !== docId);
       onCountChange?.(next.length);
       return next;
     });
+    // 显示删除成功提示
     showToast(t("draftDeleted"), "success");
   }
 
+  /**
+   * 批量发布所有草稿：逐篇调用，最后重新拉取 IndexedDB 以刷新列表。
+   */
   async function handlePublishAll(): Promise<void> {
+    // 标记全部发布中，禁用按钮
     setPublishingAll(true);
+    // 统计成功和失败的数量
     let successCount = 0;
     let failCount = 0;
+    // 逐篇发布
     for (const d of drafts) {
       try {
         await onPublish(d.documentId);
@@ -94,14 +148,19 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
     setDrafts(unpublished);
     onCountChange?.(unpublished.length);
 
+    // 根据结果显示不同的提示
     if (failCount === 0) {
       showToast(t("publishAll"), "success");
     } else {
       showToast(`${successCount} published, ${failCount} failed`, "error");
     }
+    // 关闭全部发布中状态
     setPublishingAll(false);
   }
 
+  /**
+   * 将时间戳格式化为本地日期时间字符串。
+   */
   const formatTime = (ts: number): string => {
     const d = new Date(ts);
     return d.toLocaleString(undefined, {
@@ -114,41 +173,46 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
 
   return (
     <>
-      {/* Overlay */}
+      {/* 遮罩层：点击关闭抽屉 */}
       <div className="mdocs-drawer-overlay" onClick={onClose} />
 
-      {/* Drawer */}
+      {/* 抽屉主体 */}
       <div className="mdocs-drawer" role="dialog" aria-modal="true">
-        {/* Header */}
+        {/* 头部 */}
         <header className="mdocs-drawer-header">
           <div className="mdocs-drawer-header-text">
             <h2 className="mdocs-drawer-title">
               {t("unpublishedDrafts")}
+              {/* 显示未发布数量徽标 */}
               {unpublished.length > 0 && (
                 <span className="mdocs-drawer-count-badge">{unpublished.length}</span>
               )}
             </h2>
             <span className="mdocs-drawer-subtitle">{t("draftCount", { count: String(unpublished.length) })}</span>
           </div>
+          {/* 关闭按钮 */}
           <button type="button" className="mdocs-drawer-close-btn" onClick={onClose} aria-label={t("close")}>
             ×
           </button>
         </header>
 
-        {/* Body */}
+        {/* 内容区 */}
         <div className="mdocs-drawer-body">
           {unpublished.length === 0 ? (
+            // 空状态：所有草稿已发布
             <div className="mdocs-drawer-empty">
               <div className="mdocs-drawer-empty-icon" aria-hidden="true">✓</div>
               <p className="mdocs-drawer-empty-text">{t("draftsEmptyState")}</p>
             </div>
           ) : (
+            // 草稿列表
             <div className="mdocs-drawer-items">
               {unpublished.map((d) => (
                 <div key={d.documentId} className="mdocs-drawer-item">
                   <div className="mdocs-drawer-item-icon" aria-hidden="true">📄</div>
                   <div className="mdocs-drawer-item-info">
                     <span className="mdocs-drawer-item-name">
+                      {/* 没有显示名称时显示「未命名文档」 */}
                       {d.displayName || t("unknownTitle")}
                     </span>
                     <span className="mdocs-drawer-item-meta">
@@ -156,6 +220,7 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
                     </span>
                   </div>
                   <div className="mdocs-drawer-item-actions">
+                    {/* 发布按钮 */}
                     <button
                       type="button"
                       className="mdocs-btn-ghost mdocs-btn-ghost-primary"
@@ -164,6 +229,7 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
                     >
                       {publishingIds.has(d.documentId) ? t("publishing") : t("publish")}
                     </button>
+                    {/* 删除按钮 */}
                     <button
                       type="button"
                       className="mdocs-btn-ghost mdocs-btn-ghost-danger"
@@ -179,11 +245,12 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
           )}
         </div>
 
-        {/* Footer */}
+        {/* 底部操作栏 */}
         <footer className="mdocs-drawer-footer">
           <button type="button" onClick={onClose}>
             {t("close")}
           </button>
+          {/* 全部发布按钮 */}
           <button
             type="button"
             className="primary"
@@ -194,7 +261,7 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
           </button>
         </footer>
 
-        {/* Toast */}
+        {/* Toast 提示 */}
         {toast && (
           <div className={"mdocs-drawer-toast mdocs-drawer-toast--" + toast.type} role="status">
             {toast.message}
@@ -202,11 +269,12 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
         )}
       </div>
 
-      {/* Delete confirm dialog */}
+      {/* 删除确认弹窗 */}
       {deleteConfirmId && (
         <div
           className="mdocs-dialog-backdrop"
           role="presentation"
+          // 点击遮罩层关闭确认弹窗
           onMouseDown={(ev) => {
             if (ev.target === ev.currentTarget) setDeleteConfirmId(null);
           }}

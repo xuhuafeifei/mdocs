@@ -1,0 +1,474 @@
+{
+  "root": {
+    "children": [
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "Welcome to the Lobe Editor Demo!",
+            "type": "text",
+            "version": 1,
+            "id": "2"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "heading",
+        "version": 1,
+        "tag": "h1",
+        "id": "1"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "In case the black box at the bottom is – it's the debug view, showing the current state of the editor. You can disable it by pressing on the settings control in the bottom-left of your screen and toggling the debug view setting.",
+            "type": "text",
+            "version": 1,
+            "id": "4"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "quote",
+        "version": 1,
+        "id": "3"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "The playground is a demo environment built with ",
+            "type": "text",
+            "version": 1,
+            "id": "8"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "﻿",
+                "type": "cursor",
+                "version": 1,
+                "id": "10"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "﻿",
+                "type": "cursor",
+                "version": 1,
+                "id": "11"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "﻿",
+                "type": "cursor",
+                "version": 1,
+                "id": "12"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "﻿",
+                "type": "cursor",
+                "version": 1,
+                "id": "13"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "@lobehub/editor",
+                "type": "text",
+                "version": 1,
+                "id": "14"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "codeInline",
+            "version": 1,
+            "id": "9"
+          },
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "﻿",
+            "type": "cursor",
+            "version": 1,
+            "id": "15"
+          },
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": ". Try typing in ",
+            "type": "text",
+            "version": 1,
+            "id": "16"
+          },
+          {
+            "detail": 0,
+            "format": 1,
+            "mode": "normal",
+            "style": "",
+            "text": "some text",
+            "type": "text",
+            "version": 1,
+            "id": "17"
+          },
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": " with ",
+            "type": "text",
+            "version": 1,
+            "id": "18"
+          },
+          {
+            "detail": 0,
+            "format": 2,
+            "mode": "normal",
+            "style": "",
+            "text": "different formats",
+            "type": "text",
+            "version": 1,
+            "id": "19"
+          },
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": ".",
+            "type": "text",
+            "version": 1,
+            "id": "20"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "7"
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Visit the ",
+                "type": "text",
+                "version": 1,
+                "id": "23"
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Lobe Editor website",
+                    "type": "text",
+                    "version": 1,
+                    "id": "25"
+                  }
+                ],
+                "direction": "ltr",
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": "noreferrer",
+                "target": null,
+                "title": null,
+                "url": "https://editor.lobehub.com",
+                "id": "24"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " for documentation and more information.",
+                "type": "text",
+                "version": 1,
+                "id": "26"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 1,
+            "id": "22"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Check out the code on our ",
+                "type": "text",
+                "version": 1,
+                "id": "28"
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "GitHub repository",
+                    "type": "text",
+                    "version": 1,
+                    "id": "30"
+                  }
+                ],
+                "direction": "ltr",
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": null,
+                "target": null,
+                "title": "https://github.com/lobehub/lobe-editor",
+                "url": "https://github.com/lobehub/lobe-editor",
+                "id": "29"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": ".",
+                "type": "text",
+                "version": 1,
+                "id": "31"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 2,
+            "id": "27"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Playground code ",
+                "type": "text",
+                "version": 1,
+                "id": "33"
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Playground code",
+                    "type": "text",
+                    "version": 1,
+                    "id": "35"
+                  }
+                ],
+                "direction": "ltr",
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": "noreferrer",
+                "target": null,
+                "title": null,
+                "url": "https://github.com/lobehub/lobe-editor/blob/master/src/react/Editor/demos/index.tsx",
+                "id": "34"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " can be found here.",
+                "type": "text",
+                "version": 1,
+                "id": "36"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 3,
+            "id": "32"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Join our ",
+                "type": "text",
+                "version": 1,
+                "id": "38"
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Discover Server",
+                    "type": "text",
+                    "version": 1,
+                    "id": "40"
+                  }
+                ],
+                "direction": "ltr",
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": null,
+                "target": null,
+                "title": "https://discord.gg/AYFPHvv2jT",
+                "url": "https://discord.gg/AYFPHvv2jT",
+                "id": "39"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " and chat with the team.",
+                "type": "text",
+                "version": 1,
+                "id": "41"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 4,
+            "id": "37"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "list",
+        "version": 1,
+        "listType": "bullet",
+        "start": 1,
+        "tag": "ul",
+        "id": "21"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "Lastly, we're constantly adding cool new features to this playground. So make sure you check back here when you next get a chance 🙂.",
+            "type": "text",
+            "version": 1,
+            "id": "43"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "42"
+      },
+      {
+        "type": "code",
+        "version": 1,
+        "code": "import { Editor } from '@lobehub/editor';",
+        "codeTheme": "default",
+        "language": "typescript",
+        "options": {
+          "indentWithTabs": false,
+          "lineNumbers": false,
+          "tabSize": 2
+        },
+        "id": "44"
+      },
+      {
+        "children": [],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "45"
+      }
+    ],
+    "direction": "ltr",
+    "format": "",
+    "indent": 0,
+    "type": "root",
+    "version": 1,
+    "id": "root"
+  }
+}

@@ -1,5 +1,5 @@
 /** Reserved filename for per-folder description (hidden in tree, opened when folder is selected). */
-export const FOLDER_DESC_FILENAME = "desc.md";
+export const FOLDER_DESC_FILENAME = "___desc___.md";
 
 export function folderDescPathForFolder(folderPath: string): string {
   const p = folderPath.trim();

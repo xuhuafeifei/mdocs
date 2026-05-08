@@ -4,7 +4,6 @@ import {
   deleteDocument,
   findDocumentById,
   findDocumentByPath,
-  findDocumentInvite,
   insertDocument,
   insertDocumentInvite,
   deleteDocumentInvite,
@@ -13,146 +12,194 @@ import {
   updateDocumentContent,
   type DocumentRow,
 } from "../db/repositories/document.repo.js";
-import { findDomainById } from "../db/repositories/domain.repo.js";
+import {
+  findDomainById,
+  isDomainMember,
+} from "../db/repositories/domain.repo.js";
+import {
+  resolveDomainAccess,
+  canEnterDomainTree,
+} from "../access/domain-access.js";
+import {
+  DocumentError,
+  Permission,
+  canReadDocument,
+  canEditDocument,
+  type DomainAccessInfo,
+  validateDomainPermission,
+} from "../access/access-control.js";
 import { insertAuditLog } from "../db/repositories/audit.repo.js";
 import {
   deleteDocumentFile,
   readDocument,
   writeDocument,
 } from "../storage/file-store.js";
-import { normaliseDocRelativePath } from "../storage/paths.js";
+import {
+  markDirty,
+  removeIndex,
+  rebuildDocument,
+} from "../search/document-index-manager.js";
 import type {
   DocumentDetail,
   DocumentSummary,
 } from "../../shared/types/document.js";
-import { DocPathError } from "../../shared/docPath.js";
-import { normaliseRelativePathForStorage } from "../../shared/storagePath.js";
-import { prefixPersonalDomainStoragePath } from "../../shared/personalDomain.js";
 import { getConfig } from "../config/index.js";
+import { markdownToLexicalJson } from "./markdown-to-lexical.js";
 
-export class DocumentError extends Error {
-  status: number;
-  code: string;
-  constructor(code: string, message: string, status = 400) {
-    super(message);
-    this.code = code;
-    this.status = status;
-  }
-}
+// ============================================================
+//  列文档（域内可见列表）
+// ============================================================
 
-export const Permission = {
-  PRIVATE: 0,
-  PUBLIC_READ: 1,
-  PUBLIC_EDIT: 2,
-  INVITE: 3,
-} as const;
-
-export function canReadDocument(row: DocumentRow, visitorId: string | null): boolean {
-  if (row.owner_visitor_id === visitorId) return true;
-  if (row.permission === Permission.PUBLIC_READ || row.permission === Permission.PUBLIC_EDIT) return true;
-  if (!visitorId) return false;
-  if (row.permission === Permission.INVITE) {
-    return !!findDocumentInvite(getDb(), row.document_id, visitorId);
-  }
-  return false;
-}
-
-export function canEditDocument(row: DocumentRow, visitorId: string | null): boolean {
-  if (row.owner_visitor_id === visitorId) return true;
-  if (row.permission === Permission.PUBLIC_EDIT) return true;
-  if (!visitorId) return false;
-  if (row.permission === Permission.INVITE) {
-    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
-    return invite?.permission === "edit";
-  }
-  return false;
-}
-
-export function assertDocumentAccess(
-  documentId: string,
-  visitorId: string | null,
-  action: "read" | "edit" | "delete",
-): void {
-  const db = getDb();
-  const row = findDocumentById(db, documentId);
-  if (!row) {
-    throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
-  }
-
-  if (action === "read") {
-    if (!canReadDocument(row, visitorId)) {
-      throw new DocumentError("FORBIDDEN", "no permission to read this document", 403);
-    }
-  } else if (action === "edit") {
-    if (!canEditDocument(row, visitorId)) {
-      throw new DocumentError("FORBIDDEN", "no permission to edit this document", 403);
-    }
-  } else if (action === "delete") {
-    if (row.owner_visitor_id !== visitorId) {
-      throw new DocumentError("FORBIDDEN", "only the owner can delete this document", 403);
-    }
-  }
-}
-
-export function listDocuments(domainId?: string, visitorId?: string | null): DocumentSummary[] {
+export function listDocuments(
+  domainId?: string,
+  visitorId?: string | null,
+): DocumentSummary[] {
   const cfg = getConfig();
   const effective = domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
+
+  const domain = findDomainById(db, effective);
+  const access = resolveDomainAccess(db, domain, effective, visitorId);
+  if (!canEnterDomainTree(access)) return [];
+
+  const domainPermission = domain?.permission ?? "public";
+  const isMember = !!(
+    visitorId &&
+    domain &&
+    isDomainMember(db, domain.domain_id, visitorId)
+  );
+  const domainInfo: DomainAccessInfo = {
+    domainPermission,
+    isDomainMember: isMember,
+  };
+
   const rows = listDocumentsByDomain(db, effective);
-  const filtered = visitorId
-    ? rows.filter((r) => canReadDocument(r, visitorId))
-    : rows.filter((r) => r.permission === Permission.PUBLIC_READ || r.permission === Permission.PUBLIC_EDIT);
+  const filtered = rows.filter((r) =>
+    canReadDocument(r, visitorId ?? null, domainInfo),
+  );
   return filtered.map(rowToSummary);
+}
+
+// ============================================================
+//  创建文档
+// ============================================================
+
+/**
+ * 规范化文件名：确保文件名有效且以 .md 结尾
+ */
+function normalizeFileName(fileName: string): string {
+  let normalized = fileName.trim();
+
+  // 移除路径字符，只保留文件名
+  normalized = normalized.split(/[\\/]/).pop() || "untitled";
+
+  // 替换非法字符
+  normalized = normalized.replace(/[^\w\u4e00-\u9fa5\-_.]/g, "_");
+
+  // 确保以 .md 结尾
+  if (!normalized.toLowerCase().endsWith(".md")) {
+    normalized += ".md";
+  }
+
+  // 避免空文件名
+  if (normalized === ".md") {
+    normalized = "untitled.md";
+  }
+
+  return normalized;
 }
 
 export function createDocument(params: {
   actorVisitorId: string;
-  relativePath: string;
+  fileName: string; // 改为只接受文件名，后端自动计算路径
   displayName?: string;
   content: string;
   domainId?: string;
   permission?: number;
+  fileType?: string;
+  parentId?: string | null;
+  /** 内容格式，默认 'lexical'；传 'markdown' 时自动转换为 Lexical JSON */
+  contentFormat?: "markdown" | "lexical";
 }): DocumentDetail {
+  // 如果 markdown 格式，先转为 Lexical JSON
+  const content =
+    params.contentFormat === "markdown"
+      ? markdownToLexicalJson(params.content)
+      : params.content;
   const cfg = getConfig();
   const domainId = params.domainId?.trim() || cfg.defaultDomainId;
-
-  if (domainId !== cfg.defaultDomainId && domainId !== params.actorVisitorId) {
-    throw new DocumentError("FORBIDDEN", "cannot create documents in this domain", 403);
-  }
-
-  let pathFromUser: string;
-  try {
-    pathFromUser = normaliseRelativePathForStorage(params.relativePath);
-  } catch (e) {
-    if (e instanceof DocPathError) {
-      throw new DocumentError("INVALID_PATH", e.message, 400);
-    }
-    throw e;
-  }
-  const relativePath =
-    domainId === params.actorVisitorId
-      ? normaliseDocRelativePath(prefixPersonalDomainStoragePath(params.actorVisitorId, pathFromUser))
-      : normaliseDocRelativePath(pathFromUser);
   const db = getDb();
 
-  const existing = findDocumentByPath(db, relativePath);
+  const domainRow = findDomainById(db, domainId);
+  if (!domainRow) {
+    throw new DocumentError("DOMAIN_NOT_FOUND", "域不存在", 404);
+  }
+  const access = resolveDomainAccess(
+    db,
+    domainRow,
+    domainId,
+    params.actorVisitorId,
+  );
+  if (access.kind !== "full") {
+    throw new DocumentError("FORBIDDEN", "无权在该域创建文档", 403);
+  }
+
+  // 自动计算 relativePath
+  let relativePath: string;
+  const normalizedFileName = normalizeFileName(params.fileName);
+
+  if (!params.parentId) {
+    // 没有 parentId，是域的顶层文件
+    relativePath = normalizedFileName;
+  } else {
+    // 有 parentId，找到父节点路径并拼接
+    const parentDoc = findDocumentById(db, params.parentId);
+    if (!parentDoc || parentDoc.file_type !== "dir") {
+      throw new DocumentError(
+        "INVALID_PARENT",
+        "无效的父节点或父节点不是文件夹",
+        400,
+      );
+    }
+    // 确保父节点路径以 / 结尾
+    const parentPath = parentDoc.relative_path.endsWith("/")
+      ? parentDoc.relative_path
+      : parentDoc.relative_path + "/";
+    relativePath = parentPath + normalizedFileName;
+  }
+
+  const existing = findDocumentByPath(db, domainId, relativePath);
   if (existing) {
-    throw new DocumentError("DOC_EXISTS", "document already exists", 409);
+    throw new DocumentError("DOC_EXISTS", "文档已存在", 409);
   }
 
   const displayName = deriveDisplayName(params.displayName, relativePath);
   const documentId = randomUUID();
   const now = new Date().toISOString();
 
-  // Default permission: private for personal domain, public-read for default domain
-  const permission =
-    params.permission !== undefined
-      ? params.permission
-      : domainId === params.actorVisitorId
-        ? Permission.PRIVATE
+  const defaultPermission =
+    domainId === params.actorVisitorId
+      ? Permission.PRIVATE
+      : domainRow.permission === "restricted"
+        ? Permission.DOMAIN_READ
         : Permission.PUBLIC_READ;
 
-  const write = writeDocument(relativePath, params.content);
+  let permission: number;
+  if (params.permission !== undefined) {
+    if (!validateDomainPermission(domainRow.permission, params.permission)) {
+      throw new DocumentError(
+        "INVALID_PERMISSION",
+        `域类型"${domainRow.permission}"不允许权限值 ${params.permission}`,
+        400,
+      );
+    }
+    permission = params.permission;
+  } else {
+    permission = defaultPermission;
+  }
+
+  // 磁盘路径现在自动带上 {domain_id}/ 前缀
+  const write = writeDocument(domainId, relativePath, content);
 
   const tx = db.transaction(() => {
     insertDocument(db, {
@@ -167,6 +214,8 @@ export function createDocument(params: {
       createdAt: now,
       updatedAt: now,
       permission,
+      fileType: params.fileType ?? "md",
+      parentId: params.parentId ?? null,
     });
     insertAuditLog(db, {
       actorVisitorId: params.actorVisitorId,
@@ -179,6 +228,16 @@ export function createDocument(params: {
   });
   tx();
 
+  // 异步标记并重建索引（不阻塞 API 响应）
+  markDirty(documentId);
+  process.nextTick(() => {
+    try {
+      rebuildDocument(documentId);
+    } catch (err) {
+      // 忽略索引失败，定时器会再次扫描 dirty
+    }
+  });
+
   return {
     documentId,
     domainId,
@@ -188,16 +247,23 @@ export function createDocument(params: {
     updatedBy: params.actorVisitorId,
     updatedAt: now,
     createdAt: now,
-    content: params.content,
+    content,
     contentHash: write.contentHash,
     permission,
   };
 }
 
+// ============================================================
+//  读单篇文档（调用方需先鉴权）
+// ============================================================
+
 export function getDocument(documentId: string): DocumentDetail {
   const row = findDocumentById(getDb(), documentId);
-  if (!row) throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
-  const { content, contentHash } = readDocument(row.relative_path);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+  const { content, contentHash } = readDocument(
+    row.domain_id,
+    row.relative_path,
+  );
   return {
     ...rowToSummary(row),
     content,
@@ -206,22 +272,54 @@ export function getDocument(documentId: string): DocumentDetail {
   };
 }
 
+// ============================================================
+//  更新文档
+// ============================================================
+
 export function updateDocument(params: {
   actorVisitorId: string;
   documentId: string;
   content: string;
   displayName?: string;
   permission?: number;
+  /** 内容格式，默认 'lexical'；传 'markdown' 时自动转换为 Lexical JSON */
+  contentFormat?: "markdown" | "lexical";
 }): DocumentDetail {
+  // 如果 markdown 格式，先转为 Lexical JSON
+  const content =
+    params.contentFormat === "markdown"
+      ? markdownToLexicalJson(params.content)
+      : params.content;
   const db = getDb();
   const row = findDocumentById(db, params.documentId);
-  if (!row) throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
-  if (!canEditDocument(row, params.actorVisitorId)) {
-    throw new DocumentError("FORBIDDEN", "no permission to edit this document", 403);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+
+  const domain = findDomainById(db, row.domain_id);
+  const domainPermission = domain?.permission ?? "public";
+  const isMember = !!(
+    domain && isDomainMember(db, domain.domain_id, params.actorVisitorId)
+  );
+  const domainInfo: DomainAccessInfo = {
+    domainPermission,
+    isDomainMember: isMember,
+  };
+  if (!canEditDocument(row, params.actorVisitorId, domainInfo)) {
+    throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
+  }
+
+  if (
+    params.permission !== undefined &&
+    !validateDomainPermission(domainPermission, params.permission)
+  ) {
+    throw new DocumentError(
+      "INVALID_PERMISSION",
+      `域类型"${domainPermission}"不允许权限值 ${params.permission}`,
+      400,
+    );
   }
 
   const displayName = params.displayName?.trim() || row.display_name;
-  const write = writeDocument(row.relative_path, params.content);
+  const write = writeDocument(row.domain_id, row.relative_path, content);
   const now = new Date().toISOString();
 
   const tx = db.transaction(() => {
@@ -244,6 +342,16 @@ export function updateDocument(params: {
   });
   tx();
 
+  // 异步标记并重建索引（不阻塞 API 响应）
+  markDirty(row.document_id);
+  process.nextTick(() => {
+    try {
+      rebuildDocument(row.document_id);
+    } catch (err) {
+      // 忽略索引失败，定时器会再次扫描 dirty
+    }
+  });
+
   return {
     documentId: row.document_id,
     domainId: row.domain_id,
@@ -253,11 +361,16 @@ export function updateDocument(params: {
     updatedBy: params.actorVisitorId,
     updatedAt: now,
     createdAt: row.created_at,
-    content: params.content,
+    content,
     contentHash: write.contentHash,
-    permission: params.permission !== undefined ? params.permission : row.permission,
+    permission:
+      params.permission !== undefined ? params.permission : row.permission,
   };
 }
+
+// ============================================================
+//  删除文档
+// ============================================================
 
 export function removeDocument(params: {
   actorVisitorId: string;
@@ -265,9 +378,9 @@ export function removeDocument(params: {
 }): void {
   const db = getDb();
   const row = findDocumentById(db, params.documentId);
-  if (!row) throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== params.actorVisitorId) {
-    throw new DocumentError("FORBIDDEN", "only the owner can delete this document", 403);
+    throw new DocumentError("FORBIDDEN", "仅创建者可删除此文档", 403);
   }
   const now = new Date().toISOString();
   const tx = db.transaction(() => {
@@ -282,8 +395,14 @@ export function removeDocument(params: {
     });
   });
   tx();
-  deleteDocumentFile(row.relative_path);
+  deleteDocumentFile(row.domain_id, row.relative_path);
+  // 从全文索引中移除
+  removeIndex(row.document_id);
 }
+
+// ============================================================
+//  文档邀请
+// ============================================================
 
 export function addDocumentInvite(
   actorVisitorId: string,
@@ -293,19 +412,21 @@ export function addDocumentInvite(
 ): void {
   const db = getDb();
   const row = findDocumentById(db, documentId);
-  if (!row) throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== actorVisitorId) {
-    throw new DocumentError("FORBIDDEN", "only the owner can invite to this document", 403);
+    throw new DocumentError("FORBIDDEN", "仅创建者可邀请他人", 403);
   }
+
   const domain = findDomainById(db, row.domain_id);
-  // Private domains have a single domain member (domain owner = domain_id); do not invite them.
-  if (domain?.permission === "private" && targetVisitorId === domain.domain_id) {
+
+  if (domain && isDomainMember(db, domain.domain_id, targetVisitorId)) {
     throw new DocumentError(
       "BAD_REQUEST",
-      "private domain owner is the only domain member; invite is not used for that visitor",
+      "该访客已是域成员，无需邀请；邀请与域成员互斥",
       400,
     );
   }
+
   insertDocumentInvite(db, documentId, targetVisitorId, targetPermission);
 }
 
@@ -316,18 +437,27 @@ export function removeDocumentInvite(
 ): void {
   const db = getDb();
   const row = findDocumentById(db, documentId);
-  if (!row) throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== actorVisitorId) {
-    throw new DocumentError("FORBIDDEN", "only the owner can manage invites", 403);
+    throw new DocumentError("FORBIDDEN", "仅创建者可管理邀请", 403);
   }
   deleteDocumentInvite(db, documentId, targetVisitorId);
 }
 
-export function getDocumentInvites(documentId: string): { visitorId: string; permission: string }[] {
+export function getDocumentInvites(
+  documentId: string,
+): { visitorId: string; permission: string }[] {
   const db = getDb();
   const rows = listDocumentInvites(db, documentId);
-  return rows.map((r) => ({ visitorId: r.visitor_id, permission: r.permission }));
+  return rows.map((r) => ({
+    visitorId: r.visitor_id,
+    permission: r.permission,
+  }));
 }
+
+// ============================================================
+//  内部辅助
+// ============================================================
 
 function rowToSummary(row: DocumentRow): DocumentSummary {
   return {
@@ -343,7 +473,10 @@ function rowToSummary(row: DocumentRow): DocumentSummary {
   };
 }
 
-function deriveDisplayName(raw: string | undefined, relativePath: string): string {
+function deriveDisplayName(
+  raw: string | undefined,
+  relativePath: string,
+): string {
   const t = raw?.trim();
   if (t) return t.slice(0, 200);
   const base = relativePath.split("/").pop() ?? relativePath;

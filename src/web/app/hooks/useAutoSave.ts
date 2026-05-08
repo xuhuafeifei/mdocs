@@ -1,3 +1,11 @@
+/**
+ * 自动保存 Hook
+ * 监听 Lexical 编辑器内容变化，在以下时机自动将草稿保存到 IndexedDB：
+ * 1. 内容变更后防抖（默认 1s）
+ * 2. 编辑器失去焦点（blur）
+ * 3. 页面隐藏/关闭（visibilitychange / beforeunload）
+ * 使用 markdown 作为内容对比基线，避免 Lexical 内部状态（node key）抖动导致误保存。
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { IEditor } from "@lobehub/editor";
 import { saveDraft, deleteDraft, getDraft } from "../../storage/drafts";
@@ -17,26 +25,55 @@ interface UseAutoSaveOptions {
 }
 
 export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000, documentMeta }: UseAutoSaveOptions) {
+  // ---- 状态：内容是否有未保存的变更 ----
   const [isDirty, setIsDirty] = useState(false);
+
+  // ---- 状态：IndexedDB 中是否已有该文档的草稿 ----
   const [draftExists, setDraftExists] = useState(false);
+
+  // ---- 状态：上次保存的时间戳 ----
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+
+  // ---- 防抖定时器引用 ----
+  // 用于延迟保存，避免用户连续输入时频繁写入 IndexedDB
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ---- 清理函数引用 ----
+  // 存储 Lexical 监听器的注销函数，在依赖变化时清理旧监听器
   const cleanupRef = useRef<(() => void) | null>(null);
 
-  // Tracks whether the IndexedDB draft matches the current editor content.
-  // Set to true when a save occurs (auto/manual), false when content changes.
+  // ---- 草稿是否最新标记 ----
+  // true = IndexedDB 草稿与当前编辑器内容一致
+  // false = 内容已变更，草稿已过时
   const draftCurrentRef = useRef(false);
 
-  // Snapshot of editor content at last save/load — used to filter out
-  // non-content updates (selection/cursor) from the Lexical update listener.
+  /**
+   * 上次保存/加载时的编辑器内容快照，用于过滤掉 Lexical 的非内容更新（选区、光标移动等）。
+   * 存储 markdown 而非 JSON，因为 JSON 包含 Lexical 内部状态（node key 等），
+   * 编辑器挂载/初始化时 node key 会重新生成导致 JSON 变化，但文章实际内容没变。
+   */
   const lastContentRef = useRef("");
 
-  // Refs for use in event handlers (avoid stale closure)
+  // ---- dirty 标记的 ref 版本 ----
+  // 用于事件处理器中读取最新值（避免闭包捕获旧值）
   const dirtyRef = useRef(false);
 
+  /**
+   * 执行实际保存：将当前编辑器内容序列化为 JSON 写入 IndexedDB。
+   * 保存成功后同步更新 dirty、draftExists、lastSavedAt 等状态。
+   */
   const performSave = useCallback(async () => {
+    // 编辑器尚未初始化，无法保存
     if (!editor) return;
+    // 基线还没初始化（非空 markdown 字符串不会为 falsy），兜底跳过，防止挂载时误写草稿
+    if (!lastContentRef.current) {
+      console.log("[useAutoSave] performSave blocked: lastContentRef is empty");
+      return;
+    }
+    // 将编辑器当前内容序列化为 Lexical JSON 字符串
     const jsonContent = JSON.stringify(editor.getDocument("json"));
+    console.log("[useAutoSave] performSave saving draft, documentId:", documentId, "content preview:", jsonContent.slice(0, 80));
+    // 写入 IndexedDB
     await saveDraft({
       documentId,
       content: jsonContent,
@@ -45,69 +82,90 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
       published: false,
       ...documentMeta,
     });
-    lastContentRef.current = jsonContent;
+    // 保存成功后，用当前 markdown 内容更新对比基线
+    lastContentRef.current = (editor.getDocument("markdown") as string) ?? "";
+    // 标记草稿已存在（用于 UI 显示保存状态点）
     setDraftExists(true);
+    // 清除 dirty 标记（内容已保存）
     setIsDirty(false);
+    // 记录保存时间
     setLastSavedAt(Date.now());
+    // 标记草稿与当前内容一致
     draftCurrentRef.current = true;
     dirtyRef.current = false;
   }, [editor, documentId, displayName, documentMeta]);
 
-  // Check for existing draft on document change
+  /**
+   * 切换文档时检查 IndexedDB 中是否已有草稿，恢复对应状态。
+   */
   useEffect(() => {
+    // 用于防止组件卸载后执行 setState
     let cancelled = false;
+    // 从 IndexedDB 读取该文档的草稿
     getDraft(documentId).then((draft) => {
+      // 如果组件已卸载，忽略结果
       if (cancelled) return;
       if (draft) {
+        // 有草稿：更新 UI 状态，标记草稿存在
         setDraftExists(true);
         setLastSavedAt(draft.updatedAt);
         draftCurrentRef.current = true; // draft matches loaded state
-        // Normalize: if the stored content is already Lexical JSON, keep it for
-        // comparison; if it's legacy markdown, start fresh so the first content
-        // change triggers a re-save that upgrades the format.
-        let normalized = "";
-        try {
-          const p = JSON.parse(draft.content);
-          if (p?.root?.children) normalized = draft.content;
-        } catch {
-          // legacy markdown — leave empty, will be upgraded on next save
-        }
-        lastContentRef.current = normalized;
       } else {
+        // 无草稿：重置所有状态
         setDraftExists(false);
         setLastSavedAt(null);
         draftCurrentRef.current = false;
-        lastContentRef.current = "";
         dirtyRef.current = false;
       }
     });
+    // 清理函数：组件卸载或 documentId 变化时标记为已取消
     return () => { cancelled = true; };
   }, [documentId]);
 
-  // Listen for editor changes (afterDelay mode)
+  /**
+   * 注册 Lexical 更新监听器（afterDelay 模式）。
+   * 以 markdown 为内容对比基线，仅在文本真正变化时才标记 dirty 并启动防抖保存。
+   */
   useEffect(() => {
+    // 编辑器尚未初始化，无法注册监听器
     if (!editor) return;
+    // 获取 Lexical 内部编辑器实例
     const lexical = editor.getLexicalEditor();
     if (!lexical) return;
 
+    // 先清理上一个编辑器实例的监听器（防止依赖变化时重复注册）
     cleanupRef.current?.();
-    const unregister = lexical.registerUpdateListener(() => {
-      const jsonContent = JSON.stringify(editor.getDocument("json"));
-      // Only react when text content actually changed (ignore selection/cursor moves)
-      if (jsonContent === lastContentRef.current) return;
-      lastContentRef.current = jsonContent;
 
+    // 注册 listener 前立即同步基线为当前编辑器的 markdown 内容。
+    // 用 markdown 而非 JSON，避免 Lexical 内部状态抖动（node key 重新生成等）误触发草稿保存。
+    lastContentRef.current = editor.getDocument("markdown") ?? "";
+
+    // 注册 Lexical 更新监听器：每次编辑器状态变化时都会触发
+    const unregister = lexical.registerUpdateListener(() => {
+      // 获取当前编辑器内容的 markdown 表示
+      const md = (editor.getDocument("markdown") as string) ?? "";
+      // 仅在文档文本实际变化时才标记 dirty。忽略选区/光标移动，以及 Lexical 内部状态抖动（node key 重新生成等）
+      if (md === lastContentRef.current) return;
+      console.log("[useAutoSave] updateListener dirty, documentId:", documentId, "oldLen:", lastContentRef.current.length, "newLen:", md.length);
+      // 更新对比基线为最新内容
+      lastContentRef.current = md;
+
+      // 标记内容已变更
       setIsDirty(true);
       dirtyRef.current = true;
+      // 内容变了，草稿不再是最新的
       draftCurrentRef.current = false; // content changed, draft is now stale
 
+      // 清除之前的防抖定时器（如果用户连续输入，重新计时）
       if (timerRef.current) clearTimeout(timerRef.current);
+      // 启动新的防抖定时器，延迟保存
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         performSave();
       }, debounceMs);
     });
 
+    // 保存清理函数，供下次 effect 执行或组件卸载时调用
     cleanupRef.current = () => {
       unregister();
       if (timerRef.current) {
@@ -116,49 +174,88 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
       }
     };
 
+    // 清理函数：依赖变化时注销旧监听器
     return () => cleanupRef.current?.();
   }, [editor, documentId, displayName, debounceMs, documentMeta, performSave]);
 
-  // Blur save (onFocusChange mode)
+  /**
+   * 编辑器失焦时立即保存（取消待执行的防抖定时器，若内容有变更则立即执行）。
+   */
   useEffect(() => {
+    // 编辑器未初始化时不处理
     if (!editor) return;
+    // 获取编辑器根 DOM 元素
     const rootElement = editor.getLexicalEditor()?.getRootElement();
     if (!rootElement) return;
 
     const handleBlur = () => {
+      // 失焦时先取消待执行的防抖定时器（避免重复保存）
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+      // 如果内容有变更，立即执行保存
       if (dirtyRef.current) {
         performSave();
       }
     };
 
+    // 监听编辑器根元素的 blur 事件
     rootElement.addEventListener("blur", handleBlur);
+    // 清理函数：移除 blur 监听器
     return () => rootElement.removeEventListener("blur", handleBlur);
   }, [editor, performSave]);
 
-  // Window blur / tab switch save (onWindowChange mode)
+  /**
+   * 页面隐藏或关闭前若仍有未保存变更，立即触发保存。
+   */
   useEffect(() => {
     const handleVisibilityChange = () => {
+      // 页面切换到后台（如切换 Tab、最小化）
       if (document.visibilityState === "hidden") {
+        // 取消待执行的防抖定时器
         if (timerRef.current) {
           clearTimeout(timerRef.current);
           timerRef.current = null;
         }
+        // 如果有未保存变更，立即保存到 IndexedDB
         if (dirtyRef.current) {
           performSave();
         }
       }
     };
 
+    const handleBeforeUnload = () => {
+      // 浏览器关闭/刷新前
+      if (dirtyRef.current) {
+        // 取消待执行的防抖定时器
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+        // 立即保存，防止数据丢失
+        performSave();
+      }
+    };
+
+    // 注册页面可见性变化监听器
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    // 注册浏览器关闭/刷新监听器
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    // 清理函数：移除监听器
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
   }, [performSave]);
 
+  /**
+   * 清除当前文档的本地草稿（通常在成功发布后调用）。
+   */
   async function clearDraft(): Promise<void> {
+    // 从 IndexedDB 删除该文档的草稿记录
     await deleteDraft(documentId);
+    // 重置所有相关状态
     setDraftExists(false);
     setIsDirty(false);
     dirtyRef.current = false;
@@ -166,24 +263,37 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
     lastContentRef.current = "";
   }
 
-  /** Load draft content if newer than server version */
+  /**
+   * 加载本地草稿内容（若存在）。App.tsx 优先在打开文档时使用此内容。
+   */
   async function loadDraftContent(): Promise<string | null> {
+    // 从 IndexedDB 读取草稿
     const draft = await getDraft(documentId);
+    // 没有草稿则返回 null
     if (!draft) return null;
+    // 返回草稿内容（Lexical JSON 字符串）
     return draft.content;
   }
 
-  /** Call after externally saving a draft (e.g. manual "Save Draft" button) */
+  /**
+   * 外部保存草稿后调用（如手动「保存草稿」按钮），同步更新所有状态为「已保存」。
+   */
   function markDraftSaved(): void {
+    // 标记草稿已存在
     setDraftExists(true);
+    // 清除 dirty 标记
     setIsDirty(false);
     dirtyRef.current = false;
+    // 记录保存时间
     setLastSavedAt(Date.now());
+    // 标记草稿与当前内容一致
     draftCurrentRef.current = true;
+    // 更新 markdown 对比基线为当前内容
     if (editor) {
-      lastContentRef.current = JSON.stringify(editor.getDocument("json"));
+      lastContentRef.current = (editor.getDocument("markdown") as string) ?? "";
     }
   }
 
+  // 返回外部需要的状态和方法
   return { isDirty, draftExists, lastSavedAt, clearDraft, loadDraftContent, markDraftSaved };
 }

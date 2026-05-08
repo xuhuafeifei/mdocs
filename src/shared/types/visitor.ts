@@ -21,3 +21,9 @@ export interface VisitorRegisterResponse {
 export interface VisitorMeResponse {
   visitor: VisitorPublic;
 }
+
+/** 访客目录（勾选成员用）：仅 id + 昵称 */
+export interface VisitorDirectoryEntry {
+  visitorId: VisitorId;
+  visitorName: string;
+}

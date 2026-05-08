@@ -1,0 +1,21 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Markdown 解析结果 vs Lobe Lexical golden 结构 > 结构差异清单（子节点个数、type、text 严格对齐；code 仅比源码） 1`] = `
+"root.children.length: 期望 7 个子节点，实际 6 个
+root.children[1].children[0].type: 期望 text，实际 paragraph
+root.children[2].children.length: 期望 8 个子节点，实际 7 个
+root.children[2].children[1].type: 期望 codeInline，实际 text
+root.children[2].children[2].type: 期望 cursor，实际 text
+root.children[2].children[3].text: 期望 ". Try typing in "，实际 "some text"
+root.children[2].children[4].text: 期望 "some text"，实际 " with "
+root.children[2].children[5].text: 期望 " with "，实际 "different formats"
+root.children[2].children[6].text: 期望 "different formats"，实际 "."
+root.children[3].children[0].children.length: 期望 3 个子节点，实际 1 个
+root.children[3].children[0].children[0].type: 期望 text，实际 paragraph
+root.children[3].children[1].children.length: 期望 3 个子节点，实际 1 个
+root.children[3].children[1].children[0].type: 期望 text，实际 paragraph
+root.children[3].children[2].children.length: 期望 3 个子节点，实际 1 个
+root.children[3].children[2].children[0].type: 期望 text，实际 paragraph
+root.children[3].children[3].children.length: 期望 3 个子节点，实际 1 个
+root.children[3].children[3].children[0].type: 期望 text，实际 paragraph"
+`;

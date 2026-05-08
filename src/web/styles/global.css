@@ -16,6 +16,7 @@
   --mdocs-error: #EF5350;
   --mdocs-error-soft: #FFEBEE;
   --mdocs-error-text: #C62828;
+  --mdocs-danger: #E53935;
 
   /* === Neutral === */
   --mdocs-bg: #F5F5F5;
@@ -280,4 +281,21 @@ a:hover {
 
 .mdocs-playground-editor {
   padding: 16px;
+}
+
+/* === Demo Mode Banner === */
+.mdocs-demo-banner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 8px 16px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mdocs-demo-banner a {
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: underline;
 }

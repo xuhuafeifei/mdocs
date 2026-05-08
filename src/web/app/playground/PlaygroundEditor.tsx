@@ -1,3 +1,8 @@
+/**
+ * Playground 编辑器组件
+ * lobe-editor 的完整功能演示，包含所有插件（列表、链接、图片、代码块、表格、数学公式、图表、自动补全等）。
+ * 用于本地开发时测试编辑器行为，不直接参与 mdocs 主业务。
+ */
 import {
   IEditor,
   INSERT_CODEINLINE_COMMAND,
@@ -41,6 +46,9 @@ import { openFileSelector } from "../actions";
 import PlaygroundContainer from "./PlaygroundContainer";
 import content from "./data.json";
 
+/**
+ * 通用防抖函数：延迟执行，减少编辑器内容变化时的频繁序列化。
+ */
 function debounce<A extends unknown[]>(fn: (...args: A) => void, wait: number): (...args: A) => void {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   return (...args: A) => {
@@ -49,13 +57,22 @@ function debounce<A extends unknown[]>(fn: (...args: A) => void, wait: number): 
   };
 }
 
+// 将 scrollIntoView 挂载到 window，供调试使用
 window.__scrollIntoView = scrollIntoView;
 
 const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey">> = (props) => {
+  // 获取 lobe-editor 编辑器实例
   const editor = useEditor();
+
+  // ---- 编辑器 JSON 输出 ----
   const [json, setJson] = useState("");
+
+  // ---- 编辑器 Markdown 输出 ----
   const [markdown, setMarkdown] = useState("");
 
+  /**
+   * 编辑器内容变化回调：防抖 200ms 后序列化为 Markdown 和 JSON。
+   */
   const handleChange = useMemo(
     () =>
       debounce((e: IEditor) => {
@@ -67,6 +84,9 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
     [],
   );
 
+  /**
+   * JSON 面板手动编辑回调：防抖 200ms 后回写到编辑器。
+   */
   const handleJSONChange = useMemo(
     () =>
       debounce((value: unknown) => {
@@ -78,11 +98,17 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
     [editor],
   );
 
+  /**
+   * 编辑器初始化：挂载到 window 供调试，并触发首次序列化。
+   */
   const handleInit = (e: IEditor) => {
     window.editor = e;
     handleChange(e);
   };
 
+  /**
+   * @ 提及（mention）候选列表：演示用机器人角色。
+   */
   const mentionItems: SlashOptions["items"] = useMemo(
     () => [
       {
@@ -107,6 +133,9 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
     [],
   );
 
+  /**
+   * Slash 命令菜单项配置：标题、分割线、表格、公式、文件、链接、代码等。
+   */
   const slashItems: SlashOptions["items"] = useMemo(() => {
     const data: SlashOptions["items"] = [
       {
@@ -133,6 +162,7 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
           ed.dispatchCommand(INSERT_HEADING_COMMAND, { tag: "h3" });
         },
       },
+      // 分隔线
       { type: "divider" },
       {
         icon: MinusIcon,
@@ -161,6 +191,7 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
           });
         },
       },
+      // 分隔线
       { type: "divider" },
       {
         key: "file",
@@ -215,7 +246,9 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
       },
     ];
     return data.map((item) => {
+      // 分隔线项不做处理
       if (item.type === "divider") return item;
+      // 普通项添加右侧快捷键提示
       return {
         ...item,
         extra: (
@@ -262,9 +295,11 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
           ReactMathPlugin,
           ReactMeta2dPlugin,
           ReactCodePlugin,
+          // 浮动工具栏
           withProps(ReactToolbarPlugin, {
             children: <Toolbar editor={editor} floating />,
           }),
+          // 自动补全插件
           withProps(ReactAutoCompletePlugin, {
             delay: 1000,
             onAutoComplete: async ({ input, afterText, selectionType, abortSignal }) => {
@@ -295,6 +330,7 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
               return null;
             },
           }),
+          // 图片插件：支持 blob URL 转存为 base64
           withProps(ReactImagePlugin, {
             defaultBlockImage: true,
             handleRehost: async (url) => {
@@ -312,6 +348,7 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
               return url.startsWith("blob:");
             },
           }),
+          // 文件插件：模拟上传（本地预览）
           withProps(ReactFilePlugin, {
             handleUpload: async (file) => {
               console.debug("Files uploaded:", file);

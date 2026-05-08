@@ -1,5 +1,12 @@
+/**
+ * 错误码到翻译键的映射表
+ * 用于统一将后端错误码、路径校验错误、存储校验错误转换为用户友好的本地化提示。
+ */
 import type { TranslationKey } from "./types";
 
+/**
+ * 后端错误码到翻译键的映射。
+ */
 export const ERROR_CODE_MAP: Record<string, TranslationKey> = {
   UNAUTHENTICATED: "errUnauthenticated",
   BAD_REQUEST: "errBadRequest",
@@ -10,8 +17,14 @@ export const ERROR_CODE_MAP: Record<string, TranslationKey> = {
   INTERNAL: "errInternal",
   INVALID_PATH: "errInvalidPath",
   UNKNOWN: "errUnknown",
+  UNKNOWN_VISITOR_IDS: "errUnknownVisitorIds",
+  TEMPLATE_NOT_FOUND: "errTemplateNotFound",
+  DOMAIN_NOT_RESTRICTED: "errDomainNotRestricted",
 };
 
+/**
+ * 文档路径校验错误信息到翻译键的映射。
+ */
 export const PATH_ERROR_MESSAGE_MAP: Record<string, TranslationKey> = {
   "relative path is required": "pathRequired",
   "path must be relative": "pathMustBeRelative",
@@ -22,6 +35,9 @@ export const PATH_ERROR_MESSAGE_MAP: Record<string, TranslationKey> = {
   "path escapes docs root": "pathEscapesRoot",
 };
 
+/**
+ * 存储层校验（文件夹/文件名）错误信息到翻译键的映射。
+ */
 export const STORAGE_ERROR_MESSAGE_MAP: Record<string, TranslationKey> = {
   "enter a folder name": "enterFolderName",
   "use a single name, not a path": "singleNameNotPath",

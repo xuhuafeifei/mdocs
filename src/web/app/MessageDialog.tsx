@@ -1,3 +1,7 @@
+/**
+ * 通用消息弹窗
+ * 用于展示错误提示或其他需要用户确认的信息（点击「知道了」关闭）。
+ */
 import { useI18n } from "../i18n";
 
 interface MessageDialogProps {
@@ -6,6 +10,9 @@ interface MessageDialogProps {
   onClose: () => void;
 }
 
+/**
+ * 通用消息弹窗组件：点击遮罩或「知道了」按钮关闭。
+ */
 export function MessageDialog({ title, message, onClose }: MessageDialogProps) {
   const { t } = useI18n();
   return (

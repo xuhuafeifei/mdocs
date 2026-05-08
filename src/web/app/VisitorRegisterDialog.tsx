@@ -1,3 +1,8 @@
+/**
+ * 访客注册弹窗
+ * 首次访问时展示的欢迎界面，要求用户输入昵称以创建访客身份。
+ * 创建成功后，后端返回 visitorToken 和 visitorId，存入 localStorage。
+ */
 import { useState } from "react";
 import { useI18n } from "../i18n";
 
@@ -10,6 +15,9 @@ export function VisitorRegisterDialog(props: {
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
+  /**
+   * 提交注册：校验名称非空 → 调用注册接口 → 处理错误。
+   */
   async function submit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     const trimmed = name.trim();

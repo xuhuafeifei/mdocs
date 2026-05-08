@@ -1,8 +1,15 @@
+.mdocs-app-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+}
+
 .mdocs-shell {
   display: grid;
   grid-template-columns: 260px 1fr;
   grid-template-rows: 1fr;
-  height: 100vh;
+  flex: 1;
   min-height: 0;
 }
 
@@ -504,7 +511,14 @@
 .mdocs-context-item.danger:hover {
   background: var(--mdocs-error-soft);
 }
-
+/* Document editor body inset — same idea as .mdocs-playground-editor in global.css */
+.mdocs-document-editor-root {
+  box-sizing: border-box;
+  /* padding: 80px 60px 60px; */
+  padding-left: 50px;
+  padding-right: 50px;
+  padding-top: 20px;
+}
 /* === Main area === */
 .mdocs-main {
   display: flex;
@@ -546,91 +560,6 @@
   flex: 0 0 auto;
   min-width: 0;
   box-sizing: border-box;
-}
-
-.mdocs-domain-lock {
-  flex-shrink: 0;
-}
-
-/* === Custom domain dropdown === */
-.mdocs-domain-select-wrapper {
-  position: relative;
-  flex: 0 1 auto;
-  min-width: 120px;
-  max-width: 200px;
-}
-
-.mdocs-domain-select-trigger {
-  width: 100%;
-  height: 35px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 8px;
-  border: 1px solid var(--mdocs-border);
-  border-radius: var(--mdocs-radius);
-  background: var(--mdocs-surface);
-  font-size: 13px;
-  color: var(--mdocs-text);
-  cursor: pointer;
-}
-
-.mdocs-domain-select-trigger:hover {
-  border-color: var(--mdocs-border-hover);
-}
-
-.mdocs-domain-select-text {
-  flex: 1;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mdocs-domain-select-chevron {
-  flex-shrink: 0;
-  transition: transform 0.15s ease;
-}
-
-.mdocs-domain-select-chevron.open {
-  transform: rotate(180deg);
-}
-
-.mdocs-domain-select-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  min-width: 160px;
-  padding: 4px;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.mdocs-domain-select-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 10px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 13px;
-  color: var(--mdocs-text);
-  cursor: pointer;
-  text-align: left;
-}
-
-.mdocs-domain-select-option:hover {
-  background: var(--mdocs-bg);
-}
-
-.mdocs-domain-select-option.active {
-  background: var(--mdocs-accent-soft);
-  font-weight: 500;
 }
 
 .mdocs-editor-permission-select {
@@ -1300,41 +1229,4 @@ strong.label {
   z-index: 10;
   background: var(--mdocs-surface);
   border-bottom: 1px solid var(--mdocs-border);
-}
-
-/* === Outline panel === */
-.mdocs-outline {
-  flex-shrink: 0;
-  width: 200px;
-  padding: 16px 12px;
-  overflow-y: auto;
-}
-
-.mdocs-outline-title {
-  color: var(--mdocs-text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  letter-spacing: 0.5px;
-}
-
-.mdocs-outline-item {
-  border-radius: var(--mdocs-radius-sm);
-  color: var(--mdocs-text);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 28px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border: none;
-  background: transparent;
-  display: block;
-  width: 100%;
-  text-align: left;
-  transition: background 0.12s ease;
-}
-
-.mdocs-outline-item:hover {
-  background: var(--mdocs-bg);
 }
