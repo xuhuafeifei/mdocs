@@ -8,7 +8,8 @@
  * 5. 新建文档/文件夹的模态框管理
  * 6. 全局消息提示与冲突处理
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BookOpen, LogOut, Star } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -24,11 +25,15 @@ import {
 import { fetchDomainsSafe, pickInitialDomainId } from "../services/domainsBootstrap";
 import {
   deleteDocumentApi,
+  deleteFolderApi,
   fetchMe,
   fetchTreeApi,
   getDocumentApi,
   registerVisitorApi,
   updateDocumentApi,
+  fetchBookmarksApi,
+  removeBookmarkApi,
+  type Bookmark,
 } from "../services/endpoints";
 import { VisitorRegisterDialog } from "./VisitorRegisterDialog";
 import { VisitorIdNotice } from "./VisitorIdNotice";
@@ -38,6 +43,7 @@ import { DocumentEditor } from "./DocumentEditor";
 import { DomainSelect } from "./DomainSelect";
 import { SettingsPage } from "./SettingsPage";
 import { MessageDialog } from "./MessageDialog";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
 import { ConflictNotice } from "./ConflictNotice";
 import { getDraft, saveDraft as saveDraftRecord, deleteDraftIfUnchanged } from "../storage/drafts";
@@ -48,6 +54,27 @@ import "./App.css";
 import "./domain.css";
 
 type Phase = "loading" | "needsRegister" | "ready";
+
+/**
+ * 使用 Intl.RelativeTimeFormat 将 ISO 时间字符串格式化为相对时间。
+ * 自动适配 locale（中文/英文），降级时返回 ISO 日期简写。
+ */
+function formatRelativeTime(isoStr: string, locale: string): string {
+  try {
+    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    const diffMs = Date.now() - new Date(isoStr).getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHour = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHour / 24);
+    if (diffDay > 30) return rtf.format(-Math.floor(diffDay / 30), "month");
+    if (diffDay > 0) return rtf.format(-diffDay, "day");
+    if (diffHour > 0) return rtf.format(-diffHour, "hour");
+    if (diffMin > 0) return rtf.format(-diffMin, "minute");
+    return rtf.format(-Math.floor(diffMs / 1000), "second");
+  } catch {
+    return isoStr.slice(0, 10);
+  }
+}
 
 /**
  * 初始化域列表与文档树。
@@ -114,6 +141,13 @@ export function App() {
 
   // ---- 错误弹窗消息 ----
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
+
+  // ---- 删除确认弹窗 ----
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: "document" | "folder";
+    id: string;
+    name: string;
+  } | null>(null);
 
   // ---- 右键菜单状态 ----
   const [menu, setMenu] = useState<TreeContextMenuPayload | null>(null);
@@ -348,6 +382,61 @@ export function App() {
   // ---- 退出确认弹窗 ----
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  // ---- 收藏列表弹窗 ----
+  const [showBookmarksDialog, setShowBookmarksDialog] = useState(false);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedDomainId, setSelectedDomainId] = useState("");
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
+
+  /**
+   * 加载收藏列表。
+   */
+  async function loadBookmarks(): Promise<void> {
+    try {
+      const list = await fetchBookmarksApi();
+      setBookmarks(list);
+    } catch (err) {
+      setAlertMessage(translateError(t, err));
+    }
+  }
+
+  /** 域 ID → 域名称 的查找表 */
+  const domainNameLookup = useMemo(() => {
+    const lookup: Record<string, string> = {};
+    for (const d of domains) {
+      lookup[d.domainId] = d.domainName;
+    }
+    return lookup;
+  }, [domains]);
+
+  /** 筛选后的收藏列表 */
+  const filteredBookmarks = useMemo(() => {
+    let list = bookmarks;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((bm) => bm.displayName?.toLowerCase().includes(q));
+    }
+    if (selectedDomainId) {
+      list = list.filter((bm) => bm.domainId === selectedDomainId);
+    }
+    return list;
+  }, [bookmarks, searchQuery, selectedDomainId]);
+
+  /** 收藏中出现的域列表（用于筛选下拉） */
+  const uniqueDomains = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { id: string; name: string }[] = [];
+    for (const bm of bookmarks) {
+      const did = bm.domainId;
+      if (did && !seen.has(did)) {
+        seen.add(did);
+        result.push({ id: did, name: domainNameLookup[did] ?? did });
+      }
+    }
+    return result;
+  }, [bookmarks, domainNameLookup]);
+
   // ---- 发布冲突标记 ----
   const [conflict, setConflict] = useState(false);
 
@@ -407,25 +496,55 @@ export function App() {
   }
 
   /**
-   * 删除指定文档：先确认弹窗，成功后若当前正在编辑该文档则清空编辑器并返回首页。
+   * 触发文档删除：打开确认弹窗（不直接删除）。
    */
-  async function deleteDocumentById(documentId: string, label: string): Promise<void> {
-    // 弹出浏览器原生确认框，显示要删除的文档路径
-    if (!window.confirm(t("deleteConfirm", { name: label }))) return;
+  function requestDeleteDocument(documentId: string, label: string): void {
+    setDeleteConfirm({ type: "document", id: documentId, name: label });
+  }
+
+  /**
+   * 触发文件夹删除：打开确认弹窗。
+   */
+  function requestDeleteFolder(folderDocumentId: string, label: string): void {
+    setDeleteConfirm({ type: "folder", id: folderDocumentId, name: label });
+  }
+
+  /**
+   * 执行删除（用户在确认弹窗中点击「确定」时调用）。
+   */
+  async function executeDelete(): Promise<void> {
+    if (!deleteConfirm) return;
     try {
-      // 向后端发送删除请求
-      await deleteDocumentApi(documentId);
-      // 如果当前正在编辑的就是这篇文档，需要清理编辑器状态
-      if (activeDoc?.documentId === documentId) {
-        setActiveDoc(null);
-        setSelectedCreateParentPath("");
-        navigate("/");
+      if (deleteConfirm.type === "document") {
+        await deleteDocumentApi(deleteConfirm.id);
+        // 如果当前正在编辑的就是这篇文档，需要清理编辑器状态
+        if (activeDoc?.documentId === deleteConfirm.id) {
+          setActiveDoc(null);
+          setSelectedCreateParentPath("");
+          navigate("/");
+        }
+      } else if (deleteConfirm.type === "folder") {
+        await deleteFolderApi(deleteConfirm.id);
+        // 如果删除的文件夹包含当前文档，需要清空编辑器
+        // 这里简单处理：先全部刷新，之后让树重新加载
+        if (activeDoc) {
+          setActiveDoc(null);
+          setSelectedCreateParentPath("");
+          navigate("/");
+        }
       }
-      // 刷新文档树，移除已删除的文档节点
+      // 刷新文档树
       await refreshTree();
+      setMessage(
+        deleteConfirm.type === "folder"
+          ? `已删除「${deleteConfirm.name}」及其下所有内容`
+          : `已删除「${deleteConfirm.name}」`,
+      );
+      window.setTimeout(() => setMessage(null), 2000);
     } catch (err) {
-      // 删除失败（如无权限、文档不存在），显示错误提示
       setAlertMessage(translateError(t, err));
+    } finally {
+      setDeleteConfirm(null);
     }
   }
 
@@ -592,9 +711,14 @@ export function App() {
               </div>
               <button
                 type="button"
-                className="mdocs-sidebar-logout"
-                title="退出登录"
-                onClick={() => setShowLogoutConfirm(true)}
+                className="mdocs-sidebar-bookmark mdocs-tooltip"
+                data-tooltip={t("bookmark")}
+                onClick={() => {
+                  setShowBookmarksDialog(true);
+                  setSearchQuery("");
+                  setSelectedDomainId("");
+                  void loadBookmarks();
+                }}
                 style={{
                   background: "none",
                   border: "none",
@@ -606,7 +730,24 @@ export function App() {
                   borderRadius: 4,
                 }}
               >
-                ⏻
+                <Star size={16} strokeWidth={1.5} />
+              </button>
+              <button
+                type="button"
+                className="mdocs-sidebar-logout mdocs-tooltip"
+                data-tooltip={t("logout")}
+                onClick={() => setShowLogoutConfirm(true)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "6px",
+                  color: "var(--mdocs-text-muted, #999)",
+                  lineHeight: 1,
+                  borderRadius: 4,
+                }}
+              >
+                <LogOut size={16} strokeWidth={1.5} />
               </button>
             </footer>
           </aside>
@@ -637,10 +778,18 @@ export function App() {
                   });
                 }}
                 onPublish={publishDocument}
-                onDelete={() =>
-                  deleteDocumentById(activeDoc.documentId, activeDoc.relativePath)
-                }
+                onDelete={() => {
+                  // 如果是目录描述文档，删除整个目录
+                  if (activeDoc.relativePath.endsWith("/___desc___.md")) {
+                    const folderPath = activeDoc.relativePath.replace(/\/___desc___\.md$/, "");
+                    // 直接传 desc 文档的 ID，后端会自动找父目录
+                    requestDeleteFolder(activeDoc.documentId, folderPath);
+                  } else {
+                    requestDeleteDocument(activeDoc.documentId, activeDoc.relativePath);
+                  }
+                }}
                 saveBeforeNavRef={saveBeforeNavRef}
+                onShowToast={setMessage}
               />
             ) : (
               // ---- 没有文档打开：渲染欢迎页 ----
@@ -740,6 +889,174 @@ export function App() {
             </div>
           )}
 
+          {/* ========== 收藏列表弹窗 ========== */}
+          {showBookmarksDialog && (
+            <div
+              className="mdocs-dialog-backdrop"
+              onClick={(e) => { if (e.target === e.currentTarget) setShowBookmarksDialog(false); }}
+            >
+              <div className="mdocs-dialog card" style={{ maxWidth: 640, width: "min(640px, 100%)", maxHeight: "70vh", display: "flex", flexDirection: "column" }}>
+                <h1 style={{ fontSize: "1.125rem", marginBottom: 16 }}>
+                  {t("bookmarkTitle")}（{bookmarks.length}）
+                </h1>
+
+                {bookmarks.length > 0 && (
+                  <div className="mdocs-bookmark-filterbar">
+                    <input
+                      type="text"
+                      placeholder={t("bookmarkSearch")}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    <select
+                      value={selectedDomainId}
+                      onChange={(e) => setSelectedDomainId(e.target.value)}
+                    >
+                      <option value="">{t("bookmarkFilterAll")}</option>
+                      {uniqueDomains.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {bookmarks.length === 0 ? (
+                  <p style={{ color: "var(--mdocs-text-muted, #999)", textAlign: "center", padding: "2rem 0" }}>
+                    {t("bookmarkEmpty")}
+                  </p>
+                ) : filteredBookmarks.length === 0 ? (
+                  <p style={{ color: "var(--mdocs-text-muted, #999)", textAlign: "center", padding: "2rem 0" }}>
+                    {t("bookmarkNoMatch")}
+                  </p>
+                ) : (
+                  <div style={{ overflowY: "auto", flex: 1, margin: "0 -1rem", padding: "0 1rem" }}>
+                    <table className="mdocs-bookmark-table">
+                      <thead>
+                        <tr>
+                          <th>{t("bookmarkColTitle")}</th>
+                          <th>{t("bookmarkColDomain")}</th>
+                          <th>{t("bookmarkColAuthor")}</th>
+                          <th>{t("bookmarkColTime")}</th>
+                          <th className="mdocs-bookmark-col-action" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                    {filteredBookmarks.map((bm) => {
+                      const isRemoving = removingIds.has(bm.documentId);
+                      return (
+                      <tr
+                        key={bm.documentId}
+                        className={`${isRemoving ? "mdocs-bookmark-removing" : ""}`}
+                        style={{ opacity: bm.isDeleted ? 0.6 : 1 }}
+                      >
+                        <td className="mdocs-bookmark-col-title">
+                          <div
+                            style={{ cursor: bm.isDeleted ? "default" : "pointer", display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}
+                            onClick={() => {
+                              if (bm.isDeleted) return;
+                              guardNavigate(() => {
+                                setShowBookmarksDialog(false);
+                                navigate(`/doc/${bm.documentId}`);
+                              });
+                            }}
+                          >
+                            <span
+                              ref={(el) => {
+                                if (el) {
+                                  const overflow = el.scrollWidth > el.clientWidth;
+                                  el.title = overflow ? (bm.displayName ?? "") : "";
+                                }
+                              }}
+                              style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}
+                            >{bm.displayName ?? "(无标题)"}</span>
+                            {bm.isDeleted && <span style={{ fontSize: "0.7rem", color: "#d32f2f", background: "#ffebee", padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>已删除</span>}
+                          </div>
+                        </td>
+                        <td>{bm.isDeleted ? "" : (domainNameLookup[bm.domainId ?? ""] ?? bm.domainId ?? "")}</td>
+                        <td>{bm.isDeleted ? "" : (bm.ownerVisitorName ?? "-")}</td>
+                        <td>{bm.isDeleted ? "" : formatRelativeTime(bm.bookmarkedAt, lang)}</td>
+                        <td className="mdocs-bookmark-col-action">
+                          <div style={{ display: "flex", gap: 2, alignItems: "center", justifyContent: "flex-end" }}>
+                            <button
+                              type="button"
+                              className="mdocs-tooltip"
+                              data-tooltip={t("bookmarkOpen")}
+                              onClick={() => {
+                                if (bm.isDeleted) return;
+                                guardNavigate(() => {
+                                  setShowBookmarksDialog(false);
+                                  navigate(`/doc/${bm.documentId}`);
+                                });
+                              }}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: bm.isDeleted ? "default" : "pointer",
+                                padding: "4px",
+                                color: "var(--mdocs-text-muted, #999)",
+                                lineHeight: 1,
+                                borderRadius: 4,
+                                display: "inline-flex",
+                                alignItems: "center",
+                              }}
+                            >
+                              <BookOpen size={14} strokeWidth={1.5} />
+                            </button>
+                            <button
+                              type="button"
+                              className="mdocs-tooltip"
+                              data-tooltip={t("bookmarkRemove")}
+                              onClick={async () => {
+                                try {
+                                  await removeBookmarkApi(bm.documentId);
+                                  setRemovingIds((prev) => new Set(prev).add(bm.documentId));
+                                  setTimeout(() => {
+                                    setBookmarks((prev) => prev.filter((x) => x.documentId !== bm.documentId));
+                                    setRemovingIds((prev) => {
+                                      const next = new Set(prev);
+                                      next.delete(bm.documentId);
+                                      return next;
+                                    });
+                                  }, 300);
+                                } catch (err) {
+                                  setAlertMessage(translateError(t, err));
+                                }
+                              }}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                padding: "4px",
+                                color: "var(--mdocs-text-muted, #999)",
+                                fontSize: "1rem",
+                                lineHeight: 1,
+                                borderRadius: 4,
+                                display: "inline-flex",
+                                alignItems: "center",
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = "#d32f2f"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--mdocs-text-muted, #999)"; }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      );
+                    })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="mdocs-dialog-actions" style={{ justifyContent: "flex-end", marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--mdocs-border, #eee)" }}>
+                  <button type="button" onClick={() => setShowBookmarksDialog(false)}>
+                    {t("close")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ========== 右键菜单浮层 ========== */}
           {menu && (
             <TreeContextMenu
@@ -750,7 +1067,25 @@ export function App() {
               onClose={() => setMenu(null)}
               onCreateChild={(parent) => openNewDocumentModal(parent)}
               onCreateFolder={(parent) => openNewFolderModal(parent)}
-              onDelete={(doc) => deleteDocumentById(doc.documentId, doc.path)}
+              onDeleteDocument={(doc) => requestDeleteDocument(doc.documentId, doc.path)}
+              onDeleteFolder={(folder) => requestDeleteFolder(folder.documentId, folder.folderDisplayName || folder.name)}
+            />
+          )}
+
+          {/* ========== 删除确认弹窗 ========== */}
+          {deleteConfirm && (
+            <ConfirmDialog
+              title={deleteConfirm.type === "folder" ? "删除文件夹" : "删除文档"}
+              message={
+                deleteConfirm.type === "folder"
+                  ? `确定要删除「${deleteConfirm.name}」及其下的所有文档和子文件夹吗？此操作不可撤销。`
+                  : `确定要删除「${deleteConfirm.name}」吗？`
+              }
+              confirmLabel="删除"
+              cancelLabel="取消"
+              onConfirm={executeDelete}
+              onCancel={() => setDeleteConfirm(null)}
+              danger
             />
           )}
 

@@ -18,7 +18,8 @@ export function TreeContextMenu(props: {
   onClose: () => void;
   onCreateChild: (parentPath: string) => void;
   onCreateFolder: (parentPath: string) => void;
-  onDelete: (node: Extract<TreeNode, { type: "document" }>) => void;
+  onDeleteDocument: (node: Extract<TreeNode, { type: "document" }>) => void;
+  onDeleteFolder: (node: Extract<TreeNode, { type: "folder" }>) => void;
 }) {
   const { t } = useI18n();
 
@@ -106,20 +107,23 @@ export function TreeContextMenu(props: {
       >
         {folderLabel}
       </button>
-      {/* 删除按钮：仅文档节点可删除 */}
-      {props.node.type === "document" && (
-        <button
-          type="button"
-          className="mdocs-context-item danger"
-          onClick={() => {
-            const doc = props.node as Extract<TreeNode, { type: "document" }>;
-            props.onDelete(doc);
-            props.onClose();
-          }}
-        >
-          {t("deleteItem", { name: props.node.name })}
-        </button>
-      )}
+      {/* 删除按钮：文档和文件夹均可删除 */}
+      <button
+        type="button"
+        className="mdocs-context-item danger"
+        onClick={() => {
+          if (props.node.type === "document") {
+            props.onDeleteDocument(props.node);
+          } else {
+            props.onDeleteFolder(props.node);
+          }
+          props.onClose();
+        }}
+      >
+        {props.node.type === "folder"
+          ? t("deleteFolder", { name: folderHuman || props.node.name })
+          : t("deleteItem", { name: props.node.name })}
+      </button>
     </div>
   );
 }

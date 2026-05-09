@@ -1230,3 +1230,179 @@ strong.label {
   background: var(--mdocs-surface);
   border-bottom: 1px solid var(--mdocs-border);
 }
+
+/* === Icon button hover effects === */
+.mdocs-sidebar-bookmark,
+.mdocs-sidebar-logout {
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.mdocs-sidebar-bookmark:hover,
+.mdocs-sidebar-logout:hover {
+  color: var(--mdocs-text, #111827) !important;
+  background: var(--mdocs-bg-hover, #F3F4F6) !important;
+}
+
+.mdocs-bookmark-btn {
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.mdocs-bookmark-btn:hover:not(:disabled) {
+  transform: scale(1.1);
+}
+
+/* === Instant Tooltip === */
+.mdocs-tooltip {
+  position: relative;
+}
+
+.mdocs-tooltip::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.05s ease, visibility 0.05s ease;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.mdocs-tooltip::after {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.85);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.05s ease, visibility 0.05s ease;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.mdocs-tooltip:hover::before,
+.mdocs-tooltip:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* 向下的 tooltip */
+.mdocs-tooltip-bottom::before {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
+.mdocs-tooltip-bottom::after {
+  top: calc(100% + 1px);
+  bottom: auto;
+  border-top-color: transparent;
+  border-bottom-color: rgba(0, 0, 0, 0.85);
+}
+
+/* === 收藏弹窗 === */
+.mdocs-bookmark-filterbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mdocs-bookmark-filterbar input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--mdocs-border, #e5e7eb);
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--mdocs-bg, #f9fafb);
+  color: var(--mdocs-text, #111827);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mdocs-bookmark-filterbar input:focus {
+  border-color: var(--mdocs-accent, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.mdocs-bookmark-filterbar select {
+  padding: 6px 10px;
+  border: 1px solid var(--mdocs-border, #e5e7eb);
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--mdocs-bg, #f9fafb);
+  color: var(--mdocs-text, #111827);
+  outline: none;
+  cursor: pointer;
+  max-width: 140px;
+}
+
+.mdocs-bookmark-filterbar select:focus {
+  border-color: var(--mdocs-accent, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.mdocs-bookmark-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 2px;
+  table-layout: fixed;
+}
+
+.mdocs-bookmark-table th {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  color: var(--mdocs-text-muted, #999);
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 1px solid var(--mdocs-border, #eee);
+}
+
+.mdocs-bookmark-table td {
+  padding: 10px 12px;
+  font-size: 0.8125rem;
+  color: var(--mdocs-text-muted, #999);
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mdocs-bookmark-table .mdocs-bookmark-col-title {
+  color: var(--mdocs-text, #111827);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mdocs-bookmark-table .mdocs-bookmark-col-action {
+  width: 72px;
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.mdocs-bookmark-table tbody tr {
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.mdocs-bookmark-table tbody tr:hover td {
+  background: var(--mdocs-hover-bg, #f5f5f5);
+}
+
+.mdocs-bookmark-removing {
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+

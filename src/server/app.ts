@@ -12,6 +12,7 @@ import { buildDomainsRouter } from "./routes/domains.routes.js";
 import { buildDomainMemberTemplatesRouter } from "./routes/domain-member-templates.routes.js";
 import { buildFoldersRouter } from "./routes/folders.routes.js";
 import { buildCliTokensRouter } from "./routes/cli-tokens.routes.js";
+import { buildBookmarksRouter } from "./routes/bookmarks.routes.js";
 import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
 import { startIndexTimer } from "./search/document-index-manager.js";
 import { useLogger } from "./logger/logger.js";
@@ -54,6 +55,7 @@ export function buildApp(): Application {
   app.use("/api/domain-member-templates", buildDomainMemberTemplatesRouter());
   app.use("/api/folders", buildFoldersRouter());
   app.use("/api/cli", buildCliTokensRouter());
+  app.use("/api/bookmarks", buildBookmarksRouter());
 
   // 兜底：未匹配到的 API 路径返回 404
   app.use("/api", (_req, res) => {

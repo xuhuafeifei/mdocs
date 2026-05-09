@@ -115,7 +115,15 @@ const SCHEMA_STATEMENTS: string[] = [
     created_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_cli_tokens_visitor ON cli_tokens (visitor_id)`,
+  `CREATE TABLE IF NOT EXISTS document_bookmarks (
+    visitor_id TEXT NOT NULL,
+    document_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (visitor_id, document_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_bookmarks_visitor ON document_bookmarks (visitor_id)`,
 ];
+
 
 /**
  * 在数据库上应用完整 Schema。

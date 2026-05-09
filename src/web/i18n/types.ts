@@ -68,6 +68,7 @@ export type TranslationKey =
   | "newFolderAtRoot"
   | "newFolderBeside"
   | "deleteItem"
+  | "deleteFolder"
   // Flow diagram
   | "editDiagram"
   | "newDiagram"
@@ -265,4 +266,29 @@ export type TranslationKey =
   | "cliTokenCopied"
   | "cliTokenResetConfirm"
   | "cliTokenActive"
-  | "cliTokenRevoked";
+  | "cliTokenRevoked"
+  // Document info menu
+  | "docInfo"
+  | "docInfoCreator"
+  | "docInfoCreatedAt"
+  | "docInfoSize"
+  | "docInfoUpdatedAt"
+  | "docInfoChangePermission"
+  // Bookmarks
+  | "bookmark"
+  | "bookmarkAdd"
+  | "bookmarkRemove"
+  | "bookmarkTitle"
+  | "bookmarkEmpty"
+  | "bookmarkOpen"
+  | "bookmarkAdded"
+  | "bookmarkRemoved"
+  | "bookmarkColTitle"
+  | "bookmarkColDomain"
+  | "bookmarkColAuthor"
+  | "bookmarkColTime"
+  | "bookmarkSearch"
+  | "bookmarkFilterAll"
+  | "bookmarkNoMatch"
+  // Logout
+  | "logout";

@@ -7,6 +7,7 @@ import {
   getDocumentInvites,
   listDocuments,
   removeDocument,
+  removeFolder,
   removeDocumentInvite,
   updateDocument,
 } from "../documents/document.service.js";
@@ -185,6 +186,29 @@ export function buildDocumentsRouter(): Router {
       res.status(204).end();
     } catch (err) {
       respondError(res, err, "documents-route.delete");
+    }
+  });
+
+  /**
+   * DELETE /folder/:folderDocumentId
+   * 删除目录及其下所有文档和子目录。需目录创建者身份。
+   *
+   * 通过 folder 的 documentId 定位目录，递归删除该路径下所有内容。
+   */
+  router.delete("/folder/:folderDocumentId", (req: Request, res: Response) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+      return;
+    }
+    const folderDocumentId = req.params.folderDocumentId!;
+    try {
+      const result = removeFolder({
+        actorVisitorId: req.visitor.visitor_id,
+        folderDocumentId,
+      });
+      res.json({ data: result });
+    } catch (err) {
+      respondError(res, err, "documents-route.delete-folder");
     }
   });
 

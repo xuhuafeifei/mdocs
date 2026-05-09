@@ -84,6 +84,16 @@ export interface DomainAccessInfo {
   isDomainMember: boolean;
 }
 
+/**
+ * 获取域权限上下文（供 bookmarks 等模块使用）。
+ */
+export function getDomainInfo(db: any, domainId: string, visitorId: string | null): DomainAccessInfo {
+  const domain = findDomainById(db, domainId);
+  const domainPermission = domain?.permission ?? "public";
+  const isDomainMember = !!(visitorId && domain && checkDomainMember(db, domain.domain_id, visitorId));
+  return { domainPermission, isDomainMember };
+}
+
 // ============================================================
 //  读权限
 // ============================================================

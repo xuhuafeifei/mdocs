@@ -8,6 +8,8 @@ export interface DocumentSummary {
   updatedAt: string;
   createdAt: string;
   permission: number;
+  fileType: string;
+  parentId: string | null;
 }
 
 export interface DocumentDetail extends DocumentSummary {

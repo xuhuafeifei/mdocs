@@ -74,14 +74,19 @@ export function markDirty(documentId: string): void {
  */
 export function removeIndex(documentId: string): void {
   const db = getDb();
-  // 查 FTS rowid 映射
-  const mapRow = db
-    .prepare(`SELECT fts_rowid FROM documents_fts_rowid WHERE document_id = ?`)
-    .get(documentId) as { fts_rowid: number } | undefined;
-  if (mapRow) {
-    // FTS5 删除语法：INSERT INTO table(table, rowid) VALUES('delete', ?)
-    db.prepare(`INSERT INTO documents_fts(documents_fts, rowid) VALUES('delete', ?)`).run(mapRow.fts_rowid);
-    db.prepare(`DELETE FROM documents_fts_rowid WHERE document_id = ?`).run(documentId);
+  try {
+    // 查 FTS rowid 映射
+    const mapRow = db
+      .prepare(`SELECT fts_rowid FROM documents_fts_rowid WHERE document_id = ?`)
+      .get(documentId) as { fts_rowid: number } | undefined;
+    if (mapRow) {
+      // FTS5 删除语法：INSERT INTO table(table, rowid) VALUES('delete', ?)
+      db.prepare(`INSERT INTO documents_fts(documents_fts, rowid) VALUES('delete', ?)`).run(mapRow.fts_rowid);
+      db.prepare(`DELETE FROM documents_fts_rowid WHERE document_id = ?`).run(documentId);
+    }
+  } catch {
+    // 忽略索引删除错误，不影响文档删除的主流程
+    // 索引不一致问题会在下次 rebuildAllDirty 时自动修复
   }
 }
 

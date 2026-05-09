@@ -9,6 +9,7 @@ import {
   deleteDocumentInvite,
   listDocumentInvites,
   listDocumentsByDomain,
+  listDocumentsByPathPrefix,
   updateDocumentContent,
   type DocumentRow,
 } from "../db/repositories/document.repo.js";
@@ -401,6 +402,87 @@ export function removeDocument(params: {
 }
 
 // ============================================================
+//  删除目录（批量删除目录下所有文档和子目录）
+// ============================================================
+
+export function removeFolder(params: {
+  actorVisitorId: string;
+  folderDocumentId: string;
+}): { deletedCount: number } {
+  const db = getDb();
+  let folder = findDocumentById(db, params.folderDocumentId);
+  if (!folder) throw new DocumentError("DOC_NOT_FOUND", "目录不存在", 404);
+
+  // 如果传进来的是 ___desc___.md 文档，自动查找它的父目录
+  if (folder.file_type === "md" && folder.relative_path.endsWith("/___desc___.md")) {
+    if (!folder.parent_id) {
+      throw new DocumentError("BAD_REQUEST", "描述文档无父目录", 400);
+    }
+    folder = findDocumentById(db, folder.parent_id);
+    if (!folder || folder.file_type !== "dir") {
+      throw new DocumentError("DOC_NOT_FOUND", "父目录不存在", 404);
+    }
+  }
+
+  if (folder.file_type !== "dir") {
+    throw new DocumentError("BAD_REQUEST", "不是目录", 400);
+  }
+  if (folder.owner_visitor_id !== params.actorVisitorId) {
+    throw new DocumentError("FORBIDDEN", "仅创建者可删除此目录", 403);
+  }
+
+  // 目录路径前缀，用于匹配所有子文档和子目录
+  const pathPrefix = `${folder.relative_path}/`;
+
+  // 找出该目录下所有文档（包括子目录、描述文档、普通文档）
+  const allDocs = listDocumentsByPathPrefix(db, folder.domain_id, pathPrefix);
+
+  // 加上目录本身
+  const allToDelete = [...allDocs, folder];
+
+  if (allToDelete.length === 0) return { deletedCount: 0 };
+
+  // 校验所有文档都是当前用户创建的
+  const notOwned = allToDelete.filter((d) => d.owner_visitor_id !== params.actorVisitorId);
+  if (notOwned.length > 0) {
+    throw new DocumentError(
+      "FORBIDDEN",
+      `目录下有 ${notOwned.length} 篇文档不属于你，无法删除`,
+      403,
+    );
+  }
+
+  const now = new Date().toISOString();
+  const deletedIds: string[] = [];
+
+  const tx = db.transaction(() => {
+    for (const doc of allToDelete) {
+      deleteDocument(db, doc.document_id);
+      deletedIds.push(doc.document_id);
+      insertAuditLog(db, {
+        actorVisitorId: params.actorVisitorId,
+        action: doc.file_type === "dir" ? "folder.delete" : "document.delete",
+        targetType: doc.file_type === "dir" ? "folder" : "document",
+        targetId: doc.document_id,
+        metadata: { relativePath: doc.relative_path, viaFolderDelete: true },
+        createdAt: now,
+      });
+    }
+  });
+  tx();
+
+  // 删除磁盘文件和索引（只删 md 文件有内容的，dir 类型不写磁盘）
+  for (const doc of allToDelete) {
+    if (doc.file_type === "md") {
+      deleteDocumentFile(doc.domain_id, doc.relative_path);
+      removeIndex(doc.document_id);
+    }
+  }
+
+  return { deletedCount: allToDelete.length };
+}
+
+// ============================================================
 //  文档邀请
 // ============================================================
 
@@ -470,6 +552,8 @@ function rowToSummary(row: DocumentRow): DocumentSummary {
     updatedAt: row.updated_at,
     createdAt: row.created_at,
     permission: row.permission,
+    fileType: row.file_type,
+    parentId: row.parent_id,
   };
 }
 

@@ -324,9 +324,19 @@ export function createFolderApi(input: {
 
 /**
  * 删除空目录。
+ * @deprecated 请使用 deleteFolderApi（新版，支持递归删除）
  */
-export function deleteFolderApi(folderId: string): Promise<void> {
+export function deleteFolderApiV0(folderId: string): Promise<void> {
   return api<void>(`/api/folders/${encodeURIComponent(folderId)}`, {
+    method: "DELETE",
+  });
+}
+
+/**
+ * 删除目录及其下所有内容（递归删除）。
+ */
+export function deleteFolderApi(folderDocumentId: string): Promise<{ deletedCount: number }> {
+  return api<{ deletedCount: number }>(`/api/documents/folder/${encodeURIComponent(folderDocumentId)}`, {
     method: "DELETE",
   });
 }
@@ -386,5 +396,53 @@ export function searchDocumentsApi(input: {
   return api<SearchResult[]>("/api/documents/search", {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+// ========== 书签/收藏 ==========
+
+/** 收藏的文档条目 */
+export interface Bookmark {
+  documentId: string;
+  domainId: string | null;
+  relativePath: string | null;
+  displayName: string | null;
+  ownerVisitorId: string | null;
+  ownerVisitorName: string | null;
+  permission: number | null;
+  createdAt: string | null;
+  bookmarkedAt: string;
+  isDeleted: boolean;
+}
+
+/**
+ * 获取当前访客的所有收藏列表。
+ */
+export function fetchBookmarksApi(): Promise<Bookmark[]> {
+  return api<Bookmark[]>("/api/bookmarks");
+}
+
+/**
+ * 检查是否已收藏某文档。
+ */
+export function checkBookmarkApi(documentId: string): Promise<{ bookmarked: boolean }> {
+  return api<{ bookmarked: boolean }>(`/api/bookmarks/${encodeURIComponent(documentId)}`);
+}
+
+/**
+ * 添加收藏。
+ */
+export function addBookmarkApi(documentId: string): Promise<void> {
+  return api<void>(`/api/bookmarks/${encodeURIComponent(documentId)}`, {
+    method: "POST",
+  });
+}
+
+/**
+ * 取消收藏。
+ */
+export function removeBookmarkApi(documentId: string): Promise<void> {
+  return api<void>(`/api/bookmarks/${encodeURIComponent(documentId)}`, {
+    method: "DELETE",
   });
 }

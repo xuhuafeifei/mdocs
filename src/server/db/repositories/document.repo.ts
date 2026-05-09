@@ -190,6 +190,27 @@ export function deleteDocument(db: Database.Database, documentId: string): void 
   db.prepare(`DELETE FROM documents WHERE document_id = ?`).run(documentId);
 }
 
+/**
+ * 查询指定域下某路径前缀的所有文档（递归查找目录下所有内容）。
+ * 用于目录删除时找出所有需要删除的文档。
+ *
+ * @param db - better-sqlite3 数据库实例
+ * @param domainId - 域 ID
+ * @param pathPrefix - 路径前缀（如 "folder/subfolder/"）
+ * @returns 匹配的文档行数组
+ */
+export function listDocumentsByPathPrefix(
+  db: Database.Database,
+  domainId: string,
+  pathPrefix: string,
+): DocumentRow[] {
+  return db
+    .prepare<[string, string], DocumentRow>(
+      `SELECT * FROM documents WHERE domain_id = ? AND relative_path LIKE ?`,
+    )
+    .all(domainId, `${pathPrefix}%`);
+}
+
 /** 文档邀请在数据库中的行结构，对应 document_invites 表。 */
 export interface DocumentInviteRow {
   document_id: string;

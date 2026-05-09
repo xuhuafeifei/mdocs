@@ -35,12 +35,12 @@ export function buildVisitorsRouter(): Router {
     }
     try {
       const result = registerVisitor(body.visitorName);
-      // 设置 HttpOnly Cookie（1 年有效期，跨端口共享）
+      // 设置 HttpOnly Cookie（10 年有效期，约等于永久）
       res.cookie("visitor_token", result.visitorToken, {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
-        maxAge: 365 * 24 * 60 * 60 * 1000,
+        maxAge: 10 * 365 * 24 * 60 * 60 * 1000,
       });
       res.json({
         data: {
@@ -76,12 +76,12 @@ export function buildVisitorsRouter(): Router {
       res.status(404).json({ error: { code: "INVALID_RECOVERY_CODE", message: "recovery code is invalid or expired" } });
       return;
     }
-    // 设置 HttpOnly Cookie
+    // 设置 HttpOnly Cookie（10 年有效期，约等于永久）
     res.cookie("visitor_token", result.visitorToken, {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
-      maxAge: 365 * 24 * 60 * 60 * 1000,
+      maxAge: 10 * 365 * 24 * 60 * 60 * 1000,
     });
     res.json({
       data: {

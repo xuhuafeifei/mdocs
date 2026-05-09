@@ -42,7 +42,7 @@ import {
 } from "@lobehub/editor";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
-import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, SigmaIcon, Table2Icon } from "lucide-react";
+import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, SigmaIcon, Table2Icon, TextAlignJustify } from "lucide-react";
 
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
@@ -50,11 +50,12 @@ import { useI18n } from "../i18n";
 import { openFileSelector } from "./actions";
 import Toolbar from "./Toolbar";
 import { DomainSelect } from "./DomainSelect";
-import { uploadAssetApi } from "../services/endpoints";
+import { uploadAssetApi, checkBookmarkApi, addBookmarkApi, removeBookmarkApi, fetchVisitorsDirectoryApi } from "../services/endpoints";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { usePublishGuard } from "./hooks/usePublishGuard";
 import { localizeDomainName } from "./utils";
 import { FALLBACK_DOMAIN_SUMMARY } from "../services/domainsBootstrap";
+import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 
 /**
  * 大纲侧边栏：根据大纲可见性动态控制宽度，带动画过渡效果。
@@ -94,11 +95,45 @@ interface DocumentEditorProps {
   onDelete: () => Promise<void>;
   /** Called by App.tsx before navigation to flush pending changes */
   saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
+  /** Toast message callback */
+  onShowToast?: (message: string) => void;
 }
 
 export function DocumentEditor(props: DocumentEditorProps) {
   // ---- 国际化 ----
   const { t, lang } = useI18n();
+
+  // ---- 文档信息菜单显示状态 ----
+  const [showDocInfoMenu, setShowDocInfoMenu] = useState(false);
+  const docInfoMenuRef = useRef<HTMLDivElement>(null);
+  const [visitors, setVisitors] = useState<VisitorDirectoryEntry[]>([]);
+
+  // ---- 点击菜单外部自动关闭 ----
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (docInfoMenuRef.current && !docInfoMenuRef.current.contains(event.target as Node)) {
+        setShowDocInfoMenu(false);
+      }
+    };
+
+    if (showDocInfoMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showDocInfoMenu]);
+
+  // ---- 加载访客目录（用于显示创建者昵称）----
+  useEffect(() => {
+    fetchVisitorsDirectoryApi().then(setVisitors).catch(() => {});
+  }, []);
+
+  /**
+   * 根据 visitorId 查找访客昵称
+   */
+  function getVisitorName(visitorId: string): string {
+    const v = visitors.find((x) => x.visitorId === visitorId);
+    return v?.visitorName ?? visitorId.slice(0, 8);
+  }
 
   // ---- 文档标题（显示名称）----
   // 用户可以在输入框中修改，失焦时自动保存
@@ -107,6 +142,10 @@ export function DocumentEditor(props: DocumentEditorProps) {
   // ---- 发布中状态 ----
   // true 时禁用发布按钮，防止重复提交
   const [busy, setBusy] = useState(false);
+
+  // ---- 书签/收藏状态 ----
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [bookmarkBusy, setBookmarkBusy] = useState(false);
 
   // ---- 是否处于编辑模式 ----
   // 从 localStorage 读取用户偏好，默认自动进入编辑模式
@@ -209,6 +248,47 @@ export function DocumentEditor(props: DocumentEditorProps) {
   }, [props.document.displayName, props.document.documentId]);
 
   /**
+   * 切换文档时检查当前文档的收藏状态。
+   */
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const result = await checkBookmarkApi(props.document.documentId);
+        if (mounted) {
+          setIsBookmarked(result.bookmarked);
+        }
+      } catch {
+        // 忽略检查书签的错误
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [props.document.documentId]);
+
+  /**
+   * 切换收藏状态。
+   */
+  async function toggleBookmark(): Promise<void> {
+    if (bookmarkBusy) return;
+    setBookmarkBusy(true);
+    try {
+      if (isBookmarked) {
+        await removeBookmarkApi(props.document.documentId);
+        setIsBookmarked(false);
+        props.onShowToast?.(t("bookmarkRemoved"));
+      } else {
+        await addBookmarkApi(props.document.documentId);
+        setIsBookmarked(true);
+        props.onShowToast?.(t("bookmarkAdded"));
+      }
+    } finally {
+      setBookmarkBusy(false);
+    }
+  }
+
+  /**
    * 将 saveDraft 方法暴露给 App.tsx，以便导航前刷新待保存的变更。
    * 不需要依赖项，每次渲染都更新 ref，确保 App.tsx 拿到最新方法。
    */
@@ -217,6 +297,15 @@ export function DocumentEditor(props: DocumentEditorProps) {
       props.saveBeforeNavRef.current = saveDraft;
     }
   });
+
+  /**
+   * 格式化文件大小显示
+   */
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
 
   /**
    * 编辑器初始化回调。
@@ -546,6 +635,102 @@ export function DocumentEditor(props: DocumentEditorProps) {
               </button>
             )
           )}
+          {/* 文档信息菜单按钮（所有模式都显示） */}
+          <div ref={docInfoMenuRef} className="mdocs-tooltip mdocs-tooltip-bottom" data-tooltip={t("docInfo")} style={{ position: "relative" }}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setShowDocInfoMenu(!showDocInfoMenu)}
+              style={{ padding: "4px 8px", minWidth: "auto", display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              <TextAlignJustify size={18} strokeWidth={1.5} style={{ color: "var(--mdocs-text-secondary, #6b7280)" }} />
+            </button>
+            {/* 下拉菜单 */}
+            {showDocInfoMenu && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  right: 0,
+                  marginTop: "4px",
+                  background: "var(--mdocs-surface, #fff)",
+                  border: "1px solid var(--mdocs-border, #e5e5e5)",
+                  borderRadius: "8px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                  minWidth: "220px",
+                  zIndex: 100,
+                  padding: "8px 0",
+                }}
+              >
+                {/* 元信息区域 */}
+                <div style={{ padding: "4px 16px", fontSize: "13px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCreator")}</span>
+                    <span>{getVisitorName(props.document.ownerVisitorId)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCreatedAt")}</span>
+                    <span>{new Date(props.document.createdAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoSize")}</span>
+                    <span>{formatFileSize(new Blob([props.document.content]).size)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoUpdatedAt")}</span>
+                    <span>{new Date(props.document.updatedAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
+                  </div>
+                </div>
+                {/* 分隔线 */}
+                <div style={{ height: "1px", background: "var(--mdocs-border, #e5e5e5)", margin: "8px 0" }} />
+                {/* 可点击操作按钮区域 */}
+                <button
+                  type="button"
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "8px 16px",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                  onClick={() => {
+                    void toggleBookmark();
+                  }}
+                >
+                  <span>{isBookmarked ? "⭐" : "☆"}</span>
+                  <span>{isBookmarked ? t("bookmarkRemove") : t("bookmarkAdd")}</span>
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "8px 16px",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                  onClick={() => {
+                    setShowDocInfoMenu(false);
+                    // TODO: 打开权限修改弹窗
+                    alert("修改权限功能开发中...");
+                  }}
+                >
+                  {t("docInfoChangePermission")}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <OutlineProvider>

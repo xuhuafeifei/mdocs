@@ -61,8 +61,8 @@ vi.mock("../logger/logger.js", () => ({
 }));
 
 import { buildDocumentTree } from "./tree.service.js";
-import { createDocument } from "./document.service.js";
-import { findDocumentById, countChildrenByParent } from "../db/repositories/document.repo.js";
+import { createDocument, removeFolder } from "./document.service.js";
+import { findDocumentById, countChildrenByParent, listDocumentsByPathPrefix } from "../db/repositories/document.repo.js";
 import { getDb } from "../db/connection.js";
 import { buildFoldersRouter } from "../routes/folders.routes.js";
 import type { Express } from "express";
@@ -426,5 +426,106 @@ describe("countChildrenByParent", () => {
     const folderId = createFolder("with-subfolder");
     createFolder("sub", "default", folderId);
     expect(countChildrenByParent(getDb(), folderId)).toBe(1);
+  });
+});
+
+// ============================================================
+//  removeFolder 递归删除目录测试
+// ============================================================
+
+describe("removeFolder 递归删除目录", () => {
+  it("删除空目录：成功，返回 deletedCount = 1（仅目录本身）", () => {
+    const folderId = createFolder("empty-folder");
+    const result = removeFolder({ actorVisitorId: OWNER, folderDocumentId: folderId });
+    expect(result.deletedCount).toBe(1);
+    expect(findDocumentById(getDb(), folderId)).toBeUndefined();
+  });
+
+  it("删除含文档的目录：目录和所有文档都被删除", () => {
+    const folderId = createFolder("with-docs");
+    const doc1 = createDoc("with-docs/a.md", "content a", "default", folderId);
+    const doc2 = createDoc("with-docs/b.md", "content b", "default", folderId);
+
+    const result = removeFolder({ actorVisitorId: OWNER, folderDocumentId: folderId });
+
+    // 删除数量：目录本身 + 2篇文档 = 3
+    expect(result.deletedCount).toBe(3);
+    expect(findDocumentById(getDb(), folderId)).toBeUndefined();
+    expect(findDocumentById(getDb(), doc1.documentId)).toBeUndefined();
+    expect(findDocumentById(getDb(), doc2.documentId)).toBeUndefined();
+  });
+
+  it("删除嵌套目录：所有层级的目录和文档都被删除", () => {
+    const parentId = createFolder("parent");
+    const childId = createFolder("child", "default", parentId);
+    createDoc("parent/child/nested.md", "nested", "default", childId);
+    createDoc("parent/root.md", "root", "default", parentId);
+
+    const result = removeFolder({ actorVisitorId: OWNER, folderDocumentId: parentId });
+
+    // 删除数量：parent目录 + child目录 + 2篇文档 = 4
+    expect(result.deletedCount).toBe(4);
+    expect(findDocumentById(getDb(), parentId)).toBeUndefined();
+    expect(findDocumentById(getDb(), childId)).toBeUndefined();
+  });
+
+  it("删除目录时也删除 ___desc___.md 描述文档", () => {
+    const folderId = createFolder("with-desc", "default", null, "This is folder description");
+    createDoc("with-desc/doc.md", "content", "default", folderId);
+
+    // 确认 desc 文档存在
+    const allDocs = listDocumentsByPathPrefix(getDb(), "default", "with-desc/");
+    expect(allDocs.length).toBeGreaterThanOrEqual(2); // desc.md + doc.md
+
+    const result = removeFolder({ actorVisitorId: OWNER, folderDocumentId: folderId });
+
+    // 目录本身 + desc.md + doc.md = 3
+    expect(result.deletedCount).toBe(3);
+    const afterDelete = listDocumentsByPathPrefix(getDb(), "default", "with-desc/");
+    expect(afterDelete).toHaveLength(0);
+  });
+
+  it("删除时传入 ___desc___.md 的 ID：自动找到父目录并删除", () => {
+    const folderId = createFolder("test-folder", "default", null, "folder description");
+    // 找到 desc 文档的 ID
+    const descDoc = listDocumentsByPathPrefix(getDb(), "default", "test-folder/").find(
+      (d) => d.relative_path.endsWith("/___desc___.md"),
+    );
+    expect(descDoc).toBeDefined();
+
+    // 传 desc 文档的 ID，应该也能正常删除整个目录
+    const result = removeFolder({ actorVisitorId: OWNER, folderDocumentId: descDoc!.document_id });
+    expect(result.deletedCount).toBe(2); // 目录本身 + desc.md
+    expect(findDocumentById(getDb(), folderId)).toBeUndefined();
+  });
+
+  it("非创建者删除目录：抛出 403", () => {
+    const folderId = createFolder("owned-folder");
+    expect(() => {
+      removeFolder({ actorVisitorId: OTHER, folderDocumentId: folderId });
+    }).toThrow(/仅创建者|403/);
+  });
+
+  it("删除不存在的目录：抛出 404", () => {
+    expect(() => {
+      removeFolder({ actorVisitorId: OWNER, folderDocumentId: "non-existent" });
+    }).toThrow(/不存在|404/);
+  });
+
+  it("目录下有他人文档：拒绝删除，抛出 403", () => {
+    const folderId = createFolder("mixed-owner");
+    // 插入一篇他人创建的文档（绕过 createDocument 的权限）
+    const db = getDb();
+    const { randomUUID } = require("node:crypto");
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO documents (document_id, domain_id, relative_path, display_name, owner_visitor_id,
+       created_by, updated_by, content_hash, created_at, updated_at, permission, file_type, parent_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(randomUUID(), "default", "mixed-owner/others-doc.md", "others doc", OTHER, OTHER, OTHER, '', now, now, 1, 'md', folderId);
+
+    expect(() => {
+      removeFolder({ actorVisitorId: OWNER, folderDocumentId: folderId });
+    }).toThrow(/不属于你|403/);
   });
 });
