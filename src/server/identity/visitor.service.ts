@@ -1,6 +1,7 @@
 import { getDb } from "../db/connection.js";
 import {
   findVisitorById,
+  findVisitorByName,
   findVisitorByRecoveryCodeHash,
   findVisitorByTokenHash,
   insertVisitor,
@@ -49,6 +50,15 @@ export function registerVisitor(visitorName: string): RegisteredVisitor {
   }
 
   const db = getDb();
+  // 检查名称是否已被占用（仅检查未被禁用的访客）
+  const existingByName = db
+    .prepare<string, { c: number }>(
+      `SELECT 1 AS c FROM visitors WHERE visitor_name = ? AND disabled_at IS NULL`,
+    )
+    .get(trimmed);
+  if (existingByName) {
+    throw new VisitorValidationError("visitor name is already taken");
+  }
   // 生成访客唯一标识、原始令牌、恢复码及其哈希
   const visitorId = newVisitorId();
   const rawToken = newVisitorToken();
@@ -128,10 +138,11 @@ export function getVisitorById(visitorId: string): VisitorRow | null {
 /**
  * 列出系统中所有访客记录。
  *
+ * @param filter - 过滤条件："all"（全部，默认）、"active"（仅启用）、"disabled"（仅禁用）
  * @returns 访客数据库记录数组
  */
-export function listAllVisitors(): VisitorRow[] {
-  return listVisitors(getDb());
+export function listAllVisitors(filter: "all" | "active" | "disabled" = "all"): VisitorRow[] {
+  return listVisitors(getDb(), filter);
 }
 
 /**
@@ -157,8 +168,6 @@ export function recoverVisitor(recoveryCode: string): RegisteredVisitor | null {
     db.prepare(
       `UPDATE visitors SET visitor_token_hash = ?, last_seen_at = ? WHERE visitor_id = ?`,
     ).run(tokenHash, now, row.visitor_id);
-    // 清除恢复码（一次性）
-    updateRecoveryCodeHash(db, row.visitor_id, null);
     // 审计日志
     insertAuditLog(db, {
       actorVisitorId: row.visitor_id,
@@ -176,7 +185,7 @@ export function recoverVisitor(recoveryCode: string): RegisteredVisitor | null {
     visitor: toPublic({
       ...row,
       visitor_token_hash: tokenHash,
-      recovery_code_hash: null,
+      recovery_code_hash: codeHash,
     }),
     visitorToken: rawToken,
     recoveryCode: "",

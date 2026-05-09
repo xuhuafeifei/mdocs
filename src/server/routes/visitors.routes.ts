@@ -35,10 +35,16 @@ export function buildVisitorsRouter(): Router {
     }
     try {
       const result = registerVisitor(body.visitorName);
+      // 设置 HttpOnly Cookie（1 年有效期，跨端口共享）
+      res.cookie("visitor_token", result.visitorToken, {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 365 * 24 * 60 * 60 * 1000,
+      });
       res.json({
         data: {
           visitor: result.visitor,
-          visitorToken: result.visitorToken,
           recoveryCode: result.recoveryCode,
         },
       });
@@ -70,10 +76,16 @@ export function buildVisitorsRouter(): Router {
       res.status(404).json({ error: { code: "INVALID_RECOVERY_CODE", message: "recovery code is invalid or expired" } });
       return;
     }
+    // 设置 HttpOnly Cookie
+    res.cookie("visitor_token", result.visitorToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+    });
     res.json({
       data: {
         visitor: result.visitor,
-        visitorToken: result.visitorToken,
       },
     });
   });
@@ -125,6 +137,15 @@ export function buildVisitorsRouter(): Router {
     // 确保该访客拥有对应的个人域
     ensurePersonalDomain(getDb(), req.visitor.visitor_id, req.visitor.visitor_name);
     res.json({ data: { visitor: toPublic(req.visitor) } });
+  });
+
+  /**
+   * POST /logout
+   * 注销当前访客，清除 Cookie。
+   */
+  router.post("/logout", (_req: Request, res: Response) => {
+    res.clearCookie("visitor_token", { path: "/" });
+    res.json({ data: { ok: true } });
   });
 
   return router;

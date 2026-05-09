@@ -8,7 +8,7 @@
  * - 资源：文件上传
  * - 成员模板：批量管理受限域成员
  */
-import { api, ApiRequestError, getStoredToken, isDemoMode } from "./client";
+import { api, ApiRequestError, isDemoMode } from "./client";
 import type { DocumentDetail } from "../../shared/types/document";
 import type {
   VisitorDirectoryEntry,
@@ -282,11 +282,9 @@ export async function uploadAssetApi(file: File, documentId: string): Promise<st
   formData.append("file[]", file);
   formData.append("documentId", documentId);
 
-  // 手动构建请求头，只添加身份令牌，不添加 Content-Type
+  // 手动构建请求头，不添加 Content-Type
   //（浏览器会自动为 FormData 设置正确的 multipart/form-data）
   const headers = new Headers();
-  const token = getStoredToken();
-  if (token) headers.set("x-visitor-token", token);
 
   const res = await fetch("/api/assets/upload", {
     method: "POST",

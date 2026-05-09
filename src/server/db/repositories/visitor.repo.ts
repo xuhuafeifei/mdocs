@@ -59,6 +59,19 @@ export function findVisitorById(
 }
 
 /**
+ * 根据访客名称查找访客（支持按名称迁移）。
+ * 只返回未禁用的访客。
+ */
+export function findVisitorByName(
+  db: Database.Database,
+  visitorName: string,
+): VisitorRow | undefined {
+  return db
+    .prepare<string, VisitorRow>(`SELECT * FROM visitors WHERE visitor_name = ? AND disabled_at IS NULL`)
+    .get(visitorName);
+}
+
+/**
  * 更新指定访客的 last_seen_at 字段。
  */
 export function updateVisitorLastSeen(
@@ -91,10 +104,15 @@ export function disableVisitor(
 /**
  * 列出所有访客，按创建时间降序排列。
  */
-export function listVisitors(db: Database.Database): VisitorRow[] {
-  return db
-    .prepare<[], VisitorRow>(`SELECT * FROM visitors ORDER BY created_at DESC`)
-    .all();
+export function listVisitors(db: Database.Database, filter: "all" | "active" | "disabled" = "all"): VisitorRow[] {
+  let sql = `SELECT * FROM visitors`;
+  if (filter === "active") {
+    sql += ` WHERE disabled_at IS NULL`;
+  } else if (filter === "disabled") {
+    sql += ` WHERE disabled_at IS NOT NULL`;
+  }
+  sql += ` ORDER BY created_at DESC`;
+  return db.prepare<[], VisitorRow>(sql).all();
 }
 
 /**

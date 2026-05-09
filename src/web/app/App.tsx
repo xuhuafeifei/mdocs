@@ -15,13 +15,10 @@ import type { VisitorPublic } from "../../shared/types/visitor";
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
 import type { TreeNode } from "../../shared/types/tree";
-import { stripDomainPathPrefix } from "../../shared/personalDomain";
 import {
   ApiRequestError,
-  clearIdentity,
-  getStoredToken,
-  getStoredVisitorId,
-  storeIdentity,
+  clearVisitorId,
+  storeVisitorId,
   isDemoMode,
 } from "../services/client";
 import { fetchDomainsSafe, pickInitialDomainId } from "../services/domainsBootstrap";
@@ -51,19 +48,6 @@ import "./App.css";
 import "./domain.css";
 
 type Phase = "loading" | "needsRegister" | "ready";
-
-/**
- * 计算文档在界面中应展示的相对路径。
- * 若当前访客的个人域与文档所在域一致，则去掉个人域前缀，使路径更简洁。
- */
-function docPathForSelection(doc: DocumentDetail): string {
-  // 从 localStorage 读取当前访客 ID
-  const vid = getStoredVisitorId();
-  // 如果当前访客没有个人域，或者文档不在个人域中，直接返回原始路径
-  if (!vid || doc.domainId !== vid) return doc.relativePath;
-  // 去掉个人域前缀，让路径显示更简洁
-  return stripDomainPathPrefix(vid, doc.relativePath);
-}
 
 /**
  * 初始化域列表与文档树。
@@ -182,9 +166,8 @@ export function App() {
   }, [message]);
 
   /**
-   * 应用启动引导：检查本地 Token → 获取访客信息 → 加载域与文档树。
-   * 若 Token 无效（401）则清除身份并回到注册页。
-   * Demo 模式由构建参数 VITE_DEMO_MODE 控制，编译后固定。
+   * 应用启动引导：先尝试 Cookie 静默登录 → 失败再走注册页。
+   * 浏览器自动携带 Cookie，无需 localStorage。
    */
   async function bootstrap(): Promise<void> {
     // Demo 模式由构建参数 VITE_DEMO_MODE 决定，编译后固定
@@ -196,48 +179,43 @@ export function App() {
       return;
     }
 
-    // 从 localStorage 读取访客 Token，如果没有则直接进入注册页
-    if (!getStoredToken()) {
-      setPhase("needsRegister");
-      return;
-    }
     try {
-      // 携带 Token 向后端请求当前访客信息
+      // 直接尝试获取当前访客信息：
+      // - 如果有 Cookie（其他端口设置的）→ 直接登录成功
+      // - 如果 401 → 进入注册页
       const me = await fetchMe();
-      // 保存访客信息到状态，供全局使用
+      // Cookie 认证成功
       setVisitor(me);
-      // 加载访客可见的域列表，并挑选默认域加载文档树
+      // 保存访客 ID 到 localStorage，Token 由后端通过 Cookie 管理
+      storeVisitorId(me.visitorId);
       await initDomainsAndTree(me.visitorId, setDomains, setCurrentDomainId, refreshTree);
-      // 一切就绪，切换到 ready 阶段
       setPhase("ready");
     } catch (err) {
-      // 如果后端返回 401，说明 Token 已过期或无效
+      // 401 = 未登录，正常进入注册页
       if (err instanceof ApiRequestError && err.status === 401) {
-        // 清除本地保存的无效身份
-        clearIdentity();
         setPhase("needsRegister");
         return;
       }
-      // 其他错误（如网络错误）显示错误提示，但仍回到注册页
+      // 其他错误（如网络错误）显示错误提示
       setAlertMessage(translateError(t, err));
       setPhase("needsRegister");
     }
   }
 
   /**
-   * 处理访客注册：调用注册接口 → 保存身份到 localStorage → 初始化域与树。
+   * 处理访客注册：调用注册接口 → 后端自动设 Cookie → 初始化域与树。
    */
   async function handleRegister(visitorName: string): Promise<void> {
     // 向后端提交访客名称，创建新身份
     const res = await registerVisitorApi(visitorName);
-    // 将返回的 visitorId 和 Token 存入 localStorage，供后续请求自动携带
-    storeIdentity(res.visitor.visitorId, res.visitorToken);
     // 更新 React 状态中的访客信息
     setVisitor(res.visitor);
     // 触发访客 ID 提示条，提醒用户保存 ID 以便恢复
     setPendingVisitorId(res.visitor.visitorId);
     // 保存恢复码用于展示
     setRecoveryCode(res.recoveryCode);
+    // 保存访客 ID 到 localStorage，Cookie 已由后端自动设置
+    storeVisitorId(res.visitor.visitorId);
     // 加载域列表和文档树
     await initDomainsAndTree(res.visitor.visitorId, setDomains, setCurrentDomainId, refreshTree);
     // 切换到 ready 阶段，展示主界面
@@ -297,7 +275,7 @@ export function App() {
       // ========== 步骤 2：本地没有可用草稿，从服务器获取完整文档 ==========
       const doc = await getDocumentApi(docId);
       // 设置新建文档的默认父路径（根据当前域是否个人域决定是否去掉前缀）
-      setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
+      setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
 
       // ========== 步骤 3：把服务器元数据缓存到草稿中 ==========
       // 这样下次打开同一文档时，步骤 1 就能命中本地草稿，跳过网络请求
@@ -361,7 +339,7 @@ export function App() {
     // 文档创建成功后的回调：设置为当前文档并跳转路由
     onDocCreated: (doc: DocumentDetail) => {
       setActiveDoc(doc);
-      setSelectedCreateParentPath(parentDirForCreates(docPathForSelection(doc)));
+      setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
       navigate(`/doc/${doc.documentId}`);
     },
     refreshTree,
@@ -747,7 +725,7 @@ export function App() {
                     className="primary"
                     style={{ background: "#d32f2f" }}
                     onClick={() => {
-                      clearIdentity();
+                      clearVisitorId();
                       setActiveDoc(null);
                       setVisitor(null);
                       setTree([]);

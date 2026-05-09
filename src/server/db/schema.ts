@@ -4,7 +4,7 @@ import type Database from "better-sqlite3";
 const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS visitors (
     visitor_id TEXT PRIMARY KEY,
-    visitor_name TEXT NOT NULL,
+    visitor_name TEXT NOT NULL UNIQUE,
     visitor_token_hash TEXT NOT NULL UNIQUE,
     created_at TEXT NOT NULL,
     last_seen_at TEXT,

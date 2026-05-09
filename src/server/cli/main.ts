@@ -1,3 +1,10 @@
+import { buildApp } from "../app.js";
+import { getConfig } from "../config/index.js";
+import { getDb } from "../db/connection.js";
+import {
+  findVisitorById,
+  findVisitorByName,
+} from "../db/repositories/visitor.repo.js";
 import { listAllVisitors } from "../identity/visitor.service.js";
 import {
   migrateVisitor,
@@ -33,11 +40,13 @@ function printUsage(): void {
       "mdocs CLI",
       "",
       "Usage:",
-      "  mdocs visitor list",
+      "  mdocs visitor list [--active|--disabled|--all]",
       "  mdocs visitor migrate --from OLD --to NEW [--dry-run] [--confirm]",
       "",
       "Notes:",
-      "  Either --dry-run or --confirm must be supplied for migrate.",
+      "  visitor list defaults to --active (only enabled visitors).",
+      "  For migrate, OLD/NEW can be either visitor ID (UUID) or visitor name.",
+      "  Either --dry-run or --confirm must be supplied.",
       "  --confirm performs the migration inside a transaction and makes a backup first.",
       "",
     ].join("\n"),
@@ -48,11 +57,15 @@ function printUsage(): void {
 async function main(): Promise<void> {
   const [command, sub, ...rest] = process.argv.slice(2);
   if (!command) {
-    printUsage();
-    process.exit(0);
+    startServer();
+    return;
+  }
+  if (command === "start") {
+    startServer();
+    return;
   }
   if (command === "visitor" && sub === "list") {
-    runVisitorList();
+    runVisitorList(parseFlags(rest));
     return;
   }
   if (command === "visitor" && sub === "migrate") {
@@ -63,9 +76,33 @@ async function main(): Promise<void> {
   process.exit(1);
 }
 
-/** 执行 `visitor list`：查询所有访客并以 TSV 格式输出。 */
-function runVisitorList(): void {
-  const rows = listAllVisitors();
+/** 启动 HTTP 服务器。 */
+function startServer(): void {
+  const cfg = getConfig();
+  const app = buildApp();
+  const server = app.listen(cfg.port, cfg.host, () => {
+    process.stdout.write(`mdocs listening on http://${cfg.host}:${cfg.port}\n`);
+  });
+  server.on("error", (err) => {
+    process.stderr.write(`server error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  });
+}
+
+/** 执行 `visitor list`：查询访客并以 TSV 格式输出。
+ *
+ * 支持过滤参数：
+ *   --active   仅列出启用的访客（默认）
+ *   --disabled 仅列出已禁用的访客
+ *   --all      列出全部访客
+ */
+function runVisitorList(flags: Flags): void {
+  let filter: "all" | "active" | "disabled" = "active";
+  if (flags.all === true) filter = "all";
+  if (flags.disabled === true) filter = "disabled";
+  // --active 显式指定时覆盖
+
+  const rows = listAllVisitors(filter);
   for (const row of rows) {
     process.stdout.write(
       `${row.visitor_id}\t${row.visitor_name}\tcreated=${row.created_at}\tdisabled=${row.disabled_at ?? "-"}\tmerged_into=${row.merged_into_visitor_id ?? "-"}\n`,
@@ -73,15 +110,36 @@ function runVisitorList(): void {
   }
 }
 
+/**
+ * 根据输入字符串解析访客记录：先按 ID 查找，找不到再按名称查找。
+ * 只返回未禁用的访客。
+ */
+function resolveVisitor(ident: string): { visitorId: string; visitorName: string } {
+  const db = getDb();
+  // 先按 ID 查
+  let row = findVisitorById(db, ident);
+  // 再按名称查
+  if (!row) row = findVisitorByName(db, ident);
+  // 都没找到，抛错
+  if (!row) {
+    throw new MigrationError("NOT_FOUND", `visitor "${ident}" not found (tried as ID, then name)`);
+  }
+  // 检查是否已禁用
+  if (row.disabled_at) {
+    throw new MigrationError("VISITOR_DISABLED", `visitor "${ident}" is disabled`);
+  }
+  return { visitorId: row.visitor_id, visitorName: row.visitor_name };
+}
+
 /** 执行 `visitor migrate`：校验参数后调用迁移服务，并输出结果或错误。 */
 function runVisitorMigrate(flags: Flags): void {
-  const from = typeof flags.from === "string" ? flags.from : "";
-  const to = typeof flags.to === "string" ? flags.to : "";
+  const fromRaw = typeof flags.from === "string" ? flags.from : "";
+  const toRaw = typeof flags.to === "string" ? flags.to : "";
   const dryRun = flags["dry-run"] === true;
   const confirm = flags.confirm === true;
 
   // 校验必填参数
-  if (!from || !to) {
+  if (!fromRaw || !toRaw) {
     process.stderr.write("--from and --to are required\n");
     process.exit(2);
   }
@@ -91,7 +149,10 @@ function runVisitorMigrate(flags: Flags): void {
     process.exit(2);
   }
   try {
-    const result = migrateVisitor({ fromVisitorId: from, toVisitorId: to, confirm });
+    // 智能解析访客（支持 ID 或名称）
+    const from = resolveVisitor(fromRaw);
+    const to = resolveVisitor(toRaw);
+    const result = migrateVisitor({ fromVisitorId: from.visitorId, toVisitorId: to.visitorId, confirm });
     printMigrationResult(result);
   } catch (err) {
     if (err instanceof MigrationError) {

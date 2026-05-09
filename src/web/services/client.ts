@@ -22,7 +22,6 @@ import {
 } from "./mockApi";
 
 // ---- localStorage 键名 ----
-const TOKEN_KEY = "mdocs.visitorToken";
 const VISITOR_ID_KEY = "mdocs.visitorId";
 
 export interface ApiError {
@@ -53,13 +52,6 @@ export function isDemoMode(): boolean {
 }
 
 /**
- * 从 localStorage 读取当前访客的认证令牌。
- */
-export function getStoredToken(): string | null {
-  return window.localStorage.getItem(TOKEN_KEY);
-}
-
-/**
  * 从 localStorage 读取当前访客的 ID。
  */
 export function getStoredVisitorId(): string | null {
@@ -67,19 +59,18 @@ export function getStoredVisitorId(): string | null {
 }
 
 /**
- * 将访客身份（ID + Token）持久化到 localStorage。
+ * 将访客 ID 持久化到 localStorage。
+ * Token 由后端通过 HttpOnly Cookie 管理，前端不存储。
  */
-export function storeIdentity(visitorId: string, token: string): void {
+export function storeVisitorId(visitorId: string): void {
   window.localStorage.setItem(VISITOR_ID_KEY, visitorId);
-  window.localStorage.setItem(TOKEN_KEY, token);
 }
 
 /**
- * 清除本地保存的访客身份（登出或 Token 失效时调用）。
+ * 清除本地保存的访客 ID（登出时调用）。
  */
-export function clearIdentity(): void {
+export function clearVisitorId(): void {
   window.localStorage.removeItem(VISITOR_ID_KEY);
-  window.localStorage.removeItem(TOKEN_KEY);
 }
 
 /**
@@ -245,9 +236,7 @@ export async function api<T>(
   if (!headers.has("Content-Type") && init.body) {
     headers.set("Content-Type", "application/json");
   }
-  // 从 localStorage 读取 Token 并注入请求头
-  const token = getStoredToken();
-  if (token) headers.set("x-visitor-token", token);
+  // Token 由后端通过 HttpOnly Cookie 自动携带，无需手动注入请求头
 
   // 执行 fetch 请求
   const res = await fetch(path, { ...init, headers });

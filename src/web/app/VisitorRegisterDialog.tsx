@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { useI18n } from "../i18n";
 import { recoverVisitorApi } from "../services/endpoints";
-import { storeIdentity } from "../services/client";
+import { storeVisitorId } from "../services/client";
 
 export function VisitorRegisterDialog(props: {
   onSubmit: (visitorName: string) => Promise<void>;
@@ -56,7 +56,8 @@ export function VisitorRegisterDialog(props: {
     setLocalError(null);
     try {
       const res = await recoverVisitorApi(code);
-      storeIdentity(res.visitor.visitorId, res.visitorToken);
+      // Cookie 已由后端自动设置，只保存 visitorId
+      storeVisitorId(res.visitor.visitorId);
       await props.onRecover(res.visitor.visitorId);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : String(err));

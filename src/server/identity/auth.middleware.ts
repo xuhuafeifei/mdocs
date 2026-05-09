@@ -78,14 +78,18 @@ function tryResolveVisitor(req: Request): VisitorRow | null {
 }
 
 /**
- * 从请求头中读取 Web 端访客令牌。
+ * 从请求头或 Cookie 中读取 Web 端访客令牌。
  *
  * @param req - Express 请求对象
  * @returns 读取到的令牌字符串，不存在或为空时返回 null
  */
 function readVisitorToken(req: Request): string | null {
+  // 优先读请求头（兼容现有前端）
   const header = req.header("x-visitor-token");
   if (header && header.trim()) return header.trim();
+  // 其次读 Cookie（支持跨端口共享）
+  const cookie = req.cookies?.visitor_token;
+  if (cookie && cookie.trim()) return cookie.trim();
   return null;
 }
 

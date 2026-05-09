@@ -9,7 +9,7 @@
  * - 内存锁：Set<documentId> 防止 timer 与外部触发同时重建同一文档
  */
 import { Jieba } from "@node-rs/jieba";
-import { dict } from "@node-rs/jieba/dict";
+import { dict } from "@node-rs/jieba/dict.js";
 import { getDb } from "../db/connection.js";
 import { readDocument } from "../storage/file-store.js";
 import { useLogger } from "../logger/logger.js";

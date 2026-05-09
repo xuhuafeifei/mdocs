@@ -30,11 +30,14 @@ export function buildDocumentTree(domainId?: string, visitorId?: string | null):
 
   const rows = listDocumentsByDomain(db, effective);
   const filtered = rows.filter((r) => canReadDocument(r, visitorId ?? null, domainInfo));
-  return buildTreeFromRows(filtered);
+  return buildTreeFromRows(filtered, visitorId ?? null);
 }
 
 /**
  * 根据过滤后的文档行数组，按 parent_id 构建文档树。
+ *
+ * 路径处理：如果文档在访客自己的个人域下，自动去掉 `_personal/{visitorId}/` 前缀，
+ * 让前端显示更简洁。
  *
  * 步骤：
  * 1. 为所有 dir 创建文件夹节点，document_id → TreeFolderNode 映射
@@ -42,11 +45,19 @@ export function buildDocumentTree(domainId?: string, visitorId?: string | null):
  * 3. 将文件夹挂在各自的父文件夹下
  * 4. 对根节点和子节点递归排序
  */
-function buildTreeFromRows(rows: DocumentRow[]): TreeNode[] {
+function buildTreeFromRows(rows: DocumentRow[], visitorId: string | null): TreeNode[] {
   const roots: TreeNode[] = [];
   const folderById = new Map<string, TreeFolderNode>();
   // 记录已添加到 roots 的文件夹 ID，避免重复
   const addedToRoots = new Set<string>();
+
+  // 根据访问者身份处理路径：个人域下的路径去掉前缀
+  const adjustPath = (path: string, ownerId: string): string => {
+    if (!visitorId || ownerId !== visitorId) return path;
+    const prefix = `_personal/${visitorId}/`;
+    if (path.startsWith(prefix)) return path.slice(prefix.length);
+    return path;
+  };
 
   // 第一步：创建所有文件夹节点
   for (const row of rows) {
@@ -54,7 +65,7 @@ function buildTreeFromRows(rows: DocumentRow[]): TreeNode[] {
       const node: TreeFolderNode = {
         type: "folder",
         name: deriveFolderName(row),
-        path: row.relative_path,
+        path: adjustPath(row.relative_path, row.owner_visitor_id),
         documentId: row.document_id,
         children: [],
       };
@@ -100,7 +111,7 @@ function buildTreeFromRows(rows: DocumentRow[]): TreeNode[] {
       const node: TreeNode = {
         type: "document",
         name: leafName,
-        path: row.relative_path,
+        path: adjustPath(row.relative_path, row.owner_visitor_id),
         documentId: row.document_id,
         displayName: row.display_name,
         ownerVisitorId: row.owner_visitor_id,

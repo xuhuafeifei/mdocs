@@ -16,8 +16,6 @@ import {
   parseDisplayNameMarkdownFile,
 } from "../../../shared/storagePath";
 import { FOLDER_DESC_FILENAME, folderDescPathForFolder } from "../../../shared/folderDesc";
-import { stripDomainPathPrefix } from "../../../shared/personalDomain";
-import { getStoredVisitorId } from "../../services/client";
 import { createDocumentApi, createFolderApi } from "../../services/endpoints";
 import { STORAGE_ERROR_MESSAGE_MAP } from "../../i18n/errors";
 import { translateError, parentDirForCreates } from "../utils";
@@ -63,15 +61,6 @@ function joinDocPath(parentPath: string, fileName: string): string {
   if (!f) return p;
   // 如果父路径为空，直接返回文件名；否则用 / 拼接
   return p ? `${p}/${f}` : f;
-}
-
-/**
- * 计算文档在界面中的展示路径（同 App.tsx，去掉个人域前缀）。
- */
-function docPathForSelection(doc: DocumentDetail): string {
-  const vid = getStoredVisitorId();
-  if (!vid || doc.domainId !== vid) return doc.relativePath;
-  return stripDomainPathPrefix(vid, doc.relativePath);
 }
 
 /**

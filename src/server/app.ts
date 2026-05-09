@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import express, { type Application } from "express";
+import cookieParser from "cookie-parser";
 import { getConfig } from "./config/index.js";
 import { getDb } from "./db/connection.js";
 import { authMiddleware } from "./identity/auth.middleware.js";
@@ -31,6 +32,7 @@ export function buildApp(): Application {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "32mb" }));
+  app.use(cookieParser());
 
   // 健康检查端点，无需认证
   app.get("/api/health", (_req, res) => {
