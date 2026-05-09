@@ -889,10 +889,9 @@
 }
 
 .mdocs-visitor-picker-search {
-  flex: 0 0 360px;
-  min-width: 200px;
-  max-width: 400px;
-  padding: 8px 12px;
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 6px 12px;
   border: 1px solid var(--mdocs-border);
   border-radius: 8px;
   font-size: 14px;

@@ -96,18 +96,17 @@ describe("recoverVisitor", () => {
     expect(result).toBeNull();
   });
 
-  it("恢复码可重复使用，每次恢复生成新 Token", () => {
-    const registered = registerVisitor("重复恢复");
+  it("恢复码仅一次有效，使用后失效", () => {
+    const registered = registerVisitor("一次性恢复");
 
     // 第一次成功
     const first = recoverVisitor(registered.recoveryCode);
     expect(first).not.toBeNull();
     const firstToken = first!.visitorToken;
 
-    // 第二次也成功，且 token 不同
+    // 第二次使用同一恢复码应返回 null
     const second = recoverVisitor(registered.recoveryCode);
-    expect(second).not.toBeNull();
-    expect(second!.visitorToken).not.toBe(firstToken);
+    expect(second).toBeNull();
   });
 });
 

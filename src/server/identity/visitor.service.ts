@@ -164,9 +164,9 @@ export function recoverVisitor(recoveryCode: string): RegisteredVisitor | null {
   const now = new Date().toISOString();
 
   const tx = db.transaction(() => {
-    // 更新 Token
+    // 更新 Token 并清除恢复码（一次性使用）
     db.prepare(
-      `UPDATE visitors SET visitor_token_hash = ?, last_seen_at = ? WHERE visitor_id = ?`,
+      `UPDATE visitors SET visitor_token_hash = ?, last_seen_at = ?, recovery_code_hash = NULL WHERE visitor_id = ?`,
     ).run(tokenHash, now, row.visitor_id);
     // 审计日志
     insertAuditLog(db, {
