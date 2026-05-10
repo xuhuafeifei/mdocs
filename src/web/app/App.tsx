@@ -9,7 +9,7 @@
  * 6. 全局消息提示与冲突处理
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, LogOut, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
+import { BookOpen, File, Folder, LogOut, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -708,10 +708,12 @@ export function App() {
 
             {/* 新建文档/文件夹按钮 */}
             <div className="mdocs-sidebar-actions">
-              <button type="button" onClick={() => openNewDocumentModal()} className="primary">
+              <button type="button" onClick={() => openNewDocumentModal()} className="primary" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <File size={16} strokeWidth={1.5} />
                 {t("newDocument")}
               </button>
-              <button type="button" className="secondary" onClick={() => openNewFolderModal()}>
+              <button type="button" className="secondary" onClick={() => openNewFolderModal()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <Folder size={16} strokeWidth={1.5} />
                 {t("newFolder")}
               </button>
             </div>
@@ -871,10 +873,12 @@ export function App() {
                   />
                 </div>
                 <div className="mdocs-welcome-actions">
-                  <button type="button" className="primary" onClick={() => openNewDocumentModal()}>
+                  <button type="button" className="primary" onClick={() => openNewDocumentModal()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <File size={16} strokeWidth={1.5} />
                     {t("newDocument")}
                   </button>
-                  <button type="button" className="secondary" onClick={() => openNewFolderModal()}>
+                  <button type="button" className="secondary" onClick={() => openNewFolderModal()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Folder size={16} strokeWidth={1.5} />
                     {t("newFolder")}
                   </button>
                 </div>
