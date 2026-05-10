@@ -16,6 +16,7 @@
 | 测试分层、运行方式、关键用例 | [`testing-strategy.md`](./testing-strategy.md) |
 | 与 `markdown-docs` 的代码隔离红线 | [`clean-room-policy.md`](./clean-room-policy.md) |
 | 恢复码设计、API、DB 变更、涉及文件清单 | [`recovery-code.md`](./recovery-code.md) |
+| 主界面右侧空白 / 编辑区不铺满（shell 栅格 + main 未 flex 撑满） | [`bug-fixes/layout-editor-right-blank-2026-05-10.md`](./bug-fixes/layout-editor-right-blank-2026-05-10.md) |
 | 重大技术决策的历史记录 | [`adr/`](./adr/) |
 
 ## 项目坐标
