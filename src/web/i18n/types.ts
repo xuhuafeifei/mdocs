@@ -275,6 +275,8 @@ export type TranslationKey =
   | "docInfoSize"
   | "docInfoUpdatedAt"
   | "docInfoChangePermission"
+  | "docInfoChooseInvitees"
+  | "docInfoPermissionUpdated"
   // Bookmarks
   | "bookmark"
   | "bookmarkAdd"

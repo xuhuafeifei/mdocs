@@ -284,6 +284,8 @@ export const en: Record<TranslationKey, string> = {
   docInfoSize: "Size",
   docInfoUpdatedAt: "Last edited",
   docInfoChangePermission: "Change permission",
+  docInfoChooseInvitees: "Choose invitees",
+  docInfoPermissionUpdated: "Permission updated",
   // Bookmarks
   bookmark: "Bookmarks",
   bookmarkAdd: "Add to bookmarks",

@@ -282,6 +282,8 @@ export const zh: Record<TranslationKey, string> = {
   docInfoSize: "大小",
   docInfoUpdatedAt: "上次编辑",
   docInfoChangePermission: "修改文章权限",
+  docInfoChooseInvitees: "选择受邀人",
+  docInfoPermissionUpdated: "权限已更新",
   // Bookmarks
   bookmark: "收藏",
   bookmarkAdd: "添加收藏",
