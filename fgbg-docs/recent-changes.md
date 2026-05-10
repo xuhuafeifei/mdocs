@@ -155,3 +155,53 @@ authMiddleware:
 
 - mdocs 的前端草稿/自动保存/自动发布逻辑见 `src/web/storage/drafts.ts` 和 `src/web/app/hooks/` 目录。
 - 每个前端组件都有详细的 JSDoc 注释，可以直接看源码。
+
+---
+
+## 7. 文档邀请成员功能
+
+### 背景
+
+五级权限模型在 v0.2.0 已经支持 `document_invites` 表（read/edit 邀请），但前端一直缺少对应的邀请 UI。这次补齐了完整的邀请成员流程。
+
+### 涉及文件
+
+| 文件 | 做什么 |
+|------|--------|
+| `src/web/app/DocumentEditor.tsx` | 文档信息菜单新增「👥 邀请成员」入口；加载现有邀请列表；保存邀请变更 |
+| `src/web/app/VisitorPickerModal.tsx` | 扩展支持权限选择模式：传入 `showPermissionSelect` / `permissionOptions` / `initialPermissions` 等 props，返回 `[{ visitorId, permission }]` |
+| `src/web/app/VisitorPickerContent.tsx` | 右栏新增权限下拉框列（MiniSelect），复用搜索/勾选逻辑 |
+| `src/web/app/MiniSelect.tsx` | **新文件**：紧凑型下拉组件，遵循项目 DomainSelect 模式（点击外部关闭、Escape 键、键盘可访问） |
+| `src/web/app/App.css` | `.mdocs-mini-select` 样式 |
+| `src/web/app/App.tsx` | `canEdit` 计算增加 `activeDoc.invitedEdit === true` 判断 |
+| `src/shared/types/document.ts` | `DocumentDetail` 新增 `invitedEdit?: boolean` 字段 |
+| `src/server/documents/document.service.ts` | `getDocument()` 新增 `visitorId` 参数，查询 `document_invites` 表填充 `invitedEdit` 标记 |
+| `src/server/routes/documents.routes.ts` | GET `/:documentId` 路由传入 `req.visitor?.visitor_id` |
+| `src/server/access/access-control.ts` | **Bug 修复**：`canEditDocument()` 在 private 域各档位下补充 invite 检查，被 invite edit 的非创建者可编辑 |
+| `src/server/access/access-control.test.ts` | 新增 10 条单测，覆盖 invite read/edit 跨所有权限档位 |
+| `src/web/i18n/types.ts`, `zh.ts`, `en.ts` | 新增 `invitePermissionRead`、`invitePermissionEdit` 国际化 |
+
+### 权限模型修正
+
+**修复前的问题：** `canEditDocument()` 对 private 域下所有权限档位（private、domain_read、domain_write、public_read）直接返回 false，没有检查 `document_invites` 表。导致被邀请编辑的用户虽然能通过中间件鉴权（`assertDocumentAccess`），但前端 `canEdit` 计算为 false，编辑器仍以只读模式渲染。
+
+**修复方式（前后端双修）：**
+1. **后端** `access-control.ts` — `canEditDocument()` 对 private 域的每个档位补充 `findDocumentInvite()` + `invite?.permission === "edit"` 检查
+2. **后端** `document.service.ts` — `getDocument()` 查 invite 并返回 `invitedEdit: true`
+3. **前端** `App.tsx` — `canEdit` 增加 `|| activeDoc.invitedEdit === true`
+
+### 邀请数据流
+
+```
+文档信息菜单 → 点击「邀请成员」
+  → GET /api/documents/:id/invites（加载已邀请的成员 + 权限）
+  → 打开 VisitorPickerModal（左侧访客列表 + 右侧已选成员含权限下拉框）
+  → 用户勾选/取消 + 调整权限（read/edit）
+  → saveInvite() 对比新旧 Map，批量 upsert/delete document_invites
+```
+
+### 技术细节
+
+- MiniSelect 是项目内第一个通用下拉组件，后续可替代原生 `<select>` 和其他硬编码的 Select
+- VisitorPickerModal 通过 `showPermissionSelect` 属性切换两种返回格式（纯 ID 数组 vs `{ visitorId, permission }[]`），保持向后兼容
+- `saveInvite()` 使用事务保证原子性：新增调用 `POST /:id/invites`，删除调用 `DELETE /:id/invites/:vid`
