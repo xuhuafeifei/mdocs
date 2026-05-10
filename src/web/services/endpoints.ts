@@ -446,3 +446,53 @@ export function removeBookmarkApi(documentId: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+// ========== 评论 ==========
+
+/** 文档评论条目 */
+export interface CommentEntry {
+  commentId: string;
+  documentId: string;
+  visitorId: string;
+  visitorName: string;
+  parentId: string | null;
+  replyToVisitorId: string | null;
+  replyToVisitorName: string | null;
+  content: string;
+  isDeleted: boolean;
+  createdAt: string;
+}
+
+/**
+ * 获取文档评论列表。
+ */
+export function fetchCommentsApi(documentId: string): Promise<{ comments: CommentEntry[]; total: number }> {
+  return api<{ comments: CommentEntry[]; total: number }>(
+    `/api/documents/${encodeURIComponent(documentId)}/comments`,
+  );
+}
+
+/**
+ * 发表评论。
+ */
+export function createCommentApi(documentId: string, input: {
+  content: string;
+  parentId: string | null;
+  replyToVisitorId: string | null;
+  replyToVisitorName: string | null;
+}): Promise<CommentEntry> {
+  return api<CommentEntry>(`/api/documents/${encodeURIComponent(documentId)}/comments`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * 删除评论。
+ */
+export function deleteCommentApi(documentId: string, commentId: string): Promise<{ success: boolean }> {
+  return api<{ success: boolean }>(
+    `/api/documents/${encodeURIComponent(documentId)}/comments/${encodeURIComponent(commentId)}`,
+    { method: "DELETE" },
+  );
+}

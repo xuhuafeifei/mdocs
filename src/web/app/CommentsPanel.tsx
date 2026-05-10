@@ -1,19 +1,9 @@
 import { useEffect, useState } from "react";
 import { MessageSquare, X } from "lucide-react";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { fetchCommentsApi, createCommentApi, deleteCommentApi, type CommentEntry } from "../services/endpoints";
 
-export interface DocumentComment {
-  commentId: string;
-  documentId: string;
-  visitorId: string;
-  visitorName: string;
-  parentId: string | null;
-  replyToVisitorId: string | null;
-  replyToVisitorName: string | null;
-  content: string;
-  isDeleted: boolean;
-  createdAt: string;
-}
+export type DocumentComment = CommentEntry;
 
 interface CommentsPanelProps {
   documentId: string;
@@ -26,8 +16,6 @@ interface CommentsPanelProps {
   onClose: () => void;
 }
 
-const API_BASE = "/api";
-
 export function CommentsPanel({ documentId, visitorId, visitorName, documentOwnerId, onClose }: CommentsPanelProps) {
   const [comments, setComments] = useState<DocumentComment[]>([]);
   const [newComment, setNewComment] = useState("");
@@ -35,6 +23,7 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   /** 判断是否可以删除某条评论：是评论作者 OR 是文档创建者 */
   function canDeleteComment(comment: DocumentComment): boolean {
@@ -42,18 +31,21 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
     return comment.visitorId === visitorId || documentOwnerId === visitorId;
   }
 
-  // 加载评论
+  // 加载评论 + 清理状态
   useEffect(() => {
+    setNewComment("");
+    setReplyTo(null);
+    setError(null);
     loadComments();
   }, [documentId]);
 
   async function loadComments() {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/documents/${documentId}/comments`);
-      const json = await res.json();
-      setComments(json.data.comments);
+      const res = await fetchCommentsApi(documentId);
+      setComments(res.comments);
     } catch (err) {
+      setError("加载评论失败");
       console.error("Failed to load comments:", err);
     } finally {
       setLoading(false);
@@ -65,22 +57,21 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
     if (!newComment.trim() || !visitorId) return;
 
     setSubmitting(true);
+    setError(null);
     try {
-      await fetch(`${API_BASE}/documents/${documentId}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: newComment,
-          parentId: replyTo?.commentId || null,
-          replyToVisitorId: replyTo
-            ? comments.find((c) => c.commentId === replyTo.commentId)?.visitorId ?? null
-            : null,
-          replyToVisitorName: replyTo?.visitorName || null,
-        }),
+      await createCommentApi(documentId, {
+        content: newComment,
+        parentId: replyTo?.commentId || null,
+        replyToVisitorId: replyTo
+          ? comments.find((c) => c.commentId === replyTo.commentId)?.visitorId ?? null
+          : null,
+        replyToVisitorName: replyTo?.visitorName || null,
       });
       setNewComment("");
       setReplyTo(null);
       await loadComments();
+    } catch (err) {
+      setError((err as Error).message || "发表失败，请重试");
     } finally {
       setSubmitting(false);
     }
@@ -88,13 +79,12 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
 
   // 删除评论
   async function handleDelete(commentId: string) {
+    setError(null);
     try {
-      await fetch(`${API_BASE}/documents/${documentId}/comments/${commentId}`, {
-        method: "DELETE",
-      });
+      await deleteCommentApi(documentId, commentId);
       await loadComments();
     } catch (err) {
-      console.error("Failed to delete comment:", err);
+      setError((err as Error).message || "删除失败，请重试");
     } finally {
       setDeleteTarget(null);
     }
@@ -131,6 +121,14 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
           <X size={18} />
         </button>
       </div>
+
+      {/* 错误提示 */}
+      {error && (
+        <div className="mdocs-comments-error">
+          {error}
+          <button type="button" onClick={() => setError(null)}><X size={14} /></button>
+        </div>
+      )}
 
       {/* 评论列表 */}
       <div className="mdocs-comments-list">
