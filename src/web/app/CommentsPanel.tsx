@@ -241,15 +241,19 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
           )}
           <textarea
             value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
+            onChange={(e) => setNewComment(e.target.value.slice(0, 512))}
             placeholder={replyTo ? `回复 ${replyTo.visitorName}...` : "发表评论..."}
             className="mdocs-comments-input"
+            maxLength={512}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 handleSubmit();
               }
             }}
           />
+          <div className={`mdocs-comments-char-count${newComment.length >= 460 ? " mdocs-char-count--warn" : ""}`}>
+            {newComment.length}/512
+          </div>
           <div className="mdocs-comments-input-actions">
             <button
               type="button"

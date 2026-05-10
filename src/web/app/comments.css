@@ -234,8 +234,19 @@
   border-radius: 6px;
   resize: vertical;
   font-size: 0.9rem;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   font-family: inherit;
+}
+
+.mdocs-comments-char-count {
+  text-align: right;
+  font-size: 0.8rem;
+  color: #999;
+  margin-bottom: 8px;
+}
+
+.mdocs-comments-char-count.mdocs-char-count--warn {
+  color: #d32f2f;
 }
 
 .mdocs-comments-input:focus {

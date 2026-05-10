@@ -149,6 +149,35 @@ describe("DocumentCommentService", () => {
         }),
       ).rejects.toThrow("评论内容不能为空");
     });
+
+    it("不允许创建超过 512 个字符的评论", async () => {
+      const longContent = "a".repeat(513);
+      await expect(
+        service.createComment({
+          documentId: "doc-1",
+          visitorId: "visitor-a",
+          visitorName: "Alice",
+          parentId: null,
+          replyToVisitorId: null,
+          replyToVisitorName: null,
+          content: longContent,
+        }),
+      ).rejects.toThrow("评论内容不能超过 512 个字符");
+    });
+
+    it("恰好 512 个字符的评论应该允许", async () => {
+      const content = "a".repeat(512);
+      const comment = await service.createComment({
+        documentId: "doc-1",
+        visitorId: "visitor-a",
+        visitorName: "Alice",
+        parentId: null,
+        replyToVisitorId: null,
+        replyToVisitorName: null,
+        content,
+      });
+      expect(comment.content.length).toBe(512);
+    });
   });
 
   describe("deleteComment", () => {

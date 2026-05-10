@@ -33,6 +33,10 @@ export class DocumentCommentService {
       throw new Error("评论内容不能为空");
     }
 
+    if (params.content.length > 512) {
+      throw new Error("评论内容不能超过 512 个字符");
+    }
+
     return this.repo.create(params);
   }
 
