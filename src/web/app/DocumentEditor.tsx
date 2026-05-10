@@ -929,7 +929,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 padding={16}
                 style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, overflow: "auto", outline: "none" }}
               >
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <Editor
                     content={props.document.content}
                     type={contentType}

@@ -636,6 +636,13 @@
   outline: none;
 }
 
+/* 编辑器内表格：限制最大宽度 + 内容换行 */
+.mdocs-editor-content-area table {
+  max-width: 100%;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
 .mdocs-editor-body {
   flex: 1;
   display: grid;
