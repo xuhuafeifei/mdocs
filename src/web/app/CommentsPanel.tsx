@@ -16,19 +16,29 @@ export interface DocumentComment {
 
 interface CommentsPanelProps {
   documentId: string;
+  /** 当前访客 ID，未登录时为 undefined */
   visitorId?: string;
+  /** 当前访客昵称 */
   visitorName?: string;
+  /** 文档创建者 ID，文档创建者可以删除所有评论 */
+  documentOwnerId?: string;
   onClose: () => void;
 }
 
 const API_BASE = "/api";
 
-export function CommentsPanel({ documentId, visitorId, visitorName, onClose }: CommentsPanelProps) {
+export function CommentsPanel({ documentId, visitorId, visitorName, documentOwnerId, onClose }: CommentsPanelProps) {
   const [comments, setComments] = useState<DocumentComment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<{ commentId: string; visitorName: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  /** 判断是否可以删除某条评论：是评论作者 OR 是文档创建者 */
+  function canDeleteComment(comment: DocumentComment): boolean {
+    if (!visitorId) return false;
+    return comment.visitorId === visitorId || documentOwnerId === visitorId;
+  }
 
   // 加载评论
   useEffect(() => {
@@ -136,7 +146,7 @@ export function CommentsPanel({ documentId, visitorId, visitorName, onClose }: C
                 </span>
                 <span className="mdocs-comment-author">{root.visitorName}</span>
                 <span className="mdocs-comment-time">{formatRelativeTime(root.createdAt)}</span>
-                {visitorId === root.visitorId && (
+                {canDeleteComment(root) && (
                   <button
                     type="button"
                     className="mdocs-comment-delete"
@@ -150,15 +160,18 @@ export function CommentsPanel({ documentId, visitorId, visitorName, onClose }: C
 
               <div className="mdocs-comment-content">{root.content}</div>
 
-              <button
-                type="button"
-                className="mdocs-comment-reply-btn"
-                onClick={() =>
-                  setReplyTo({ commentId: root.commentId, visitorName: root.visitorName })
-                }
-              >
-                回复
-              </button>
+              {/* 只有登录用户能回复 */}
+              {visitorId && (
+                <button
+                  type="button"
+                  className="mdocs-comment-reply-btn"
+                  onClick={() =>
+                    setReplyTo({ commentId: root.commentId, visitorName: root.visitorName })
+                  }
+                >
+                  回复
+                </button>
+              )}
 
               {/* 回复列表 - 面包屑样式 */}
               {getReplies(root.commentId).length > 0 && (
@@ -178,7 +191,7 @@ export function CommentsPanel({ documentId, visitorId, visitorName, onClose }: C
                         <span className="mdocs-comment-time">
                           {formatRelativeTime(reply.createdAt)}
                         </span>
-                        {visitorId === reply.visitorId && (
+                        {canDeleteComment(reply) && (
                           <button
                             type="button"
                             className="mdocs-comment-delete"
@@ -190,15 +203,18 @@ export function CommentsPanel({ documentId, visitorId, visitorName, onClose }: C
                         )}
                       </div>
                       <div className="mdocs-comment-content">{reply.content}</div>
-                      <button
-                        type="button"
-                        className="mdocs-comment-reply-btn"
-                        onClick={() =>
-                          setReplyTo({ commentId: root.commentId, visitorName: reply.visitorName })
-                        }
-                      >
-                        回复
-                      </button>
+                      {/* 只有登录用户能回复 */}
+                      {visitorId && (
+                        <button
+                          type="button"
+                          className="mdocs-comment-reply-btn"
+                          onClick={() =>
+                            setReplyTo({ commentId: root.commentId, visitorName: reply.visitorName })
+                          }
+                        >
+                          回复
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -208,40 +224,48 @@ export function CommentsPanel({ documentId, visitorId, visitorName, onClose }: C
         )}
       </div>
 
-      {/* 评论输入框 */}
-      <div className="mdocs-comments-input-wrapper">
-        {replyTo && (
-          <div className="mdocs-comment-reply-notice">
-            <span>
-            回复 <span className="mdocs-comment-reply-to-name">{replyTo.visitorName}</span>
-          </span>
-            <button type="button" onClick={() => setReplyTo(null)}>
-            <X size={14} /> 取消
-          </button>
+      {/* 评论输入框：只有登录用户能发表 */}
+      {visitorId ? (
+        <div className="mdocs-comments-input-wrapper">
+          {replyTo && (
+            <div className="mdocs-comment-reply-notice">
+              <span>
+                回复 <span className="mdocs-comment-reply-to-name">{replyTo.visitorName}</span>
+              </span>
+              <button type="button" onClick={() => setReplyTo(null)}>
+                <X size={14} /> 取消
+              </button>
+            </div>
+          )}
+          <textarea
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            placeholder={replyTo ? `回复 ${replyTo.visitorName}...` : "发表评论..."}
+            className="mdocs-comments-input"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                handleSubmit();
+              }
+            }}
+          />
+          <div className="mdocs-comments-input-actions">
+            <button
+              type="button"
+              className="mdocs-btn-primary"
+              onClick={handleSubmit}
+              disabled={submitting || !newComment.trim()}
+            >
+              {submitting ? "发表中..." : "发表"}
+            </button>
           </div>
-        )}
-        <textarea
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder={replyTo ? `回复 ${replyTo.visitorName}...` : "发表评论..."}
-          className="mdocs-comments-input"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              handleSubmit();
-            }
-          }}
-        />
-        <div className="mdocs-comments-input-actions">
-          <button
-            type="button"
-            className="mdocs-btn-primary"
-            onClick={handleSubmit}
-            disabled={submitting || !newComment.trim() || !visitorId}
-          >
-            {submitting ? "发表中..." : "发表"}
-          </button>
         </div>
-      </div>
+      ) : (
+        <div className="mdocs-comments-input-wrapper" style={{ textAlign: "center" }}>
+          <div style={{ color: "#666", fontSize: "0.9rem" }}>
+            请先创建访客身份以发表评论
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -46,6 +46,26 @@ export function buildApp(): Application {
     serveAssetFile(req, res);
   });
 
+  // 获取评论列表：无需认证（能读文档就能看评论）
+  app.get("/api/documents/:documentId/comments", async (req, res) => {
+    const { documentId } = req.params;
+    if (!documentId) {
+      return res.status(400).json({ error: "缺少 documentId" });
+    }
+    try {
+      const { documentCommentService } = await import("./documents/document-comment.service.js");
+      const comments = await documentCommentService.getCommentsByDocumentId(documentId);
+      res.json({
+        data: {
+          comments,
+          total: comments.filter((c: any) => !c.isDeleted).length,
+        },
+      });
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+    }
+  });
+
   // 后续 /api 路由均需经过身份认证
   app.use("/api", authMiddleware);
   app.use("/api/assets", buildAssetsUploadRouter());
@@ -57,6 +77,7 @@ export function buildApp(): Application {
   app.use("/api/folders", buildFoldersRouter());
   app.use("/api/cli", buildCliTokensRouter());
   app.use("/api/bookmarks", buildBookmarksRouter());
+  // 发表/删除评论：需要认证
   app.use("/api/documents", documentCommentsRouter);
 
   // 兜底：未匹配到的 API 路径返回 404

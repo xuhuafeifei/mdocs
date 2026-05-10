@@ -1,10 +1,13 @@
-import { getDb } from "../db/connection";
-import { DocumentCommentRepository } from "../db/repositories/document-comment.repo";
+import type Database from "better-sqlite3";
+import { getDb } from "../db/connection.js";
+import { DocumentCommentRepository } from "../db/repositories/document-comment.repo.js";
 
 export class DocumentCommentService {
   private readonly repo: DocumentCommentRepository;
+  private readonly db: Database.Database;
 
   constructor(db = getDb()) {
+    this.db = db;
     this.repo = new DocumentCommentRepository(db);
   }
 
@@ -38,16 +41,27 @@ export class DocumentCommentService {
     return this.repo.getByDocumentId(documentId);
   }
 
-  /** 删除评论（软删除） */
+  /** 删除评论（软删除）
+   * - 评论作者可以删除自己的评论
+   * - 文档创建者可以删除该文档下的所有评论
+   */
   async deleteComment(commentId: string, visitorId: string) {
     const comment = await this.repo.getById(commentId);
     if (!comment) {
       throw new Error("评论不存在");
     }
 
-    // 只有评论作者可以删除
-    if (comment.visitorId !== visitorId) {
-      throw new Error("只能删除自己的评论");
+    // 获取文档信息，检查是否是文档创建者
+    const doc = this.db
+      .prepare("SELECT owner_visitor_id FROM documents WHERE document_id = ?")
+      .get(comment.documentId) as { owner_visitor_id: string } | undefined;
+
+    const isDocOwner = doc && doc.owner_visitor_id === visitorId;
+    const isCommentAuthor = comment.visitorId === visitorId;
+
+    // 只有评论作者或文档创建者可以删除
+    if (!isCommentAuthor && !isDocOwner) {
+      throw new Error("只能删除自己的评论或文档下的评论");
     }
 
     return this.repo.softDelete(commentId);

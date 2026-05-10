@@ -856,12 +856,13 @@ export function App() {
                   />
                 </div>
 
-                {/* 评论抽屉面板 */}
-                {commentPanelOpen && visitor && (
+                {/* 评论抽屉面板 - 能读文档就能看评论 */}
+                {commentPanelOpen && (
                   <CommentsPanel
                     documentId={activeDoc.documentId}
-                    visitorId={visitor.visitorId}
-                    visitorName={visitor.visitorName}
+                    visitorId={visitor?.visitorId}
+                    visitorName={visitor?.visitorName}
+                    documentOwnerId={activeDoc.ownerVisitorId}
                     onClose={() => setCommentPanelOpen(false)}
                   />
                 )}
