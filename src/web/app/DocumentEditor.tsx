@@ -42,7 +42,7 @@ import {
 } from "@lobehub/editor";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
-import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users } from "lucide-react";
+import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare } from "lucide-react";
 
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
@@ -103,6 +103,12 @@ interface DocumentEditorProps {
   saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
   /** Toast message callback */
   onShowToast?: (message: string) => void;
+  /** 评论面板切换 */
+  onToggleComments: () => void;
+  /** 评论面板是否展开 */
+  commentPanelOpen: boolean;
+  /** 评论数量 */
+  commentCount: number;
 }
 
 export function DocumentEditor(props: DocumentEditorProps) {
@@ -716,6 +722,25 @@ export function DocumentEditor(props: DocumentEditorProps) {
               </button>
             )
           )}
+          {/* 评论按钮（所有模式都显示） */}
+          <button
+            type="button"
+            className="secondary mdocs-tooltip mdocs-tooltip-bottom"
+            onClick={props.onToggleComments}
+            data-tooltip="评论"
+            style={{
+              padding: "4px 8px",
+              minWidth: "auto",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+              background: props.commentPanelOpen ? "var(--mdocs-hover-bg, #f0f0f0)" : undefined,
+            }}
+          >
+            <MessageSquare size={18} strokeWidth={1.5} style={{ color: "var(--mdocs-text-secondary, #6b7280)" }} />
+            {props.commentCount > 0 && <span style={{ fontSize: "0.85rem" }}>{props.commentCount}</span>}
+          </button>
           {/* 文档信息菜单按钮（所有模式都显示） */}
           <div ref={docInfoMenuRef} className="mdocs-tooltip mdocs-tooltip-bottom" data-tooltip={t("docInfo")} style={{ position: "relative" }}>
             <button

@@ -122,6 +122,22 @@ const SCHEMA_STATEMENTS: string[] = [
     PRIMARY KEY (visitor_id, document_id)
   )`,
   `CREATE INDEX IF NOT EXISTS idx_bookmarks_visitor ON document_bookmarks (visitor_id)`,
+  `CREATE TABLE IF NOT EXISTS document_comments (
+    comment_id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    visitor_id TEXT NOT NULL,
+    visitor_name TEXT NOT NULL,
+    parent_id TEXT,
+    reply_to_visitor_id TEXT,
+    reply_to_visitor_name TEXT,
+    content TEXT NOT NULL,
+    is_deleted INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_comments_document ON document_comments (document_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_comments_parent ON document_comments (parent_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_comments_visitor ON document_comments (visitor_id)`,
 ];
 
 

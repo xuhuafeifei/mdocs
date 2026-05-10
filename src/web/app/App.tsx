@@ -9,7 +9,7 @@
  * 6. 全局消息提示与冲突处理
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, File, Folder, LogOut, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
+import { BookOpen, File, Folder, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -47,12 +47,14 @@ import { MessageDialog } from "./MessageDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
 import { ConflictNotice } from "./ConflictNotice";
+import { CommentsPanel } from "./CommentsPanel";
 import { getDraft, saveDraft as saveDraftRecord, deleteDraftIfUnchanged } from "../storage/drafts";
 import { translateError, localizeDomainName, parentDirForCreates } from "./utils";
 import { useAutoPublish } from "./hooks/useAutoPublish";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 import "./App.css";
 import "./domain.css";
+import "./comments.css";
 
 type Phase = "loading" | "needsRegister" | "ready";
 
@@ -123,6 +125,10 @@ export function App() {
     setSidebarCollapsed(newValue);
     localStorage.setItem("mdocs.sidebarCollapsed", String(newValue));
   };
+
+  // ---- 评论区展开状态 ----
+  const [commentPanelOpen, setCommentPanelOpen] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
 
   // ---- 访客信息 ----
   const [visitor, setVisitor] = useState<VisitorPublic | null>(null);
@@ -805,43 +811,61 @@ export function App() {
           {/* ========== 主内容区 ========== */}
           <main className="mdocs-main">
             {activeDoc ? (
-              // ---- 有文档打开：渲染编辑器 ----
-              <DocumentEditor
-                // key 使用 documentId，切换文档时强制重新挂载编辑器，避免状态混淆
-                key={activeDoc.documentId}
-                document={activeDoc}
-                // 判断当前访客是否有编辑权限：
-                // - 文档所有者可编辑
-                // - permission === 4（public_write，公开可编辑）时所有人可编辑
-                // - 通过邀请获得编辑权限
-                canEdit={Boolean(visitor && (activeDoc.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDoc.permission) || activeDoc.invitedEdit === true))}
-                domains={domains}
-                currentDomainId={currentDomainId}
-                // 切换域：清空当前文档，加载新域的树
-                onDomainChange={(domainId) => {
-                  guardNavigate(() => {
-                    localStorage.setItem("mdocs.currentDomainId", domainId);
-                    setCurrentDomainId(domainId);
-                    setActiveDoc(null);
-                    setSelectedCreateParentPath("");
-                    navigate("/");
-                    void refreshTree(domainId);
-                  });
-                }}
-                onPublish={publishDocument}
-                onDelete={() => {
-                  // 如果是目录描述文档，删除整个目录
-                  if (activeDoc.relativePath.endsWith("/___desc___.md")) {
-                    const folderPath = activeDoc.relativePath.replace(/\/___desc___\.md$/, "");
-                    // 直接传 desc 文档的 ID，后端会自动找父目录
-                    requestDeleteFolder(activeDoc.documentId, folderPath);
-                  } else {
-                    requestDeleteDocument(activeDoc.documentId, activeDoc.relativePath);
-                  }
-                }}
-                saveBeforeNavRef={saveBeforeNavRef}
-                onShowToast={setMessage}
-              />
+              <div className="mdocs-editor-with-comments">
+                {/* 编辑器区域 */}
+                <div className="mdocs-editor-container">
+                  <DocumentEditor
+                    // key 使用 documentId，切换文档时强制重新挂载编辑器，避免状态混淆
+                    key={activeDoc.documentId}
+                    document={activeDoc}
+                    // 判断当前访客是否有编辑权限：
+                    // - 文档所有者可编辑
+                    // - permission === 4（public_write，公开可编辑）时所有人可编辑
+                    // - 通过邀请获得编辑权限
+                    canEdit={Boolean(visitor && (activeDoc.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDoc.permission) || activeDoc.invitedEdit === true))}
+                    domains={domains}
+                    currentDomainId={currentDomainId}
+                    // 切换域：清空当前文档，加载新域的树
+                    onDomainChange={(domainId) => {
+                      guardNavigate(() => {
+                        localStorage.setItem("mdocs.currentDomainId", domainId);
+                        setCurrentDomainId(domainId);
+                        setActiveDoc(null);
+                        setSelectedCreateParentPath("");
+                        navigate("/");
+                        void refreshTree(domainId);
+                      });
+                    }}
+                    onPublish={publishDocument}
+                    onDelete={() => {
+                      // 如果是目录描述文档，删除整个目录
+                      if (activeDoc.relativePath.endsWith("/___desc___.md")) {
+                        const folderPath = activeDoc.relativePath.replace(/\/___desc___\.md$/, "");
+                        // 直接传 desc 文档的 ID，后端会自动找父目录
+                        requestDeleteFolder(activeDoc.documentId, folderPath);
+                      } else {
+                        requestDeleteDocument(activeDoc.documentId, activeDoc.relativePath);
+                      }
+                    }}
+                    saveBeforeNavRef={saveBeforeNavRef}
+                    onShowToast={setMessage}
+                    // 评论相关
+                    onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
+                    commentPanelOpen={commentPanelOpen}
+                    commentCount={commentCount}
+                  />
+                </div>
+
+                {/* 评论抽屉面板 */}
+                {commentPanelOpen && visitor && (
+                  <CommentsPanel
+                    documentId={activeDoc.documentId}
+                    visitorId={visitor.visitorId}
+                    visitorName={visitor.visitorName}
+                    onClose={() => setCommentPanelOpen(false)}
+                  />
+                )}
+              </div>
             ) : (
               // ---- 没有文档打开：渲染欢迎页 ----
               <div className="mdocs-welcome">
