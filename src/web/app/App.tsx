@@ -674,7 +674,7 @@ export function App() {
           onPublishDraft={publishDraftFromList}
         />
       ) : (
-        <>
+        <div className="mdocs-layout">
           {/* ========== 左侧边栏 ========== */}
           <aside className={`mdocs-sidebar ${sidebarCollapsed ? "mdocs-sidebar-collapsed" : ""}`}>
             {/* 品牌 Logo 区域 */}
@@ -1188,7 +1188,7 @@ export function App() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
     </div>

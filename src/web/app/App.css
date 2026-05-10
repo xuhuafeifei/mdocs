@@ -20,6 +20,13 @@
   justify-content: center;
 }
 
+.mdocs-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .mdocs-sidebar {
   background: var(--mdocs-surface);
   border-right: 1px solid var(--mdocs-border);
@@ -62,7 +69,11 @@
   justify-content: center;
 }
 
-.mdocs-sidebar-collapsed .mdocs-brand {
+/* 收起时隐藏 brand 文字，保留 logo */
+.mdocs-sidebar-collapsed .mdocs-brand-logo {
+  margin-right: 0;
+}
+.mdocs-sidebar-collapsed .mdocs-brand span {
   display: none;
 }
 
