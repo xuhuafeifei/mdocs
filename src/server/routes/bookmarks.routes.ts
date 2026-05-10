@@ -58,7 +58,7 @@ export function buildBookmarksRouter(): Router {
       return;
     }
 
-    const { documentId } = req.params;
+    const documentId = req.params.documentId!;
     const db = getDb();
 
     // 检查文档是否存在且当前访客有读权限
@@ -88,7 +88,7 @@ export function buildBookmarksRouter(): Router {
       return;
     }
 
-    const { documentId } = req.params;
+    const documentId = req.params.documentId!;
     const db = getDb();
 
     // 检查文档是否存在且当前访客有读权限
@@ -118,7 +118,7 @@ export function buildBookmarksRouter(): Router {
       return;
     }
 
-    const { documentId } = req.params;
+    const documentId = req.params.documentId!;
     const db = getDb();
 
     removeBookmark(db, req.visitor.visitor_id, documentId);

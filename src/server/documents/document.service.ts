@@ -252,6 +252,8 @@ export function createDocument(params: {
     content,
     contentHash: write.contentHash,
     permission,
+    fileType: params.fileType ?? "md",
+    parentId: params.parentId ?? null,
   };
 }
 
@@ -374,6 +376,8 @@ export function updateDocument(params: {
     contentHash: write.contentHash,
     permission:
       params.permission !== undefined ? params.permission : row.permission,
+    fileType: row.file_type,
+    parentId: row.parent_id,
   };
 }
 
