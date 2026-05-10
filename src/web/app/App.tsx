@@ -9,7 +9,7 @@
  * 6. 全局消息提示与冲突处理
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, LogOut, Star } from "lucide-react";
+import { BookOpen, LogOut, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -111,6 +111,18 @@ export function App() {
   // "needsRegister": 需要注册访客身份
   // "ready": 已登录，可以正常使用
   const [phase, setPhase] = useState<Phase>("loading");
+
+  // ---- 侧边栏收起状态 ----
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const stored = localStorage.getItem("mdocs.sidebarCollapsed");
+    return stored === "true";
+  });
+
+  const toggleSidebar = () => {
+    const newValue = !sidebarCollapsed;
+    setSidebarCollapsed(newValue);
+    localStorage.setItem("mdocs.sidebarCollapsed", String(newValue));
+  };
 
   // ---- 访客信息 ----
   const [visitor, setVisitor] = useState<VisitorPublic | null>(null);
@@ -664,13 +676,34 @@ export function App() {
       ) : (
         <>
           {/* ========== 左侧边栏 ========== */}
-          <aside className="mdocs-sidebar">
+          <aside className={`mdocs-sidebar ${sidebarCollapsed ? "mdocs-sidebar-collapsed" : ""}`}>
             {/* 品牌 Logo 区域 */}
             <header className="mdocs-sidebar-header">
               <div className="mdocs-brand">
                 <img src={mdocsLogo} alt={t("brand")} className="mdocs-brand-logo" />
                 <span>{t("brand")}</span>
               </div>
+              <button
+                type="button"
+                className="mdocs-sidebar-toggle"
+                onClick={toggleSidebar}
+                aria-label={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "6px",
+                  color: "var(--mdocs-text-muted, #999)",
+                  borderRadius: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f0f0f0)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+              >
+                {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+              </button>
             </header>
 
             {/* 新建文档/文件夹按钮 */}

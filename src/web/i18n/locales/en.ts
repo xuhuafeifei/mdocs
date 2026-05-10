@@ -289,6 +289,9 @@ export const en: Record<TranslationKey, string> = {
   docInfoInviteMember: "Invite members",
   docInfoInviteSuccess: "Invited {{count}} member(s)",
   docInfoPermissionUpdated: "Permission updated",
+  // Sidebar
+  expandSidebar: "Expand sidebar",
+  collapseSidebar: "Collapse sidebar",
   // Bookmarks
   bookmark: "Bookmarks",
   bookmarkAdd: "Add to bookmarks",

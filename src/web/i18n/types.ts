@@ -280,6 +280,9 @@ export type TranslationKey =
   | "docInfoInviteMember"
   | "docInfoInviteSuccess"
   | "docInfoPermissionUpdated"
+  // Sidebar
+  | "expandSidebar"
+  | "collapseSidebar"
   // Bookmarks
   | "bookmark"
   | "bookmarkAdd"

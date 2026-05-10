@@ -287,6 +287,9 @@ export const zh: Record<TranslationKey, string> = {
   docInfoInviteMember: "邀请成员",
   docInfoInviteSuccess: "已邀请 {{count}} 人",
   docInfoPermissionUpdated: "权限已更新",
+  // Sidebar
+  expandSidebar: "展开侧边栏",
+  collapseSidebar: "收起侧边栏",
   // Bookmarks
   bookmark: "收藏",
   bookmarkAdd: "添加收藏",
