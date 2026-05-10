@@ -15,6 +15,8 @@ export interface DocumentSummary {
 export interface DocumentDetail extends DocumentSummary {
   content: string;
   contentHash: string;
+  /** 当前请求的访客是否通过邀请获得了编辑权限 */
+  invitedEdit?: boolean;
 }
 
 export interface CreateDocumentRequest {

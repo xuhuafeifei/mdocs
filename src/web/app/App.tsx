@@ -778,7 +778,8 @@ export function App() {
                 // 判断当前访客是否有编辑权限：
                 // - 文档所有者可编辑
                 // - permission === 4（public_write，公开可编辑）时所有人可编辑
-                canEdit={Boolean(visitor && (activeDoc.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDoc.permission)))}
+                // - 通过邀请获得编辑权限
+                canEdit={Boolean(visitor && (activeDoc.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDoc.permission) || activeDoc.invitedEdit === true))}
                 domains={domains}
                 currentDomainId={currentDomainId}
                 // 切换域：清空当前文档，加载新域的树

@@ -88,6 +88,86 @@ function seedDocInDomain(options: {
   return domainId;
 }
 
+/** 插入一条文档邀请 */
+function seedInvite(docId: string, visitorId: string, permission: "read" | "edit" = "read") {
+  const db = testDbRef.db!;
+  db.prepare(
+    `INSERT INTO document_invites (document_id, visitor_id, permission) VALUES (?, ?, ?)`,
+  ).run(docId, visitorId, permission);
+}
+
+// ============================================================
+//  invite 权限（新增）
+// ============================================================
+
+describe("document invite — read", () => {
+  it("private 域：被 invite read 的非创建者可读", () => {
+    seedDocInDomain({ domainPermission: "private", docPermission: Permission.PRIVATE, docId: "invite-doc" });
+    seedInvite("invite-doc", OTHER, "read");
+    expect(() => assertDocumentAccess("invite-doc", OTHER, "read")).not.toThrow();
+  });
+
+  it("restricted 域：非成员被 invite read 可读", () => {
+    seedDocInDomain({ domainPermission: "restricted", docPermission: Permission.DOMAIN_READ, docId: "invite-doc2" });
+    seedInvite("invite-doc2", OTHER, "read");
+    expect(() => assertDocumentAccess("invite-doc2", OTHER, "read")).not.toThrow();
+  });
+});
+
+describe("document invite — edit", () => {
+  it("private 域：被 invite edit 的非创建者可编辑", () => {
+    seedDocInDomain({ domainPermission: "private", docPermission: Permission.PRIVATE, docId: "edit-doc" });
+    seedInvite("edit-doc", OTHER, "edit");
+    expect(() => assertDocumentAccess("edit-doc", OTHER, "edit")).not.toThrow();
+  });
+
+  it("private 域：被 invite read 的非创建者不可编辑（403）", () => {
+    seedDocInDomain({ domainPermission: "private", docPermission: Permission.PRIVATE, docId: "edit-doc2" });
+    seedInvite("edit-doc2", OTHER, "read");
+    expect(() => assertDocumentAccess("edit-doc2", OTHER, "edit")).toThrow(DocumentError);
+  });
+
+  it("restricted 域：被 invite edit 的非成员可编辑", () => {
+    seedDocInDomain({ domainPermission: "restricted", docPermission: Permission.DOMAIN_READ, docId: "edit-doc3" });
+    seedInvite("edit-doc3", OTHER, "edit");
+    expect(() => assertDocumentAccess("edit-doc3", OTHER, "edit")).not.toThrow();
+  });
+
+  it("restricted 域：被 invite read 的非成员不可编辑（403）", () => {
+    seedDocInDomain({ domainPermission: "restricted", docPermission: Permission.DOMAIN_READ, docId: "edit-doc4" });
+    seedInvite("edit-doc4", OTHER, "read");
+    expect(() => assertDocumentAccess("edit-doc4", OTHER, "edit")).toThrow(DocumentError);
+  });
+
+  it("private 域 + domain_read：被 invite edit 的非创建者可编辑", () => {
+    seedDocInDomain({ domainPermission: "private", docPermission: Permission.DOMAIN_READ, docId: "edit-doc5" });
+    seedInvite("edit-doc5", OTHER, "edit");
+    expect(() => assertDocumentAccess("edit-doc5", OTHER, "edit")).not.toThrow();
+  });
+
+  it("private 域 + public_read：被 invite edit 的非创建者可编辑", () => {
+    seedDocInDomain({ domainPermission: "private", docPermission: Permission.PUBLIC_READ, docId: "edit-doc6" });
+    seedInvite("edit-doc6", OTHER, "edit");
+    expect(() => assertDocumentAccess("edit-doc6", OTHER, "edit")).not.toThrow();
+  });
+
+  it("private 域 + domain_write：域成员可编辑，无需 invite", () => {
+    seedDocInDomain({
+      domainPermission: "private",
+      docPermission: Permission.DOMAIN_WRITE,
+      docId: "edit-doc7",
+      memberIds: [OTHER],
+    });
+    expect(() => assertDocumentAccess("edit-doc7", OTHER, "edit")).not.toThrow();
+  });
+
+  it("private 域 + domain_write：非域成员被 invite edit 可编辑", () => {
+    seedDocInDomain({ domainPermission: "private", docPermission: Permission.DOMAIN_WRITE, docId: "edit-doc8" });
+    seedInvite("edit-doc8", OTHER, "edit");
+    expect(() => assertDocumentAccess("edit-doc8", OTHER, "edit")).not.toThrow();
+  });
+});
+
 // ============================================================
 //  validateDomainPermission
 // ============================================================

@@ -141,6 +141,8 @@ export const zh: Record<TranslationKey, string> = {
   permissionDomainWrite: "域内可编辑",
   permissionPublicRead: "公开可读",
   permissionPublicEdit: "公开可编辑",
+  invitePermissionRead: "只读",
+  invitePermissionEdit: "可编辑",
   // Domain
   personalDomainSuffix: "个人域",
   // Settings
@@ -282,7 +284,8 @@ export const zh: Record<TranslationKey, string> = {
   docInfoSize: "大小",
   docInfoUpdatedAt: "上次编辑",
   docInfoChangePermission: "修改文章权限",
-  docInfoChooseInvitees: "选择受邀人",
+  docInfoInviteMember: "邀请成员",
+  docInfoInviteSuccess: "已邀请 {{count}} 人",
   docInfoPermissionUpdated: "权限已更新",
   // Bookmarks
   bookmark: "收藏",

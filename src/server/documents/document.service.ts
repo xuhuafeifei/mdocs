@@ -4,6 +4,7 @@ import {
   deleteDocument,
   findDocumentById,
   findDocumentByPath,
+  findDocumentInvite,
   insertDocument,
   insertDocumentInvite,
   deleteDocumentInvite,
@@ -258,18 +259,25 @@ export function createDocument(params: {
 //  读单篇文档（调用方需先鉴权）
 // ============================================================
 
-export function getDocument(documentId: string): DocumentDetail {
+export function getDocument(documentId: string, visitorId?: string | null): DocumentDetail {
   const row = findDocumentById(getDb(), documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   const { content, contentHash } = readDocument(
     row.domain_id,
     row.relative_path,
   );
+  // 检查访客是否通过邀请获得编辑权限
+  let invitedEdit = false;
+  if (visitorId && row.owner_visitor_id !== visitorId) {
+    const invite = findDocumentInvite(getDb(), documentId, visitorId);
+    invitedEdit = invite?.permission === "edit";
+  }
   return {
     ...rowToSummary(row),
     content,
     contentHash,
     permission: row.permission,
+    ...(invitedEdit ? { invitedEdit: true } : {}),
   };
 }
 

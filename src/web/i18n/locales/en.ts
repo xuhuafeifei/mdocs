@@ -142,6 +142,8 @@ export const en: Record<TranslationKey, string> = {
   permissionDomainWrite: "Domain write",
   permissionPublicRead: "Public read",
   permissionPublicEdit: "Public edit",
+  invitePermissionRead: "Read only",
+  invitePermissionEdit: "Can edit",
   // Domain
   personalDomainSuffix: "'s workspace",
   // Settings
@@ -284,7 +286,8 @@ export const en: Record<TranslationKey, string> = {
   docInfoSize: "Size",
   docInfoUpdatedAt: "Last edited",
   docInfoChangePermission: "Change permission",
-  docInfoChooseInvitees: "Choose invitees",
+  docInfoInviteMember: "Invite members",
+  docInfoInviteSuccess: "Invited {{count}} member(s)",
   docInfoPermissionUpdated: "Permission updated",
   // Bookmarks
   bookmark: "Bookmarks",

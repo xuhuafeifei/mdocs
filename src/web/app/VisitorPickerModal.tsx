@@ -31,7 +31,14 @@ export interface VisitorPickerModalProps {
   excludeTemplateId?: number;
   templates: DomainMemberTemplate[];
   onClose: () => void;
-  onConfirm: (visitorIds: string[]) => void | Promise<void>;
+  /** 确认回调：showPermissionSelect=true 时返回带权限的对象数组，否则返回 ID 数组 */
+  onConfirm: (result: string[] | Array<{ visitorId: string; permission: string }>) => void | Promise<void>;
+  /** 是否显示权限选择下拉（文档邀请时使用） */
+  showPermissionSelect?: boolean;
+  /** 权限选项 */
+  permissionOptions?: { value: string; label: string }[];
+  /** 已有成员的初始权限 */
+  initialPermissions?: Map<string, string>;
 }
 
 type SelectedDisplayRow = { visitorId: string; name: string; muted: boolean };
@@ -47,6 +54,9 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
     templates,
     onClose,
     onConfirm,
+    showPermissionSelect = false,
+    permissionOptions = [],
+    initialPermissions,
   } = props;
   const { t } = useI18n();
 
@@ -68,6 +78,9 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
 
   // ---- 已选访客 ID 集合 ----
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+
+  // ---- 已选访客的权限 Map ----
+  const [permissions, setPermissions] = useState<Map<string, string>>(() => new Map());
 
   // ---- 搜索过滤词 ----
   const [filter, setFilter] = useState("");
@@ -108,13 +121,15 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
     if (!open) return;
     // 用初始已选项初始化勾选集合
     setSelectedIds(new Set(initialSelectedIds));
+    // 初始化权限 Map
+    setPermissions(initialPermissions ? new Map(initialPermissions) : new Map());
     // 清空搜索词
     setFilter("");
     // 清空模板选择
     setTemplatePick("");
     // 清空错误提示
     setLocalErr(null);
-  }, [open, initialSelectedIds]);
+  }, [open, initialSelectedIds, initialPermissions]);
 
   /**
    * 弹窗打开时加载访客目录，组件卸载或弹窗关闭时取消未完成的请求。
@@ -170,17 +185,19 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
    *   2. 已停用     → 显示「昵称 · 已停用」（灰色斜体）
    *   3. 已删除     → 显示「已删除的访客（库中无记录）」（灰色斜体）
    */
-  const selectedDisplayRows: SelectedDisplayRow[] = useMemo(() => {
+  const selectedDisplayRows = useMemo(() => {
     // 构建访客目录 Map，用于快速查找
     const dirMap = new Map(allVisitors.map((v) => [v.visitorId, v]));
-    const rows: SelectedDisplayRow[] = [];
+    const rows: Array<{ visitorId: string; name: string; muted: boolean; permission?: string }> = [];
     // 遍历所有已选成员 ID
     for (const id of selectedIds) {
+      // 获取该访客的权限
+      const permission = permissions.get(id);
       // 先在活跃访客目录中查找
       const dir = dirMap.get(id);
       if (dir) {
         // 找到了，显示正常状态
-        rows.push({ visitorId: id, name: dir.visitorName, muted: false });
+        rows.push({ visitorId: id, name: dir.visitorName, muted: false, permission });
         continue;
       }
       // 在 seedMembers（域成员接口）中查找
@@ -188,27 +205,28 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
       if (seed) {
         if (seed.missing) {
           // visitors 表已无此行 → 物理删除
-          rows.push({ visitorId: id, name: t("visitorPickerMemberMissing"), muted: true });
+          rows.push({ visitorId: id, name: t("visitorPickerMemberMissing"), muted: true, permission });
         } else if (seed.disabled) {
           // visitors 表有行但 disabled_at 非空 → 已停用（被合并）
           rows.push({
             visitorId: id,
             name: `${seed.visitorName} · ${t("visitorPickerDisabledTag")}`,
             muted: true,
+            permission,
           });
         } else {
           // 正常成员
-          rows.push({ visitorId: id, name: seed.visitorName, muted: false });
+          rows.push({ visitorId: id, name: seed.visitorName, muted: false, permission });
         }
         continue;
       }
       // 两个数据源都找不到 → 未知访客
-      rows.push({ visitorId: id, name: t("visitorPickerUnknownVisitor"), muted: true });
+      rows.push({ visitorId: id, name: t("visitorPickerUnknownVisitor"), muted: true, permission });
     }
     // 按名称字母顺序排序
     rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
     return rows;
-  }, [allVisitors, selectedIds, seedMap, t]);
+  }, [allVisitors, selectedIds, seedMap, permissions, t]);
 
   /**
    * 切换访客选中状态，locked（域创建者等）不可取消。
@@ -220,17 +238,38 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
       setSelectedIds((prev) => {
         const n = new Set(prev);
         if (n.has(id)) {
-          // 已选中则取消
+          // 已选中则取消，同时移除权限
           n.delete(id);
+          setPermissions((p) => {
+            const np = new Map(p);
+            np.delete(id);
+            return np;
+          });
         } else {
-          // 未选中则添加
+          // 未选中则添加，默认权限为 read
           n.add(id);
+          setPermissions((p) => {
+            const np = new Map(p);
+            np.set(id, "read");
+            return np;
+          });
         }
         return n;
       });
     },
     [locked],
   );
+
+  /**
+   * 修改访客权限
+   */
+  const handlePermissionChange = useCallback((visitorId: string, permission: string) => {
+    setPermissions((prev) => {
+      const np = new Map(prev);
+      np.set(visitorId, permission);
+      return np;
+    });
+  }, []);
 
   /**
    * 套用已选模板：在当前已选成员基础上追加模板中的访客（仅追加已知访客，不移除任何人）。
@@ -262,9 +301,18 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
     setLocalErr(null);
     setConfirmBusy(true);
     try {
-      // 将已选 ID 转为数组并排序，保证输出一致性
-      const ids = [...selectedIds].sort();
-      await onConfirm(ids);
+      if (showPermissionSelect) {
+        // 文档邀请模式：返回带权限的对象数组
+        const result = [...selectedIds].sort().map((visitorId) => ({
+          visitorId,
+          permission: permissions.get(visitorId) ?? "read",
+        }));
+        await onConfirm(result);
+      } else {
+        // 普通模式：仅返回 ID 数组
+        const ids = [...selectedIds].sort();
+        await onConfirm(ids);
+      }
       onClose();
     } catch (err) {
       setLocalErr(translateError(t, err));
@@ -384,6 +432,9 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
             selectedRows={selectedDisplayRows}
             lockedIds={locked}
             myVisitorId={myVisitorId}
+            showPermissionSelect={showPermissionSelect}
+            permissionOptions={permissionOptions}
+            onPermissionChange={handlePermissionChange}
           />
         </div>
 

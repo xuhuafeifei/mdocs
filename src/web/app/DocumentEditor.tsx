@@ -55,7 +55,7 @@ import { useI18n } from "../i18n";
 import { openFileSelector } from "./actions";
 import Toolbar from "./Toolbar";
 import { DomainSelect } from "./DomainSelect";
-import { uploadAssetApi, checkBookmarkApi, addBookmarkApi, removeBookmarkApi, fetchVisitorsDirectoryApi, addDocumentInviteApi } from "../services/endpoints";
+import { uploadAssetApi, checkBookmarkApi, addBookmarkApi, removeBookmarkApi, fetchVisitorsDirectoryApi, addDocumentInviteApi, getDocumentInvitesApi, removeDocumentInviteApi } from "../services/endpoints";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { usePublishGuard } from "./hooks/usePublishGuard";
 import { localizeDomainName } from "./utils";
@@ -116,8 +116,10 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [permissionDraft, setPermissionDraft] = useState<DocumentPermissionValue>(props.document.permission as DocumentPermissionValue);
   const [permissionBusy, setPermissionBusy] = useState(false);
-  const [showVisitorPicker, setShowVisitorPicker] = useState(false);
-  const [invitedVisitorIds, setInvitedVisitorIds] = useState<Set<string>>(new Set());
+  const [showInvitePicker, setShowInvitePicker] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [existingInvites, setExistingInvites] = useState<Map<string, string>>(new Map());
+  const [inviteBusy, setInviteBusy] = useState(false);
 
   // ---- 点击菜单外部自动关闭 ----
   useEffect(() => {
@@ -416,30 +418,48 @@ export function DocumentEditor(props: DocumentEditorProps) {
   }
 
   async function savePermission(): Promise<void> {
-    if (permissionBusy) return;
-    // 如果只是切换到邀请权限但还没选人，或者权限没变化，不提交
-    const isInviteMode = permissionDraft === DocumentPermission.DOMAIN_READ;
-    if (!isInviteMode && permissionDraft === props.document.permission) {
+    if (permissionBusy || permissionDraft === props.document.permission) {
       setShowPermissionDialog(false);
       return;
     }
     setPermissionBusy(true);
     try {
       const content = editor ? JSON.stringify(editor.getDocument("json")) : props.document.content;
-      // 1. 更新文档权限级别
-      if (permissionDraft !== props.document.permission) {
-        await props.onPublish(content, displayName, props.document.documentId, permissionDraft);
-      }
-      // 2. 邀请权限模式下，添加访客邀请
-      if (isInviteMode && invitedVisitorIds.size > 0) {
-        for (const visitorId of invitedVisitorIds) {
-          await addDocumentInviteApi(props.document.documentId, visitorId, "read");
-        }
-      }
+      await props.onPublish(content, displayName, props.document.documentId, permissionDraft);
       setShowPermissionDialog(false);
       props.onShowToast?.(t("docInfoPermissionUpdated"));
     } finally {
       setPermissionBusy(false);
+    }
+  }
+
+  /**
+   * 保存邀请成员：对比新旧邀请列表，处理新增、删除、权限变更
+   */
+  async function saveInvite(result: Array<{ visitorId: string; permission: string }>): Promise<void> {
+    if (inviteBusy) return;
+    setInviteBusy(true);
+    try {
+      const newIds = new Set(result.map((r) => r.visitorId));
+      const newPermMap = new Map(result.map((r) => [r.visitorId, r.permission]));
+
+      for (const [visitorId] of existingInvites) {
+        if (!newIds.has(visitorId)) {
+          await removeDocumentInviteApi(props.document.documentId, visitorId);
+        }
+      }
+
+      for (const { visitorId, permission } of result) {
+        const oldPerm = existingInvites.get(visitorId);
+        if (!oldPerm || oldPerm !== permission) {
+          await addDocumentInviteApi(props.document.documentId, visitorId, permission);
+        }
+      }
+
+      setShowInvitePicker(false);
+      props.onShowToast?.(t("docInfoInviteSuccess", { count: result.length }));
+    } finally {
+      setInviteBusy(false);
     }
   }
 
@@ -778,6 +798,40 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     border: "none",
                     cursor: "pointer",
                     fontSize: "13px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                  onClick={() => {
+                    setShowDocInfoMenu(false);
+                    void (async () => {
+                      setInviteLoading(true);
+                      try {
+                        const invites = await getDocumentInvitesApi(props.document.documentId);
+                        const inviteMap = new Map(invites.map((i) => [i.visitorId, i.permission]));
+                        setExistingInvites(inviteMap);
+                        setShowInvitePicker(true);
+                      } finally {
+                        setInviteLoading(false);
+                      }
+                    })();
+                  }}
+                >
+                  <span>👥</span>
+                  <span>{t("docInfoInviteMember")}</span>
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "8px 16px",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "13px",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
@@ -819,57 +873,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 </label>
               ))}
             </div>
-            {/* 邀请权限：选择受邀人 */}
-            {permissionDraft === DocumentPermission.DOMAIN_READ && (
-              <div style={{ marginTop: 12 }}>
-                <button
-                  type="button"
-                  className="secondary"
-                  style={{ width: "100%", marginBottom: 8 }}
-                  onClick={() => setShowVisitorPicker(true)}
-                >
-                  {t("docInfoChooseInvitees")}
-                </button>
-                {invitedVisitorIds.size > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                    {[...invitedVisitorIds].map((id) => (
-                      <span
-                        key={id}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 6,
-                          padding: "4px 8px",
-                          background: "var(--mdocs-bg-hover, #f5f5f5)",
-                          borderRadius: 4,
-                          fontSize: "12px",
-                        }}
-                      >
-                        {getVisitorName(id)}
-                        <button
-                          type="button"
-                          onClick={() => setInvitedVisitorIds((prev) => {
-                            const n = new Set(prev);
-                            n.delete(id);
-                            return n;
-                          })}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            fontSize: "14px",
-                            lineHeight: 1,
-                          }}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
               <button type="button" onClick={() => setShowPermissionDialog(false)}>{t("cancel")}</button>
               <button type="button" className="primary" disabled={permissionBusy} onClick={() => void savePermission()}>
@@ -879,15 +882,21 @@ export function DocumentEditor(props: DocumentEditorProps) {
           </div>
         </div>
       )}
-      {/* 访客选择器弹窗 */}
+      {/* 邀请成员访客选择器弹窗 */}
       <VisitorPickerModal
-        open={showVisitorPicker}
-        title={t("docInfoChooseInvitees")}
-        initialSelectedIds={[...invitedVisitorIds]}
+        open={showInvitePicker}
+        title={t("docInfoInviteMember")}
+        initialSelectedIds={[...existingInvites.keys()]}
+        initialPermissions={existingInvites}
         templates={[]}
-        onClose={() => setShowVisitorPicker(false)}
-        onConfirm={(ids) => {
-          setInvitedVisitorIds(new Set(ids));
+        showPermissionSelect={true}
+        permissionOptions={[
+          { value: "read", label: t("invitePermissionRead") },
+          { value: "edit", label: t("invitePermissionEdit") },
+        ]}
+        onClose={() => setShowInvitePicker(false)}
+        onConfirm={(result) => {
+          void saveInvite(result as Array<{ visitorId: string; permission: string }>);
         }}
       />
       <OutlineProvider>

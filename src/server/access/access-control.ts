@@ -176,20 +176,25 @@ export function canEditDocument(
 
   // private 域：按五档实际语义
   if (row.permission === Permission.PRIVATE) {
-    // 仅创建者可写
-    return false;
+    // 仅创建者可写，或靠 invite
+    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
+    return invite?.permission === "edit";
   }
   if (row.permission === Permission.DOMAIN_READ) {
-    // domain_read：仅创建者可写（已在第 1 步排除了）
-    return false;
+    // domain_read：仅创建者可写，或靠 invite
+    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
+    return invite?.permission === "edit";
   }
   if (row.permission === Permission.DOMAIN_WRITE) {
-    // domain_write：域成员可写，但 private 域只有创建者一名成员
-    return false;
+    // domain_write：域成员可写，或靠 invite
+    if (domainInfo.isDomainMember) return true;
+    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
+    return invite?.permission === "edit";
   }
   if (row.permission === Permission.PUBLIC_READ) {
-    // public_read：仅创建者可写
-    return false;
+    // public_read：仅创建者可写，或靠 invite
+    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
+    return invite?.permission === "edit";
   }
   // public_write：任何人可写
   return true;

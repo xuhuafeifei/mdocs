@@ -7,6 +7,8 @@
 import { useMemo } from "react";
 import { useI18n } from "../i18n";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
+import { MiniSelect } from "./MiniSelect";
+import type { MiniSelectOption } from "./MiniSelect";
 
 /** 取 UUID 前 6 位用于简短展示 */
 function idPrefix6(id: string): string {
@@ -18,6 +20,7 @@ export interface SelectedDisplayRow {
   visitorId: string;
   name: string;
   muted: boolean;
+  permission?: string;
 }
 
 export interface VisitorPickerContentProps {
@@ -31,6 +34,12 @@ export interface VisitorPickerContentProps {
   lockedIds?: Set<string>;
   /** 当前登录的访客 ID，传入后在左列置顶 + 绿色 (你) 标记 */
   myVisitorId?: string | null;
+  /** 是否显示权限选择下拉（文档邀请时使用） */
+  showPermissionSelect?: boolean;
+  /** 权限选项，如 [{ value: 'read', label: '只读' }, { value: 'edit', label: '可编辑' }] */
+  permissionOptions?: { value: string; label: string }[];
+  /** 权限变更回调 */
+  onPermissionChange?: (visitorId: string, permission: string) => void;
 }
 
 /**
@@ -50,6 +59,9 @@ export function VisitorPickerContent(props: VisitorPickerContentProps) {
     selectedRows,
     lockedIds = new Set(),
     myVisitorId,
+    showPermissionSelect = false,
+    permissionOptions = [],
+    onPermissionChange,
   } = props;
   const { t } = useI18n();
 
@@ -162,13 +174,14 @@ export function VisitorPickerContent(props: VisitorPickerContentProps) {
                   <tr>
                     <th scope="col">{t("visitorPickerColIdFull")}</th>
                     <th scope="col">{t("visitorPickerColName")}</th>
+                    {showPermissionSelect && <th scope="col">{t("permissionLabel")}</th>}
                     <th scope="col" className="mdocs-visitor-picker-check-col" />
                   </tr>
                 </thead>
                 <tbody>
                   {selectedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="mdocs-visitor-picker-empty-cell">
+                      <td colSpan={showPermissionSelect ? 4 : 3} className="mdocs-visitor-picker-empty-cell">
                         {t("visitorPickerNoSelection")}
                       </td>
                     </tr>
@@ -181,6 +194,15 @@ export function VisitorPickerContent(props: VisitorPickerContentProps) {
                           <td><code className="mdocs-visitor-picker-id-full">{row.visitorId}</code></td>
                           {/* muted 状态（已停用/已删除）使用灰色斜体 */}
                           <td className={row.muted ? "mdocs-visitor-picker-name-muted" : undefined}>{row.name}</td>
+                          {showPermissionSelect && (
+                            <td>
+                              <MiniSelect
+                                options={permissionOptions as MiniSelectOption[]}
+                                value={row.permission ?? "read"}
+                                onChange={(v) => onPermissionChange?.(row.visitorId, v)}
+                              />
+                            </td>
+                          )}
                           <td className="mdocs-visitor-picker-check-col">
                             {isLocked ? (
                               // 锁定成员显示「—」不可移除

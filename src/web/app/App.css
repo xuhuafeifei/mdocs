@@ -1351,6 +1351,63 @@ strong.label {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
+/* === MiniSelect 通用小尺寸选择器 === */
+.mdocs-mini-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--mdocs-surface, #fff);
+  color: var(--mdocs-text, #111827);
+  cursor: pointer;
+  min-width: 72px;
+  white-space: nowrap;
+}
+
+.mdocs-mini-select-trigger:hover {
+  background: var(--mdocs-bg-hover, #f5f5f5);
+}
+
+.mdocs-mini-select-chevron {
+  transition: transform 0.15s ease;
+}
+
+.mdocs-mini-select-chevron.open {
+  transform: rotate(180deg);
+}
+
+.mdocs-mini-select-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 1000;
+  min-width: 100%;
+  padding: 4px;
+}
+
+.mdocs-mini-select-option {
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mdocs-mini-select-option:hover {
+  background: var(--mdocs-hover-bg, #f5f5f5);
+}
+
+.mdocs-mini-select-option.active {
+  background: var(--mdocs-accent-bg, #eff6ff);
+  color: var(--mdocs-accent, #3b82f6);
+}
+
 .mdocs-bookmark-table {
   width: 100%;
   border-collapse: separate;

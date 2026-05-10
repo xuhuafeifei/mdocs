@@ -118,9 +118,10 @@ export function buildDocumentsRouter(): Router {
   router.get("/:documentId", requireDocumentAccess("read"), (req: Request, res: Response) => {
     // 中间件已通过校验，这里直接从路由参数取文档ID
     const documentId = req.params.documentId!;
+    const visitorId = req.visitor?.visitor_id ?? null;
     try {
       // 从数据库和磁盘读取完整文档内容
-      const doc = getDocument(documentId);
+      const doc = getDocument(documentId, visitorId);
       res.json({ data: doc });
     } catch (err) {
       respondError(res, err, "documents-route.get");

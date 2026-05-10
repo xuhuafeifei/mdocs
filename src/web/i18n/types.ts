@@ -138,6 +138,8 @@ export type TranslationKey =
   | "permissionDomainWrite"
   | "permissionPublicRead"
   | "permissionPublicEdit"
+  | "invitePermissionRead"
+  | "invitePermissionEdit"
   // Settings
   | "settings"
   | "general"
@@ -275,7 +277,8 @@ export type TranslationKey =
   | "docInfoSize"
   | "docInfoUpdatedAt"
   | "docInfoChangePermission"
-  | "docInfoChooseInvitees"
+  | "docInfoInviteMember"
+  | "docInfoInviteSuccess"
   | "docInfoPermissionUpdated"
   // Bookmarks
   | "bookmark"
