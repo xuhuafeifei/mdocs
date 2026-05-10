@@ -42,7 +42,7 @@ import {
 } from "@lobehub/editor";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
-import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, SigmaIcon, Table2Icon, TextAlignJustify } from "lucide-react";
+import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users } from "lucide-react";
 
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
@@ -819,7 +819,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     })();
                   }}
                 >
-                  <span>👥</span>
+                  <Users size={14} />
                   <span>{t("docInfoInviteMember")}</span>
                 </button>
                 <button
@@ -832,6 +832,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     border: "none",
                     cursor: "pointer",
                     fontSize: "13px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
@@ -841,7 +844,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     setShowPermissionDialog(true);
                   }}
                 >
-                  {t("docInfoChangePermission")}
+                  <ShieldUser size={14} />
+                  <span>{t("docInfoChangePermission")}</span>
                 </button>
               </div>
             )}
