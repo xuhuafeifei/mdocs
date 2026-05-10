@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { MessageSquare, X } from "lucide-react";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 export interface DocumentComment {
   commentId: string;
@@ -33,6 +34,7 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
   const [replyTo, setReplyTo] = useState<{ commentId: string; visitorName: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   /** 判断是否可以删除某条评论：是评论作者 OR 是文档创建者 */
   function canDeleteComment(comment: DocumentComment): boolean {
@@ -86,8 +88,6 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
 
   // 删除评论
   async function handleDelete(commentId: string) {
-    if (!confirm("确定删除这条评论？")) return;
-
     try {
       await fetch(`${API_BASE}/documents/${documentId}/comments/${commentId}`, {
         method: "DELETE",
@@ -95,6 +95,8 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
       await loadComments();
     } catch (err) {
       console.error("Failed to delete comment:", err);
+    } finally {
+      setDeleteTarget(null);
     }
   }
 
@@ -150,7 +152,7 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
                   <button
                     type="button"
                     className="mdocs-comment-delete"
-                    onClick={() => handleDelete(root.commentId)}
+                    onClick={() => setDeleteTarget(root.commentId)}
                     title="删除"
                   >
                     <X size={14} />
@@ -195,7 +197,7 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
                           <button
                             type="button"
                             className="mdocs-comment-delete"
-                            onClick={() => handleDelete(reply.commentId)}
+                            onClick={() => setDeleteTarget(reply.commentId)}
                             title="删除"
                           >
                             <X size={12} />
@@ -265,6 +267,18 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
             请先创建访客身份以发表评论
           </div>
         </div>
+      )}
+
+      {/* 删除确认弹窗 */}
+      {deleteTarget && (
+        <ConfirmDialog
+          title="删除评论"
+          message="确定要删除这条评论吗？"
+          confirmLabel="删除"
+          danger
+          onConfirm={() => handleDelete(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   );
