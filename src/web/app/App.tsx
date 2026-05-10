@@ -16,6 +16,7 @@ import type { VisitorPublic } from "../../shared/types/visitor";
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
 import type { TreeNode } from "../../shared/types/tree";
+import { isPublicWritePermission } from "../../shared/permissions.js";
 import {
   ApiRequestError,
   clearVisitorId,
@@ -300,6 +301,13 @@ export function App() {
           ownerVisitorId: draft.ownerVisitorId!,
           domainId: draft.domainId,
         } as DocumentDetail);
+        // 切换到文档所属的域
+        if (draft.domainId !== currentDomainId) {
+          localStorage.setItem("mdocs.currentDomainId", draft.domainId);
+          setCurrentDomainId(draft.domainId);
+          // 刷新新域的文档树
+          void refreshTree(draft.domainId);
+        }
         // 设置新建文档的默认父路径为当前文档所在文件夹
         setSelectedCreateParentPath(parentDirForCreates(draft.relativePath));
         // 本地加载成功，直接返回
@@ -308,6 +316,13 @@ export function App() {
 
       // ========== 步骤 2：本地没有可用草稿，从服务器获取完整文档 ==========
       const doc = await getDocumentApi(docId);
+      // 切换到文档所属的域（关键修复：URL 跳转时自动切换域）
+      if (doc.domainId !== currentDomainId) {
+        localStorage.setItem("mdocs.currentDomainId", doc.domainId);
+        setCurrentDomainId(doc.domainId);
+        // 刷新新域的文档树
+        void refreshTree(doc.domainId);
+      }
       // 设置新建文档的默认父路径（根据当前域是否个人域决定是否去掉前缀）
       setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
 
@@ -444,10 +459,10 @@ export function App() {
    * 发布文档：将内容推送到服务器，成功后清除冲突标记并刷新树。
    * 目前所有发布失败都视为潜在冲突（待细化）。
    */
-  async function publishDocument(content: string, displayName: string, documentId: string): Promise<void> {
+  async function publishDocument(content: string, displayName: string, documentId: string, permission?: number): Promise<void> {
     try {
       // 向后端 PUT 更新文档内容和标题
-      const updated = await updateDocumentApi(documentId, { content, displayName });
+      const updated = await updateDocumentApi(documentId, { content, displayName, permission });
       // 如果当前正在编辑的就是这篇文档，更新本地状态以反映最新内容
       setActiveDoc((prev) => (prev && prev.documentId === documentId ? updated : prev));
       // 刷新侧边栏文档树（文档修改时间等可能变化）
@@ -762,8 +777,8 @@ export function App() {
                 document={activeDoc}
                 // 判断当前访客是否有编辑权限：
                 // - 文档所有者可编辑
-                // - permission === 2（公开可编辑）的文档所有人可编辑
-                canEdit={Boolean(visitor && (activeDoc.ownerVisitorId === visitor.visitorId || activeDoc.permission === 2))}
+                // - permission === 4（public_write，公开可编辑）时所有人可编辑
+                canEdit={Boolean(visitor && (activeDoc.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDoc.permission)))}
                 domains={domains}
                 currentDomainId={currentDomainId}
                 // 切换域：清空当前文档，加载新域的树

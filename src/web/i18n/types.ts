@@ -135,6 +135,7 @@ export type TranslationKey =
   | "permissionLabel"
   | "permissionPrivate"
   | "permissionInvite"
+  | "permissionDomainWrite"
   | "permissionPublicRead"
   | "permissionPublicEdit"
   // Settings

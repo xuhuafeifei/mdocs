@@ -138,6 +138,7 @@ export const zh: Record<TranslationKey, string> = {
   permissionLabel: "权限",
   permissionPrivate: "私有",
   permissionInvite: "邀请",
+  permissionDomainWrite: "域内可编辑",
   permissionPublicRead: "公开可读",
   permissionPublicEdit: "公开可编辑",
   // Domain

@@ -139,6 +139,7 @@ export const en: Record<TranslationKey, string> = {
   permissionLabel: "Permission",
   permissionPrivate: "Private",
   permissionInvite: "Invite",
+  permissionDomainWrite: "Domain write",
   permissionPublicRead: "Public read",
   permissionPublicEdit: "Public edit",
   // Domain

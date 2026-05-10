@@ -46,6 +46,11 @@ import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, SigmaIcon, Table2I
 
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
+import {
+  DocumentPermission,
+  allowedPermissionsForDomain,
+  type DocumentPermissionValue,
+} from "../../shared/permissions.js";
 import { useI18n } from "../i18n";
 import { openFileSelector } from "./actions";
 import Toolbar from "./Toolbar";
@@ -91,7 +96,7 @@ interface DocumentEditorProps {
   domains: DomainSummary[];
   currentDomainId: string;
   onDomainChange: (domainId: string) => void;
-  onPublish: (content: string, displayName: string, documentId: string) => Promise<void>;
+  onPublish: (content: string, displayName: string, documentId: string, permission?: number) => Promise<void>;
   onDelete: () => Promise<void>;
   /** Called by App.tsx before navigation to flush pending changes */
   saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
@@ -107,6 +112,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const [showDocInfoMenu, setShowDocInfoMenu] = useState(false);
   const docInfoMenuRef = useRef<HTMLDivElement>(null);
   const [visitors, setVisitors] = useState<VisitorDirectoryEntry[]>([]);
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+  const [permissionDraft, setPermissionDraft] = useState<DocumentPermissionValue>(props.document.permission as DocumentPermissionValue);
+  const [permissionBusy, setPermissionBusy] = useState(false);
 
   // ---- 点击菜单外部自动关闭 ----
   useEffect(() => {
@@ -247,6 +255,10 @@ export function DocumentEditor(props: DocumentEditorProps) {
     setDisplayName(props.document.displayName);
   }, [props.document.displayName, props.document.documentId]);
 
+  useEffect(() => {
+    setPermissionDraft(props.document.permission as DocumentPermissionValue);
+  }, [props.document.permission, props.document.documentId]);
+
   /**
    * 切换文档时检查当前文档的收藏状态。
    */
@@ -380,6 +392,39 @@ export function DocumentEditor(props: DocumentEditorProps) {
     if (next === prev) return;
     // 标题有变更，执行发布
     await publish();
+  }
+
+  const currentDomain = useMemo(
+    () => props.domains.find((d) => d.domainId === props.document.domainId),
+    [props.domains, props.document.domainId],
+  );
+
+  const allowedPermissions = useMemo<DocumentPermissionValue[]>(() => {
+    const domainPermission = currentDomain?.permission ?? "public";
+    return allowedPermissionsForDomain(domainPermission);
+  }, [currentDomain?.permission]);
+
+  function permissionLabel(permission: DocumentPermissionValue): string {
+    if (permission === DocumentPermission.PRIVATE) return t("permissionPrivate");
+    if (permission === DocumentPermission.DOMAIN_READ) return t("permissionInvite");
+    if (permission === DocumentPermission.DOMAIN_WRITE) return t("permissionDomainWrite");
+    if (permission === DocumentPermission.PUBLIC_READ) return t("permissionPublicRead");
+    return t("permissionPublicEdit");
+  }
+
+  async function savePermission(): Promise<void> {
+    if (permissionBusy || permissionDraft === props.document.permission) {
+      setShowPermissionDialog(false);
+      return;
+    }
+    setPermissionBusy(true);
+    try {
+      const content = editor ? JSON.stringify(editor.getDocument("json")) : props.document.content;
+      await props.onPublish(content, displayName, props.document.documentId, permissionDraft);
+      setShowPermissionDialog(false);
+    } finally {
+      setPermissionBusy(false);
+    }
   }
 
   /**
@@ -722,8 +767,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
                   onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
                   onClick={() => {
                     setShowDocInfoMenu(false);
-                    // TODO: 打开权限修改弹窗
-                    alert("修改权限功能开发中...");
+                    setPermissionDraft(props.document.permission as DocumentPermissionValue);
+                    setShowPermissionDialog(true);
                   }}
                 >
                   {t("docInfoChangePermission")}
@@ -733,6 +778,40 @@ export function DocumentEditor(props: DocumentEditorProps) {
           </div>
         </div>
       </div>
+      {showPermissionDialog && (
+        <div
+          className="mdocs-dialog-backdrop"
+          style={{ position: "fixed", zIndex: 9999 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowPermissionDialog(false); }}
+        >
+          <div className="mdocs-dialog card" style={{ maxWidth: 480 }}>
+            <h1 style={{ fontSize: "1.1rem", marginBottom: 12 }}>{t("docInfoChangePermission")}</h1>
+            <div className="muted" style={{ marginBottom: 12 }}>
+              {t("domainPermission")}：{currentDomain ? localizeDomainName(currentDomain.domainName, lang, t) : props.document.domainId}
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {allowedPermissions.map((permission) => (
+                <label key={permission} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <input
+                    type="radio"
+                    name="doc-permission"
+                    value={permission}
+                    checked={permissionDraft === permission}
+                    onChange={() => setPermissionDraft(permission)}
+                  />
+                  <span>{permissionLabel(permission)}</span>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+              <button type="button" onClick={() => setShowPermissionDialog(false)}>{t("cancel")}</button>
+              <button type="button" className="primary" disabled={permissionBusy} onClick={() => void savePermission()}>
+                {permissionBusy ? t("publishing") : t("saveAndPublish")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <OutlineProvider>
         <Block flex={1} style={{ minHeight: 0 }}>
           <div
