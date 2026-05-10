@@ -338,8 +338,8 @@ describe("DocumentCommentService", () => {
 
       expect(comments1.length).toBe(1);
       expect(comments2.length).toBe(1);
-      expect(comments1[0].content).toBe("文档 1 的评论");
-      expect(comments2[0].content).toBe("文档 2 的评论");
+      expect(comments1[0]!.content).toBe("文档 1 的评论");
+      expect(comments2[0]!.content).toBe("文档 2 的评论");
     });
   });
 });

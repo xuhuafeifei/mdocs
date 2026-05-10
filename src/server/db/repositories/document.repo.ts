@@ -81,6 +81,50 @@ export function listDocumentsByDomain(db: Database.Database, domainId: string): 
 }
 
 /**
+ * 列出指定访客创建的所有文档，按更新时间倒序排列。
+ *
+ * @param db - better-sqlite3 数据库实例
+ * @param visitorId - 访客 ID
+ * @returns 该访客创建的所有文档列表
+ */
+export interface DocumentWithDomain {
+  documentId: string;
+  domainId: string;
+  relativePath: string;
+  displayName: string;
+  createdAt: string;
+  updatedAt: string;
+  permission: number;
+}
+
+export function listDocumentsByVisitor(db: Database.Database, visitorId: string): DocumentWithDomain[] {
+  const rows = db
+    .prepare<string, {
+      document_id: string;
+      domain_id: string;
+      relative_path: string;
+      display_name: string;
+      created_at: string;
+      updated_at: string;
+      permission: number;
+    }>(
+      `SELECT document_id, domain_id, relative_path, display_name, created_at, updated_at, permission
+       FROM documents WHERE owner_visitor_id = ? ORDER BY updated_at DESC`,
+    )
+    .all(visitorId);
+
+  return rows.map((row) => ({
+    documentId: row.document_id,
+    domainId: row.domain_id,
+    relativePath: row.relative_path,
+    displayName: row.display_name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    permission: row.permission,
+  }));
+}
+
+/**
  * 根据文档 ID 查找单篇文档。
  *
  * @param db - better-sqlite3 数据库实例

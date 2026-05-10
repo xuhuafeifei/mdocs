@@ -17,6 +17,10 @@
 | 与 `markdown-docs` 的代码隔离红线 | [`clean-room-policy.md`](./clean-room-policy.md) |
 | 恢复码设计、API、DB 变更、涉及文件清单 | [`recovery-code.md`](./recovery-code.md) |
 | 主界面右侧空白 / 编辑区不铺满（shell 栅格 + main 未 flex 撑满） | [`bug-fixes/layout-editor-right-blank-2026-05-10.md`](./bug-fixes/layout-editor-right-blank-2026-05-10.md) |
+| 刷新页面后登录态失效 / Cookie 与请求头冲突 | [`bug-fixes/login-state-invalidation-2026-05-09.md`](./bug-fixes/login-state-invalidation-2026-05-09.md) |
+| 快速切换文档出现内容与 URL 不匹配 / openDocument 竞态条件 | [`bug-fixes/open-document-race-condition-2026-05-10.md`](./bug-fixes/open-document-race-condition-2026-05-10.md) |
+| CommentsPanel 评论列表 O(n*m) 性能优化 | [`bug-fixes/comments-panel-performance-2026-05-10.md`](./bug-fixes/comments-panel-performance-2026-05-10.md) |
+| DocumentEditor handleInit 重复 JSON.parse 优化 | [`bug-fixes/handle-init-duplicate-parse-2026-05-10.md`](./bug-fixes/handle-init-duplicate-parse-2026-05-10.md) |
 | 重大技术决策的历史记录 | [`adr/`](./adr/) |
 
 ## 项目坐标

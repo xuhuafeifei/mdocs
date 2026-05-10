@@ -306,5 +306,13 @@ export const zh: Record<TranslationKey, string> = {
   bookmarkSearch: "搜索收藏",
   bookmarkFilterAll: "全部域",
   bookmarkNoMatch: "暂无匹配的收藏",
+  // My Documents
+  myDocuments: "我的文章",
+  myDocumentsEmpty: "暂无文章",
+  myDocumentsColTitle: "标题",
+  myDocumentsColDomain: "域",
+  myDocumentsColUpdated: "更新时间",
+  myDocumentsColCreated: "创建时间",
+  myDocumentsNoMatch: "暂无匹配的文章",
   logout: "退出登录",
 };

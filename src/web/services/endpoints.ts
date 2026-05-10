@@ -323,16 +323,6 @@ export function createFolderApi(input: {
 }
 
 /**
- * 删除空目录。
- * @deprecated 请使用 deleteFolderApi（新版，支持递归删除）
- */
-export function deleteFolderApiV0(folderId: string): Promise<void> {
-  return api<void>(`/api/folders/${encodeURIComponent(folderId)}`, {
-    method: "DELETE",
-  });
-}
-
-/**
  * 删除目录及其下所有内容（递归删除）。
  */
 export function deleteFolderApi(folderDocumentId: string): Promise<{ deletedCount: number }> {
@@ -445,6 +435,26 @@ export function removeBookmarkApi(documentId: string): Promise<void> {
   return api<void>(`/api/bookmarks/${encodeURIComponent(documentId)}`, {
     method: "DELETE",
   });
+}
+
+// ========== 我的文章 ==========
+
+/** 我的文档条目 */
+export interface MyDocument {
+  documentId: string;
+  domainId: string;
+  relativePath: string;
+  displayName: string;
+  createdAt: string;
+  updatedAt: string;
+  permission: number;
+}
+
+/**
+ * 获取当前访客创建的所有文档。
+ */
+export function fetchMyDocumentsApi(): Promise<MyDocument[]> {
+  return api<MyDocument[]>("/api/visitors/me/documents");
 }
 
 // ========== 评论 ==========

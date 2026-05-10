@@ -13,7 +13,19 @@ import { DraftListPage } from "./DraftListPage";
 import { listAllDrafts } from "../storage/drafts";
 import { DomainManagementPanel } from "./DomainManagementPanel";
 import { MemberTemplatesPanel } from "./MemberTemplatesPanel";
-import { createCliTokenApi, generateRecoveryCodeApi, listCliTokensApi } from "../services/endpoints";
+import { VisitorPickerModal } from "./VisitorPickerModal";
+import {
+  createCliTokenApi,
+  generateRecoveryCodeApi,
+  listCliTokensApi,
+  fetchBookmarksApi,
+  fetchMyDocumentsApi,
+  getDocumentInvitesApi,
+  addDocumentInviteApi,
+  removeDocumentInviteApi,
+  removeBookmarkApi,
+} from "../services/endpoints";
+import type { Bookmark, MyDocument } from "../services/endpoints";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 
 /**
@@ -27,11 +39,12 @@ function getBool(key: string, def: boolean): boolean {
   return v === "true";
 }
 
-type SettingsTab = "general" | "domainManagement" | "memberTemplates" | "savePublish";
+type SettingsTab = "general" | "bookmarks" | "myDocuments" | "domainManagement" | "memberTemplates" | "savePublish";
 
 export function SettingsPage(props: {
   onBack: () => void;
   onPublishDraft: (docId: string) => void;
+  onOpenDocument: (docId: string) => void;
 }) {
   const { t, lang, setLang } = useI18n();
   const { onBack, onPublishDraft } = props;
@@ -70,6 +83,21 @@ export function SettingsPage(props: {
   // ---- 未发布草稿数量（用于徽标显示） ----
   const [draftCount, setDraftCount] = useState(0);
 
+  // ---- 我的收藏 ----
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [bookmarksLoading, setBookmarksLoading] = useState(false);
+  const [bookmarkSearch, setBookmarkSearch] = useState("");
+
+  // ---- 我的文章 ----
+  const [myDocuments, setMyDocuments] = useState<MyDocument[]>([]);
+  const [myDocumentsLoading, setMyDocumentsLoading] = useState(false);
+  const [myDocumentSearch, setMyDocumentSearch] = useState("");
+
+  // ---- 文档邀请成员弹窗 ----
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [currentInviteDocId, setCurrentInviteDocId] = useState<string | null>(null);
+  const [existingInvites, setExistingInvites] = useState<Map<string, string>>(new Map());
+
   /**
    * 自动同步开关变更时持久化到 localStorage。
    */
@@ -97,6 +125,18 @@ export function SettingsPage(props: {
   }, [tab]);
 
   /**
+   * 切换到「我的收藏」或「我的文章」Tab 时加载数据。
+   */
+  useEffect(() => {
+    if (tab === "bookmarks") {
+      loadBookmarks();
+    }
+    if (tab === "myDocuments") {
+      loadMyDocuments();
+    }
+  }, [tab]);
+
+  /**
    * 首次渲染时加载 CLI Token 列表。
    */
   useEffect(() => {
@@ -115,6 +155,42 @@ export function SettingsPage(props: {
       // 加载失败忽略
     } finally {
       setCliTokensLoading(false);
+    }
+  }
+
+  /** 加载当前访客的所有收藏 */
+  async function loadBookmarks(): Promise<void> {
+    try {
+      setBookmarksLoading(true);
+      const result = await fetchBookmarksApi();
+      setBookmarks(result);
+    } catch {
+      // 加载失败忽略
+    } finally {
+      setBookmarksLoading(false);
+    }
+  }
+
+  /** 加载当前访客创建的所有文档 */
+  async function loadMyDocuments(): Promise<void> {
+    try {
+      setMyDocumentsLoading(true);
+      const result = await fetchMyDocumentsApi();
+      setMyDocuments(result);
+    } catch {
+      // 加载失败忽略
+    } finally {
+      setMyDocumentsLoading(false);
+    }
+  }
+
+  /** 取消收藏 */
+  async function handleRemoveBookmark(documentId: string): Promise<void> {
+    try {
+      await removeBookmarkApi(documentId);
+      setBookmarks((prev) => prev.filter((b) => b.documentId !== documentId));
+    } catch {
+      // 忽略
     }
   }
 
@@ -157,6 +233,74 @@ export function SettingsPage(props: {
     }
   }
 
+  /** 打开邀请成员弹窗 */
+  async function handleOpenInviteModal(documentId: string): Promise<void> {
+    setCurrentInviteDocId(documentId);
+    try {
+      const invites = await getDocumentInvitesApi(documentId);
+      const inviteMap = new Map<string, string>();
+      invites.forEach((invite: { visitorId: string; permission: string }) => {
+        inviteMap.set(invite.visitorId, invite.permission);
+      });
+      setExistingInvites(inviteMap);
+    } catch {
+      // 加载失败时初始化为空
+      setExistingInvites(new Map());
+    }
+    setInviteModalOpen(true);
+  }
+
+  /** 保存邀请成员列表 */
+  async function handleSaveInvite(
+    result: Array<{ visitorId: string; permission: string }>,
+  ): Promise<void> {
+    if (!currentInviteDocId) return;
+    try {
+      // 计算需要添加和删除的邀请
+      const newVisitorIds = new Set(result.map((r) => r.visitorId));
+      const oldVisitorIds = new Set(existingInvites.keys());
+
+      // 删除不在新列表中的邀请
+      for (const visitorId of oldVisitorIds) {
+        if (!newVisitorIds.has(visitorId)) {
+          await removeDocumentInviteApi(currentInviteDocId, visitorId);
+        }
+      }
+
+      // 添加新的邀请或更新权限
+      for (const item of result) {
+        await addDocumentInviteApi(currentInviteDocId, item.visitorId, item.permission);
+      }
+
+      // 重新加载文章列表以刷新状态
+      await loadMyDocuments();
+    } finally {
+      setInviteModalOpen(false);
+      setCurrentInviteDocId(null);
+    }
+  }
+
+  // ---- 过滤后的收藏列表 ----
+  const filteredBookmarks = bookmarks.filter((b) => {
+    if (!bookmarkSearch.trim()) return true;
+    const search = bookmarkSearch.toLowerCase();
+    return (
+      (b.displayName || b.relativePath || "").toLowerCase().includes(search) ||
+      (b.ownerVisitorName || "").toLowerCase().includes(search) ||
+      (b.domainId || "").toLowerCase().includes(search)
+    );
+  });
+
+  // ---- 过滤后的我的文章列表 ----
+  const filteredDocuments = myDocuments.filter((d) => {
+    if (!myDocumentSearch.trim()) return true;
+    const search = myDocumentSearch.toLowerCase();
+    return (
+      (d.displayName || d.relativePath || "").toLowerCase().includes(search) ||
+      (d.domainId || "").toLowerCase().includes(search)
+    );
+  });
+
   return (
     <>
       {/* ========== 左侧设置导航栏 ========== */}
@@ -174,6 +318,20 @@ export function SettingsPage(props: {
             onClick={() => setTab("general")}
           >
             {t("general")}
+          </div>
+          {/* 我的收藏 Tab */}
+          <div
+            className={"mdocs-config-item" + (tab === "bookmarks" ? " active" : "")}
+            onClick={() => setTab("bookmarks")}
+          >
+            {t("bookmarkTitle")}
+          </div>
+          {/* 我的文章 Tab */}
+          <div
+            className={"mdocs-config-item" + (tab === "myDocuments" ? " active" : "")}
+            onClick={() => setTab("myDocuments")}
+          >
+            {t("myDocuments")}
           </div>
           {/* 域管理 Tab */}
           <div
@@ -394,6 +552,144 @@ export function SettingsPage(props: {
               </div>
             )}
           </div>
+        ) : tab === "bookmarks" ? (
+          // ---- 我的收藏 Tab ----
+          <div className="mdocs-settings">
+            <div className="mdocs-settings-header">
+              <h2 className="mdocs-settings-title">{t("bookmarkTitle")}</h2>
+            </div>
+            <div className="mdocs-settings-card">
+              <input
+                type="text"
+                className="mdocs-settings-search"
+                placeholder={t("bookmarkSearch")}
+                value={bookmarkSearch}
+                onChange={(e) => setBookmarkSearch(e.target.value)}
+              />
+              {bookmarksLoading ? (
+                <div style={{ textAlign: "center", padding: "40px 0" }}>
+                  {t("loading")}
+                </div>
+              ) : (
+                  <>
+                    {filteredBookmarks.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "40px 0", opacity: 0.6 }}>
+                        {bookmarkSearch ? t("bookmarkNoMatch") : t("bookmarkEmpty")}
+                      </div>
+                    ) : (
+                      <table className="mdocs-settings-table">
+                        <thead>
+                          <tr>
+                            <th>{t("bookmarkColTitle")}</th>
+                            <th>{t("bookmarkColDomain")}</th>
+                            <th>{t("bookmarkColAuthor")}</th>
+                            <th>{t("bookmarkColTime")}</th>
+                            <th style={{ textAlign: "right" }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredBookmarks.map((bookmark) => (
+                            <tr key={bookmark.documentId}>
+                              <td style={{ cursor: "pointer", fontWeight: 500 }} onClick={() => props.onOpenDocument(bookmark.documentId)}>
+                                {bookmark.displayName || bookmark.relativePath || "Untitled"}
+                              </td>
+                              <td>{bookmark.isDeleted ? (
+                                <span style={{ opacity: 0.5, fontStyle: "italic" }}>已删除</span>
+                              ) : (
+                                bookmark.domainId || "—"
+                              )}
+                              </td>
+                              <td>{bookmark.ownerVisitorName || "—"}</td>
+                              <td>{new Date(bookmark.bookmarkedAt).toLocaleDateString()}</td>
+                              <td style={{ textAlign: "right" }}>
+                                <button
+                                  type="button"
+                                  className="secondary small"
+                                  onClick={() => handleRemoveBookmark(bookmark.documentId)}
+                                >
+                                  {t("bookmarkRemove")}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+        ) : tab === "myDocuments" ? (
+          // ---- 我的文章 Tab ----
+          <div className="mdocs-settings">
+            <div className="mdocs-settings-header">
+              <h2 className="mdocs-settings-title">{t("myDocuments")}</h2>
+            </div>
+            <div className="mdocs-settings-card">
+              <input
+                type="text"
+                className="mdocs-settings-search"
+                placeholder="搜索文章…"
+                value={myDocumentSearch}
+                onChange={(e) => setMyDocumentSearch(e.target.value)}
+              />
+              {myDocumentsLoading ? (
+                <div style={{ textAlign: "center", padding: "40px 0" }}>
+                  {t("loading")}
+                </div>
+              ) : (
+                <>
+                  {filteredDocuments.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "40px 0", opacity: 0.6 }}>
+                      {myDocumentSearch ? t("myDocumentsNoMatch") : t("myDocumentsEmpty")}
+                    </div>
+                  ) : (
+                    <table className="mdocs-settings-table">
+                      <thead>
+                        <tr>
+                          <th>{t("myDocumentsColTitle")}</th>
+                          <th>{t("myDocumentsColDomain")}</th>
+                          <th>{t("myDocumentsColUpdated")}</th>
+                          <th>{t("myDocumentsColCreated")}</th>
+                          <th colSpan={2}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredDocuments.map((doc) => (
+                          <tr key={doc.documentId}>
+                            <td style={{ cursor: "pointer", fontWeight: 500 }} onClick={() => props.onOpenDocument(doc.documentId)}>
+                              {doc.displayName || doc.relativePath || "Untitled"}
+                            </td>
+                            <td>{doc.domainId || "—"}</td>
+                            <td>{new Date(doc.updatedAt).toLocaleDateString()}</td>
+                            <td>{new Date(doc.createdAt).toLocaleDateString()}</td>
+                            <td style={{ textAlign: "right" }}>
+                              <button
+                                type="button"
+                                className="secondary small"
+                                onClick={() => handleOpenInviteModal(doc.documentId)}
+                              >
+                                {t("docInfoInviteMember")}
+                              </button>
+                            </td>
+                            <td style={{ textAlign: "right", paddingLeft: 0 }}>
+                              <button
+                                type="button"
+                                className="primary small"
+                                onClick={() => props.onOpenDocument(doc.documentId)}
+                              >
+                                {t("bookmarkOpen")}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
         ) : tab === "domainManagement" ? (
           // ---- 域管理 Tab ----
           <DomainManagementPanel />
@@ -494,6 +790,24 @@ export function SettingsPage(props: {
           onCancel={() => setShowResetConfirm(false)}
         />
       )}
+
+      {/* 邀请成员访客选择器弹窗 */}
+      <VisitorPickerModal
+        open={inviteModalOpen}
+        title={t("docInfoInviteMember")}
+        initialSelectedIds={[...existingInvites.keys()]}
+        initialPermissions={existingInvites}
+        templates={[]}
+        showPermissionSelect={true}
+        permissionOptions={[
+          { value: "read", label: t("invitePermissionRead") },
+          { value: "edit", label: t("invitePermissionEdit") },
+        ]}
+        onClose={() => setInviteModalOpen(false)}
+        onConfirm={(result) => {
+          void handleSaveInvite(result as Array<{ visitorId: string; permission: string }>);
+        }}
+      />
     </>
   );
 }

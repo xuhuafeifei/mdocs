@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MessageSquare, X } from "lucide-react";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { fetchCommentsApi, createCommentApi, deleteCommentApi, type CommentEntry } from "../services/endpoints";
@@ -30,6 +30,27 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
     if (!visitorId) return false;
     return comment.visitorId === visitorId || documentOwnerId === visitorId;
   }
+
+  /**
+   * 按 parentId 分组评论，O(n) 单次遍历，避免每次渲染多次 filter
+   */
+  const { rootComments, repliesByParentId, totalCount } = useMemo(() => {
+    const root: DocumentComment[] = [];
+    const replies = new Map<string, DocumentComment[]>();
+    let count = 0;
+
+    for (const c of comments) {
+      if (c.isDeleted) continue;
+      count++;
+      if (!c.parentId) {
+        root.push(c);
+      } else {
+        if (!replies.has(c.parentId)) replies.set(c.parentId, []);
+        replies.get(c.parentId)!.push(c);
+      }
+    }
+    return { rootComments: root, repliesByParentId: replies, totalCount: count };
+  }, [comments]);
 
   // 加载评论 + 清理状态
   useEffect(() => {
@@ -103,19 +124,13 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
     return `${days}天前`;
   }
 
-  // 前端分组：根评论
-  const rootComments = comments.filter((c) => !c.parentId && !c.isDeleted);
-  // 获取某根评论的所有回复
-  const getReplies = (parentId: string) =>
-    comments.filter((c) => c.parentId === parentId && !c.isDeleted);
-
   return (
     <div className="mdocs-comments-panel">
       {/* 头部 */}
       <div className="mdocs-comments-header">
         <h3 style={{ margin: 0, fontSize: "1rem", display: "flex", alignItems: "center", gap: 6 }}>
           <MessageSquare size={18} />
-          评论 ({comments.filter(c => !c.isDeleted).length})
+          评论 ({totalCount})
         </h3>
         <button type="button" onClick={onClose} className="mdocs-comments-close-btn">
           <X size={18} />
@@ -174,9 +189,9 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
               )}
 
               {/* 回复列表 - 面包屑样式 */}
-              {getReplies(root.commentId).length > 0 && (
+              {(repliesByParentId.get(root.commentId) ?? []).length > 0 && (
                 <div className="mdocs-comment-replies">
-                  {getReplies(root.commentId).map((reply) => (
+                  {(repliesByParentId.get(root.commentId) ?? []).map((reply) => (
                     <div key={reply.commentId} className="mdocs-comment-reply">
                       <div className="mdocs-comment-header">
                         <span className="mdocs-comment-avatar mdocs-comment-avatar-small">

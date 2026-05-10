@@ -8,6 +8,7 @@ import {
 } from "../identity/visitor.service.js";
 import { getDb } from "../db/connection.js";
 import { listActiveVisitorsDirectory } from "../db/repositories/visitor.repo.js";
+import { listDocumentsByVisitor } from "../db/repositories/document.repo.js";
 import { ensurePersonalDomain } from "../domains/personal-domain.service.js";
 import { useLogger } from "../logger/logger.js";
 
@@ -137,6 +138,19 @@ export function buildVisitorsRouter(): Router {
     // 确保该访客拥有对应的个人域
     ensurePersonalDomain(getDb(), req.visitor.visitor_id, req.visitor.visitor_name);
     res.json({ data: { visitor: toPublic(req.visitor) } });
+  });
+
+  /**
+   * GET /me/documents
+   * 获取当前登录访客创建的所有文档。
+   */
+  router.get("/me/documents", (req: Request, res: Response) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+      return;
+    }
+    const documents = listDocumentsByVisitor(getDb(), req.visitor.visitor_id);
+    res.json({ data: documents });
   });
 
   /**

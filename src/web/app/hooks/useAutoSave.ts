@@ -58,9 +58,18 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
   // 用于事件处理器中读取最新值（避免闭包捕获旧值）
   const dirtyRef = useRef(false);
 
+  // ---- 使用 ref 保存频繁变化的值，避免 performSave 依赖变化导致监听器反复注册 ----
+  const documentIdRef = useRef(documentId);
+  const displayNameRef = useRef(displayName);
+  const documentMetaRef = useRef(documentMeta);
+  documentIdRef.current = documentId;
+  displayNameRef.current = displayName;
+  documentMetaRef.current = documentMeta;
+
   /**
    * 执行实际保存：将当前编辑器内容序列化为 JSON 写入 IndexedDB。
    * 保存成功后同步更新 dirty、draftExists、lastSavedAt 等状态。
+   * 注意：此函数仅依赖 editor（通过 ref 访问其他值），因此引用稳定，不会导致监听器反复注册。
    */
   const performSave = useCallback(async () => {
     // 编辑器尚未初始化，无法保存
@@ -72,15 +81,15 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
     }
     // 将编辑器当前内容序列化为 Lexical JSON 字符串
     const jsonContent = JSON.stringify(editor.getDocument("json"));
-    console.log("[useAutoSave] performSave saving draft, documentId:", documentId, "content preview:", jsonContent.slice(0, 80));
+    console.log("[useAutoSave] performSave saving draft, documentId:", documentIdRef.current, "content preview:", jsonContent.slice(0, 80));
     // 写入 IndexedDB
     await saveDraft({
-      documentId,
+      documentId: documentIdRef.current,
       content: jsonContent,
-      displayName,
+      displayName: displayNameRef.current,
       updatedAt: Date.now(),
       published: false,
-      ...documentMeta,
+      ...documentMetaRef.current,
     });
     // 保存成功后，用当前 markdown 内容更新对比基线
     lastContentRef.current = (editor.getDocument("markdown") as string) ?? "";
@@ -93,7 +102,7 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
     // 标记草稿与当前内容一致
     draftCurrentRef.current = true;
     dirtyRef.current = false;
-  }, [editor, documentId, displayName, documentMeta]);
+  }, [editor]);
 
   /**
    * 切换文档时检查 IndexedDB 中是否已有草稿，恢复对应状态。

@@ -130,6 +130,10 @@ export function App() {
   const [commentPanelOpen, setCommentPanelOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
 
+  // ---- 文档打开请求的竞态保护 ----
+  // 快速切换文档时，标记当前预期的 documentId，旧请求返回后如果不匹配则丢弃
+  const expectedDocIdRef = useRef<string | null>(null);
+
   // ---- 访客信息 ----
   const [visitor, setVisitor] = useState<VisitorPublic | null>(null);
 
@@ -298,12 +302,17 @@ export function App() {
   /**
    * 打开文档：优先从本地草稿加载（减少网络请求），无草稿时再请求服务器。
    * 若本地有草稿，还会把服务器返回的元数据缓存到草稿中，方便下次离线打开。
+   * 使用 expectedDocIdRef 进行竞态保护：快速切换文档时，旧请求返回后如果不匹配则丢弃。
    */
   async function openDocument(docId: string): Promise<void> {
+    // 标记当前预期的 documentId，用于竞态保护
+    expectedDocIdRef.current = docId;
     try {
       // ========== 步骤 1：优先从本地草稿加载 ==========
       // 先查 IndexedDB 看是否有该文档的本地草稿
       const draft = await getDraft(docId);
+      // 竞态检查：如果用户已经切换到其他文档，当前请求的结果已过时，直接丢弃
+      if (expectedDocIdRef.current !== docId) return;
       // 草稿必须满足以下条件才算可用：
       // - 存在且未标记为已发布
       // - 包含相对路径、域 ID、所有者 ID（即之前打开过时缓存过元数据）
@@ -334,6 +343,8 @@ export function App() {
 
       // ========== 步骤 2：本地没有可用草稿，从服务器获取完整文档 ==========
       const doc = await getDocumentApi(docId);
+      // 竞态检查：如果用户已经切换到其他文档，当前请求的结果已过时，直接丢弃
+      if (expectedDocIdRef.current !== docId) return;
       // 切换到文档所属的域（关键修复：URL 跳转时自动切换域）
       if (doc.domainId !== currentDomainId) {
         localStorage.setItem("mdocs.currentDomainId", doc.domainId);
@@ -357,6 +368,9 @@ export function App() {
         });
       }
 
+      // 再次做竞态检查，因为 saveDraftRecord 也是异步的
+      if (expectedDocIdRef.current !== docId) return;
+
       // ========== 步骤 4：决定最终展示的内容 ==========
       // 如果有本地草稿（但只有内容，没有元数据），用草稿内容覆盖服务器内容
       // 如果没有草稿，直接使用服务器返回的完整文档
@@ -364,6 +378,8 @@ export function App() {
         ? { ...doc, content: draft.content, displayName: draft.displayName }
         : doc);
     } catch (err) {
+      // 竞态检查：如果已经切换文档，不显示旧请求的错误
+      if (expectedDocIdRef.current !== docId) return;
       // 打开文档失败（如文档不存在、无权限），显示错误提示
       setAlertMessage(translateError(t, err));
     }
@@ -678,6 +694,7 @@ export function App() {
         <SettingsPage
           onBack={() => setView("docs")}
           onPublishDraft={publishDraftFromList}
+          onOpenDocument={openDocument}
         />
       ) : (
         <div className="mdocs-layout">
@@ -712,16 +729,14 @@ export function App() {
               </button>
             </header>
 
-            {/* 新建文档/文件夹按钮 */}
+            {/* 新建文档/文件夹图标 */}
             <div className="mdocs-sidebar-actions">
-              <button type="button" onClick={() => openNewDocumentModal()} className="primary" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <File size={16} strokeWidth={1.5} />
-                {t("newDocument")}
-              </button>
-              <button type="button" className="secondary" onClick={() => openNewFolderModal()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <Folder size={16} strokeWidth={1.5} />
-                {t("newFolder")}
-              </button>
+              <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip={t("newDocument")} onClick={() => openNewDocumentModal()} style={{ color: "var(--mdocs-accent)" }}>
+                <File size={20} />
+              </span>
+              <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip={t("newFolder")} onClick={() => openNewFolderModal()}>
+                <Folder size={20} />
+              </span>
             </div>
 
             {/* 文档树：递归渲染文件夹和文档 */}

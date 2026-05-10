@@ -349,69 +349,71 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
           </button>
         </header>
 
-        {/* 工具栏：模板选择 */}
-        <div className="mdocs-visitor-picker-toolbar">
-          <div className="mdocs-visitor-picker-template-bar">
-            <div ref={templateRef} className="mdocs-template-picker">
+        {/* 工具栏：模板选择（有可用模板时才显示） */}
+        {templateOptions.length > 0 && (
+          <div className="mdocs-visitor-picker-toolbar">
+            <div className="mdocs-visitor-picker-template-bar">
+              <div ref={templateRef} className="mdocs-template-picker">
+                <button
+                  type="button"
+                  className="mdocs-template-picker-trigger"
+                  onClick={() => setTemplateMenuOpen((v) => !v)}
+                  // 访客目录未加载完成时禁用
+                  disabled={loadState !== "ok"}
+                  aria-haspopup="listbox"
+                  aria-expanded={templateMenuOpen}
+                >
+                  <span className="mdocs-template-picker-text">
+                    {/* 显示当前选中的模板名称，或提示文字 */}
+                    {templatePick
+                      ? templateOptions.find((t) => String(t.id) === templatePick)?.displayName
+                      : t("visitorPickerPickTemplate")}
+                  </span>
+                  <svg className={"mdocs-template-picker-chevron" + (templateMenuOpen ? " open" : "")} width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M1 1l4 4 4-4" />
+                  </svg>
+                </button>
+                {/* 模板下拉菜单 */}
+                {templateMenuOpen && (
+                  <div className="mdocs-template-picker-menu card" role="listbox">
+                    {templateOptions.map((tm) => (
+                      <button
+                        key={tm.id}
+                        type="button"
+                        className={"mdocs-template-picker-option" + (String(tm.id) === templatePick ? " active" : "")}
+                        role="option"
+                        aria-selected={String(tm.id) === templatePick}
+                        onClick={() => { setTemplatePick(String(tm.id)); setTemplateMenuOpen(false); }}
+                      >
+                        {tm.displayName}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* 套用模板按钮 */}
               <button
                 type="button"
-                className="mdocs-template-picker-trigger"
-                onClick={() => setTemplateMenuOpen((v) => !v)}
-                // 访客目录未加载完成或没有可用模板时禁用
-                disabled={loadState !== "ok" || templateOptions.length === 0}
-                aria-haspopup="listbox"
-                aria-expanded={templateMenuOpen}
+                className="secondary"
+                onClick={() => {
+                  // 访客目录未加载完成时提示
+                  if (loadState !== "ok") {
+                    setLocalErr(t("loading"));
+                    return;
+                  }
+                  // 未选择模板时提示
+                  if (!templatePick) {
+                    setLocalErr(t("visitorPickerPickTemplate"));
+                    return;
+                  }
+                  applyTemplate();
+                }}
               >
-                <span className="mdocs-template-picker-text">
-                  {/* 显示当前选中的模板名称，或提示文字 */}
-                  {templatePick
-                    ? templateOptions.find((t) => String(t.id) === templatePick)?.displayName
-                    : t("visitorPickerPickTemplate")}
-                </span>
-                <svg className={"mdocs-template-picker-chevron" + (templateMenuOpen ? " open" : "")} width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M1 1l4 4 4-4" />
-                </svg>
+                {t("visitorPickerApplyTemplate")}
               </button>
-              {/* 模板下拉菜单 */}
-              {templateMenuOpen && (
-                <div className="mdocs-template-picker-menu card" role="listbox">
-                  {templateOptions.map((tm) => (
-                    <button
-                      key={tm.id}
-                      type="button"
-                      className={"mdocs-template-picker-option" + (String(tm.id) === templatePick ? " active" : "")}
-                      role="option"
-                      aria-selected={String(tm.id) === templatePick}
-                      onClick={() => { setTemplatePick(String(tm.id)); setTemplateMenuOpen(false); }}
-                    >
-                      {tm.displayName}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
-            {/* 套用模板按钮 */}
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => {
-                // 访客目录未加载完成时提示
-                if (loadState !== "ok") {
-                  setLocalErr(t("loading"));
-                  return;
-                }
-                // 未选择模板时提示
-                if (!templatePick) {
-                  setLocalErr(t("visitorPickerPickTemplate"));
-                  return;
-                }
-                applyTemplate();
-              }}
-            >
-              {t("visitorPickerApplyTemplate")}
-            </button>
           </div>
-        </div>
+        )}
 
         {/* 错误提示 */}
         {localErr && (

@@ -299,5 +299,13 @@ export type TranslationKey =
   | "bookmarkSearch"
   | "bookmarkFilterAll"
   | "bookmarkNoMatch"
+  // My Documents
+  | "myDocuments"
+  | "myDocumentsEmpty"
+  | "myDocumentsColTitle"
+  | "myDocumentsColDomain"
+  | "myDocumentsColUpdated"
+  | "myDocumentsColCreated"
+  | "myDocumentsNoMatch"
   // Logout
   | "logout";

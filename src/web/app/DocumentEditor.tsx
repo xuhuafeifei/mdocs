@@ -332,7 +332,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
   /**
    * 编辑器初始化回调。
-   * 绕过 content prop 的 bug，通过 editor API 在微任务中重新设置内容，确保编辑器已完全挂载。
+   * 使用已预计算的 contentType（来自 useMemo），避免重复 JSON 解析。
+   * 通过 editor API 在微任务中重新设置内容，确保编辑器已完全挂载。
    */
   const handleInit = useCallback((e: IEditor) => {
     // 保存编辑器实例到状态，供工具栏等子组件使用
@@ -341,19 +342,10 @@ export function DocumentEditor(props: DocumentEditorProps) {
     // queueMicrotask ensures the editor has fully initialized first.
     const initContent = contentRef.current;
     if (initContent) {
-      // 先默认按 markdown 处理
-      let ct: "json" | "markdown" = "markdown";
-      try {
-        // 尝试解析为 JSON，判断是否是 Lexical 格式
-        const p = JSON.parse(initContent);
-        ct = p?.root?.children ? "json" : "markdown";
-      } catch {
-        // 解析失败就是 markdown
-        ct = "markdown";
-      }
       // 在微任务中设置内容，确保编辑器内部已完全初始化
+      // 使用已预计算的 contentType，避免重复 JSON 解析
       queueMicrotask(() => {
-        e.setDocument(ct, initContent);
+        e.setDocument(contentType, initContent);
       });
     }
     // 调试用：打印编辑器初始化后的内容结构前两个节点
@@ -362,7 +354,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       console.log("[handleInit] editor content after setDocument:", JSON.stringify(afterInit?.root?.children?.slice(0, 2)));
     });
 
-  }, []);
+  }, [contentType]);
 
   /**
    * 发布文档：将当前编辑器内容序列化为 JSON 并推送到服务器，成功后清除本地草稿。

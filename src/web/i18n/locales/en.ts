@@ -308,5 +308,13 @@ export const en: Record<TranslationKey, string> = {
   bookmarkSearch: "Search bookmarks",
   bookmarkFilterAll: "All domains",
   bookmarkNoMatch: "No matching bookmarks",
+  // My Documents
+  myDocuments: "My Documents",
+  myDocumentsEmpty: "No documents yet",
+  myDocumentsColTitle: "Title",
+  myDocumentsColDomain: "Domain",
+  myDocumentsColUpdated: "Updated",
+  myDocumentsColCreated: "Created",
+  myDocumentsNoMatch: "No matching documents",
   logout: "Sign out",
 };
