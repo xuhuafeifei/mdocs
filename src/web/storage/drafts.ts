@@ -21,6 +21,9 @@ export interface DraftRecord {
   permission?: number;
   ownerVisitorId?: string;
   domainId?: string;
+  // Publish failure tracking
+  publishError?: string;
+  publishErrorAt?: number;
 }
 
 // ---- 数据库连接单例 ----
@@ -116,13 +119,69 @@ export async function deleteDraftIfUnchanged(
 
 /**
  * 读取所有草稿记录（供草稿列表页和自动发布扫描使用）。
+ *
+ * @param opts.skipFailed — 跳过已标记为发布失败的草稿（auto-publish 用）
  */
-export async function listAllDrafts(): Promise<DraftRecord[]> {
+export async function listAllDrafts(opts?: { skipFailed?: boolean }): Promise<DraftRecord[]> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readonly");
     const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      let result: DraftRecord[] = req.result;
+      if (opts?.skipFailed) {
+        result = result.filter((d: DraftRecord) => !d.publishError);
+      }
+      resolve(result);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * 标记草稿发布失败（如服务端文档不存在）。
+ */
+export async function markDraftPublishError(documentId: string, error: string): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    const req = store.get(documentId);
+    req.onsuccess = () => {
+      const existing = req.result;
+      if (existing) {
+        store.put({
+          ...existing,
+          publishError: error,
+          publishErrorAt: Date.now(),
+        });
+      }
+      resolve();
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * 清除草稿的发布失败标记（用户点击重试时调用）。
+ */
+export async function clearDraftPublishError(documentId: string): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    const req = store.get(documentId);
+    req.onsuccess = () => {
+      const existing = req.result;
+      if (existing) {
+        store.put({
+          ...existing,
+          publishError: undefined,
+          publishErrorAt: undefined,
+        });
+      }
+      resolve();
+    };
     req.onerror = () => reject(req.error);
   });
 }
