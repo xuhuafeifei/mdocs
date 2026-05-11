@@ -1000,7 +1000,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 horizontal
                 style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, borderRadius: 0, outline: "none" }}
               >
-                <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "auto", padding: 16 }}>
+                <div className="mdocs-editor-scroll-host">
                   {editorSurfaceReady ? (
                     <Editor
                       key={props.document.documentId}

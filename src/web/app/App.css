@@ -639,7 +639,11 @@ button.small {
   padding-left: 50px;
   padding-right: 50px;
   padding-top: 20px;
-  padding-bottom: 30px;
+}
+
+/* 给编辑器实际内容区域底部留白，避免文本贴底 */
+.mdocs-document-editor-root > [contenteditable] {
+  padding-bottom: 56px;
 }
 
 /* 大纲与 Editor 共享同一卡片，用一条短灰线隔离两侧 */
@@ -730,6 +734,25 @@ button.small {
   max-width: 100%;
   word-break: break-word;
   overflow-wrap: break-word;
+}
+
+/*
+ * 底栏留白：子层 Editor 为 height:100% 的 flex 子项时，仅给本层加 padding-bottom
+ * 在 Chromium 下往往不会增加 scrollHeight；用 ::after 真实撑高可滚动区域。
+ */
+.mdocs-editor-scroll-host {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 16px 0;
+}
+
+.mdocs-editor-scroll-host::after {
+  content: "";
+  display: block;
+  height: 80px;
 }
 
 .mdocs-editor-body {
