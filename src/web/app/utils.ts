@@ -4,7 +4,7 @@
  */
 import { ApiRequestError } from "../services/client";
 import { DocPathError } from "../../shared/docPath";
-import { ERROR_CODE_MAP, PATH_ERROR_MESSAGE_MAP, STORAGE_ERROR_MESSAGE_MAP } from "../i18n/errors";
+import { PATH_ERROR_MESSAGE_MAP, STORAGE_ERROR_MESSAGE_MAP } from "../i18n/errors";
 import type { TranslationKey } from "../i18n/types";
 
 /**
@@ -16,8 +16,8 @@ export function translateError(
   err: unknown,
 ): string {
   if (err instanceof ApiRequestError) {
-    const key = ERROR_CODE_MAP[err.code];
-    if (key) return t(key);
+    // 后端已返回用户友好的中文消息（如"目录下有 X 篇文档不属于你，无法删除"），
+    // 直接展示，不被 i18n 通用翻译覆盖。
     return err.message;
   }
   if (err instanceof DocPathError) {

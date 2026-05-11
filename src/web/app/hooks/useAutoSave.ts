@@ -15,6 +15,8 @@ interface UseAutoSaveOptions {
   documentId: string;
   displayName: string;
   debounceMs?: number;
+  /** When false, skip Lexical listeners (e.g. read-only). */
+  enabled?: boolean;
   /** Persisted alongside the draft so we can skip the network on re-open. */
   documentMeta?: {
     relativePath: string;
@@ -24,7 +26,26 @@ interface UseAutoSaveOptions {
   };
 }
 
-export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000, documentMeta }: UseAutoSaveOptions) {
+const MAX_DATASOURCE_WAIT_FRAMES = 48;
+
+function safeGetMarkdown(editor: IEditor): string | null {
+  try {
+    const raw = editor.getDocument("markdown");
+    return typeof raw === "string" ? raw : "";
+  } catch {
+    return null;
+  }
+}
+
+function safeGetJsonString(editor: IEditor): string | null {
+  try {
+    return JSON.stringify(editor.getDocument("json"));
+  } catch {
+    return null;
+  }
+}
+
+export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000, enabled = true, documentMeta }: UseAutoSaveOptions) {
   // ---- 状态：内容是否有未保存的变更 ----
   const [isDirty, setIsDirty] = useState(false);
 
@@ -80,7 +101,8 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
       return;
     }
     // 将编辑器当前内容序列化为 Lexical JSON 字符串
-    const jsonContent = JSON.stringify(editor.getDocument("json"));
+    const jsonContent = safeGetJsonString(editor);
+    if (jsonContent == null) return;
     console.log("[useAutoSave] performSave saving draft, documentId:", documentIdRef.current, "content preview:", jsonContent.slice(0, 80));
     // 写入 IndexedDB
     await saveDraft({
@@ -92,7 +114,7 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
       ...documentMetaRef.current,
     });
     // 保存成功后，用当前 markdown 内容更新对比基线
-    lastContentRef.current = (editor.getDocument("markdown") as string) ?? "";
+    lastContentRef.current = safeGetMarkdown(editor) ?? lastContentRef.current;
     // 标记草稿已存在（用于 UI 显示保存状态点）
     setDraftExists(true);
     // 清除 dirty 标记（内容已保存）
@@ -136,6 +158,11 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
    * 以 markdown 为内容对比基线，仅在文本真正变化时才标记 dirty 并启动防抖保存。
    */
   useEffect(() => {
+    if (!enabled) {
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+      return;
+    }
     // 编辑器尚未初始化，无法注册监听器
     if (!editor) return;
     // 获取 Lexical 内部编辑器实例
@@ -145,52 +172,74 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
     // 先清理上一个编辑器实例的监听器（防止依赖变化时重复注册）
     cleanupRef.current?.();
 
-    // 注册 listener 前立即同步基线为当前编辑器的 markdown 内容。
-    // 用 markdown 而非 JSON，避免 Lexical 内部状态抖动（node key 重新生成等）误触发草稿保存。
-    lastContentRef.current = editor.getDocument("markdown") ?? "";
+    let cancelled = false;
+    let raf = 0;
+    let waitFrames = 0;
 
-    // 注册 Lexical 更新监听器：每次编辑器状态变化时都会触发
-    const unregister = lexical.registerUpdateListener(() => {
-      // 获取当前编辑器内容的 markdown 表示
-      const md = (editor.getDocument("markdown") as string) ?? "";
-      // 仅在文档文本实际变化时才标记 dirty。忽略选区/光标移动，以及 Lexical 内部状态抖动（node key 重新生成等）
-      if (md === lastContentRef.current) return;
-      console.log("[useAutoSave] updateListener dirty, documentId:", documentId, "oldLen:", lastContentRef.current.length, "newLen:", md.length);
-      // 更新对比基线为最新内容
+    const attachListener = () => {
+      if (cancelled) return;
+      const md = safeGetMarkdown(editor);
+      if (md === null) {
+        waitFrames += 1;
+        if (waitFrames > MAX_DATASOURCE_WAIT_FRAMES) return;
+        raf = requestAnimationFrame(attachListener);
+        return;
+      }
       lastContentRef.current = md;
 
-      // 标记内容已变更
-      setIsDirty(true);
-      dirtyRef.current = true;
-      // 内容变了，草稿不再是最新的
-      draftCurrentRef.current = false; // content changed, draft is now stale
+      // 注册 Lexical 更新监听器：每次编辑器状态变化时都会触发
+      const unregister = lexical.registerUpdateListener(() => {
+        // 获取当前编辑器内容的 markdown 表示
+        const nextMd = safeGetMarkdown(editor);
+        if (nextMd === null) return;
+        // 仅在文档文本实际变化时才标记 dirty。忽略选区/光标移动，以及 Lexical 内部状态抖动（node key 重新生成等）
+        if (nextMd === lastContentRef.current) return;
+        console.log("[useAutoSave] updateListener dirty, documentId:", documentId, "oldLen:", lastContentRef.current.length, "newLen:", nextMd.length);
+        // 更新对比基线为最新内容
+        lastContentRef.current = nextMd;
 
-      // 清除之前的防抖定时器（如果用户连续输入，重新计时）
-      if (timerRef.current) clearTimeout(timerRef.current);
-      // 启动新的防抖定时器，延迟保存
-      timerRef.current = setTimeout(() => {
-        timerRef.current = null;
-        performSave();
-      }, debounceMs);
-    });
+        // 标记内容已变更
+        setIsDirty(true);
+        dirtyRef.current = true;
+        // 内容变了，草稿不再是最新的
+        draftCurrentRef.current = false; // content changed, draft is now stale
 
-    // 保存清理函数，供下次 effect 执行或组件卸载时调用
-    cleanupRef.current = () => {
-      unregister();
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
+        // 清除之前的防抖定时器（如果用户连续输入，重新计时）
+        if (timerRef.current) clearTimeout(timerRef.current);
+        // 启动新的防抖定时器，延迟保存
+        timerRef.current = setTimeout(() => {
+          timerRef.current = null;
+          performSave();
+        }, debounceMs);
+      });
+
+      // 保存清理函数，供下次 effect 执行或组件卸载时调用
+      cleanupRef.current = () => {
+        unregister();
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+      };
     };
 
+    queueMicrotask(() => {
+      if (!cancelled) raf = requestAnimationFrame(attachListener);
+    });
+
     // 清理函数：依赖变化时注销旧监听器
-    return () => cleanupRef.current?.();
-  }, [editor, documentId, displayName, debounceMs, documentMeta, performSave]);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      cleanupRef.current?.();
+    };
+  }, [enabled, editor, documentId, displayName, debounceMs, documentMeta, performSave]);
 
   /**
    * 编辑器失焦时立即保存（取消待执行的防抖定时器，若内容有变更则立即执行）。
    */
   useEffect(() => {
+    if (!enabled) return;
     // 编辑器未初始化时不处理
     if (!editor) return;
     // 获取编辑器根 DOM 元素
@@ -213,12 +262,13 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
     rootElement.addEventListener("blur", handleBlur);
     // 清理函数：移除 blur 监听器
     return () => rootElement.removeEventListener("blur", handleBlur);
-  }, [editor, performSave]);
+  }, [enabled, editor, performSave]);
 
   /**
    * 页面隐藏或关闭前若仍有未保存变更，立即触发保存。
    */
   useEffect(() => {
+    if (!enabled) return;
     const handleVisibilityChange = () => {
       // 页面切换到后台（如切换 Tab、最小化）
       if (document.visibilityState === "hidden") {
@@ -256,7 +306,7 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [performSave]);
+  }, [enabled, performSave]);
 
   /**
    * 清除当前文档的本地草稿（通常在成功发布后调用）。
@@ -299,7 +349,7 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
     draftCurrentRef.current = true;
     // 更新 markdown 对比基线为当前内容
     if (editor) {
-      lastContentRef.current = (editor.getDocument("markdown") as string) ?? "";
+      lastContentRef.current = safeGetMarkdown(editor) ?? "";
     }
   }
 

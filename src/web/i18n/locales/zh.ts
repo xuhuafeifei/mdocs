@@ -266,6 +266,10 @@ export const zh: Record<TranslationKey, string> = {
   draftsEmptyState: "所有草稿已同步，当前无未发布内容。",
   localSnapshot: "本地快照",
   unknownTitle: "未命名文档",
+  draftPublishFailedNotice: "草稿「{{name}}」发布失败：文档不存在",
+  recoverDraft: "另存为新文档",
+  recoverDraftDesc: "将「{{name}}」的草稿内容保存为一篇全新文档",
+  recoverTargetFolder: "目标目录",
   // CLI Token
   cliToken: "CLI Token",
   cliTokenDesc: "用于命令行工具和 Agent 的身份令牌，继承你的所有权限",

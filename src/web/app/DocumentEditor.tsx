@@ -8,7 +8,7 @@
  * 4. 发布文档到服务器
  * 5. 处理内容类型检测（Lexical JSON vs Markdown）
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Block } from "@lobehub/ui";
 import { saveDraft as saveDraftToIdb } from "../storage/drafts";
@@ -62,6 +62,14 @@ import { localizeDomainName } from "./utils";
 import { FALLBACK_DOMAIN_SUMMARY } from "../services/domainsBootstrap";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { VisitorPickerModal } from "./VisitorPickerModal";
+
+function safeLexicalJsonString(editor: IEditor): string | null {
+  try {
+    return JSON.stringify(editor.getDocument("json"));
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 大纲侧边栏：根据大纲可见性动态控制宽度，带动画过渡效果。
@@ -180,10 +188,25 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
   // ---- 编辑器实例引用 ----
   // @lobehub/editor 的 IEditor 实例，初始化后通过 onInit 回调设置
+  // 强制上游在切换文档时卸载旧实例（与下方 editorSurfaceReady、key 配合），避免复用已销毁的 IEditor
   const [editor, setEditor] = useState<IEditor | null>(null);
+
+  /** 推迟一帧再挂载 Editor，减轻 React 19 下上游 flushSync 在渲染周期内触发的警告 */
+  const [editorSurfaceReady, setEditorSurfaceReady] = useState(false);
 
   // 用于在组件卸载时强制销毁编辑器实例，防止上游 ReactEditor 未调用 destroy 导致内存泄漏
   const editorRef = useRef<IEditor | null>(null);
+
+  useLayoutEffect(() => {
+    setEditorSurfaceReady(false);
+    setEditor(null);
+    editorRef.current = null;
+  }, [props.document.documentId]);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setEditorSurfaceReady(true));
+    return () => cancelAnimationFrame(id);
+  }, [props.document.documentId]);
 
   // ---- 最新内容引用 ----
   // 用于 handleInit 中读取最新内容（useCallback 的闭包不会自动更新）
@@ -354,20 +377,27 @@ export function DocumentEditor(props: DocumentEditorProps) {
     editorRef.current = e;
     // 保存编辑器实例到状态，供工具栏等子组件使用
     setEditor(e);
-    // Bypass buggy content prop — re-set content programmatically via editor API
-    // queueMicrotask ensures the editor has fully initialized first.
+    // Bypass buggy content prop — re-set content programmatically via editor API。
+    // 双微任务 + 失败后 rAF 重试一次：等 DataSource 注册完成后再 setDocument。
     const initContent = contentRef.current;
-    if (initContent) {
-      // 在微任务中设置内容，确保编辑器内部已完全初始化
-      // 使用已预计算的 contentType，避免重复 JSON 解析
-      queueMicrotask(() => {
+    if (!initContent) return;
+
+    const applyContent = (): void => {
+      try {
         e.setDocument(contentType, initContent);
-      });
-    }
-    // 调试用：打印编辑器初始化后的内容结构前两个节点
+      } catch {
+        requestAnimationFrame(() => {
+          try {
+            e.setDocument(contentType, initContent);
+          } catch {
+            /* DataSource not ready yet or StrictMode tore down editor */
+          }
+        });
+      }
+    };
+
     queueMicrotask(() => {
-      const afterInit = e.getDocument("json");
-      console.log("[handleInit] editor content after setDocument:", JSON.stringify(afterInit?.root?.children?.slice(0, 2)));
+      queueMicrotask(applyContent);
     });
 
   }, [contentType]);
@@ -385,7 +415,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
     setBusy(true);
     try {
       // 将编辑器内容序列化为 Lexical JSON 字符串
-      const content = JSON.stringify(editor.getDocument("json"));
+      const content = safeLexicalJsonString(editor);
+      if (!content) return;
       // 调用 App.tsx 传入的 onPublish，执行实际的 API 请求
       await props.onPublish(content, displayName, props.document.documentId);
       // 发布成功后清除本地草稿（草稿已不需要）
@@ -441,8 +472,12 @@ export function DocumentEditor(props: DocumentEditorProps) {
     }
     setPermissionBusy(true);
     try {
-      const content = editor ? JSON.stringify(editor.getDocument("json")) : props.document.content;
-      await props.onPublish(content, displayName, props.document.documentId, permissionDraft);
+      const content =
+        editor
+          ? safeLexicalJsonString(editor)
+          : null;
+      const payload = content ?? props.document.content;
+      await props.onPublish(payload, displayName, props.document.documentId, permissionDraft);
       setShowPermissionDialog(false);
       props.onShowToast?.(t("docInfoPermissionUpdated"));
     } finally {
@@ -494,7 +529,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
       return;
     }
     // 将当前编辑器内容序列化为 JSON
-    const jsonContent = JSON.stringify(editor.getDocument("json"));
+    const jsonContent = safeLexicalJsonString(editor);
+    if (!jsonContent) return;
     console.log("[DocumentEditor.saveDraft] saving draft, documentId:", props.document.documentId, "content preview:", jsonContent.slice(0, 80));
     // Mark as saved synchronously BEFORE async IndexedDB write,
     // so the navigation guard sees clean state immediately.
@@ -965,19 +1001,22 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, borderRadius: 0, outline: "none" }}
               >
                 <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "auto", padding: 16 }}>
-                  <Editor
-                    content={props.document.content}
-                    type={contentType}
-                    confirmPasteMarkdown
-                    // 编辑模式下可编辑，只读模式下不可编辑
-                    editable={editing}
-                    onInit={handleInit}
-                    plugins={plugins}
-                    lineEmptyPlaceholder={t("displayNamePlaceholder")}
-                    placeholder={t("displayNamePlaceholder")}
-                    slashOption={{ items: slashItems }}
-                    className="mdocs-document-editor-root"
-                  />
+                  {editorSurfaceReady ? (
+                    <Editor
+                      key={props.document.documentId}
+                      content={props.document.content}
+                      type={contentType}
+                      confirmPasteMarkdown
+                      // 编辑模式下可编辑，只读模式下不可编辑
+                      editable={editing}
+                      onInit={handleInit}
+                      plugins={plugins}
+                      lineEmptyPlaceholder={t("displayNamePlaceholder")}
+                      placeholder={t("displayNamePlaceholder")}
+                      slashOption={{ items: slashItems }}
+                      className="mdocs-document-editor-root"
+                    />
+                  ) : null}
                 </div>
                 {/* 大纲侧边栏：与 Editor 共享同一卡片，滚动时保持固定 */}
                 {editor && <OutlineSideRail editor={editor} />}

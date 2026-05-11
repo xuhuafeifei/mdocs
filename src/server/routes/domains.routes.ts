@@ -103,6 +103,14 @@ export function buildDomainsRouter(): Router {
     const now = new Date().toISOString();
     const domainId = randomUUID();
     const db = getDb();
+
+    // 检查域名是否已存在
+    const existing = db.prepare(`SELECT domain_id FROM domains WHERE domain_name = ?`).get(body.domainName.trim());
+    if (existing) {
+      res.status(409).json({ error: { code: "DOMAIN_NAME_EXISTS", message: "domain name already exists" } });
+      return;
+    }
+
     insertDomain(db, {
       domainId,
       domainName: body.domainName.trim(),
@@ -261,6 +269,12 @@ export function buildDomainsRouter(): Router {
     const docCount = countDocumentsByDomain(db, domainId);
     if (docCount > 0) {
       res.status(400).json({ error: { code: "DOMAIN_HAS_DOCUMENTS", message: "cannot modify domain with documents" } });
+      return;
+    }
+    // 检查新名称是否与其他域冲突
+    const existing = db.prepare(`SELECT domain_id FROM domains WHERE domain_name = ? AND domain_id != ?`).get(body.domainName.trim(), domainId);
+    if (existing) {
+      res.status(409).json({ error: { code: "DOMAIN_NAME_EXISTS", message: "domain name already exists" } });
       return;
     }
     updateDomainName(db, domainId, body.domainName.trim());

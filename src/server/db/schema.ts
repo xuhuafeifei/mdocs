@@ -14,7 +14,7 @@ const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_visitors_token_hash ON visitors (visitor_token_hash)`,
   `CREATE TABLE IF NOT EXISTS domains (
     domain_id TEXT PRIMARY KEY,
-    domain_name TEXT NOT NULL,
+    domain_name TEXT NOT NULL UNIQUE,
     creator_visitor_id TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -151,6 +151,7 @@ export function applySchema(db: Database.Database): void {
       db.exec(stmt);
     }
     migrateDomainsTable(db);
+    migrateDomainNameUnique(db);
     migrateDocumentsTable(db);
     migrateDocumentsDirty(db);
     migrateVisitorsRecoveryCode(db);
@@ -181,6 +182,55 @@ function migrateDomainsTable(db: Database.Database): void {
   if (names.has("created_by") && !names.has("creator_visitor_id")) {
     db.exec(`ALTER TABLE domains RENAME COLUMN created_by TO creator_visitor_id`);
   }
+}
+
+/** 为 domains 表的 domain_name 列添加 UNIQUE 约束（SQLite 需重建表）。 */
+function migrateDomainNameUnique(db: Database.Database): void {
+  // 检查 domain_name 是否已存在 UNIQUE 约束
+  const indexes = db.prepare(`PRAGMA index_list(domains)`).all() as { name: string }[];
+  const hasUniqueIndex = indexes.some(
+    (idx) => idx.name === "sqlite_autoindex_domains_1" || idx.name === "idx_domains_name_unique"
+  );
+  if (hasUniqueIndex) return;
+
+  // 第一步：去重 — 给重复的域名加后缀 (2), (3)...
+  const dupRows = db
+    .prepare<[], { domain_name: string; cnt: number }>(
+      `SELECT domain_name, COUNT(*) as cnt FROM domains GROUP BY domain_name HAVING cnt > 1`
+    )
+    .all();
+
+  for (const dup of dupRows) {
+    const rows = db
+      .prepare<string, { domain_id: string; domain_name: string }>(
+        `SELECT domain_id, domain_name FROM domains WHERE domain_name = ? ORDER BY created_at`
+      )
+      .all(dup.domain_name);
+    // 第一条保留原名，从第二条开始加后缀
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i]!;
+      const newName = `${row.domain_name} (${i + 1})`;
+      db.prepare(`UPDATE domains SET domain_name = ? WHERE domain_id = ?`).run(newName, row.domain_id);
+    }
+  }
+
+  // 第二步：重建表，添加 UNIQUE 约束
+  db.exec(`CREATE TABLE domains_new (
+    domain_id TEXT PRIMARY KEY,
+    domain_name TEXT NOT NULL UNIQUE,
+    creator_visitor_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    permission TEXT NOT NULL DEFAULT 'public'
+  )`);
+
+  db.exec(`INSERT INTO domains_new
+    (domain_id, domain_name, creator_visitor_id, created_at, updated_at, permission)
+    SELECT domain_id, domain_name, creator_visitor_id, created_at, updated_at, permission
+    FROM domains`);
+
+  db.exec(`DROP TABLE domains`);
+  db.exec(`ALTER TABLE domains_new RENAME TO domains`);
 }
 
 /** 若不存在 id 为 default 的域，则插入一条默认域记录。 */

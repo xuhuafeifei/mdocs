@@ -1,0 +1,21 @@
+diff --git a/es/index.js b/es/index.js
+index ca15f69f9bf666f76a9a6e16627162fc7d5e8ad8..7edc1b58ac5141920e97d4832e2deca0262cbe41 100644
+--- a/es/index.js
++++ b/es/index.js
+@@ -8280,8 +8280,15 @@ const styles$2 = createStaticStyles(({ css }) => {
+ });
+ //#endregion
+ //#region src/plugins/table/react/TableHoverActions/utils.ts
++const TABLE_THEME_DEFAULTS = {
++	table: "editor_table",
++	tableCell: "editor_table_cell",
++	tableCellHeader: "editor_table_cell_header",
++	tableCellSelected: "editor_table_cell_selected"
++};
+ function getThemeSelector(iEditor, name) {
+-	const className = iEditor.getTheme()?.[name];
++	const fromEditor = iEditor.getTheme()?.[name];
++	const className = typeof fromEditor === "string" ? fromEditor : TABLE_THEME_DEFAULTS[name];
+ 	if (typeof className !== "string") throw new Error(`getThemeClass: required theme property ${name} not defined`);
+ 	return className.split(/\s+/g).map((cls) => `.${cls}`).join(",");
+ }

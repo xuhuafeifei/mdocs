@@ -30,8 +30,8 @@ export function useAutoPublish(
      * 扫描并发布闲置草稿。
      */
     const scan = async () => {
-      // 从 IndexedDB 读取所有草稿
-      const drafts = await listAllDrafts();
+      // 从 IndexedDB 读取所有草稿，跳过已标记为发布失败的草稿
+      const drafts = await listAllDrafts({ skipFailed: true });
       const now = Date.now();
 
       for (const draft of drafts) {

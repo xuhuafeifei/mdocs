@@ -11,6 +11,8 @@ import {
   removeDocumentInvite,
   updateDocument,
 } from "../documents/document.service.js";
+import { findDomainByName } from "../db/repositories/domain.repo.js";
+import { getDb } from "../db/connection.js";
 import { searchDocuments } from "../search/search.service.js";
 import { requireDocumentAccess } from "../middleware/document-auth.middleware.js";
 import { StoragePathError } from "../storage/paths.js";
@@ -47,11 +49,18 @@ export function buildDocumentsRouter(): Router {
    * 由服务层负责权限过滤，直接返回过滤后的列表。
    */
   router.get("/", (req: Request, res: Response) => {
-    // 从 query 中读取 domainId，必须是字符串；不是字符串就当没传
-    const domainId = typeof req.query.domainId === "string" ? req.query.domainId : undefined;
-    // 从已鉴权的请求上下文中取访客ID；未登录则为 null
+    let domainId = typeof req.query.domainId === "string" ? req.query.domainId : undefined;
+    // 如果提供了 domainName，解析为 domainId
+    const domainName = typeof req.query.domainName === "string" ? req.query.domainName : undefined;
+    if (domainName) {
+      const domain = findDomainByName(getDb(), domainName);
+      if (!domain) {
+        res.status(404).json({ error: { code: "DOMAIN_NOT_FOUND", message: `domain '${domainName}' not found` } });
+        return;
+      }
+      domainId = domain.domain_id;
+    }
     const visitorId = req.visitor?.visitor_id ?? null;
-    // 调用服务层获取可见文档列表（服务层内部做权限过滤）
     const docs = listDocuments(domainId, visitorId);
     res.json({ data: docs });
   });

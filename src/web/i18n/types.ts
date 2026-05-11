@@ -259,6 +259,12 @@ export type TranslationKey =
   | "draftsEmptyState"
   | "localSnapshot"
   | "unknownTitle"
+  | "draftPublishFailedNotice"
+  | "recoverDraft"
+  | "recoverDraftDesc"
+  | "recoverTargetFolder"
+  | "recoverDraftDesc"
+  | "recoverTargetFolder"
   // CLI Token
   | "cliToken"
   | "cliTokenDesc"

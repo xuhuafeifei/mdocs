@@ -268,6 +268,10 @@ export const en: Record<TranslationKey, string> = {
   draftsEmptyState: "All drafts synced — no unpublished content.",
   localSnapshot: "Local snapshot",
   unknownTitle: "Untitled document",
+  draftPublishFailedNotice: "Draft \"{{name}}\" publish failed: document not found",
+  recoverDraft: "Save As New Document",
+  recoverDraftDesc: "Save the draft of \"{{name}}\" as a brand new document",
+  recoverTargetFolder: "Target Folder",
   // CLI Token
   cliToken: "CLI Token",
   cliTokenDesc: "Identity token for CLI and Agent tools, inherits all your permissions",

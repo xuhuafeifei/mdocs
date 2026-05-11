@@ -48,7 +48,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
 import { ConflictNotice } from "./ConflictNotice";
 import { CommentsPanel } from "./CommentsPanel";
-import { getDraft, saveDraft as saveDraftRecord, deleteDraftIfUnchanged } from "../storage/drafts";
+import { getDraft, saveDraft as saveDraftRecord, deleteDraftIfUnchanged, markDraftPublishError } from "../storage/drafts";
 import { translateError, localizeDomainName, parentDirForCreates } from "./utils";
 import { useAutoPublish } from "./hooks/useAutoPublish";
 import mdocsLogo from "../assets/mdocs-logo.svg";
@@ -531,7 +531,7 @@ export function App() {
       const deleted = await deleteDraftIfUnchanged(docId, draft.updatedAt);
       if (!deleted) {
         console.log("[publishDraftFromList] draft modified during publish, keeping:", docId);
-        // 草稿在发布过程中被用户修改了，保留草稿供下次扫描/发布
+        // 草稿在发布过程中被用户继续编辑了，保留草稿供下次扫描/发布
       }
       // 刷新文档树，更新文档状态
       await refreshTree();
@@ -539,7 +539,16 @@ export function App() {
       setMessage(t("published"));
       window.setTimeout(() => setMessage(null), 1200);
     } catch (err) {
-      // 发布失败，显示错误弹窗
+      if (err instanceof ApiRequestError && err.status === 404) {
+        // 服务端文档已不存在，标记草稿为发布失败（不再重复扫描）
+        // 显示草稿名称，方便用户定位
+        const draft = await getDraft(docId);
+        const draftName = draft?.displayName || t("unknownTitle");
+        setMessage(t("draftPublishFailedNotice", { name: draftName }));
+        await markDraftPublishError(docId, "DOC_NOT_FOUND");
+        return;
+      }
+      // 其他错误显示错误弹窗
       setAlertMessage(translateError(t, err));
     }
   }
@@ -695,6 +704,7 @@ export function App() {
           onBack={() => setView("docs")}
           onPublishDraft={publishDraftFromList}
           onOpenDocument={openDocument}
+          onRecoverDraft={() => void refreshTree()}
         />
       ) : (
         <div className="mdocs-layout">

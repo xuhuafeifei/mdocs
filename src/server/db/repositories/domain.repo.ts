@@ -34,6 +34,18 @@ export function findDomainById(db: Database.Database, domainId: string): DomainR
 }
 
 /**
+ * 根据域名（domain_name）查找单个域。
+ * 返回对应行或 undefined。
+ */
+export function findDomainByName(db: Database.Database, domainName: string): DomainRow | undefined {
+  return db
+    .prepare<string, DomainRow>(
+      `SELECT domain_id, domain_name, creator_visitor_id, created_at, updated_at, permission FROM domains WHERE domain_name = ?`,
+    )
+    .get(domainName);
+}
+
+/**
  * 插入一条新的域记录。
  * permission 未提供时默认为 public。
  */
