@@ -961,7 +961,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
             <div className="mdocs-editor-content-area" style={{ flex: 1, display: "flex", minHeight: 0 }}>
               <Block
                 variant="outlined"
-                style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, display: "flex", borderRadius: 0, outline: "none" }}
+                horizontal
+                style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, borderRadius: 0, outline: "none" }}
               >
                 <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "auto", padding: 16 }}>
                   <Editor
