@@ -10,6 +10,14 @@ Markdown knowledge base for small teams.
 
 > 文档站点：[xuhuafeifei.github.io/mdocs-site](https://xuhuafeifei.github.io/mdocs-site/)
 
+编辑界面图片:
+<img width="1440" height="812" alt="image" src="https://github.com/user-attachments/assets/605e7299-7485-4809-a9e1-0918c686d5fd" />
+**上述文章是通过mdocs-cli由agent阅读Deepseek-TUI代码后推送的**
+
+后台界面
+<img width="1440" height="812" alt="image" src="https://github.com/user-attachments/assets/aba8ae95-40d5-49ba-a469-7665f8e3f21b" />
+
+
 ## Clean-room policy
 
 `mdocs` is implemented from scratch. It MUST NOT reuse any code from
