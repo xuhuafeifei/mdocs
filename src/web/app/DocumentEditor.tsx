@@ -72,6 +72,7 @@ function OutlineSideRail({ editor }: { editor: IEditor }) {
 
   return (
     <div
+      className="mdocs-outline-siderail"
       style={{
         // 不允许被压缩
         flexShrink: 0,
@@ -960,10 +961,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
             <div className="mdocs-editor-content-area" style={{ flex: 1, display: "flex", minHeight: 0 }}>
               <Block
                 variant="outlined"
-                padding={16}
-                style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, overflow: "auto", outline: "none" }}
+                style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, display: "flex", borderRadius: 0, outline: "none" }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "auto", padding: 16 }}>
                   <Editor
                     content={props.document.content}
                     type={contentType}
@@ -978,9 +978,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     className="mdocs-document-editor-root"
                   />
                 </div>
+                {/* 大纲侧边栏：与 Editor 共享同一卡片，滚动时保持固定 */}
+                {editor && <OutlineSideRail editor={editor} />}
               </Block>
-              {/* 大纲侧边栏：放在滚动区域外，滚动时保持固定 */}
-              {editor && <OutlineSideRail editor={editor} />}
             </div>
         </div>
       </Block>

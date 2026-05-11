@@ -641,6 +641,14 @@ button.small {
   padding-top: 20px;
   padding-bottom: 30px;
 }
+
+/* 大纲与 Editor 共享同一卡片，去掉突兀的左边框 */
+.mdocs-outline-siderail > div > div:first-child {
+  border-left: none !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  padding-top: 20px !important;
+}
 /* === Main area === */
 .mdocs-main {
   display: flex;
