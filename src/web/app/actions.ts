@@ -12,11 +12,20 @@ export function openFileSelector(handleFiles: (files: FileList) => void, accept 
   input.type = "file";
   input.accept = accept;
   input.multiple = false;
+  // 兜底：5 秒后无论是否触发事件都强制移除节点（兼容不支持 oncancel 的浏览器）
+  const cleanupTimeout = setTimeout(() => input.remove(), 5000);
+
   input.onchange = (event) => {
+    clearTimeout(cleanupTimeout);
     const files = (event.target as HTMLInputElement)?.files;
     if (files && files.length > 0) {
       handleFiles(files);
     }
+    input.remove();
+  };
+  // 如果用户取消文件选择对话框，确保 DOM 节点仍被移除
+  input.oncancel = () => {
+    clearTimeout(cleanupTimeout);
     input.remove();
   };
   input.click();

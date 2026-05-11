@@ -39,7 +39,7 @@ import {
   SigmaIcon,
   Table2Icon,
 } from "lucide-react";
-import { type FC, useMemo, useState } from "react";
+import { type FC, useEffect, useMemo, useRef, useState } from "react";
 
 import Toolbar from "../Toolbar";
 import { openFileSelector } from "../actions";
@@ -49,12 +49,19 @@ import content from "./data.json";
 /**
  * 通用防抖函数：延迟执行，减少编辑器内容变化时的频繁序列化。
  */
-function debounce<A extends unknown[]>(fn: (...args: A) => void, wait: number): (...args: A) => void {
+function debounce<A extends unknown[]>(fn: (...args: A) => void, wait: number): ((...args: A) => void) & { cancel: () => void } {
   let timeout: ReturnType<typeof setTimeout> | undefined;
-  return (...args: A) => {
+  const debounced = (...args: A) => {
     if (timeout !== undefined) clearTimeout(timeout);
     timeout = setTimeout(() => fn(...args), wait);
   };
+  debounced.cancel = () => {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+      timeout = undefined;
+    }
+  };
+  return debounced;
 }
 
 // 将 scrollIntoView 挂载到 window，供调试使用
@@ -63,6 +70,9 @@ window.__scrollIntoView = scrollIntoView;
 const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey">> = (props) => {
   // 获取 lobe-editor 编辑器实例
   const editor = useEditor();
+
+  // 追踪 Playground 中创建的 ObjectURL，组件卸载时统一释放，防止内存泄漏
+  const objectUrlsRef = useRef<string[]>([]);
 
   // ---- 编辑器 JSON 输出 ----
   const [json, setJson] = useState("");
@@ -105,6 +115,20 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
     window.editor = e;
     handleChange(e);
   };
+
+  // 组件卸载时清理：释放 ObjectURL、清除 debounce 定时器、移除全局 window 引用
+  useEffect(() => {
+    return () => {
+      for (const url of objectUrlsRef.current) {
+        URL.revokeObjectURL(url);
+      }
+      objectUrlsRef.current = [];
+      handleChange.cancel();
+      handleJSONChange.cancel();
+      delete (window as any).editor;
+      delete (window as any).__scrollIntoView;
+    };
+  }, [handleChange, handleJSONChange]);
 
   /**
    * @ 提及（mention）候选列表：演示用机器人角色。
@@ -354,7 +378,9 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
               console.debug("Files uploaded:", file);
               return new Promise((resolve) => {
                 setTimeout(() => {
-                  resolve({ url: URL.createObjectURL(file) });
+                  const url = URL.createObjectURL(file);
+                  objectUrlsRef.current.push(url);
+                  resolve({ url });
                 }, 1000);
               });
             },

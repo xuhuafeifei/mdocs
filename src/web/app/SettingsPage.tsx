@@ -6,7 +6,7 @@
  * 3. 成员模板（保存常用访客列表）
  * 4. 保存与发布（自动同步开关、未发布草稿列表）
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DraftListPage } from "./DraftListPage";
@@ -45,9 +45,17 @@ export function SettingsPage(props: {
   onBack: () => void;
   onPublishDraft: (docId: string) => void;
   onOpenDocument: (docId: string) => void;
+  onRecoverDraft?: (draft: any) => void;
 }) {
   const { t, lang, setLang } = useI18n();
   const { onBack, onPublishDraft } = props;
+
+  // 组件挂载状态跟踪，防止卸载后 async setState 导致内存泄漏
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // ---- 自动同步开关（推送到服务器） ----
   const [autoPublish, setAutoPublish] = useState(() => getBool("mdocs.autoPublish", false));
@@ -118,6 +126,7 @@ export function SettingsPage(props: {
   useEffect(() => {
     if (tab === "savePublish") {
       listAllDrafts().then((drafts) => {
+        if (!mountedRef.current) return;
         // 过滤掉已标记为发布的草稿，统计真正的未发布数量
         setDraftCount(drafts.filter((d) => !d.published).length);
       });
@@ -136,12 +145,16 @@ export function SettingsPage(props: {
     }
   }, [tab]);
 
+  // 注意：loadBookmarks / loadMyDocuments 内部已使用 mountedRef 做保护
+
   /**
    * 首次渲染时加载 CLI Token 列表。
    */
   useEffect(() => {
     loadCliTokens();
   }, []);
+
+  // 注意：loadCliTokens 内部已使用 mountedRef 做保护
 
   /**
    * 从服务端加载当前访客的所有 CLI Token。
@@ -150,11 +163,12 @@ export function SettingsPage(props: {
     try {
       setCliTokensLoading(true);
       const tokens = await listCliTokensApi();
+      if (!mountedRef.current) return;
       setCliTokens(tokens);
     } catch {
       // 加载失败忽略
     } finally {
-      setCliTokensLoading(false);
+      if (mountedRef.current) setCliTokensLoading(false);
     }
   }
 
@@ -163,11 +177,12 @@ export function SettingsPage(props: {
     try {
       setBookmarksLoading(true);
       const result = await fetchBookmarksApi();
+      if (!mountedRef.current) return;
       setBookmarks(result);
     } catch {
       // 加载失败忽略
     } finally {
-      setBookmarksLoading(false);
+      if (mountedRef.current) setBookmarksLoading(false);
     }
   }
 
@@ -176,11 +191,12 @@ export function SettingsPage(props: {
     try {
       setMyDocumentsLoading(true);
       const result = await fetchMyDocumentsApi();
+      if (!mountedRef.current) return;
       setMyDocuments(result);
     } catch {
       // 加载失败忽略
     } finally {
-      setMyDocumentsLoading(false);
+      if (mountedRef.current) setMyDocumentsLoading(false);
     }
   }
 
@@ -771,6 +787,7 @@ export function SettingsPage(props: {
             onPublish={onPublishDraft}
             onClose={() => setShowDrafts(false)}
             onCountChange={setDraftCount}
+            onRecover={props.onRecoverDraft}
           />
         )}
       </main>

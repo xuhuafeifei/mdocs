@@ -21,6 +21,10 @@
 | 快速切换文档出现内容与 URL 不匹配 / openDocument 竞态条件 | [`bug-fixes/open-document-race-condition-2026-05-10.md`](./bug-fixes/open-document-race-condition-2026-05-10.md) |
 | CommentsPanel 评论列表 O(n*m) 性能优化 | [`bug-fixes/comments-panel-performance-2026-05-10.md`](./bug-fixes/comments-panel-performance-2026-05-10.md) |
 | DocumentEditor handleInit 重复 JSON.parse 优化 | [`bug-fixes/handle-init-duplicate-parse-2026-05-10.md`](./bug-fixes/handle-init-duplicate-parse-2026-05-10.md) |
+| Lexical 编辑器实例内存泄漏（40GB 飙升） | [`bug-fixes/editor-memory-leak-2026-05-11.md`](./bug-fixes/editor-memory-leak-2026-05-11.md) |
+| React StrictMode 下 editor.destroy() 导致 "DataSource not registered" | [`bug-fixes/react-strictmode-editor-lifecycle-2026-05-11.md`](./bug-fixes/react-strictmode-editor-lifecycle-2026-05-11.md) |
+| 异步请求组件卸载保护（mountedRef / expectedDocIdRef 模式） | [`bug-fixes/async-unmount-guard-pattern-2026-05-11.md`](./bug-fixes/async-unmount-guard-pattern-2026-05-11.md) |
+| 浏览器资源泄漏清理（ObjectURL、DOM、debounce、window 引用） | [`bug-fixes/browser-resource-cleanup-2026-05-11.md`](./bug-fixes/browser-resource-cleanup-2026-05-11.md) |
 | 重大技术决策的历史记录 | [`adr/`](./adr/) |
 
 ## 项目坐标

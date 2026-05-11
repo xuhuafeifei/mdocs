@@ -5,17 +5,20 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
-import { listAllDrafts, deleteDraft, type DraftRecord } from "../storage/drafts";
+import { listAllDrafts, deleteDraft, clearDraftPublishError, type DraftRecord } from "../storage/drafts";
+import { RecoveryDialog } from "./RecoveryDialog";
 
 interface DraftListPageProps {
   onPublish: (docId: string) => void;
   onClose: () => void;
   onCountChange?: (count: number) => void;
+  /** 草稿另存为新文档：成功后父组件负责清除草稿和刷新树 */
+  onRecover?: (draft: DraftRecord) => void;
 }
 
 type ToastType = "success" | "error";
 
-export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPageProps) {
+export function DraftListPage({ onPublish, onClose, onCountChange, onRecover }: DraftListPageProps) {
   const { t } = useI18n();
 
   // ---- 草稿列表数据 ----
@@ -30,17 +33,25 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
   // ---- 待删除确认的草稿 ID ----
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
+  // ---- 正在恢复的草稿（打开 RecoveryDialog） ----
+  const [recoveringDraft, setRecoveringDraft] = useState<DraftRecord | null>(null);
+
   // ---- 临时提示消息 ----
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
   // ---- Toast 定时器引用 ----
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 组件挂载状态跟踪，防止卸载后 async setState 导致内存泄漏
+  const mountedRef = useRef(true);
+
   /**
    * 首次加载时从 IndexedDB 读取所有未发布草稿。
    */
   useEffect(() => {
+    mountedRef.current = true;
     listAllDrafts().then((list) => {
+      if (!mountedRef.current) return;
       // 过滤掉已标记为发布的草稿
       const unpublished = list.filter((d) => !d.published);
       // 更新草稿列表
@@ -48,6 +59,13 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
       // 通知父组件未发布数量（用于设置页徽标）
       onCountChange?.(unpublished.length);
     });
+    return () => {
+      mountedRef.current = false;
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = null;
+      }
+    };
   }, []);
 
   /**
@@ -77,6 +95,8 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
    * 发布单篇草稿：调用 onPublish（会删除 IndexedDB 记录），成功后从列表移除。
    */
   async function handlePublish(docId: string): Promise<void> {
+    // 重试时先清除失败标记
+    await clearDraftPublishError(docId);
     // 将该文档 ID 加入正在发布集合，UI 显示加载状态
     setPublishingIds((prev) => new Set(prev).add(docId));
     try {
@@ -121,6 +141,32 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
     });
     // 显示删除成功提示
     showToast(t("draftDeleted"), "success");
+  }
+
+  /**
+   * 另存为新文档：打开 RecoveryDialog。
+   */
+  function handleRecover(docId: string): void {
+    const draft = drafts.find((d) => d.documentId === docId);
+    if (draft) setRecoveringDraft(draft);
+  }
+
+  /**
+   * 恢复成功回调：清除草稿并通知父组件。
+   */
+  function handleRecoverSuccess(docId: string): void {
+    setRecoveringDraft(null);
+    // 从 IndexedDB 删除该草稿
+    void deleteDraft(docId);
+    // 从列表移除
+    setDrafts((prev) => {
+      const next = prev.filter((d) => d.documentId !== docId);
+      onCountChange?.(next.length);
+      return next;
+    });
+    // 通知父组件刷新树
+    onRecover?.(drafts.find((d) => d.documentId === docId)!);
+    showToast(t("published"), "success");
   }
 
   /**
@@ -207,40 +253,61 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
           ) : (
             // 草稿列表
             <div className="mdocs-drawer-items">
-              {unpublished.map((d) => (
-                <div key={d.documentId} className="mdocs-drawer-item">
-                  <div className="mdocs-drawer-item-icon" aria-hidden="true">📄</div>
-                  <div className="mdocs-drawer-item-info">
-                    <span className="mdocs-drawer-item-name">
-                      {/* 没有显示名称时显示「未命名文档」 */}
-                      {d.displayName || t("unknownTitle")}
-                    </span>
-                    <span className="mdocs-drawer-item-meta">
-                      {formatTime(d.updatedAt)} · {t("localSnapshot")}
-                    </span>
+              {unpublished.map((d) => {
+                const isFailed = !!d.publishError;
+                return (
+                  <div key={d.documentId} className={isFailed ? "mdocs-drawer-item mdocs-drawer-item-failed" : "mdocs-drawer-item"}>
+                    <div className="mdocs-drawer-item-icon" aria-hidden="true">📄</div>
+                    <div className="mdocs-drawer-item-info">
+                      <span className="mdocs-drawer-item-name">
+                        {/* 没有显示名称时显示「未命名文档」 */}
+                        {d.displayName || t("unknownTitle")}
+                      </span>
+                      {isFailed ? (
+                        <span className="mdocs-drawer-item-error">
+                          {formatTime(d.publishErrorAt!)} · {t("draftPublishFailedNotice", { name: d.displayName || t("unknownTitle") })}
+                        </span>
+                      ) : (
+                        <span className="mdocs-drawer-item-meta">
+                          {formatTime(d.updatedAt)} · {t("localSnapshot")}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mdocs-drawer-item-actions">
+                      {isFailed ? (
+                        // 失败草稿：显示"另存为新文档"按钮
+                        <button
+                          type="button"
+                          className="mdocs-btn-ghost mdocs-btn-ghost-primary"
+                          disabled={publishingAll}
+                          onClick={() => handleRecover(d.documentId)}
+                        >
+                          {t("recoverDraft")}
+                        </button>
+                      ) : (
+                        // 正常草稿：显示"发布"按钮
+                        <button
+                          type="button"
+                          className="mdocs-btn-ghost mdocs-btn-ghost-primary"
+                          disabled={publishingIds.has(d.documentId) || publishingAll}
+                          onClick={() => void handlePublish(d.documentId)}
+                        >
+                          {publishingIds.has(d.documentId) ? t("publishing") : t("publish")}
+                        </button>
+                      )}
+                      {/* 删除按钮 */}
+                      <button
+                        type="button"
+                        className="mdocs-btn-ghost mdocs-btn-ghost-danger"
+                        disabled={publishingAll}
+                        onClick={() => setDeleteConfirmId(d.documentId)}
+                      >
+                        {t("delete")}
+                      </button>
+                    </div>
                   </div>
-                  <div className="mdocs-drawer-item-actions">
-                    {/* 发布按钮 */}
-                    <button
-                      type="button"
-                      className="mdocs-btn-ghost mdocs-btn-ghost-primary"
-                      disabled={publishingIds.has(d.documentId) || publishingAll}
-                      onClick={() => void handlePublish(d.documentId)}
-                    >
-                      {publishingIds.has(d.documentId) ? t("publishing") : t("publish")}
-                    </button>
-                    {/* 删除按钮 */}
-                    <button
-                      type="button"
-                      className="mdocs-btn-ghost mdocs-btn-ghost-danger"
-                      disabled={publishingAll}
-                      onClick={() => setDeleteConfirmId(d.documentId)}
-                    >
-                      {t("delete")}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -292,6 +359,15 @@ export function DraftListPage({ onPublish, onClose, onCountChange }: DraftListPa
             </div>
           </div>
         </div>
+      )}
+
+      {/* 草稿恢复弹窗 */}
+      {recoveringDraft && (
+        <RecoveryDialog
+          draft={recoveringDraft}
+          onClose={() => setRecoveringDraft(null)}
+          onSuccess={() => handleRecoverSuccess(recoveringDraft.documentId)}
+        />
       )}
     </>
   );

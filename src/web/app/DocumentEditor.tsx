@@ -143,7 +143,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
   // ---- 加载访客目录（用于显示创建者昵称）----
   useEffect(() => {
-    fetchVisitorsDirectoryApi().then(setVisitors).catch(() => {});
+    let mounted = true;
+    fetchVisitorsDirectoryApi().then((data) => {
+      if (mounted) setVisitors(data);
+    }).catch(() => {});
+    return () => { mounted = false; };
   }, []);
 
   /**
@@ -176,6 +180,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
   // ---- 编辑器实例引用 ----
   // @lobehub/editor 的 IEditor 实例，初始化后通过 onInit 回调设置
   const [editor, setEditor] = useState<IEditor | null>(null);
+
+  // 用于在组件卸载时强制销毁编辑器实例，防止上游 ReactEditor 未调用 destroy 导致内存泄漏
+  const editorRef = useRef<IEditor | null>(null);
 
   // ---- 最新内容引用 ----
   // 用于 handleInit 中读取最新内容（useCallback 的闭包不会自动更新）
@@ -314,11 +321,17 @@ export function DocumentEditor(props: DocumentEditorProps) {
   /**
    * 将 saveDraft 方法暴露给 App.tsx，以便导航前刷新待保存的变更。
    * 不需要依赖项，每次渲染都更新 ref，确保 App.tsx 拿到最新方法。
+   * 组件卸载时清理 ref，防止旧闭包长期持有大对象导致内存泄漏。
    */
   useEffect(() => {
     if (props.saveBeforeNavRef) {
       props.saveBeforeNavRef.current = saveDraft;
     }
+    return () => {
+      if (props.saveBeforeNavRef) {
+        props.saveBeforeNavRef.current = undefined;
+      }
+    };
   });
 
   /**
@@ -336,6 +349,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
    * 通过 editor API 在微任务中重新设置内容，确保编辑器已完全挂载。
    */
   const handleInit = useCallback((e: IEditor) => {
+    // 保存编辑器实例到 ref，确保卸载时一定能拿到实例进行 destroy
+    editorRef.current = e;
     // 保存编辑器实例到状态，供工具栏等子组件使用
     setEditor(e);
     // Bypass buggy content prop — re-set content programmatically via editor API
@@ -355,6 +370,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
     });
 
   }, [contentType]);
+
+  // 注意：编辑器实例的销毁已由上游 ReactEditor 的 useEffect cleanup 负责，
+  // 此处不再重复 destroy，避免 React StrictMode 下重复销毁导致实例不可用。
 
   /**
    * 发布文档：将当前编辑器内容序列化为 JSON 并推送到服务器，成功后清除本地草稿。
@@ -950,8 +968,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
                   <Editor
                     content={props.document.content}
                     type={contentType}
-                    // key 使用 documentId，切换文档时强制重新挂载，避免内容混淆
-                    key={props.document.documentId}
                     confirmPasteMarkdown
                     // 编辑模式下可编辑，只读模式下不可编辑
                     editable={editing}

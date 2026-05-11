@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquare, X } from "lucide-react";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { fetchCommentsApi, createCommentApi, deleteCommentApi, type CommentEntry } from "../services/endpoints";
@@ -52,8 +52,12 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
     return { rootComments: root, repliesByParentId: replies, totalCount: count };
   }, [comments]);
 
+  // 用于竞态保护：快速切换文档时丢弃旧请求的 setState
+  const expectedDocumentIdRef = useRef(documentId);
+
   // 加载评论 + 清理状态
   useEffect(() => {
+    expectedDocumentIdRef.current = documentId;
     setNewComment("");
     setReplyTo(null);
     setError(null);
@@ -61,15 +65,20 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
   }, [documentId]);
 
   async function loadComments() {
+    const currentDocId = expectedDocumentIdRef.current;
     setLoading(true);
     try {
       const res = await fetchCommentsApi(documentId);
+      if (expectedDocumentIdRef.current !== currentDocId) return;
       setComments(res.comments);
     } catch (err) {
+      if (expectedDocumentIdRef.current !== currentDocId) return;
       setError("加载评论失败");
       console.error("Failed to load comments:", err);
     } finally {
-      setLoading(false);
+      if (expectedDocumentIdRef.current === currentDocId) {
+        setLoading(false);
+      }
     }
   }
 
