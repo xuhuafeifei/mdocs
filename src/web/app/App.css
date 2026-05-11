@@ -639,6 +639,7 @@ button.small {
   padding-left: 50px;
   padding-right: 50px;
   padding-top: 20px;
+  padding-bottom: 120px;
 }
 /* === Main area === */
 .mdocs-main {
@@ -1053,6 +1054,15 @@ strong.label {
 .mdocs-drawer-item-meta {
   font-size: 12px;
   color: var(--mdocs-text-muted);
+}
+
+.mdocs-drawer-item-error {
+  font-size: 12px;
+  color: var(--mdocs-danger);
+}
+
+.mdocs-drawer-item-failed {
+  background: var(--mdocs-danger-bg, rgba(220, 38, 38, 0.04));
 }
 
 .mdocs-drawer-item-actions {
@@ -1596,4 +1606,27 @@ strong.label {
   transition:
     opacity 0.25s ease,
     transform 0.25s ease;
+}
+
+/* ========== 草稿恢复弹窗 ========== */
+
+.mdocs-recovery-dialog {
+  width: min(520px, 92vw);
+}
+
+.mdocs-recovery-tree-label {
+  display: block;
+}
+
+.mdocs-recovery-tree {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--mdocs-border);
+  border-radius: 6px;
+  padding: 4px 0;
+  background: var(--mdocs-bg, #fff);
+}
+
+.mdocs-recovery-tree .mdocs-sidebar-list {
+  padding: 0;
 }
