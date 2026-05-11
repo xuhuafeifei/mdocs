@@ -960,7 +960,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
             <div className="mdocs-editor-content-area" style={{ flex: 1, display: "flex", minHeight: 0 }}>
               <Block
                 variant="outlined"
-                horizontal
                 padding={16}
                 style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, overflow: "auto", outline: "none" }}
               >
@@ -979,9 +978,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     className="mdocs-document-editor-root"
                   />
                 </div>
-                {/* 大纲侧边栏：根据可见性动态显示/隐藏 */}
-                {editor && <OutlineSideRail editor={editor} />}
               </Block>
+              {/* 大纲侧边栏：放在滚动区域外，滚动时保持固定 */}
+              {editor && <OutlineSideRail editor={editor} />}
             </div>
         </div>
       </Block>
