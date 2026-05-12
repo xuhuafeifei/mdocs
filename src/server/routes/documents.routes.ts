@@ -122,6 +122,9 @@ export function buildDocumentsRouter(): Router {
    * GET /:documentId
    * 获取单篇文档详情。需具备读取权限。
    *
+   * 查询参数：
+   * - format?: "json" | "text"  - 返回格式，默认 json（Lexical JSON 字符串）；text 表示提取纯文本
+   *
    * 前置校验：requireDocumentAccess("read") 中间件会先查文档和域信息，
    * 判断当前访客是否有权读取；无权则直接返回 404/403。
    */
@@ -129,9 +132,10 @@ export function buildDocumentsRouter(): Router {
     // 中间件已通过校验，这里直接从路由参数取文档ID
     const documentId = req.params.documentId!;
     const visitorId = req.visitor?.visitor_id ?? null;
+    const format = req.query.format === "text" ? "text" : "json";
     try {
       // 从数据库和磁盘读取完整文档内容
-      const doc = getDocument(documentId, visitorId);
+      const doc = getDocument(documentId, visitorId, format);
       res.json({ data: doc });
     } catch (err) {
       respondError(res, err, "documents-route.get");

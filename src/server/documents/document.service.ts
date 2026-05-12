@@ -48,6 +48,7 @@ import type {
 } from "../../shared/types/document.js";
 import { getConfig } from "../config/index.js";
 import { markdownToLexicalJson } from "./markdown-to-lexical.js";
+import { extractPlainTextFromLexical } from "./lexical-text.js";
 
 // ============================================================
 //  列文档（域内可见列表）
@@ -304,7 +305,11 @@ export function createDocument(params: {
 //  读单篇文档（调用方需先鉴权）
 // ============================================================
 
-export function getDocument(documentId: string, visitorId?: string | null): DocumentDetail {
+export function getDocument(
+  documentId: string,
+  visitorId?: string | null,
+  format?: "json" | "text",
+): DocumentDetail {
   const row = findDocumentById(getDb(), documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   const { content, contentHash } = readDocument(
@@ -317,9 +322,13 @@ export function getDocument(documentId: string, visitorId?: string | null): Docu
     const invite = findDocumentInvite(getDb(), documentId, visitorId);
     invitedEdit = invite?.permission === "edit";
   }
+  // 根据 format 决定返回原始 JSON 还是纯文本
+  const finalContent = format === "text"
+    ? extractPlainTextFromLexical(content)
+    : content;
   return {
     ...rowToSummary(row),
-    content,
+    content: finalContent,
     contentHash,
     permission: row.permission,
     ...(invitedEdit ? { invitedEdit: true } : {}),
