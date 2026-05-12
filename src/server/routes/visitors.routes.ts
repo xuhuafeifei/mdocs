@@ -1,8 +1,10 @@
 import { Router, type Request, type Response } from "express";
 import {
   generateRecoveryCode,
+  loginWithPassword,
   recoverVisitor,
   registerVisitor,
+  setVisitorPassword,
   toPublic,
   VisitorValidationError,
 } from "../identity/visitor.service.js";
@@ -25,17 +27,19 @@ export function buildVisitorsRouter(): Router {
   /**
    * POST /register
    * 注册新访客。
+   * 请求体: { visitorName: string, password?: string }
    * 返回 { visitor, visitorToken, recoveryCode }
    */
   router.post("/register", (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as { visitorName?: unknown };
+    const body = (req.body ?? {}) as { visitorName?: unknown; password?: unknown };
     // 校验访客名是否为有效字符串
     if (typeof body.visitorName !== "string") {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "visitorName is required" } });
       return;
     }
+    const password = typeof body.password === "string" ? body.password.trim() : "";
     try {
-      const result = registerVisitor(body.visitorName);
+      const result = registerVisitor(body.visitorName, password || undefined);
       // 设置 HttpOnly Cookie（10 年有效期，约等于永久）
       res.cookie("visitor_token", result.visitorToken, {
         httpOnly: true,
@@ -58,6 +62,60 @@ export function buildVisitorsRouter(): Router {
       log.error("register failed: %s", err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: { code: "INTERNAL", message: "failed to register visitor" } });
     }
+  });
+
+  /**
+   * POST /login
+   * 使用用户名+密码登录。
+   * 请求体: { visitorName: string, password: string }
+   * 返回: { visitor } + Cookie
+   * 错误码: NO_PASSWORD_SET（该用户未设置密码）、INVALID_CREDENTIALS（用户名或密码错误）
+   */
+  router.post("/login", (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as { visitorName?: unknown; password?: unknown };
+    if (typeof body.visitorName !== "string" || !body.visitorName.trim()) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "visitorName is required" } });
+      return;
+    }
+    if (typeof body.password !== "string" || !body.password.trim()) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "password is required" } });
+      return;
+    }
+
+    const db = getDb();
+    // 先查用户是否存在
+    const row = db
+      .prepare<string, { password_hash: string | null }>(
+        `SELECT password_hash FROM visitors WHERE visitor_name = ? AND disabled_at IS NULL`,
+      )
+      .get(body.visitorName.trim());
+
+    if (!row) {
+      res.status(401).json({ error: { code: "INVALID_CREDENTIALS", message: "用户名或密码错误" } });
+      return;
+    }
+
+    // 该用户未设置密码
+    if (!row.password_hash) {
+      res.status(400).json({ error: { code: "NO_PASSWORD_SET", message: "该账号未设置密码，无法远程登录" } });
+      return;
+    }
+
+    // 验证密码
+    const result = loginWithPassword(body.visitorName.trim(), body.password.trim());
+    if (!result) {
+      res.status(401).json({ error: { code: "INVALID_CREDENTIALS", message: "用户名或密码错误" } });
+      return;
+    }
+
+    // 登录成功，设置 Cookie
+    res.cookie("visitor_token", result.visitorToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 10 * 365 * 24 * 60 * 60 * 1000,
+    });
+    res.json({ data: { visitor: result.visitor } });
   });
 
   /**
@@ -103,6 +161,24 @@ export function buildVisitorsRouter(): Router {
     }
     const code = generateRecoveryCode(req.visitor.visitor_id);
     res.json({ data: { recoveryCode: code } });
+  });
+
+  /**
+   * POST /set-password
+   * 为当前已登录的访客设置密码。
+   * 请求体: { password: string }
+   * 空字符串表示清除密码。
+   */
+  router.post("/set-password", (req: Request, res: Response) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+      return;
+    }
+    const body = (req.body ?? {}) as { password?: unknown };
+    const password = typeof body.password === "string" ? body.password.trim() : "";
+
+    setVisitorPassword(req.visitor.visitor_id, password);
+    res.json({ data: { ok: true } });
   });
 
   /**

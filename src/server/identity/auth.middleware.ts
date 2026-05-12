@@ -6,6 +6,7 @@ import { resolveCliVisitor } from "./cli-token.service.js";
 // 无需身份认证即可访问的路径白名单
 const EXEMPT_PATHS = new Set<string>([
   "/visitors/register",
+  "/visitors/login",
   "/visitors/recover",
   "/health",
 ]);

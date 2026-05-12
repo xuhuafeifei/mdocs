@@ -5,6 +5,7 @@ import {
   findDocumentById,
   findDocumentByPath,
   findDocumentInvite,
+  findChildrenByParent,
   insertDocument,
   insertDocumentInvite,
   deleteDocumentInvite,
@@ -77,6 +78,48 @@ export function listDocuments(
 
   const rows = listDocumentsByDomain(db, effective);
   const filtered = rows.filter((r) =>
+    canReadDocument(r, visitorId ?? null, domainInfo),
+  );
+  return filtered.map(rowToSummary);
+}
+
+// ============================================================
+//  列出目录下的子节点
+// ============================================================
+
+export function listFolderChildren(
+  folderId: string,
+  visitorId?: string | null,
+): DocumentSummary[] {
+  const db = getDb();
+
+  // 先查文件夹本身，确认存在且有权限
+  const folder = findDocumentById(db, folderId);
+  if (!folder) return [];
+
+  const domain = findDomainById(db, folder.domain_id);
+  const access = resolveDomainAccess(db, domain, folder.domain_id, visitorId);
+  if (!canEnterDomainTree(access)) return [];
+
+  const domainPermission = domain?.permission ?? "public";
+  const isMember = !!(
+    visitorId &&
+    domain &&
+    isDomainMember(db, domain.domain_id, visitorId)
+  );
+  const domainInfo: DomainAccessInfo = {
+    domainPermission,
+    isDomainMember: isMember,
+  };
+
+  // 检查对文件夹本身是否有读权限
+  if (!canReadDocument(folder, visitorId ?? null, domainInfo)) {
+    return [];
+  }
+
+  // 查询所有直接子节点
+  const children = findChildrenByParent(db, folderId);
+  const filtered = children.filter((r) =>
     canReadDocument(r, visitorId ?? null, domainInfo),
   );
   return filtered.map(rowToSummary);

@@ -24,6 +24,7 @@ import {
   addDocumentInviteApi,
   removeDocumentInviteApi,
   removeBookmarkApi,
+  setPasswordApi,
 } from "../services/endpoints";
 import type { Bookmark, MyDocument } from "../services/endpoints";
 import mdocsLogo from "../assets/mdocs-logo.svg";
@@ -87,6 +88,11 @@ export function SettingsPage(props: {
   const [recoveryCodeResult, setRecoveryCodeResult] = useState<string | null>(null);
   const [recoveryCodeCopied, setRecoveryCodeCopied] = useState(false);
   const [recoveryCodeBusy, setRecoveryCodeBusy] = useState(false);
+
+  // ---- 密码设置相关 ----
+  const [password, setPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   // ---- 未发布草稿数量（用于徽标显示） ----
   const [draftCount, setDraftCount] = useState(0);
@@ -246,6 +252,24 @@ export function SettingsPage(props: {
       setRecoveryCodeResult(result.recoveryCode);
     } finally {
       setRecoveryCodeBusy(false);
+    }
+  }
+
+  /** 设置密码 */
+  async function handleSetPassword(e: React.FormEvent): Promise<void> {
+    e.preventDefault();
+    const pwd = password.trim();
+    if (pwd && pwd.length < 4) {
+      return;
+    }
+    try {
+      setPasswordBusy(true);
+      await setPasswordApi(pwd);
+      setPassword("");
+      setPasswordSuccess(true);
+      setTimeout(() => setPasswordSuccess(false), 3000);
+    } finally {
+      setPasswordBusy(false);
     }
   }
 
@@ -484,6 +508,40 @@ export function SettingsPage(props: {
                     {recoveryCodeBusy ? "…" : "生成恢复码"}
                   </button>
                 </div>
+              </div>
+
+              {/* 密码设置卡片 */}
+              <div className="mdocs-settings-card">
+                <div className="mdocs-settings-item">
+                  <span className="mdocs-settings-item-info">
+                    <span className="mdocs-settings-card-title">🔐 登录密码</span>
+                    <span className="mdocs-settings-item-desc">
+                      设置密码后，可在其他浏览器或设备用「用户名+密码」登录。
+                    </span>
+                  </span>
+                </div>
+                <form onSubmit={handleSetPassword} style={{ marginTop: 12 }}>
+                  <input
+                    type="password"
+                    placeholder="输入新密码（至少 4 位，留空则清除密码）"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    minLength={0}
+                    style={{ marginBottom: 8 }}
+                  />
+                  {passwordSuccess && (
+                    <div style={{ color: "#4caf50", marginBottom: 8, fontSize: "0.875rem" }}>
+                      ✓ 密码设置成功
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    className="secondary"
+                    disabled={passwordBusy}
+                  >
+                    {passwordBusy ? "设置中…" : "保存密码"}
+                  </button>
+                </form>
               </div>
             </div>
 

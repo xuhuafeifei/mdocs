@@ -6,6 +6,7 @@ import {
   getDocument,
   getDocumentInvites,
   listDocuments,
+  listFolderChildren,
   removeDocument,
   removeFolder,
   removeDocumentInvite,
@@ -220,6 +221,19 @@ export function buildDocumentsRouter(): Router {
     } catch (err) {
       respondError(res, err, "documents-route.delete-folder");
     }
+  });
+
+  /**
+   * GET /folder/:folderId/children
+   * 列出指定目录下的所有直接子节点（文件夹 + 文档）。
+   *
+   * 自动过滤当前访客无权阅读的文档，返回空数组表示无权限或目录不存在。
+   */
+  router.get("/folder/:folderId/children", (req: Request, res: Response) => {
+    const folderId = req.params.folderId!;
+    const visitorId = req.visitor?.visitor_id ?? null;
+    const children = listFolderChildren(folderId, visitorId);
+    res.json({ data: children });
   });
 
   /**

@@ -262,9 +262,9 @@ export function App() {
   /**
    * 处理访客注册：调用注册接口 → 后端自动设 Cookie → 初始化域与树。
    */
-  async function handleRegister(visitorName: string): Promise<void> {
-    // 向后端提交访客名称，创建新身份
-    const res = await registerVisitorApi(visitorName);
+  async function handleRegister(visitorName: string, password?: string): Promise<void> {
+    // 向后端提交访客名称和密码，创建新身份
+    const res = await registerVisitorApi(visitorName, password);
     // 更新 React 状态中的访客信息
     setVisitor(res.visitor);
     // 触发访客 ID 提示条，提醒用户保存 ID 以便恢复

@@ -24,10 +24,13 @@ import type { DomainMemberTemplate } from "../../shared/types/domainMemberTempla
 /**
  * 访客注册：创建新访客并返回身份令牌和恢复码。
  */
-export function registerVisitorApi(visitorName: string): Promise<VisitorRegisterResponse> {
+export function registerVisitorApi(
+  visitorName: string,
+  password?: string,
+): Promise<VisitorRegisterResponse> {
   return api<VisitorRegisterResponse>("/api/visitors/register", {
     method: "POST",
-    body: JSON.stringify({ visitorName }),
+    body: JSON.stringify({ visitorName, password }),
   });
 }
 
@@ -39,6 +42,29 @@ export function recoverVisitorApi(recoveryCode: string): Promise<VisitorRecoverR
   return api<VisitorRecoverResponse>("/api/visitors/recover", {
     method: "POST",
     body: JSON.stringify({ recoveryCode }),
+  });
+}
+
+/**
+ * 使用用户名+密码登录。
+ */
+export function loginWithPasswordApi(
+  visitorName: string,
+  password: string,
+): Promise<VisitorRecoverResponse> {
+  return api<VisitorRecoverResponse>("/api/visitors/login", {
+    method: "POST",
+    body: JSON.stringify({ visitorName, password }),
+  });
+}
+
+/**
+ * 为当前访客设置密码。
+ */
+export function setPasswordApi(password: string): Promise<{ ok: boolean }> {
+  return api<{ ok: boolean }>("/api/visitors/set-password", {
+    method: "POST",
+    body: JSON.stringify({ password }),
   });
 }
 

@@ -6,6 +6,7 @@ export interface VisitorRow {
   visitor_name: string;
   visitor_token_hash: string;
   recovery_code_hash: string | null;
+  password_hash?: string | null;
   created_at: string;
   last_seen_at: string | null;
   disabled_at: string | null;
@@ -18,6 +19,7 @@ export interface InsertVisitorInput {
   visitorName: string;
   visitorTokenHash: string;
   recoveryCodeHash?: string;
+  passwordHash?: string;
   createdAt: string;
 }
 
@@ -27,9 +29,16 @@ export interface InsertVisitorInput {
 export function insertVisitor(db: Database.Database, input: InsertVisitorInput): void {
   db.prepare(
     `INSERT INTO visitors (
-      visitor_id, visitor_name, visitor_token_hash, recovery_code_hash, created_at
-    ) VALUES (?, ?, ?, ?, ?)`,
-  ).run(input.visitorId, input.visitorName, input.visitorTokenHash, input.recoveryCodeHash ?? null, input.createdAt);
+      visitor_id, visitor_name, visitor_token_hash, recovery_code_hash, password_hash, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(
+    input.visitorId,
+    input.visitorName,
+    input.visitorTokenHash,
+    input.recoveryCodeHash ?? null,
+    input.passwordHash ?? null,
+    input.createdAt,
+  );
 }
 
 /**
@@ -154,4 +163,66 @@ export function listActiveVisitorsDirectory(
        ORDER BY visitor_name COLLATE NOCASE`,
     )
     .all();
+}
+
+// ==================== Session 相关 ====================
+
+/** 访客会话在数据库中的行结构。 */
+export interface VisitorSessionRow {
+  session_id: string;
+  visitor_id: string;
+  token_hash: string;
+  device_name: string | null;
+  created_at: string;
+  last_seen_at: string;
+}
+
+/** 插入一条新的会话记录。 */
+export interface InsertSessionInput {
+  sessionId: string;
+  visitorId: string;
+  tokenHash: string;
+  deviceName?: string;
+  createdAt: string;
+  lastSeenAt: string;
+}
+
+export function insertSession(db: Database.Database, input: InsertSessionInput): void {
+  db.prepare(
+    `INSERT INTO visitor_sessions (
+      session_id, visitor_id, token_hash, device_name, created_at, last_seen_at
+    ) VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(input.sessionId, input.visitorId, input.tokenHash, input.deviceName ?? null, input.createdAt, input.lastSeenAt);
+}
+
+/**
+ * 根据 token 哈希查找会话，并关联访客信息。
+ * 只返回未禁用访客的会话。
+ */
+export function findSessionByTokenHash(
+  db: Database.Database,
+  tokenHash: string,
+): (VisitorSessionRow & VisitorRow) | undefined {
+  return db
+    .prepare<string, VisitorSessionRow & VisitorRow>(
+      `SELECT vs.*, v.*
+       FROM visitor_sessions vs
+       JOIN visitors v ON vs.visitor_id = v.visitor_id
+       WHERE vs.token_hash = ? AND v.disabled_at IS NULL`,
+    )
+    .get(tokenHash);
+}
+
+/** 更新指定会话的 last_seen_at 字段。 */
+export function updateSessionLastSeen(
+  db: Database.Database,
+  sessionId: string,
+  at: string,
+): void {
+  db.prepare(`UPDATE visitor_sessions SET last_seen_at = ? WHERE session_id = ?`).run(at, sessionId);
+}
+
+/** 删除指定会话（退出登录）。 */
+export function deleteSession(db: Database.Database, sessionId: string): void {
+  db.prepare(`DELETE FROM visitor_sessions WHERE session_id = ?`).run(sessionId);
 }

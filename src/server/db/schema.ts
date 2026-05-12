@@ -12,6 +12,17 @@ const SCHEMA_STATEMENTS: string[] = [
     merged_into_visitor_id TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS idx_visitors_token_hash ON visitors (visitor_token_hash)`,
+  `CREATE TABLE IF NOT EXISTS visitor_sessions (
+    session_id TEXT PRIMARY KEY,
+    visitor_id TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    device_name TEXT,
+    created_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    FOREIGN KEY (visitor_id) REFERENCES visitors(visitor_id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_visitor_sessions_visitor ON visitor_sessions (visitor_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_visitor_sessions_token_hash ON visitor_sessions (token_hash)`,
   `CREATE TABLE IF NOT EXISTS domains (
     domain_id TEXT PRIMARY KEY,
     domain_name TEXT NOT NULL UNIQUE,
@@ -155,6 +166,8 @@ export function applySchema(db: Database.Database): void {
     migrateDocumentsTable(db);
     migrateDocumentsDirty(db);
     migrateVisitorsRecoveryCode(db);
+    migrateVisitorsPasswordHash(db);
+    migrateVisitorSessions(db);
     ensureDefaultDomain(db);
   });
   tx();
@@ -308,4 +321,33 @@ function migrateVisitorsRecoveryCode(db: Database.Database): void {
 function visitorColumnNames(db: Database.Database): Set<string> {
   const rows = db.prepare(`PRAGMA table_info(visitors)`).all() as { name: string }[];
   return new Set(rows.map((r) => r.name));
+}
+
+/** 为 visitors 表添加 password_hash 列（若不存在）。 */
+function migrateVisitorsPasswordHash(db: Database.Database): void {
+  const names = visitorColumnNames(db);
+  if (names.has("password_hash")) return;
+  db.exec(`ALTER TABLE visitors ADD COLUMN password_hash TEXT`);
+}
+
+/** 将 visitors 表的 token 迁移到 visitor_sessions 表（向后兼容）。 */
+function migrateVisitorSessions(db: Database.Database): void {
+  // 检查是否已经迁移过（有 session 记录说明迁过了）
+  const hasSessions = db.prepare(`SELECT 1 AS c FROM visitor_sessions LIMIT 1`).get() as { c: number } | undefined;
+  if (hasSessions) return;
+
+  // 把所有现有 visitor 的 token 迁移到 visitor_sessions 表（作为初始 session）
+  const stmt = db.prepare(`
+    INSERT INTO visitor_sessions (session_id, visitor_id, token_hash, device_name, created_at, last_seen_at)
+    SELECT
+      'legacy_' || visitor_id,
+      visitor_id,
+      visitor_token_hash,
+      'Legacy Device',
+      created_at,
+      COALESCE(last_seen_at, created_at)
+    FROM visitors
+    WHERE visitor_token_hash IS NOT NULL
+  `);
+  stmt.run();
 }
