@@ -220,7 +220,7 @@ export function useCreateModal(opts: UseCreateModalOpts) {
           return;
         }
         // 调用后端 API 创建文档
-        const parentId = effectiveParent ? findFolderIdByPath(tree, effectiveParent) : undefined;
+        const parentId = effectiveParent ? findFolderIdByPath(tree, effectiveParent) ?? undefined : undefined;
         const doc = await createDocumentApi({
           fileName: displayFile,
           displayName: displayTitle,
@@ -260,7 +260,7 @@ export function useCreateModal(opts: UseCreateModalOpts) {
       }
 
       // 调用独立的创建目录接口
-      const folderParentId = effectiveParent ? findFolderIdByPath(tree, effectiveParent) : undefined;
+      const folderParentId = effectiveParent ? findFolderIdByPath(tree, effectiveParent) ?? undefined : undefined;
       await createFolderApi({
         name: storageSeg,
         parentId: folderParentId,

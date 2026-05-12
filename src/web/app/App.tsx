@@ -630,11 +630,13 @@ export function App() {
       {/* Demo Mode 提示横幅 — 在 grid 外面 */}
       {isDemoMode() && (
         <div className="mdocs-demo-banner">
-          <span>🎮 Demo 模式</span>
+          <span>Demo 模式，部分功能被禁用，且数据保存在浏览器本地</span>
           <span>·</span>
-          <span>数据保存在浏览器本地</span>
-          <span>·</span>
-          <a href="https://github.com" target="_blank" rel="noopener noreferrer">
+          <a
+            href="https://github.com/xuhuafeifei/mdocs"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             部署自己的实例 →
           </a>
         </div>

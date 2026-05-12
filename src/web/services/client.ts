@@ -19,7 +19,12 @@ import {
   mockRegisterVisitor,
   mockCreateFolder,
   mockDeleteFolder,
+  mockRemoveFolder,
 } from "./mockApi";
+
+import { ApiRequestError } from "./api-request-error";
+
+export { ApiRequestError };
 
 // ---- localStorage 键名 ----
 const VISITOR_ID_KEY = "mdocs.visitorId";
@@ -27,20 +32,6 @@ const VISITOR_ID_KEY = "mdocs.visitorId";
 export interface ApiError {
   code: string;
   message: string;
-}
-
-/**
- * 统一 API 请求错误类。
- * 包含 HTTP 状态码、错误码和错误消息，便于上层根据状态码做不同处理。
- */
-export class ApiRequestError extends Error {
-  code: string;
-  status: number;
-  constructor(status: number, code: string, message: string) {
-    super(message);
-    this.status = status;
-    this.code = code;
-  }
 }
 
 /**
@@ -131,6 +122,12 @@ async function demoApi<T>(
   if (path.match(/^\/api\/documents\/[^/]+$/) && method === "PUT") {
     const documentId = path.split("/").pop()!;
     return mockUpdateDocument(documentId, body) as unknown as T;
+  }
+
+  // 递归删除目录（与正式环境路径一致）
+  if (path.match(/^\/api\/documents\/folder\/[^/]+$/) && method === "DELETE") {
+    const folderDocumentId = path.split("/").pop()!;
+    return mockRemoveFolder(folderDocumentId) as unknown as T;
   }
 
   // 删除文档

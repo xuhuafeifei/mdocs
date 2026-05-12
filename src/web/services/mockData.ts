@@ -6,6 +6,11 @@ import type { VisitorPublic } from "../../shared/types/visitor";
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
 import type { TreeNode, TreeFolderNode } from "../../shared/types/tree";
+import { FOLDER_DESC_FILENAME } from "../../shared/folderDesc";
+import readmeLexicalSeed from "./demo-seed/README.lexical.json";
+
+/** 欢迎页：内容与 `demo-seed/README.lexical.json` 一致（构建时打包进 bundle） */
+const README_LEXICAL_CONTENT = JSON.stringify(readmeLexicalSeed);
 
 /** Demo 访客 ID */
 export const DEMO_VISITOR_ID = "demo-visitor-001";
@@ -51,34 +56,6 @@ function hashContent(content: string): string {
   }
   return Math.abs(hash).toString(16).padStart(64, "0");
 }
-
-/** 示例文档内容 */
-const WELCOME_CONTENT = `# 欢迎使用 mdocs Demo 🎉
-
-这是 mdocs 的纯前端演示模式，所有数据存储在你的浏览器中。
-
-## 功能说明
-
-- ✅ **创建文档和文件夹**：点击侧边栏按钮
-- ✅ **Markdown 编辑**：支持完整的 Markdown 语法
-- ✅ **图表和公式**：支持流程图、序列图、数学公式
-- ✅ **本地草稿**：自动保存到浏览器 IndexedDB
-
-## 注意事项
-
-⚠️ **Demo 模式限制**：
-- 数据只保存在你的浏览器中
-- 刷新页面数据仍然保留
-- 清除浏览器数据会丢失所有文档
-
-## 开始使用
-
-1. 点击左侧 **"新建文档"** 按钮
-2. 输入文件名，开始编辑
-3. 点击 **"发布"** 保存到本地存储
-
-Enjoy! 🚀
-`;
 
 const MARKDOWN_GUIDE_CONTENT = `# Markdown 语法指南
 
@@ -200,16 +177,18 @@ Demo 模式的核心设计：
 export const DEMO_DOCUMENTS: DocumentDetail[] = [
   {
     documentId: "doc-welcome",
-    relativePath: "欢迎使用.md",
-    displayName: "欢迎使用",
-    content: WELCOME_CONTENT,
-    contentHash: hashContent(WELCOME_CONTENT),
+    relativePath: "README.md",
+    displayName: "README",
+    content: README_LEXICAL_CONTENT,
+    contentHash: hashContent(README_LEXICAL_CONTENT),
     permission: 1,
     ownerVisitorId: DEMO_VISITOR_ID,
     domainId: "default",
     updatedBy: DEMO_VISITOR_ID,
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
+    fileType: "md",
+    parentId: null,
   },
   {
     documentId: "doc-markdown-guide",
@@ -223,6 +202,8 @@ export const DEMO_DOCUMENTS: DocumentDetail[] = [
     updatedBy: DEMO_VISITOR_ID,
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
+    fileType: "md",
+    parentId: null,
   },
   {
     documentId: "doc-diagram-guide",
@@ -236,6 +217,8 @@ export const DEMO_DOCUMENTS: DocumentDetail[] = [
     updatedBy: DEMO_VISITOR_ID,
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
+    fileType: "md",
+    parentId: null,
   },
   {
     documentId: "doc-personal-note",
@@ -249,52 +232,83 @@ export const DEMO_DOCUMENTS: DocumentDetail[] = [
     updatedBy: DEMO_VISITOR_ID,
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
+    fileType: "md",
+    parentId: null,
   },
 ];
 
 /**
- * 构建文档树
+ * 构建文档树：路径推导的虚拟文件夹 + IndexedDB 中真实的目录行（fileType === dir），
+ * 并将 ___desc___.md 挂到对应文件夹上（不单独显示为普通文档）。
  */
 export function buildTree(docs: DocumentDetail[]): TreeNode[] {
   const root: TreeNode[] = [];
   const folderMap = new Map<string, TreeFolderNode>();
 
-  // 按路径排序，确保父文件夹先创建
-  const sortedDocs = [...docs].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  const dirMetaByPath = new Map<string, { documentId: string; displayName: string }>();
+  for (const d of docs) {
+    if ((d.fileType ?? "md") === "dir") {
+      dirMetaByPath.set(d.relativePath, { documentId: d.documentId, displayName: d.displayName });
+    }
+  }
+
+  const sortedDocs = [...docs]
+    .filter((d) => (d.fileType ?? "md") !== "dir")
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 
   for (const doc of sortedDocs) {
-    const parts = doc.relativePath.split("/");
-    const fileName = parts.pop()!;
+    const segments = doc.relativePath.split("/").filter(Boolean);
+    if (segments.length === 0) continue;
+
+    const leaf = segments[segments.length - 1]!;
+    const dirSegs = segments.slice(0, -1);
 
     let currentPath = "";
     let parentNodes: TreeNode[] = root;
 
-    // 逐层创建文件夹
-    for (const part of parts) {
+    for (const part of dirSegs) {
       currentPath = currentPath ? `${currentPath}/${part}` : part;
-
       let folderNode = folderMap.get(currentPath);
       if (!folderNode) {
+        const meta = dirMetaByPath.get(currentPath);
         folderNode = {
           type: "folder",
           name: part,
           path: currentPath,
-          documentId: `folder-${currentPath}`,
+          documentId: meta?.documentId ?? `folder-${currentPath}`,
           children: [],
         };
+        const dn = meta?.displayName?.trim();
+        if (dn) folderNode.folderDisplayName = dn;
         parentNodes.push(folderNode);
         folderMap.set(currentPath, folderNode);
+      } else {
+        const meta = dirMetaByPath.get(currentPath);
+        if (meta) {
+          folderNode.documentId = meta.documentId;
+          const dn = meta.displayName.trim();
+          if (dn) folderNode.folderDisplayName = dn;
+        }
       }
       parentNodes = folderNode.children;
     }
 
-    // 添加文档节点
+    if (leaf.toLowerCase() === FOLDER_DESC_FILENAME.toLowerCase()) {
+      const folderNode = folderMap.get(currentPath);
+      if (folderNode) {
+        folderNode.descDocumentId = doc.documentId;
+        const dn = doc.displayName.trim();
+        if (dn) folderNode.folderDisplayName = dn;
+      }
+      continue;
+    }
+
     parentNodes.push({
       type: "document",
-      name: fileName,
+      name: leaf,
       path: doc.relativePath,
       documentId: doc.documentId,
-      displayName: doc.displayName || fileName.replace(/\.md$/, ""),
+      displayName: doc.displayName || leaf.replace(/\.md$/i, ""),
       ownerVisitorId: doc.ownerVisitorId,
       updatedAt: doc.updatedAt,
     });
