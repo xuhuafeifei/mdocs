@@ -12,8 +12,8 @@ importers:
         specifier: 0.42.0
         version: 0.42.0
       '@lobehub/editor':
-        specifier: npm:@fgbg/lobe-editor@1.0.0-fork.9
-        version: '@fgbg/lobe-editor@1.0.0-fork.9(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(markmap-common@0.18.9)(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)'
+        specifier: npm:@fgbg/lobe-editor@1.0.0-fork.10
+        version: '@fgbg/lobe-editor@1.0.0-fork.10(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(markmap-common@0.18.9)(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)'
       '@lobehub/ui':
         specifier: ^5.0.0
         version: 5.10.0(@lobehub/fluent-emoji@4.1.0(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@lobehub/icons@5.6.0)(@types/mdast@4.0.4)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -735,8 +735,8 @@ packages:
       '@noble/hashes':
         optional: true
 
-  '@fgbg/lobe-editor@1.0.0-fork.9':
-    resolution: {integrity: sha512-DzdmDXx1k7SMMaxTOMvu8W+mkovRS4bBakyd/sJ9GLMVjJ/gGNuJ40g50D9vrubIN11UFvfbcdze/qkcI+GyGg==}
+  '@fgbg/lobe-editor@1.0.0-fork.10':
+    resolution: {integrity: sha512-nliEOrqTtKzP0IZui/PrxYf387AtX1Io2Jj+DJr30yfXJhumQkp5uf9cIqw5p7WI+zGZWi5JnNgBqfSLHJWBBw==}
     peerDependencies:
       '@lobehub/ui': ^5.0.0
       antd: ^6.1.1
@@ -5095,7 +5095,7 @@ snapshots:
 
   '@exodus/bytes@1.15.0': {}
 
-  '@fgbg/lobe-editor@1.0.0-fork.9(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(markmap-common@0.18.9)(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)':
+  '@fgbg/lobe-editor@1.0.0-fork.10(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(markmap-common@0.18.9)(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)':
     dependencies:
       '@floating-ui/dom': 1.7.6
       '@floating-ui/react': 0.27.19(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
