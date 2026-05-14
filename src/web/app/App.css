@@ -739,6 +739,16 @@ button.small {
   overflow-wrap: break-word;
 }
 
+/* 编辑器内表格滚动容器：flex 布局下 min-width: auto 默认会按内容撑开，导致溢出。设置 min-width: 0 让 overflow-x: auto 生效。 */
+.mdocs-editor-content-area .editor_table_scrollable_wrapper {
+  min-width: 0;
+}
+
+/* 编辑器内图片：限制最大宽度，防止溢出容器 */
+.mdocs-editor-content-area img {
+  max-width: 100% !important;
+}
+
 /* 滚动容器：内部编辑器根节点改为 height:auto，::after 追加真实底部空隙 */
 .mdocs-editor-scroll-host {
   box-sizing: border-box;
