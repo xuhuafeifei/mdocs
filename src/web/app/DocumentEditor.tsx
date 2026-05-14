@@ -998,7 +998,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
               <Block
                 variant="outlined"
                 horizontal
-                style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, borderRadius: 0, outline: "none" }}
+                style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, minWidth: 0, borderRadius: 0, outline: "none" }}
               >
                 <div className="mdocs-editor-scroll-host">
                   {editorSurfaceReady ? (

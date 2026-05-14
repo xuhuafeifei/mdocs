@@ -732,16 +732,17 @@ button.small {
   outline: none;
 }
 
-/* 编辑器内表格：限制最大宽度 + 内容换行 */
-.mdocs-editor-content-area table {
-  max-width: 100%;
-  word-break: break-word;
-  overflow-wrap: break-word;
+/* 编辑器内容区域：关键 flex 约束！
+   flex: 1 的 item 默认 min-width: auto，会按内容无限撑开。
+   必须设置 min-width: 0，子元素的 overflow-x: auto 才会生效，表格才能在容器内滚动。 */
+.mdocs-editor-content-area {
+  min-width: 0 !important;
 }
 
-/* 编辑器内表格滚动容器：flex 布局下 min-width: auto 默认会按内容撑开，导致溢出。设置 min-width: 0 让 overflow-x: auto 生效。 */
+/* 编辑器内表格滚动容器：双重保险，防止上游样式被覆盖 */
 .mdocs-editor-content-area .editor_table_scrollable_wrapper {
-  min-width: 0;
+  min-width: 0 !important;
+  max-width: 100% !important;
 }
 
 /* 编辑器内图片：限制最大宽度，防止溢出容器 */
