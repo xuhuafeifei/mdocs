@@ -24,6 +24,7 @@ import {
   ReactListPlugin,
   ReactMathPlugin,
   ReactMeta2dPlugin,
+  ReactMarkmapPlugin,
   ReactTablePlugin,
   ReactToolbarPlugin,
   type SlashOptions,
@@ -318,6 +319,7 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
           ReactTablePlugin,
           ReactMathPlugin,
           ReactMeta2dPlugin,
+          ReactMarkmapPlugin,
           ReactCodePlugin,
           // 浮动工具栏
           withProps(ReactToolbarPlugin, {

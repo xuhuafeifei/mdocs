@@ -31,6 +31,7 @@ import {
   ReactListPlugin,
   ReactMathPlugin,
   ReactMeta2dPlugin,
+  ReactMarkmapPlugin,
   ReactTablePlugin,
   ReactToolbarPlugin,
   ReactMarkdownPlugin,
@@ -671,9 +672,10 @@ export function DocumentEditor(props: DocumentEditorProps) {
       ReactCodemirrorPlugin,
       ReactHRPlugin,
       ReactTablePlugin,
-      ReactMathPlugin,
-      ReactMeta2dPlugin,
-      ReactCodePlugin,
+  ReactMathPlugin,
+  ReactMeta2dPlugin,
+  ReactMarkmapPlugin,
+  ReactCodePlugin,
       // 工具栏插件：传入浮动工具栏组件
       withProps(ReactToolbarPlugin, {
         children: editor ? (
