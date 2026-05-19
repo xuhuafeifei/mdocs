@@ -25,6 +25,28 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+}
+
+/* 拖拽调整宽度手柄 */
+.mdocs-comments-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.2s;
+  z-index: 10;
+}
+
+.mdocs-comments-resize-handle:hover {
+  background: var(--mdocs-primary, #1976d2);
+}
+
+.mdocs-comments-resize-handle:active {
+  background: var(--mdocs-primary, #1976d2);
 }
 
 /* 评论区头部 */
@@ -175,6 +197,7 @@
   line-height: 1.5;
   color: #333;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
 /* 回复按钮 */
@@ -219,6 +242,25 @@
   flex-shrink: 0;
 }
 
+/* 输入框顶部拖拽手柄 */
+.mdocs-comments-input-drag-handle {
+  width: 40px;
+  height: 4px;
+  background: #ddd;
+  border-radius: 2px;
+  margin: 0 auto 12px;
+  cursor: row-resize;
+  transition: background 0.2s;
+}
+
+.mdocs-comments-input-drag-handle:hover {
+  background: var(--mdocs-primary, #1976d2);
+}
+
+.mdocs-comments-input-drag-handle:active {
+  background: var(--mdocs-primary, #1976d2);
+}
+
 .mdocs-comment-reply-notice {
   display: flex;
   justify-content: space-between;
@@ -250,14 +292,15 @@
 
 .mdocs-comments-input {
   width: 100%;
-  min-height: 60px;
   padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 6px;
-  resize: vertical;
   font-size: 0.9rem;
   margin-bottom: 4px;
   font-family: inherit;
+  resize: none;
+  box-sizing: border-box;
+  display: block;
 }
 
 .mdocs-comments-char-count {

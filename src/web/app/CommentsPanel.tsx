@@ -25,6 +25,12 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // 拖拽调整宽度相关状态
+  const [panelWidth, setPanelWidth] = useState(360);
+  const [inputHeight, setInputHeight] = useState(80);
+  const isDraggingRef = useRef(false);
+  const isInputDraggingRef = useRef(false);
+
   /** 判断是否可以删除某条评论：是评论作者 OR 是文档创建者 */
   function canDeleteComment(comment: DocumentComment): boolean {
     if (!visitorId) return false;
@@ -133,8 +139,54 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
     return `${days}天前`;
   }
 
+  // 拖拽开始
+  function handleDragStart(e: React.MouseEvent) {
+    isDraggingRef.current = true;
+    e.preventDefault();
+  }
+
+  // 输入框高度拖拽开始
+  function handleInputDragStart(e: React.MouseEvent) {
+    isInputDraggingRef.current = true;
+    e.preventDefault();
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "row-resize";
+  }
+
+  // 拖拽中
+  useEffect(() => {
+    function handleMouseMove(e: MouseEvent) {
+      if (isDraggingRef.current) {
+        // 从窗口右侧计算宽度
+        const newWidth = Math.max(280, Math.min(600, window.innerWidth - e.clientX));
+        setPanelWidth(newWidth);
+      }
+      if (isInputDraggingRef.current) {
+        // 通过 Y 轴增量调整高度：鼠标向上移动则增加高度
+        const delta = -e.movementY;
+        setInputHeight((prev) => Math.max(60, Math.min(600, prev + delta)));
+      }
+    }
+
+    function handleMouseUp() {
+      isDraggingRef.current = false;
+      isInputDraggingRef.current = false;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    }
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
   return (
-    <div className="mdocs-comments-panel">
+    <div className="mdocs-comments-panel" style={{ width: panelWidth }}>
+      {/* 拖拽手柄 */}
+      <div className="mdocs-comments-resize-handle" onMouseDown={handleDragStart} />
       {/* 头部 */}
       <div className="mdocs-comments-header">
         <h3 style={{ margin: 0, fontSize: "1rem", display: "flex", alignItems: "center", gap: 6 }}>
@@ -251,6 +303,8 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
       {/* 评论输入框：只有登录用户能发表 */}
       {visitorId ? (
         <div className="mdocs-comments-input-wrapper">
+          {/* 输入框顶部拖拽手柄 */}
+          <div className="mdocs-comments-input-drag-handle" onMouseDown={handleInputDragStart} />
           {replyTo && (
             <div className="mdocs-comment-reply-notice">
               <span>
@@ -266,6 +320,7 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
             onChange={(e) => setNewComment(e.target.value.slice(0, 512))}
             placeholder={replyTo ? `回复 ${replyTo.visitorName}...` : "发表评论..."}
             className="mdocs-comments-input"
+            style={{ height: inputHeight }}
             maxLength={512}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
