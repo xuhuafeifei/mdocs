@@ -10,6 +10,8 @@ export interface DocumentRow {
   created_by: string;
   updated_by: string;
   content_hash: string;
+  /** 当前最新提交 id，用于 publish 冲突检测 */
+  head_commit_id: string | null;
   created_at: string;
   updated_at: string;
   permission: number;
@@ -27,6 +29,7 @@ export interface InsertDocumentInput {
   createdBy: string;
   updatedBy: string;
   contentHash: string;
+  headCommitId?: string | null;
   createdAt: string;
   updatedAt: string;
   permission: number;
@@ -73,7 +76,7 @@ export function listDocumentsByDomain(db: Database.Database, domainId: string): 
   return db
     .prepare<string, DocumentRow>(
       `SELECT document_id, domain_id, relative_path, display_name, owner_visitor_id,
-              created_by, updated_by, content_hash, created_at, updated_at, permission,
+              created_by, updated_by, content_hash, head_commit_id, created_at, updated_at, permission,
               file_type, parent_id
        FROM documents WHERE domain_id = ? ORDER BY relative_path`,
     )
@@ -135,7 +138,7 @@ export function findDocumentById(db: Database.Database, documentId: string): Doc
   return db
     .prepare<string, DocumentRow>(
       `SELECT document_id, domain_id, relative_path, display_name, owner_visitor_id,
-              created_by, updated_by, content_hash, created_at, updated_at, permission,
+              created_by, updated_by, content_hash, head_commit_id, created_at, updated_at, permission,
               file_type, parent_id
        FROM documents WHERE document_id = ?`,
     )
@@ -157,7 +160,7 @@ export function findDocumentByPath(db: Database.Database, domainId: string, rela
   return db
     .prepare<[string, string], DocumentRow>(
       `SELECT document_id, domain_id, relative_path, display_name, owner_visitor_id,
-              created_by, updated_by, content_hash, created_at, updated_at, permission,
+              created_by, updated_by, content_hash, head_commit_id, created_at, updated_at, permission,
               file_type, parent_id
        FROM documents WHERE domain_id = ? AND relative_path = ?`,
     )
@@ -174,9 +177,9 @@ export function insertDocument(db: Database.Database, input: InsertDocumentInput
   db.prepare(
     `INSERT INTO documents
      (document_id, domain_id, relative_path, display_name, owner_visitor_id,
-      created_by, updated_by, content_hash, created_at, updated_at, permission,
+      created_by, updated_by, content_hash, head_commit_id, created_at, updated_at, permission,
       file_type, parent_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     input.documentId,
     input.domainId,
@@ -186,12 +189,25 @@ export function insertDocument(db: Database.Database, input: InsertDocumentInput
     input.createdBy,
     input.updatedBy,
     input.contentHash,
+    input.headCommitId ?? null,
     input.createdAt,
     input.updatedAt,
     input.permission,
     input.fileType ?? 'md',
     input.parentId ?? null,
   );
+}
+
+/** 更新 documents.head_commit_id，指向当前对外生效的最新提交。 */
+export function updateDocumentHeadCommit(
+  db: Database.Database,
+  input: { documentId: string; headCommitId: string | null; updatedBy: string; updatedAt: string },
+): void {
+  db.prepare(
+    `UPDATE documents
+     SET head_commit_id = ?, updated_by = ?, updated_at = ?
+     WHERE document_id = ?`,
+  ).run(input.headCommitId, input.updatedBy, input.updatedAt, input.documentId);
 }
 
 /**

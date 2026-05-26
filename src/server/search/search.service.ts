@@ -68,6 +68,7 @@ export function searchDocuments(params: {
       created_by: row.owner_visitor_id,
       updated_by: row.owner_visitor_id,
       content_hash: "",
+      head_commit_id: null,
       created_at: "",
       updated_at: "",
       permission: row.permission,

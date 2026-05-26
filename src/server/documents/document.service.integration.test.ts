@@ -29,8 +29,13 @@ vi.mock("../storage/file-store.js", () => ({
     fileStoreMocks.lastWriteContent = content;
     return { contentHash: "mock-hash", bytes: 0 };
   },
-  readDocument: () => ({ content: "", contentHash: "mock-hash" }),
+  readDocument: () => ({
+    content: fileStoreMocks.lastWriteContent || "",
+    contentHash: "mock-hash",
+  }),
+  writeCommitBlob: () => ({ blobRef: "ab/mock", bytes: 0 }),
   deleteDocumentFile: () => {},
+  sha256: () => "mock-hash",
 }));
 
 import { DocumentError, Permission } from "../access/access-control.js";
@@ -90,6 +95,8 @@ beforeAll(() => {
 afterEach(() => {
   const db = testDbRef.db!;
   // 清理测试中文档和邀请（域、成员保留）
+  db.exec("DELETE FROM commit_parents");
+  db.exec("DELETE FROM document_commits");
   db.exec("DELETE FROM documents");
   db.exec("DELETE FROM document_invites");
   db.exec("DELETE FROM audit_logs");

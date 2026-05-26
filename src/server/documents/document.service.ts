@@ -13,8 +13,14 @@ import {
   listDocumentsByDomain,
   listDocumentsByPathPrefix,
   updateDocumentContent,
+  updateDocumentHeadCommit,
   type DocumentRow,
 } from "../db/repositories/document.repo.js";
+import { insertCommit, insertCommitParent } from "../db/repositories/commit.repo.js";
+import {
+  assertCommitBelongsToDocument,
+  assertMergeFork,
+} from "./commit-graph.js";
 import {
   findDomainById,
   isDomainMember,
@@ -35,6 +41,8 @@ import { insertAuditLog } from "../db/repositories/audit.repo.js";
 import {
   deleteDocumentFile,
   readDocument,
+  sha256,
+  writeCommitBlob,
   writeDocument,
 } from "../storage/file-store.js";
 import {
@@ -45,6 +53,7 @@ import {
 import type {
   DocumentDetail,
   DocumentSummary,
+  PublishVersionContext,
 } from "../../shared/types/document.js";
 import { getConfig } from "../config/index.js";
 import { markdownToLexicalJson } from "./markdown-to-lexical.js";
@@ -246,6 +255,9 @@ export function createDocument(params: {
 
   // 磁盘路径现在自动带上 {domain_id}/ 前缀
   const write = writeDocument(domainId, relativePath, content);
+  // 首版提交：工作区文件 + 不可变 blob + head 指针
+  const commitId = randomUUID();
+  const blob = writeCommitBlob(write.contentHash, content);
 
   const tx = db.transaction(() => {
     insertDocument(db, {
@@ -257,11 +269,20 @@ export function createDocument(params: {
       createdBy: params.actorVisitorId,
       updatedBy: params.actorVisitorId,
       contentHash: write.contentHash,
+      headCommitId: commitId,
       createdAt: now,
       updatedAt: now,
       permission,
       fileType: params.fileType ?? "md",
       parentId: params.parentId ?? null,
+    });
+    insertCommit(db, {
+      commitId,
+      documentId,
+      contentHash: write.contentHash,
+      blobRef: blob.blobRef,
+      authorVisitorId: params.actorVisitorId,
+      createdAt: now,
     });
     insertAuditLog(db, {
       actorVisitorId: params.actorVisitorId,
@@ -298,6 +319,7 @@ export function createDocument(params: {
     permission,
     fileType: params.fileType ?? "md",
     parentId: params.parentId ?? null,
+    headCommitId: commitId,
   };
 }
 
@@ -347,12 +369,10 @@ export function updateDocument(params: {
   permission?: number;
   /** 内容格式，默认 'lexical'；传 'markdown' 时自动转换为 Lexical JSON */
   contentFormat?: "markdown" | "lexical";
+  /** 发布版本信息：乐观锁与 merge 发布 */
+  version?: PublishVersionContext;
 }): DocumentDetail {
-  // 如果 markdown 格式，先转为 Lexical JSON
-  const content =
-    params.contentFormat === "markdown"
-      ? markdownToLexicalJson(params.content)
-      : params.content;
+  const content = normalizeDocumentContent(params.content, params.contentFormat);
   const db = getDb();
   const row = findDocumentById(db, params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
@@ -382,8 +402,43 @@ export function updateDocument(params: {
   }
 
   const displayName = params.displayName?.trim() || row.display_name;
-  const write = writeDocument(row.domain_id, row.relative_path, content);
   const now = new Date().toISOString();
+  const version = params.version;
+  const baseCommitId = version?.baseCommitId;
+  const mergeCtx = version?.merge;
+
+  // 冲突解决后的合并发布：插 r_local + 双父 merge 节点
+  if (mergeCtx) {
+    if (!baseCommitId) {
+      throw new DocumentError(
+        "BAD_REQUEST",
+        "merge 发布需要在 version 中提供 baseCommitId",
+        400,
+      );
+    }
+    const localSnapshotContent =
+      mergeCtx.localSnapshotContent !== undefined
+        ? normalizeDocumentContent(mergeCtx.localSnapshotContent, params.contentFormat)
+        : undefined;
+    return publishMergeDocument({
+      row,
+      actorVisitorId: params.actorVisitorId,
+      content,
+      displayName,
+      permission: params.permission,
+      baseCommitId,
+      expectedHeadCommitId: mergeCtx.expectedHeadCommitId,
+      localSnapshotContent,
+      now,
+    });
+  }
+
+  // 普通线性发布：客户端 base 必须等于当前 head（未传 version 则跳过校验）
+  assertNoVersionConflict(db, row, baseCommitId);
+
+  const write = writeDocument(row.domain_id, row.relative_path, content);
+  const commitId = randomUUID();
+  const blob = writeCommitBlob(write.contentHash, content);
 
   const tx = db.transaction(() => {
     updateDocumentContent(db, {
@@ -393,6 +448,27 @@ export function updateDocument(params: {
       updatedBy: params.actorVisitorId,
       updatedAt: now,
       permission: params.permission,
+    });
+    insertCommit(db, {
+      commitId,
+      documentId: row.document_id,
+      contentHash: write.contentHash,
+      blobRef: blob.blobRef,
+      authorVisitorId: params.actorVisitorId,
+      createdAt: now,
+    });
+    // 有上一版 head 时挂一条父边（fast-forward）
+    if (row.head_commit_id) {
+      insertCommitParent(db, {
+        childCommitId: commitId,
+        parentCommitId: row.head_commit_id,
+      });
+    }
+    updateDocumentHeadCommit(db, {
+      documentId: row.document_id,
+      headCommitId: commitId,
+      updatedBy: params.actorVisitorId,
+      updatedAt: now,
     });
     insertAuditLog(db, {
       actorVisitorId: params.actorVisitorId,
@@ -405,32 +481,25 @@ export function updateDocument(params: {
   });
   tx();
 
-  // 异步标记并重建索引（不阻塞 API 响应）
   markDirty(row.document_id);
   process.nextTick(() => {
     try {
       rebuildDocument(row.document_id);
     } catch (err) {
-      // 忽略索引失败，定时器会再次扫描 dirty
+      // ignore
     }
   });
 
-  return {
-    documentId: row.document_id,
-    domainId: row.domain_id,
-    relativePath: row.relative_path,
+  return buildDocumentDetail(row, {
     displayName,
-    ownerVisitorId: row.owner_visitor_id,
-    updatedBy: params.actorVisitorId,
-    updatedAt: now,
-    createdAt: row.created_at,
     content,
     contentHash: write.contentHash,
+    updatedBy: params.actorVisitorId,
+    updatedAt: now,
     permission:
       params.permission !== undefined ? params.permission : row.permission,
-    fileType: row.file_type,
-    parentId: row.parent_id,
-  };
+    headCommitId: commitId,
+  });
 }
 
 // ============================================================
@@ -605,6 +674,8 @@ export function getDocumentInvites(
 //  内部辅助
 // ============================================================
 
+// --- 版本提交与冲突 ---
+
 function rowToSummary(row: DocumentRow): DocumentSummary {
   return {
     documentId: row.document_id,
@@ -618,7 +689,225 @@ function rowToSummary(row: DocumentRow): DocumentSummary {
     permission: row.permission,
     fileType: row.file_type,
     parentId: row.parent_id,
+    ...(row.head_commit_id ? { headCommitId: row.head_commit_id } : {}),
   };
+}
+
+/** 组装 API 返回的 DocumentDetail，并带上最新 headCommitId。 */
+function buildDocumentDetail(
+  row: DocumentRow,
+  overrides: {
+    displayName: string;
+    content: string;
+    contentHash: string;
+    updatedBy: string;
+    updatedAt: string;
+    permission: number;
+    headCommitId: string;
+  },
+): DocumentDetail {
+  return {
+    ...rowToSummary({ ...row, head_commit_id: overrides.headCommitId }),
+    content: overrides.content,
+    contentHash: overrides.contentHash,
+    displayName: overrides.displayName,
+    updatedBy: overrides.updatedBy,
+    updatedAt: overrides.updatedAt,
+    permission: overrides.permission,
+  };
+}
+
+/**
+ * 抛出 409 VERSION_CONFLICT。
+ * details 供前端对照合并：当前 head、服务端工作区正文。
+ */
+function throwVersionConflict(
+  row: DocumentRow,
+  serverContent: string,
+  serverContentHash: string,
+): never {
+  throw new DocumentError("VERSION_CONFLICT", "版本冲突，请先合并后再发布", 409, {
+    headCommitId: row.head_commit_id,
+    content: serverContent,
+    contentHash: serverContentHash,
+  });
+}
+
+/**
+ * 普通发布前的乐观锁：baseCommitId 与 head 不一致则冲突。
+ * 未传 baseCommitId 时跳过（兼容尚未接入的前端）。
+ */
+function assertNoVersionConflict(
+  db: ReturnType<typeof getDb>,
+  row: DocumentRow,
+  baseCommitId: string | undefined,
+): void {
+  // 客户端没传 base：旧版前端或未启用冲突检测，直接放行（不进行冲突校验）
+  // 文档尚无 head：历史数据/异常态，无法比对，也放行
+  if (!baseCommitId || !row.head_commit_id) return;
+
+  // 客户端认为的「我基于的那一版」仍等于服务端当前 head → 无人插队，可 fast-forward 发布
+  if (baseCommitId === row.head_commit_id) return;
+
+  // 走到这里：base 有值且与 head 不同 → 说明在你编辑期间 head 已被别人/另一标签推进 → 409
+  assertCommitBelongsToDocument(db, baseCommitId, row.document_id);
+  const { content, contentHash } = readDocument(row.domain_id, row.relative_path);
+  throwVersionConflict(row, content, contentHash);
+}
+
+/**
+ * 合并发布（用户在浏览器合稿后，PUT version.merge）。
+ *
+ * 提交图（merge 完成后）示意：
+ *
+ *     base（开编时的 head，version.baseCommitId）
+ *      ├── expectedHead（冲突时远端最新，version.merge.expectedHeadCommitId）
+ *      └── r_local（本地支，本次首次落库；父 = base）
+ *             \      /
+ *              merge（合成稿，新 head；父 = expectedHead + r_local）
+ *
+ * 步骤：
+ * 1. 校验：expectedHead 仍为当前 head；base 是 expectedHead 的祖先（assertMergeFork）
+ * 2. 写盘：工作区 = 合成稿；commits 目录落 r_local / merge 快照（writeCommitBlob）
+ * 3. 事务：插 r_local + merge 节点与边，更新 documents.head_commit_id
+ */
+function publishMergeDocument(params: {
+  row: DocumentRow;
+  actorVisitorId: string;
+  content: string;
+  displayName: string;
+  permission?: number;
+  baseCommitId: string;
+  expectedHeadCommitId: string;
+  /** 已按 contentFormat 转换后的本地快照；未传则用 content */
+  localSnapshotContent?: string;
+  now: string;
+}): DocumentDetail {
+  const { row, actorVisitorId, content, displayName, now } = params;
+  const db = getDb();
+
+  // 如果row.head_commit_id为空大概率是因为旧客户文章没有commit_id, 不能走conflict merge逻辑
+  if (!row.head_commit_id) {
+    throw new DocumentError("BAD_REQUEST", "文档尚无提交历史，无法合并发布", 400);
+  }
+  // 合并过程中若 head 又被别人推进，同样 409
+  if (params.expectedHeadCommitId !== row.head_commit_id) {
+    const { content: serverContent, contentHash } = readDocument(
+      row.domain_id,
+      row.relative_path,
+    );
+    throwVersionConflict(row, serverContent, contentHash);
+  }
+
+  assertCommitBelongsToDocument(db, params.baseCommitId, row.document_id);
+  assertCommitBelongsToDocument(db, params.expectedHeadCommitId, row.document_id);
+  assertMergeFork(db, params.baseCommitId, params.expectedHeadCommitId);
+
+  // 写盘：工作区 + 两份历史快照（r_local 支 / merge 结果）
+  const localContent = params.localSnapshotContent ?? content;
+  const localHash = sha256(Buffer.from(localContent, "utf8"));
+  const write = writeDocument(row.domain_id, row.relative_path, content); // 当前 .md = 合成稿
+  const localWrite = writeCommitBlob(localHash, localContent); // r_local 快照
+  const mergeBlob = writeCommitBlob(write.contentHash, content); // merge 快照（常与合成稿同 hash）
+
+  const localCommitId = randomUUID();
+  const mergeCommitId = randomUUID();
+
+  /*
+   * 事务执行步骤
+   * 1. 插入r_local commit
+   *    1.1 插入 r_local commit parent 边
+   *    1.2 更新document content
+   * 2. 插入merge commit
+   *    2.1 插入merge commit parent 边 (r_local 和 远端 head 双边)
+   *    2.2 更新document content
+   * 3. 插入audit log
+   */
+  const tx = db.transaction(() => {
+    // 本地支尖端（此前仅存在于浏览器，此处首次落库）
+    // 保存r_local
+    insertCommit(db, {
+      commitId: localCommitId,
+      documentId: row.document_id,
+      contentHash: localHash,
+      blobRef: localWrite.blobRef,
+      authorVisitorId: actorVisitorId,
+      createdAt: now,
+    });
+    insertCommitParent(db, {
+      childCommitId: localCommitId,
+      parentCommitId: params.baseCommitId,
+    });
+
+    updateDocumentContent(db, {
+      documentId: row.document_id,
+      displayName,
+      contentHash: write.contentHash,
+      updatedBy: actorVisitorId,
+      updatedAt: now,
+      permission: params.permission,
+    });
+    // merge 节点：双父 = 远端 head + r_local
+    insertCommit(db, {
+      commitId: mergeCommitId,
+      documentId: row.document_id,
+      contentHash: write.contentHash,
+      blobRef: mergeBlob.blobRef,
+      authorVisitorId: actorVisitorId,
+      createdAt: now,
+    });
+    // merge node 拥有两个 parent, r_local 和 远端head
+    // 这里存储的是远端head
+    insertCommitParent(db, {
+      childCommitId: mergeCommitId,
+      parentCommitId: params.expectedHeadCommitId,
+    });
+    // 这里存储的是r_local
+    insertCommitParent(db, {
+      childCommitId: mergeCommitId,
+      parentCommitId: localCommitId,
+    });
+    updateDocumentHeadCommit(db, {
+      documentId: row.document_id,
+      headCommitId: mergeCommitId,
+      updatedBy: actorVisitorId,
+      updatedAt: now,
+    });
+    insertAuditLog(db, {
+      actorVisitorId,
+      action: "document.merge",
+      targetType: "document",
+      targetId: row.document_id,
+      metadata: {
+        baseCommitId: params.baseCommitId,
+        expectedHeadCommitId: params.expectedHeadCommitId,
+        localCommitId,
+        mergeCommitId,
+      },
+      createdAt: now,
+    });
+  });
+  tx();
+
+  markDirty(row.document_id);
+  process.nextTick(() => {
+    try {
+      rebuildDocument(row.document_id);
+    } catch {
+      // ignore
+    }
+  });
+
+  return buildDocumentDetail(row, {
+    displayName,
+    content,
+    contentHash: write.contentHash,
+    updatedBy: actorVisitorId,
+    updatedAt: now,
+    permission:
+      params.permission !== undefined ? params.permission : row.permission,
+    headCommitId: mergeCommitId,
+  });
 }
 
 function deriveDisplayName(
@@ -629,4 +918,12 @@ function deriveDisplayName(
   if (t) return t.slice(0, 200);
   const base = relativePath.split("/").pop() ?? relativePath;
   return base.replace(/\.md$/i, "") || relativePath;
+}
+
+/** 将请求正文统一转为落盘格式（Lexical JSON 字符串）。 */
+function normalizeDocumentContent(
+  content: string,
+  contentFormat?: "markdown" | "lexical",
+): string {
+  return contentFormat === "markdown" ? markdownToLexicalJson(content) : content;
 }

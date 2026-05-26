@@ -40,6 +40,7 @@ const SCHEMA_STATEMENTS: string[] = [
     created_by TEXT NOT NULL,
     updated_by TEXT NOT NULL,
     content_hash TEXT NOT NULL,
+    head_commit_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     permission INTEGER NOT NULL DEFAULT 1,
@@ -50,6 +51,24 @@ const SCHEMA_STATEMENTS: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_documents_domain ON documents (domain_id)`,
   `CREATE INDEX IF NOT EXISTS idx_documents_owner ON documents (owner_visitor_id)`,
+  // document_commits：每次 publish 一条节点；commit_parents：DAG 边（merge 时一子多父）
+  `CREATE TABLE IF NOT EXISTS document_commits (
+    commit_id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    blob_ref TEXT NOT NULL,
+    author_visitor_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_document_commits_document ON document_commits (document_id, created_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS commit_parents (
+    child_commit_id TEXT NOT NULL,
+    parent_commit_id TEXT NOT NULL,
+    PRIMARY KEY (child_commit_id, parent_commit_id),
+    FOREIGN KEY (child_commit_id) REFERENCES document_commits(commit_id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_commit_id) REFERENCES document_commits(commit_id) ON DELETE CASCADE
+  )`,
   `CREATE TABLE IF NOT EXISTS attachments (
     attachment_id TEXT PRIMARY KEY,
     document_id TEXT,
@@ -165,6 +184,7 @@ export function applySchema(db: Database.Database): void {
     migrateDomainNameUnique(db);
     migrateDocumentsTable(db);
     migrateDocumentsDirty(db);
+    migrateDocumentsHeadCommit(db);
     migrateVisitorsRecoveryCode(db);
     migrateVisitorsPasswordHash(db);
     migrateVisitorSessions(db);
@@ -304,6 +324,13 @@ function migrateDocumentsDirty(db: Database.Database): void {
   const names = documentColumnNames(db);
   if (names.has("is_dirty")) return;
   db.exec(`ALTER TABLE documents ADD COLUMN is_dirty INTEGER NOT NULL DEFAULT 1`);
+}
+
+/** 为 documents 表添加 head_commit_id 列（若不存在）。 */
+function migrateDocumentsHeadCommit(db: Database.Database): void {
+  const names = documentColumnNames(db);
+  if (names.has("head_commit_id")) return;
+  db.exec(`ALTER TABLE documents ADD COLUMN head_commit_id TEXT`);
 }
 
 function documentColumnNames(db: Database.Database): Set<string> {

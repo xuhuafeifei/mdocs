@@ -10,6 +10,7 @@ export interface AppConfig {
   filesDir: string;
   docsDir: string;
   assetsDir: string;
+  commitsDir: string;
   logsDir: string;
   webDistDir: string;
   logging: LoggingConfig;
@@ -61,6 +62,8 @@ export function getConfig(): AppConfig {
     filesDir: path.join(dataDir, "files"),
     docsDir: path.join(dataDir, "files", "docs"),
     assetsDir: path.join(dataDir, "files", "assets"),
+    // 历史提交快照：路径仅由正文 SHA-256 决定，见 resolveCommitBlobAbsolutePath
+    commitsDir: path.join(dataDir, "files", "commits"),
     logsDir: path.join(dataDir, "logs"),
     webDistDir: path.resolve(process.cwd(), "dist/web"),
     logging,

@@ -36,6 +36,7 @@ function makeDoc(overrides: Partial<DocumentRow> & { permission: number }): Docu
     created_by: OWNER,
     updated_by: OWNER,
     content_hash: "abc",
+    head_commit_id: null,
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
     file_type: "md",

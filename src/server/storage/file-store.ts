@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { resolveDocAbsolutePath } from "./paths.js";
+import { resolveCommitBlobAbsolutePath, resolveDocAbsolutePath } from "./paths.js";
 
 /** 单篇文档允许的最大字节数（2 MB），超过则拒绝写入。 */
 const MAX_DOC_BYTES = 2 * 1024 * 1024;
@@ -61,6 +61,29 @@ export function deleteDocumentFile(domainId: string, relativePath: string): void
   if (fs.existsSync(abs)) {
     fs.unlinkSync(abs);
   }
+}
+
+/**
+ * 将一次 publish 的正文写入历史快照区（与「当前工作区 .md」分开存放）。
+ *
+ * - 路径由 contentHash 决定，见 resolveCommitBlobAbsolutePath。
+ * - 同 hash 已存在则跳过写入（内容寻址去重）。
+ * - 返回 blobRef 写入 document_commits.blob_ref（相对 commitsDir，便于换数据根）。
+ */
+export function writeCommitBlob(contentHash: string, content: string): { blobRef: string; bytes: number } {
+  const buf = Buffer.from(content, "utf8");
+  if (buf.byteLength > MAX_DOC_BYTES) {
+    throw new Error("document is too large");
+  }
+  // 通过 hash 解析出绝对路径
+  const abs = resolveCommitBlobAbsolutePath(contentHash);
+  fs.mkdirSync(path.dirname(abs), { recursive: true, mode: 0o700 });
+  if (!fs.existsSync(abs)) {
+    fs.writeFileSync(abs, buf, { mode: 0o600 });
+  }
+  // 与 resolveCommitBlobAbsolutePath 使用同一套相对路径规则
+  const blobRef = `${contentHash.slice(0, 2)}/${contentHash.slice(2)}`;
+  return { blobRef, bytes: buf.byteLength };
 }
 
 /**

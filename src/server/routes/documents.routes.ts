@@ -17,6 +17,7 @@ import { getDb } from "../db/connection.js";
 import { searchDocuments } from "../search/search.service.js";
 import { requireDocumentAccess } from "../middleware/document-auth.middleware.js";
 import { StoragePathError } from "../storage/paths.js";
+import type { PublishVersionContext } from "../../shared/types/document.js";
 import { useLogger } from "../logger/logger.js";
 
 const log = useLogger("documents-route");
@@ -151,6 +152,8 @@ export function buildDocumentsRouter(): Router {
    * - content: string       必填，新正文
    * - displayName?: string  可选，新展示名
    * - permission?: number   可选，新权限档位
+   * - contentFormat?: 'markdown' | 'lexical'
+   * - version?: { baseCommitId?, merge?: { expectedHeadCommitId, localSnapshotContent? } }
    */
   router.put("/:documentId", requireDocumentAccess("edit"), (req: Request, res: Response) => {
     // 中间件只校验了文档访问权，编辑操作仍需确认已登录（ req.visitor 存在）
@@ -158,7 +161,13 @@ export function buildDocumentsRouter(): Router {
       res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
       return;
     }
-    const body = (req.body ?? {}) as { content?: unknown; displayName?: unknown; permission?: unknown; contentFormat?: unknown };
+    const body = (req.body ?? {}) as {
+      content?: unknown;
+      displayName?: unknown;
+      permission?: unknown;
+      contentFormat?: unknown;
+      version?: unknown;
+    };
     // 更新时 content 是必填项（即使是空字符串也要显式传）
     if (typeof body.content !== "string") {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "content is required" } });
@@ -173,6 +182,7 @@ export function buildDocumentsRouter(): Router {
         displayName: typeof body.displayName === "string" ? body.displayName : undefined,
         permission: typeof body.permission === "number" ? body.permission : undefined,
         contentFormat: body.contentFormat === 'markdown' ? 'markdown' : undefined,
+        version: parsePublishVersion(body.version),
       });
       res.json({ data: doc });
     } catch (err) {
@@ -341,6 +351,31 @@ export function buildDocumentsRouter(): Router {
   return router;
 }
 
+/** 解析 PUT 请求体中的 version 对象。 */
+function parsePublishVersion(raw: unknown): PublishVersionContext | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const v = raw as Record<string, unknown>;
+  const baseCommitId =
+    typeof v.baseCommitId === "string" ? v.baseCommitId : undefined;
+
+  let merge: PublishVersionContext["merge"];
+  if (v.merge && typeof v.merge === "object") {
+    const m = v.merge as Record<string, unknown>;
+    if (typeof m.expectedHeadCommitId === "string") {
+      merge = {
+        expectedHeadCommitId: m.expectedHeadCommitId,
+        localSnapshotContent:
+          typeof m.localSnapshotContent === "string"
+            ? m.localSnapshotContent
+            : undefined,
+      };
+    }
+  }
+
+  if (!baseCommitId && !merge) return undefined;
+  return { baseCommitId, merge };
+}
+
 /**
  * 统一处理文档路由中的异常，映射为对应的 HTTP 响应。
  *
@@ -356,7 +391,14 @@ export function buildDocumentsRouter(): Router {
 function respondError(res: Response, err: unknown, context: string): void {
   // 业务异常：带有明确 HTTP 状态码和错误码
   if (err instanceof DocumentError) {
-    res.status(err.status).json({ error: { code: err.code, message: err.message } });
+    // VERSION_CONFLICT 时 error.details 含 headCommitId、远端正文等
+    res.status(err.status).json({
+      error: {
+        code: err.code,
+        message: err.message,
+        ...(err.details !== undefined ? { details: err.details } : {}),
+      },
+    });
     return;
   }
   // 路径类异常：统一映射为 400 Bad Request

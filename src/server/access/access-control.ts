@@ -27,10 +27,13 @@ import type { DocumentRow } from "../db/repositories/document.repo.js";
 export class DocumentError extends Error {
   status: number;
   code: string;
-  constructor(code: string, message: string, status = 400) {
+  /** 可选附加信息（如 VERSION_CONFLICT 时返回远端 head 与正文）。 */
+  details?: unknown;
+  constructor(code: string, message: string, status = 400, details?: unknown) {
     super(message);
     this.code = code;
     this.status = status;
+    this.details = details;
   }
 }
 
