@@ -5,10 +5,12 @@
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
 import type { TreeNode } from "../../shared/types/tree";
+import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { FOLDER_DESC_FILENAME, folderDescPathForFolder } from "../../shared/folderDesc";
 import { normalisePathSegmentForStorage } from "../../shared/storagePath";
 import { ApiRequestError } from "./api-request-error";
 import { DEMO_VISITOR, DEMO_VISITOR_ID, DEMO_DOMAINS, DEMO_DOCUMENTS, buildTree } from "./mockData";
+import type { Bookmark, MyDocument } from "./endpoints";
 
 /** 数据库名称 */
 const DB_NAME = "mdocs-demo";
@@ -523,4 +525,198 @@ export async function mockRemoveFolder(folderDocumentId: string): Promise<{ dele
  */
 export async function mockDeleteFolder(folderId: string): Promise<void> {
   await mockRemoveFolder(folderId);
+}
+
+// ==================== 书签 Mock ====================
+
+const bookmarkStore = new Map<string, Set<string>>(); // visitorId -> Set<documentId>
+
+/**
+ * 检查文档是否已收藏
+ */
+export async function mockCheckBookmark(documentId: string): Promise<{ bookmarked: boolean }> {
+  return { bookmarked: bookmarkStore.get(DEMO_VISITOR_ID)?.has(documentId) ?? false };
+}
+
+/**
+ * 添加收藏
+ */
+export async function mockAddBookmark(documentId: string): Promise<void> {
+  if (!bookmarkStore.has(DEMO_VISITOR_ID)) bookmarkStore.set(DEMO_VISITOR_ID, new Set());
+  bookmarkStore.get(DEMO_VISITOR_ID)!.add(documentId);
+}
+
+/**
+ * 取消收藏
+ */
+export async function mockRemoveBookmark(documentId: string): Promise<void> {
+  bookmarkStore.get(DEMO_VISITOR_ID)?.delete(documentId);
+}
+
+/**
+ * 获取收藏列表
+ */
+export async function mockFetchBookmarks(): Promise<Bookmark[]> {
+  const ids = bookmarkStore.get(DEMO_VISITOR_ID) ?? new Set<string>();
+  const allDocs = await getAllDocuments();
+  const bookmarks: Bookmark[] = [];
+  for (const docId of ids) {
+    const doc = allDocs.find((d) => d.documentId === docId);
+    if (doc) {
+      bookmarks.push({
+        documentId: doc.documentId,
+        domainId: doc.domainId,
+        relativePath: doc.relativePath,
+        displayName: doc.displayName,
+        ownerVisitorId: doc.ownerVisitorId,
+        ownerVisitorName: DEMO_VISITOR.visitorName,
+        permission: doc.permission,
+        createdAt: doc.createdAt,
+        bookmarkedAt: doc.updatedAt,
+        isDeleted: false,
+      });
+    }
+  }
+  return bookmarks;
+}
+
+// ==================== 评论 Mock ====================
+
+interface CommentEntry {
+  commentId: string;
+  documentId: string;
+  visitorId: string;
+  visitorName: string;
+  parentId: string | null;
+  replyToVisitorId: string | null;
+  replyToVisitorName: string | null;
+  content: string;
+  isDeleted: boolean;
+  createdAt: string;
+}
+
+const commentStore = new Map<string, CommentEntry[]>(); // documentId -> comments[]
+
+/**
+ * 获取评论列表
+ */
+export async function mockFetchComments(documentId: string) {
+  const comments = commentStore.get(documentId) ?? [];
+  return { comments, total: comments.filter((c) => !c.isDeleted).length };
+}
+
+/**
+ * 创建评论
+ */
+export async function mockCreateComment(
+  documentId: string,
+  input: { content: string; parentId?: string | null; replyToVisitorId?: string | null; replyToVisitorName?: string | null },
+): Promise<CommentEntry> {
+  const comment: CommentEntry = {
+    commentId: `comment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    documentId,
+    visitorId: DEMO_VISITOR_ID,
+    visitorName: DEMO_VISITOR.visitorName,
+    parentId: input.parentId ?? null,
+    replyToVisitorId: input.replyToVisitorId ?? null,
+    replyToVisitorName: input.replyToVisitorName ?? null,
+    content: input.content,
+    isDeleted: false,
+    createdAt: new Date().toISOString(),
+  };
+  if (!commentStore.has(documentId)) commentStore.set(documentId, []);
+  commentStore.get(documentId)!.push(comment);
+  return comment;
+}
+
+/**
+ * 删除评论（软删除）
+ */
+export async function mockDeleteComment(_documentId: string, commentId: string) {
+  for (const comments of commentStore.values()) {
+    const idx = comments.findIndex((c) => c.commentId === commentId);
+    if (idx >= 0) {
+      const existing = comments[idx]!;
+      comments[idx] = {
+        commentId: existing.commentId,
+        documentId: existing.documentId,
+        visitorId: existing.visitorId,
+        visitorName: existing.visitorName,
+        parentId: existing.parentId,
+        replyToVisitorId: existing.replyToVisitorId,
+        replyToVisitorName: existing.replyToVisitorName,
+        content: existing.content,
+        isDeleted: true,
+        createdAt: existing.createdAt,
+      };
+      return { success: true };
+    }
+  }
+  throw new ApiRequestError(404, "COMMENT_NOT_FOUND", "评论不存在");
+}
+
+// ==================== 访客目录 Mock ====================
+
+/**
+ * 获取访客目录（返回 demo 访客信息）
+ */
+export async function mockFetchVisitorsDirectory(): Promise<VisitorDirectoryEntry[]> {
+  return [{
+    visitorId: DEMO_VISITOR_ID,
+    visitorName: DEMO_VISITOR.visitorName,
+  }];
+}
+
+// ==================== 文档邀请 Mock ====================
+
+const inviteStore = new Map<string, Array<{ visitorId: string; permission: string }>>();
+
+/**
+ * 获取文档邀请列表
+ */
+export async function mockGetDocumentInvites(documentId: string) {
+  return inviteStore.get(documentId) ?? [];
+}
+
+/**
+ * 添加文档邀请
+ */
+export async function mockAddDocumentInvite(documentId: string, targetVisitorId: string, targetPermission: string) {
+  if (!inviteStore.has(documentId)) inviteStore.set(documentId, []);
+  const invites = inviteStore.get(documentId)!;
+  const existing = invites.findIndex((i) => i.visitorId === targetVisitorId);
+  if (existing >= 0) {
+    invites[existing] = { visitorId: targetVisitorId, permission: targetPermission };
+  } else {
+    invites.push({ visitorId: targetVisitorId, permission: targetPermission });
+  }
+}
+
+/**
+ * 删除文档邀请
+ */
+export async function mockRemoveDocumentInvite(documentId: string, targetVisitorId: string) {
+  const invites = inviteStore.get(documentId) ?? [];
+  const idx = invites.findIndex((i) => i.visitorId === targetVisitorId);
+  if (idx >= 0) invites.splice(idx, 1);
+}
+
+// ==================== 我的文档 Mock ====================
+
+/**
+ * 获取当前访客创建的所有文档
+ */
+export async function mockFetchMyDocuments(): Promise<MyDocument[]> {
+  const allDocs = await getAllDocuments();
+  return allDocs
+    .filter((d) => d.ownerVisitorId === DEMO_VISITOR_ID)
+    .map((d) => ({
+      documentId: d.documentId,
+      domainId: d.domainId,
+      relativePath: d.relativePath,
+      displayName: d.displayName,
+      createdAt: d.createdAt,
+      updatedAt: d.updatedAt,
+      permission: d.permission,
+    }));
 }

@@ -30,4 +30,14 @@ export default defineConfig({
       "@shared": path.resolve(__dirname, "src/shared"),
     },
   },
+  optimizeDeps: {
+    include: [
+      "@lobehub/ui",
+      "motion",
+      "lucide-react",
+      "react-router-dom",
+    ],
+    // Note: do NOT exclude @lobehub/editor — it pulls CJS deps (e.g. eventemitter3)
+    // that need Vite dep pre-bundle interop (see comment at top of this file).
+  },
 });

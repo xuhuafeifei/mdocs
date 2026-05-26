@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
+import { isDemoMode } from "../services/client";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DraftListPage } from "./DraftListPage";
 import { listAllDrafts } from "../storage/drafts";
@@ -25,8 +26,10 @@ import {
   removeDocumentInviteApi,
   removeBookmarkApi,
   setPasswordApi,
+  fetchDomainsApi,
 } from "../services/endpoints";
 import type { Bookmark, MyDocument } from "../services/endpoints";
+import type { DomainSummary } from "../../shared/types/domain";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 
 /**
@@ -107,6 +110,9 @@ export function SettingsPage(props: {
   const [myDocumentsLoading, setMyDocumentsLoading] = useState(false);
   const [myDocumentSearch, setMyDocumentSearch] = useState("");
 
+  // ---- 域列表（用于 domainId -> domainName 映射）----
+  const [domains, setDomains] = useState<DomainSummary[]>([]);
+
   // ---- 文档邀请成员弹窗 ----
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [currentInviteDocId, setCurrentInviteDocId] = useState<string | null>(null);
@@ -159,6 +165,18 @@ export function SettingsPage(props: {
   useEffect(() => {
     loadCliTokens();
   }, []);
+
+  /**
+   * 首次渲染时加载域列表。
+   */
+  useEffect(() => {
+    fetchDomainsApi().then((doms) => {
+      if (mountedRef.current) setDomains(doms);
+    }).catch(() => {});
+  }, []);
+
+  /** domainId -> domainName 映射 */
+  const domainNameMap = new Map(domains.map((d) => [d.domainId, d.domainName]));
 
   // 注意：loadCliTokens 内部已使用 mountedRef 做保护
 
@@ -403,6 +421,11 @@ export function SettingsPage(props: {
 
       {/* ========== 主内容区 ========== */}
       <main className="mdocs-main">
+        {isDemoMode() && (
+          <div style={{ padding: "8px 16px", background: "#fff3cd", borderBottom: "1px solid #ffc107", fontSize: "0.85rem", color: "#856404", flexShrink: 0 }}>
+            Demo 模式下设置功能有限，数据不会同步到服务器。
+          </div>
+        )}
         {tab === "general" ? (
           // ---- 通用设置 Tab ----
           <div className="mdocs-settings">
@@ -670,7 +693,7 @@ export function SettingsPage(props: {
                               <td>{bookmark.isDeleted ? (
                                 <span style={{ opacity: 0.5, fontStyle: "italic" }}>已删除</span>
                               ) : (
-                                bookmark.domainId || "—"
+                                domainNameMap.get(bookmark.domainId || "") || bookmark.domainId || "—"
                               )}
                               </td>
                               <td>{bookmark.ownerVisitorName || "—"}</td>
@@ -734,7 +757,7 @@ export function SettingsPage(props: {
                             <td style={{ cursor: "pointer", fontWeight: 500 }} onClick={() => props.onOpenDocument(doc.documentId)}>
                               {doc.displayName || doc.relativePath || "Untitled"}
                             </td>
-                            <td>{doc.domainId || "—"}</td>
+                            <td>{domainNameMap.get(doc.domainId || "") || doc.domainId || "—"}</td>
                             <td>{new Date(doc.updatedAt).toLocaleDateString()}</td>
                             <td>{new Date(doc.createdAt).toLocaleDateString()}</td>
                             <td style={{ textAlign: "right" }}>

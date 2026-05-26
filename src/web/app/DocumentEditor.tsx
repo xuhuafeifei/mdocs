@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Block } from "@lobehub/ui";
-import { saveDraft as saveDraftToIdb } from "../storage/drafts";
+import { saveDraft as saveDraftToIdb, getDraft } from "../storage/drafts";
 
 import {
   INSERT_CODEINLINE_COMMAND,
@@ -43,7 +43,7 @@ import {
 } from "@lobehub/editor";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
-import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare } from "lucide-react";
+import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star } from "lucide-react";
 
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
@@ -268,18 +268,27 @@ export function DocumentEditor(props: DocumentEditorProps) {
   usePublishGuard({ isDirty: _isDirty, draftExists });
 
   /**
-   * 切换文档时尝试加载本地草稿内容。
-   * 注意：App.tsx openDocument 已经优先提供了草稿内容，
-   * 这里的异步加载是 fallback，处理草稿没有缓存元数据的情况。
+   * 编辑器初始化后，检查并加载本地草稿内容和标题。
+   * 处理场景：编辑内容 → 切到设置页 → 返回文档页，此时 activeDoc 是旧的服务器内容。
    */
   useEffect(() => {
-    loadDraftContent().then((draft) => {
-      if (draft) {
-        // App.tsx 正常情况下已经处理了草稿加载，这里很少会命中
+    if (!editor) return;
+    getDraft(props.document.documentId).then((draft) => {
+      if (draft && draft.content !== props.document.content) {
+        console.log("[DocumentEditor] restoring draft after remount, documentId:", props.document.documentId);
+        try {
+          editor.setDocument("json", draft.content);
+          // 如果草稿标题与文档标题不同，也更新显示名称
+          if (draft.displayName && draft.displayName !== props.document.displayName) {
+            setDisplayName(draft.displayName);
+          }
+        } catch {
+          // 忽略错误
+        }
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.document.documentId]);
+  }, [editor, props.document.documentId]);
 
   /**
    * 同步编辑器语言与 mdocs 全局语言设置。
@@ -738,6 +747,33 @@ export function DocumentEditor(props: DocumentEditorProps) {
           ariaLabel={t("currentDomainAria")}
           localizeName={(name: string) => localizeDomainName(name, lang, t)}
         />
+        {/* 收藏按钮 */}
+        <button
+          type="button"
+          className="secondary mdocs-tooltip mdocs-tooltip-bottom"
+          onClick={() => void toggleBookmark()}
+          disabled={bookmarkBusy}
+          data-tooltip={isBookmarked ? "取消收藏" : "收藏"}
+          style={{
+            padding: "4px 8px",
+            minWidth: "auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 4,
+            opacity: bookmarkBusy ? 0.5 : 1,
+          }}
+        >
+          <Star
+            size={18}
+            strokeWidth={1.5}
+            style={{
+              color: isBookmarked ? "#faad14" : "var(--mdocs-text-secondary, #6b7280)",
+              fill: isBookmarked ? "#faad14" : "none",
+            }}
+          />
+          {isBookmarked && <span>已收藏</span>}
+        </button>
         {/* 弹性占位，将右侧按钮推到最右边 */}
         <span className="mdocs-editor-toolbar-spacer" aria-hidden />
         <div className="mdocs-editor-toolbar-actions">

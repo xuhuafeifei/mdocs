@@ -163,6 +163,119 @@ const performSave = useCallback(async () => {
 
 分开的三个 ref 更清晰，语义明确，每个 ref 对应一个值。也便于后续扩展。
 
-**为什么 `editor` 仍然放在依赖数组？
+**为什么 `editor` 仍然放在依赖数组？**
 
 `editor` 是 `IEditor | null`，只有在编辑器初始化完成后才会有值，变化频率很低（只有在切换文章时才会变化一次）。放在依赖数组里是安全的。
+
+---
+
+## BUG：切换设置页后返回丢失编辑内容（2026-05-17）
+
+### 现象
+
+用户编辑文档 → 点击头像进入设置页 → 返回文档 → 之前编辑的内容不见了，回到了上次发布时的状态，但控制台日志显示草稿确实已经保存到了 IndexedDB。
+
+### 根因
+
+**数据流向断层**：
+
+```
+App.tsx openDocument(1)
+  ↓
+从 getDraft(doc1) 读到内容 A
+  ↓
+setActiveDoc({ content: A })  ← 传给 Editor props
+  ↓
+DocumentEditor ← props.document.content = A
+  ↓
+用户编辑 → content 变成 B
+  ↓
+auto-save Hook → saveDraft(doc1, B) → IndexedDB ✅
+  ↓
+切到设置页 → App view = "settings"（Editor 卸载）
+  ↓
+返回文档页 → URL 还是 /doc/1
+  ↓
+useEffect([phase, documentId]) 再次触发
+  ↓
+openDocument(1) 再次执行
+  ↓
+getDraft(doc1) 读到草稿内容 B ✅
+  ↓
+draft 有 relativePath → 命中第一个分支，准备 setActiveDoc ✅
+  ↓
+expectedDocIdRef.current === docId ✅
+  ↓
+setActiveDoc({ content: B, ... })  ← 新值入队，React 渲染
+  ↓
+React 检测到 DocumentEditor 已经存在（没有 key 变化），直接复用
+  ↓
+DocumentEditor 收到 props.document.content = B
+  ↓
+BUT: DocumentEditor 的 handleInit 只在 Editor 挂载时执行
+     而如果 Editor 已经存在，handleInit 不会重新执行 ❌
+  ↓
+Editor 仍然显示旧的 A，与 props.document.content = B 不同步 ❌
+```
+
+**根本问题**：`openDocument()` 正确从 IndexedDB 读取了最新草稿并 `setActiveDoc`，但 `DocumentEditor` 组件复用了已存在的编辑器实例，**没有重新设置内容**。
+
+`handleInit` 只在 `useCallback` 的依赖（`contentType`）变化时才会触发，或者在新的 Editor 实例挂载时触发。如果组件复用，旧内容就残留了。
+
+### 修复方案
+
+**文件**：`src/web/app/DocumentEditor.tsx`
+
+在组件挂载（`editor` 变化）或 `documentId` 变化时，主动检查并从 IndexedDB 恢复草稿内容：
+
+```typescript
+/**
+ * 编辑器初始化后，检查并加载本地草稿内容和标题。
+ * 处理场景：编辑内容 → 切到设置页 → 返回文档页，此时 activeDoc 是旧的服务器内容。
+ */
+useEffect(() => {
+  if (!editor) return;
+  getDraft(props.document.documentId).then((draft) => {
+    if (draft && draft.content !== props.document.content) {
+      console.log("[DocumentEditor] restoring draft after remount, documentId:", props.document.documentId);
+      try {
+        editor.setDocument("json", draft.content);
+        // 如果草稿标题与文档标题不同，也更新显示名称
+        if (draft.displayName && draft.displayName !== props.document.displayName) {
+          setDisplayName(draft.displayName);
+        }
+      } catch {
+        // 忽略错误
+      }
+    }
+  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [editor, props.document.documentId]);
+```
+
+**设计要点**：
+- 触发时机：`editor` 从 `null` 变为实例（重新挂载），或 `documentId` 变化
+- 比较判断：`draft.content !== props.document.content` 确保只有草稿更新时才覆盖（避免正常打开文档的不必要操作）
+- 同时恢复标题：`displayName` 可能被用户编辑过但未发布
+- `getDraft` 需要导入：原文件只有 `saveDraft` 的导入，需要补充 `getDraft`
+
+**数据流对比**：
+
+| 修复前 | 修复后 |
+|--------|--------|
+| 1. openDocument 读到草稿 B | 1. openDocument 读到草稿 B |
+| 2. setActiveDoc(B) | 2. setActiveDoc(B) |
+| 3. Editor 复用旧实例 | 3. Editor 复用旧实例 |
+| 4. Editor 仍显示 A ❌ | 4. useEffect 触发，editor.setDocument("json", B) ✅ |
+
+**修改文件**：
+- `src/web/app/DocumentEditor.tsx` - 新增挂载后恢复草稿的 useEffect
+- 导入新增：`import { saveDraft as saveDraftToIdb, getDraft } from "../storage/drafts";`
+
+### 验证要点
+
+1. ✅ 编辑文档不发布 → 切到设置页 → 返回文档：看到的是编辑后的内容，不是上次发布的版本
+2. ✅ 标题修改也会恢复（不仅仅是正文）
+3. ✅ 正常打开新文档不受影响（没有草稿时跳过）
+4. ✅ 自动保存日志正常工作，无异常报错
+

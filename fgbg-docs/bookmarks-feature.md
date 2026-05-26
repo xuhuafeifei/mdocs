@@ -154,7 +154,45 @@ export function removeBookmarkApi(documentId: string): Promise<void>;
 
 ---
 
-### 3. 侧边栏 - 我的收藏列表
+### 2.5 工具栏收藏状态按钮（2026-05-17 新增）
+
+**文件**：`src/web/app/DocumentEditor.tsx`
+
+**问题背景**：原来的收藏入口隐藏在下拉菜单中，用户无法直接看到当前文档的收藏状态，需要点开菜单才能知道。
+
+**优化方案**：在**域选择下拉框右侧**新增收藏状态按钮，直接展示当前收藏状态。
+
+**位置**：
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ [标题输入框]  [默认域 ▼]  ⭐已收藏     [发布] [删除] [💬] [⋮] │
+└─────────────────────────────────────────────────────────────────┘
+                          ↑
+                    新增收藏按钮
+```
+
+**设计细节**：
+- **图标**：使用 `Star` 图标（来自 `lucide-react`）
+- **状态展示**：
+  - 未收藏：空心星星，灰色文字
+  - 已收藏：实心黄色星星（`#faad14`） + "已收藏"文字
+- **Tooltip**：鼠标 hover 显示"收藏"或"取消收藏"
+- **防抖**：`bookmarkBusy` 状态防止重复点击
+
+**代码位置**：
+- 导入 `Star` 图标：line 46
+- 状态定义：`isBookmarked`, `bookmarkBusy`（line 210-211）
+- 加载收藏状态：useEffect（line 168-176）
+- 按钮渲染：JSX 中 `DomainSelect` 组件之后
+
+**用户价值**：
+- 一眼就能看到文档是否已收藏
+- 一键切换收藏状态，操作成本降低
+- 与文档信息菜单中的收藏状态同步
+
+---
+
+### 3. 设置页 - 我的收藏列表
 
 **文件**：`src/web/app/App.tsx`
 
@@ -250,3 +288,54 @@ export function removeBookmarkApi(documentId: string): Promise<void>;
 - 收藏/取消收藏接口测试
 - 已删除文档的收藏显示测试
 - 权限过滤测试（无权限的文档不显示在收藏列表）
+
+---
+
+## BUG 修复记录
+
+### 修复：设置页「我的收藏」显示域 ID 而不是域名称（2026-05-17）
+
+**问题**：
+- 收藏列表中「所属域」列直接显示 `domainId`（如 "default"），而不是用户可识别的域显示名称
+- 同样问题影响「我的文章」列表的域列
+
+**根因**：
+- `Bookmark` 类型只有 `domainId` 字段，没有 `domainName`
+- 后端接口只返回 `domainId`，前端没有域名称映射
+
+**修复方案**：
+
+**文件**：`src/web/app/SettingsPage.tsx`
+
+1. 组件挂载时加载域列表：
+```typescript
+const [domains, setDomains] = useState<DomainSummary[]>([]);
+
+useEffect(() => {
+  fetchDomainsApi().then((doms) => {
+    if (mountedRef.current) setDomains(doms);
+  }).catch(() => {});
+}, []);
+```
+
+2. 构建 ID → 名称的映射：
+```typescript
+const domainNameMap = new Map(domains.map((d) => [d.domainId, d.domainName]));
+```
+
+3. 表格中使用映射后的名称：
+```tsx
+<td>{bookmark.isDeleted ? (
+  <span style={{ opacity: 0.6 }}>已删除</span>
+) : (
+  domainNameMap.get(bookmark.domainId || "") || bookmark.domainId || "—"
+)}
+</td>
+```
+
+4. 同样修复应用到「我的文章」列表的域列
+
+**验证**：
+- 收藏列表显示域的中文名称（如 "默认域"）而不是 "default"
+- 域删除后降级显示 domainId
+- 无域时显示占位符 "—"

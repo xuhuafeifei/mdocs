@@ -30,6 +30,25 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
   const [inputHeight, setInputHeight] = useState(80);
   const isDraggingRef = useRef(false);
   const isInputDraggingRef = useRef(false);
+  const MAX_INPUT_HEIGHT = 300;
+  const MIN_INPUT_HEIGHT = 80;
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // 实时调整输入框高度
+  function adjustTextareaHeight() {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    const sh = ta.scrollHeight;
+    const clamped = Math.min(Math.max(sh, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT);
+    ta.style.height = `${clamped}px`;
+    setInputHeight(clamped);
+  }
+
+  // replyTo 变化时也调整高度
+  useEffect(() => {
+    setTimeout(() => adjustTextareaHeight(), 0);
+  }, [replyTo]);
 
   /** 判断是否可以删除某条评论：是评论作者 OR 是文档创建者 */
   function canDeleteComment(comment: DocumentComment): boolean {
@@ -105,6 +124,7 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
       });
       setNewComment("");
       setReplyTo(null);
+      setTimeout(() => adjustTextareaHeight(), 0);
       await loadComments();
     } catch (err) {
       setError((err as Error).message || "发表失败，请重试");
@@ -316,8 +336,12 @@ export function CommentsPanel({ documentId, visitorId, visitorName, documentOwne
             </div>
           )}
           <textarea
+            ref={textareaRef}
             value={newComment}
-            onChange={(e) => setNewComment(e.target.value.slice(0, 512))}
+            onChange={(e) => {
+              setNewComment(e.target.value.slice(0, 512));
+              setTimeout(() => adjustTextareaHeight(), 0);
+            }}
             placeholder={replyTo ? `回复 ${replyTo.visitorName}...` : "发表评论..."}
             className="mdocs-comments-input"
             style={{ height: inputHeight }}

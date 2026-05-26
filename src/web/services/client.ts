@@ -20,6 +20,18 @@ import {
   mockCreateFolder,
   mockDeleteFolder,
   mockRemoveFolder,
+  mockCheckBookmark,
+  mockAddBookmark,
+  mockRemoveBookmark,
+  mockFetchBookmarks,
+  mockFetchComments,
+  mockCreateComment,
+  mockDeleteComment,
+  mockFetchVisitorsDirectory,
+  mockGetDocumentInvites,
+  mockAddDocumentInvite,
+  mockRemoveDocumentInvite,
+  mockFetchMyDocuments,
 } from "./mockApi";
 
 import { ApiRequestError } from "./api-request-error";
@@ -205,6 +217,67 @@ async function demoApi<T>(
     return { tokenId: `demo-token-${Date.now()}`, token: "demo-token-placeholder", name: body?.name ?? "default", createdAt: new Date().toISOString() } as unknown as T;
   }
   if (path.match(/^\/api\/cli\/tokens\/[^/]+$/) && method === "DELETE") {
+    return undefined as T;
+  }
+
+  // 访客目录
+  if (path === "/api/visitors" && method === "GET") {
+    return { visitors: await mockFetchVisitorsDirectory() } as unknown as T;
+  }
+
+  // 我的文档
+  if (path === "/api/visitors/me/documents" && method === "GET") {
+    return mockFetchMyDocuments() as unknown as T;
+  }
+
+  // ==== 书签 ====
+  if (path === "/api/bookmarks" && method === "GET") {
+    return mockFetchBookmarks() as unknown as T;
+  }
+  if (path.match(/^\/api\/bookmarks\/[^/]+$/) && method === "GET") {
+    const documentId = path.split("/").pop()!;
+    return mockCheckBookmark(documentId) as unknown as T;
+  }
+  if (path.match(/^\/api\/bookmarks\/[^/]+$/) && method === "POST") {
+    const documentId = path.split("/").pop()!;
+    await mockAddBookmark(documentId);
+    return undefined as T;
+  }
+  if (path.match(/^\/api\/bookmarks\/[^/]+$/) && method === "DELETE") {
+    const documentId = path.split("/").pop()!;
+    await mockRemoveBookmark(documentId);
+    return undefined as T;
+  }
+
+  // ==== 评论 ====
+  if (path.match(/^\/api\/documents\/[^/]+\/comments$/) && method === "GET") {
+    const documentId = path.split("/")[3]!;
+    return mockFetchComments(documentId) as unknown as T;
+  }
+  if (path.match(/^\/api\/documents\/[^/]+\/comments$/) && method === "POST") {
+    const documentId = path.split("/")[3]!;
+    return mockCreateComment(documentId, body) as unknown as T;
+  }
+  if (path.match(/^\/api\/documents\/[^/]+\/comments\/[^/]+$/) && method === "DELETE") {
+    const documentId = path.split("/")[3]!;
+    const commentId = path.split("/").pop()!;
+    return mockDeleteComment(documentId, commentId) as unknown as T;
+  }
+
+  // ==== 文档邀请 ====
+  if (path.match(/^\/api\/documents\/[^/]+\/invites$/) && method === "GET") {
+    const documentId = path.split("/")[3]!;
+    return mockGetDocumentInvites(documentId) as unknown as T;
+  }
+  if (path.match(/^\/api\/documents\/[^/]+\/invites$/) && method === "POST") {
+    const documentId = path.split("/")[3]!;
+    await mockAddDocumentInvite(documentId, body?.targetVisitorId, body?.targetPermission);
+    return undefined as T;
+  }
+  if (path.match(/^\/api\/documents\/[^/]+\/invites\/[^/]+$/) && method === "DELETE") {
+    const documentId = path.split("/")[3]!;
+    const targetVisitorId = path.split("/").pop()!;
+    await mockRemoveDocumentInvite(documentId, targetVisitorId);
     return undefined as T;
   }
 

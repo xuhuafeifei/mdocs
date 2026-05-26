@@ -630,7 +630,7 @@ export function App() {
       {/* Demo Mode 提示横幅 — 在 grid 外面 */}
       {isDemoMode() && (
         <div className="mdocs-demo-banner">
-          <span>Demo 模式，部分功能被禁用，且数据保存在浏览器本地</span>
+          <span>Demo 模式，部分功能被禁用，请勿长期存储重要数据</span>
           <span>·</span>
           <a
             href="https://github.com/xuhuafeifei/mdocs"
@@ -815,6 +815,7 @@ export function App() {
               >
                 <Star size={16} strokeWidth={1.5} />
               </button>
+              {!isDemoMode() && (
               <button
                 type="button"
                 className="mdocs-sidebar-logout mdocs-tooltip"
@@ -832,6 +833,7 @@ export function App() {
               >
                 <LogOut size={16} strokeWidth={1.5} />
               </button>
+              )}
             </footer>
           </aside>
 
