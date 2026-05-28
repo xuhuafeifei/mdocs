@@ -20,6 +20,7 @@ import { insertCommit, insertCommitParent } from "../db/repositories/commit.repo
 import {
   assertCommitBelongsToDocument,
   assertMergeFork,
+  isAncestorOf,
 } from "./commit-graph.js";
 import {
   findDomainById,
@@ -53,6 +54,7 @@ import {
 import type {
   DocumentDetail,
   DocumentSummary,
+  DocumentSyncStatus,
   PublishVersionContext,
 } from "../../shared/types/document.js";
 import { getConfig } from "../config/index.js";
@@ -629,7 +631,7 @@ export function addDocumentInvite(
   const row = findDocumentById(db, documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== actorVisitorId) {
-    throw new DocumentError("FORBIDDEN", "仅创建者可邀请他人", 403);
+    throw new DocumentError("FORBIDDEN", "仅创建者可管理邀请", 403);
   }
 
   const domain = findDomainById(db, row.domain_id);
@@ -926,4 +928,50 @@ function normalizeDocumentContent(
   contentFormat?: "markdown" | "lexical",
 ): string {
   return contentFormat === "markdown" ? markdownToLexicalJson(content) : content;
+}
+
+// ============================================================
+//  同步状态（轻量轮询，不返回正文）
+// ============================================================
+
+/**
+ * 比较客户端 baseCommitId 与服务端 head，用于 Sync 指示。
+ * - up_to_date：base 未传、无 head、或 base === head
+ * - behind：base 是 head 的祖先（远端有更新）
+ * - ahead：其余（含分叉、脏 base）
+ */
+export function getDocumentSyncStatus(
+  documentId: string,
+  baseCommitId: string | undefined,
+): DocumentSyncStatus {
+  const row = findDocumentById(getDb(), documentId);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+  const head = row.head_commit_id;
+  if (!baseCommitId || !head) {
+    return { status: "up_to_date", headCommitId: head };
+  }
+  if (baseCommitId === head) {
+    return { status: "up_to_date", headCommitId: head };
+  }
+  const db = getDb();
+  if (isAncestorOf(db, baseCommitId, head)) {
+    return { status: "behind", headCommitId: head };
+  }
+  return { status: "ahead", headCommitId: head };
+}
+
+/** 内容格式转换（merge 发布：markdown → Lexical）。 */
+export function convertDocumentContent(params: {
+  content: string;
+  from: "markdown" | "lexical";
+  to: "markdown" | "lexical";
+}): string {
+  if (params.from === params.to) return params.content;
+  if (params.from === "markdown" && params.to === "lexical") {
+    return markdownToLexicalJson(params.content);
+  }
+  if (params.from === "lexical" && params.to === "markdown") {
+    return extractPlainTextFromLexical(params.content);
+  }
+  throw new DocumentError("BAD_REQUEST", "unsupported conversion", 400);
 }

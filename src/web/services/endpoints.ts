@@ -9,7 +9,11 @@
  * - 成员模板：批量管理受限域成员
  */
 import { api, ApiRequestError, isDemoMode } from "./client";
-import type { DocumentDetail } from "../../shared/types/document";
+import type {
+  DocumentDetail,
+  DocumentSyncStatus,
+  PublishVersionContext,
+} from "../../shared/types/document";
 import type {
   VisitorDirectoryEntry,
   VisitorMeResponse,
@@ -239,10 +243,37 @@ export function createDocumentApi(input: {
  */
 export function updateDocumentApi(
   documentId: string,
-  input: { content: string; displayName?: string; permission?: number },
+  input: {
+    content: string;
+    displayName?: string;
+    permission?: number;
+    contentFormat?: "markdown" | "lexical";
+    version?: PublishVersionContext;
+  },
 ): Promise<DocumentDetail> {
   return api<DocumentDetail>(`/api/documents/${encodeURIComponent(documentId)}`, {
     method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getDocumentSyncStatusApi(
+  documentId: string,
+  baseCommitId?: string,
+): Promise<DocumentSyncStatus> {
+  const q = baseCommitId
+    ? `?baseCommitId=${encodeURIComponent(baseCommitId)}`
+    : "";
+  return api(`/api/documents/${encodeURIComponent(documentId)}/sync-status${q}`);
+}
+
+export function convertContentApi(input: {
+  content: string;
+  from: "lexical" | "markdown";
+  to: "lexical" | "markdown";
+}): Promise<{ content: string }> {
+  return api<{ content: string }>("/api/documents/convert", {
+    method: "POST",
     body: JSON.stringify(input),
   });
 }

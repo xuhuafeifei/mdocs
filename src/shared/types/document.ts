@@ -63,3 +63,17 @@ export interface UpdateDocumentRequest {
   /** 发布版本信息；未传则跳过冲突检测（兼容旧客户端） */
   version?: PublishVersionContext;
 }
+
+/** GET /documents/:id/sync-status 响应 */
+export type DocumentSyncStatusKind = 'up_to_date' | 'behind' | 'ahead';
+
+export interface DocumentSyncStatus {
+  status: DocumentSyncStatusKind;
+  headCommitId: string | null;
+}
+
+export interface ConvertContentRequest {
+  content: string;
+  from: 'lexical' | 'markdown';
+  to: 'lexical' | 'markdown';
+}

@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { assertDocumentAccess, DocumentError } from "../access/access-control.js";
+import { assertDocumentAccess, assertDocumentOwner, DocumentError } from "../access/access-control.js";
 
 /**
  * 创建文档访问权限校验中间件。
@@ -39,6 +39,37 @@ export function requireDocumentAccess(action: "read" | "edit" | "delete") {
         return;
       }
       // 其他未预料的异常（如数据库连接失败），交给 Express 的错误处理中间件
+      next(err);
+    }
+  };
+}
+
+/**
+ * 仅文档创建者可通过（用于 invites 路由）。需先通过 auth，挂好 req.visitor。
+ */
+export function requireDocumentOwner(): (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => void {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const documentId = req.params.documentId;
+    if (!documentId) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "documentId is required" } });
+      return;
+    }
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+      return;
+    }
+    try {
+      assertDocumentOwner(documentId, req.visitor.visitor_id);
+      next();
+    } catch (err) {
+      if (err instanceof DocumentError) {
+        res.status(err.status).json({ error: { code: err.code, message: err.message } });
+        return;
+      }
       next(err);
     }
   };

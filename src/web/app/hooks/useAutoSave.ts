@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { IEditor } from "@lobehub/editor";
-import { saveDraft, deleteDraft, getDraft } from "../../storage/drafts";
+import { deleteDraft, getDraft, upsertContentDraft } from "../../storage/drafts";
 
 interface UseAutoSaveOptions {
   editor: IEditor | null;
@@ -17,8 +17,10 @@ interface UseAutoSaveOptions {
   debounceMs?: number;
   /** When false, skip Lexical listeners (e.g. read-only). */
   enabled?: boolean;
-  /** Persisted alongside the draft so we can skip the network on re-open. */
-  documentMeta?: {
+  /** 当前已知的文档 head；仅在该 documentId 尚无草稿时写入 `baseCommitId`（开编基准） */
+  headCommitIdAtEditStart?: string | null;
+  /** 首次创建草稿时一并落盘的文档 meta 快照 */
+  snapshotMeta?: {
     relativePath: string;
     permission: number;
     ownerVisitorId: string;
@@ -45,7 +47,15 @@ function safeGetJsonString(editor: IEditor): string | null {
   }
 }
 
-export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000, enabled = true, documentMeta }: UseAutoSaveOptions) {
+export function useAutoSave({
+  editor,
+  documentId,
+  displayName,
+  debounceMs = 1000,
+  enabled = true,
+  headCommitIdAtEditStart,
+  snapshotMeta,
+}: UseAutoSaveOptions) {
   // ---- 状态：内容是否有未保存的变更 ----
   const [isDirty, setIsDirty] = useState(false);
 
@@ -82,10 +92,12 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
   // ---- 使用 ref 保存频繁变化的值，避免 performSave 依赖变化导致监听器反复注册 ----
   const documentIdRef = useRef(documentId);
   const displayNameRef = useRef(displayName);
-  const documentMetaRef = useRef(documentMeta);
+  const headAtEditStartRef = useRef(headCommitIdAtEditStart);
+  const snapshotMetaRef = useRef(snapshotMeta);
   documentIdRef.current = documentId;
   displayNameRef.current = displayName;
-  documentMetaRef.current = documentMeta;
+  headAtEditStartRef.current = headCommitIdAtEditStart;
+  snapshotMetaRef.current = snapshotMeta;
 
   /**
    * 执行实际保存：将当前编辑器内容序列化为 JSON 写入 IndexedDB。
@@ -104,14 +116,12 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
     const jsonContent = safeGetJsonString(editor);
     if (jsonContent == null) return;
     console.log("[useAutoSave] performSave saving draft, documentId:", documentIdRef.current, "content preview:", jsonContent.slice(0, 80));
-    // 写入 IndexedDB
-    await saveDraft({
+    await upsertContentDraft({
       documentId: documentIdRef.current,
       content: jsonContent,
       displayName: displayNameRef.current,
-      updatedAt: Date.now(),
-      published: false,
-      ...documentMetaRef.current,
+      headCommitIdAtEditStart: headAtEditStartRef.current,
+      snapshotMeta: snapshotMetaRef.current,
     });
     // 保存成功后，用当前 markdown 内容更新对比基线
     lastContentRef.current = safeGetMarkdown(editor) ?? lastContentRef.current;
@@ -233,7 +243,7 @@ export function useAutoSave({ editor, documentId, displayName, debounceMs = 1000
       cancelAnimationFrame(raf);
       cleanupRef.current?.();
     };
-  }, [enabled, editor, documentId, displayName, debounceMs, documentMeta, performSave]);
+  }, [enabled, editor, documentId, displayName, debounceMs, headCommitIdAtEditStart, snapshotMeta, performSave]);
 
   /**
    * 编辑器失焦时立即保存（取消待执行的防抖定时器，若内容有变更则立即执行）。

@@ -14,6 +14,7 @@
  *   3. restricted 域 → 域成员走 1/2 档；非成员靠 invite
  *   4. private 域 → 按五档实际语义 + invite
  *   5. invite 叠加（与域成员互斥，见 addDocumentInvite）
+ *   6. Invite 管理能力：仅限文档创建者（invites HTTP 路由，见 assertDocumentOwner）
  */
 
 import { getDb } from "../db/connection.js";
@@ -165,8 +166,12 @@ export function canEditDocument(
 
   // 3. 根据域上下文 + 权限值判断
   if (domainInfo.domainPermission === "public") {
-    // public 域仅 3/4 档，仅 4 (public_write) 允许任何人写
-    return row.permission === Permission.PUBLIC_WRITE;
+    // public 域仅 3/4 档：
+    // - 4 (public_write) 任何人可写
+    // - 3 (public_read) 仅创建者可写（已在前面处理）或靠 invite(edit)
+    if (row.permission === Permission.PUBLIC_WRITE) return true;
+    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
+    return invite?.permission === "edit";
   }
 
   if (domainInfo.domainPermission === "restricted") {
@@ -241,5 +246,22 @@ export function assertDocumentAccess(
   }
   if (action === "edit" && !canEditDocument(row, visitorId, domainInfo)) {
     throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
+  }
+}
+
+/**
+ * 文档邀请：仅创建者可列出 / 新增 / 移除邀请（与被邀请者的 edit 权限区分）。
+ */
+export function assertDocumentOwner(documentId: string, visitorId: string | null): void {
+  if (!visitorId) {
+    throw new DocumentError("UNAUTHENTICATED", "no visitor", 401);
+  }
+  const db = getDb();
+  const row = findDocumentById(db, documentId);
+  if (!row) {
+    throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+  }
+  if (row.owner_visitor_id !== visitorId) {
+    throw new DocumentError("FORBIDDEN", "仅创建者可管理邀请", 403);
   }
 }

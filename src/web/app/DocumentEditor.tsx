@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Block } from "@lobehub/ui";
-import { saveDraft as saveDraftToIdb, getDraft } from "../storage/drafts";
+import { upsertContentDraft, getDraft } from "../storage/drafts";
 
 import {
   INSERT_CODEINLINE_COMMAND,
@@ -43,7 +43,7 @@ import {
 } from "@lobehub/editor";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
-import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star } from "lucide-react";
+import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, RefreshCw, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star } from "lucide-react";
 
 import type { DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
@@ -108,6 +108,14 @@ interface DocumentEditorProps {
   currentDomainId: string;
   onDomainChange: (domainId: string) => void;
   onPublish: (content: string, displayName: string, documentId: string, permission?: number) => Promise<void>;
+  syncBehind?: boolean;
+  onSyncClick?: () => void;
+  onDraftExistsChange?: (exists: boolean) => void;
+  /** 是否可管理协作者邀请（路由层仅限 owner） */
+  canManageInvites?: boolean;
+  onConflictModalRequest?: () => void;
+  onMergeRequest?: () => void;
+  syncedHeadCommitId?: string | null;
   onDelete: () => Promise<void>;
   /** Called by App.tsx before navigation to flush pending changes */
   saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
@@ -234,22 +242,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
   }, [props.document.content]);
 
   /**
-   * 构建文档元数据对象，随草稿一起保存到 IndexedDB。
-   * 这样下次离线打开时可以跳过网络请求。
+   * 自动保存仅持久化正文与 displayName；开编基准 baseCommitId 仅在首次生成草稿时写入。
+   * 首次保存会落一份文档 meta 快照，后续自动保存仅更新内容相关字段。
    */
-  const documentMeta = useMemo(() => ({
-    relativePath: props.document.relativePath,
-    permission: props.document.permission,
-    ownerVisitorId: props.document.ownerVisitorId,
-    domainId: props.document.domainId,
-  }), [props.document.relativePath, props.document.permission, props.document.ownerVisitorId, props.document.domainId]);
-
-  // ---- 自动保存 Hook ----
-  // isDirty: 内容是否有未保存的变更
-  // draftExists: IndexedDB 中是否已有该文档的草稿
-  // clearDraft: 发布成功后清除草稿
-  // loadDraftContent: 加载本地草稿内容（作为 fallback）
-  // markDraftSaved: 标记草稿已保存（用于手动保存时同步状态）
   const {
     isDirty: _isDirty,
     draftExists,
@@ -261,8 +256,18 @@ export function DocumentEditor(props: DocumentEditorProps) {
     documentId: props.document.documentId,
     displayName,
     enabled: props.canEdit,
-    documentMeta,
+    headCommitIdAtEditStart: props.syncedHeadCommitId ?? props.document.headCommitId ?? null,
+    snapshotMeta: {
+      relativePath: props.document.relativePath,
+      permission: props.document.permission,
+      ownerVisitorId: props.document.ownerVisitorId,
+      domainId: props.document.domainId,
+    },
   });
+
+  useEffect(() => {
+    props.onDraftExistsChange?.(draftExists);
+  }, [draftExists, props.onDraftExistsChange]);
 
   // ---- 发布保护：拦截浏览器关闭事件，防止未保存内容丢失 ----
   usePublishGuard({ isDirty: _isDirty, draftExists });
@@ -289,6 +294,22 @@ export function DocumentEditor(props: DocumentEditorProps) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, props.document.documentId]);
+
+  /**
+   * 同一 documentId 下，若服务端正文已更新且本地无未发布草稿，主动把内容同步到编辑器。
+   * 用于「拉取更新」后避免 activeDoc 已更新但编辑器仍停留旧内容。
+   */
+  useEffect(() => {
+    if (!editor) return;
+    void getDraft(props.document.documentId).then((draft) => {
+      if (draft && !draft.published) return;
+      try {
+        editor.setDocument(contentType, props.document.content || "");
+      } catch {
+        // 忽略编辑器暂不可写状态
+      }
+    });
+  }, [editor, props.document.documentId, props.document.content, contentType]);
 
   /**
    * 同步编辑器语言与 mdocs 全局语言设置。
@@ -432,7 +453,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       // 发布成功后清除本地草稿（草稿已不需要）
       await clearDraft();
     } catch (err) {
-      // 发布失败时抛出错误，让上层处理（如显示冲突提示）
+      // 发布失败时继续抛出，让上层冲突处理逻辑可生效
       throw err;
     } finally {
       // 无论成功失败，都要关闭发布中状态
@@ -454,7 +475,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
     // 如果没有变化，跳过发布
     if (next === prev) return;
     // 标题有变更，执行发布
-    await publish();
+    try {
+      await publish();
+    } catch {
+      // 错误已在 publish 内统一处理
+    }
   }
 
   const currentDomain = useMemo(
@@ -546,16 +571,17 @@ export function DocumentEditor(props: DocumentEditorProps) {
     // so the navigation guard sees clean state immediately.
     markDraftSaved();
     // 异步写入 IndexedDB
-    await saveDraftToIdb({
+    await upsertContentDraft({
       documentId: props.document.documentId,
       content: jsonContent,
       displayName,
-      updatedAt: Date.now(),
-      published: false,
-      relativePath: props.document.relativePath,
-      permission: props.document.permission,
-      ownerVisitorId: props.document.ownerVisitorId,
-      domainId: props.document.domainId,
+      headCommitIdAtEditStart: props.syncedHeadCommitId ?? props.document.headCommitId ?? null,
+      snapshotMeta: {
+        relativePath: props.document.relativePath,
+        permission: props.document.permission,
+        ownerVisitorId: props.document.ownerVisitorId,
+        domainId: props.document.domainId,
+      },
     });
   }
 
@@ -777,6 +803,18 @@ export function DocumentEditor(props: DocumentEditorProps) {
         {/* 弹性占位，将右侧按钮推到最右边 */}
         <span className="mdocs-editor-toolbar-spacer" aria-hidden />
         <div className="mdocs-editor-toolbar-actions">
+          {props.onSyncClick && (
+            <button
+              type="button"
+              className={"mdocs-sync-btn mdocs-tooltip mdocs-tooltip-bottom" + (props.syncBehind ? " behind" : "")}
+              data-tooltip={props.syncBehind ? t("syncBehindHint") : t("syncPull")}
+              onClick={() => void props.onSyncClick?.()}
+              style={{ display: "flex", alignItems: "center", gap: 4 }}
+            >
+              <RefreshCw size={16} strokeWidth={1.5} />
+              <span>{t("syncPull")}</span>
+            </button>
+          )}
           {editing ? (
             <>
               {/* 未开启自动同步时，显示保存状态指示器 */}
@@ -791,7 +829,14 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 </span>
               )}
               {/* 发布按钮 */}
-              <button type="button" className="primary" disabled={busy} onClick={() => void publish()}>
+              <button
+                type="button"
+                className="primary"
+                disabled={busy}
+                onClick={() => {
+                  void publish().catch(() => {});
+                }}
+              >
                 {busy ? t("publishing") : t("publish")}
               </button>
               {/* 删除按钮 */}
@@ -898,6 +943,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                   <span>{isBookmarked ? "⭐" : "☆"}</span>
                   <span>{isBookmarked ? t("bookmarkRemove") : t("bookmarkAdd")}</span>
                 </button>
+                {props.canManageInvites && (
                 <button
                   type="button"
                   style={{
@@ -932,6 +978,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                   <Users size={14} />
                   <span>{t("docInfoInviteMember")}</span>
                 </button>
+                )}
                 <button
                   type="button"
                   style={{
@@ -996,7 +1043,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
           </div>
         </div>
       )}
-      {/* 邀请成员访客选择器弹窗 */}
+      {/* 邀请成员访客选择器弹窗 — 路由层仅限 owner */}
+      {props.canManageInvites && (
       <VisitorPickerModal
         open={showInvitePicker}
         title={t("docInfoInviteMember")}
@@ -1013,6 +1061,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           void saveInvite(result as Array<{ visitorId: string; permission: string }>);
         }}
       />
+      )}
       <OutlineProvider>
         <Block flex={1} style={{ minHeight: 0 }}>
           <div

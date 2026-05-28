@@ -3,8 +3,10 @@ import { DocumentError } from "../access/access-control.js";
 import {
   addDocumentInvite,
   createDocument,
+  convertDocumentContent,
   getDocument,
   getDocumentInvites,
+  getDocumentSyncStatus,
   listDocuments,
   listFolderChildren,
   removeDocument,
@@ -15,7 +17,7 @@ import {
 import { findDomainByName } from "../db/repositories/domain.repo.js";
 import { getDb } from "../db/connection.js";
 import { searchDocuments } from "../search/search.service.js";
-import { requireDocumentAccess } from "../middleware/document-auth.middleware.js";
+import { requireDocumentAccess, requireDocumentOwner } from "../middleware/document-auth.middleware.js";
 import { StoragePathError } from "../storage/paths.js";
 import type { PublishVersionContext } from "../../shared/types/document.js";
 import { useLogger } from "../logger/logger.js";
@@ -31,9 +33,9 @@ const log = useLogger("documents-route");
  * - GET  /:id       读取单篇文档详情（需 read 权限）
  * - PUT  /:id       更新文档（需 edit 权限）
  * - DELETE /:id     删除文档（需 delete 权限，仅限创建者）
- * - GET  /:id/invites          获取邀请列表（需 edit 权限）
- * - POST /:id/invites          添加邀请（需 edit 权限）
- * - DELETE /:id/invites/:vid   移除邀请（需 edit 权限）
+ * - GET  /:id/invites          获取邀请列表（需登录；仅文档创建者）
+ * - POST /:id/invites          添加邀请（需登录；仅创建者）
+ * - DELETE /:id/invites/:vid   移除邀请（需登录；仅创建者）
  *
  * @returns Express Router 实例
  */
@@ -118,6 +120,54 @@ export function buildDocumentsRouter(): Router {
       respondError(res, err, "documents-route.create");
     }
   });
+
+  /**
+   * POST /convert
+   * 内容格式转换（markdown ↔ Lexical；lexical→markdown 为纯文本近似）。
+   */
+  router.post("/convert", (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as {
+      content?: unknown;
+      from?: unknown;
+      to?: unknown;
+    };
+    if (typeof body.content !== "string") {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "content is required" } });
+      return;
+    }
+    const from = body.from === "markdown" ? "markdown" : body.from === "lexical" ? "lexical" : null;
+    const to = body.to === "markdown" ? "markdown" : body.to === "lexical" ? "lexical" : null;
+    if (!from || !to) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "from and to are required" } });
+      return;
+    }
+    try {
+      const out = convertDocumentContent({ content: body.content, from, to });
+      res.json({ data: { content: out } });
+    } catch (err) {
+      respondError(res, err, "documents-route.convert");
+    }
+  });
+
+  /**
+   * GET /:documentId/sync-status
+   * 轻量同步状态（仅 head，不返回正文）。
+   */
+  router.get(
+    "/:documentId/sync-status",
+    requireDocumentAccess("read"),
+    (req: Request, res: Response) => {
+      const documentId = req.params.documentId!;
+      const baseCommitId =
+        typeof req.query.baseCommitId === "string" ? req.query.baseCommitId : undefined;
+      try {
+        const status = getDocumentSyncStatus(documentId, baseCommitId);
+        res.json({ data: status });
+      } catch (err) {
+        respondError(res, err, "documents-route.sync-status");
+      }
+    },
+  );
 
   /**
    * GET /:documentId
@@ -278,11 +328,9 @@ export function buildDocumentsRouter(): Router {
 
   /**
    * GET /:documentId/invites
-   * 获取文档的邀请列表。需具备编辑权限。
-   *
-   * 只有能编辑文档的访客（创建者或被邀请者等）才能查看邀请列表。
+   * 获取文档邀请列表。仅文档创建者可访问。
    */
-  router.get("/:documentId/invites", requireDocumentAccess("edit"), (req: Request, res: Response) => {
+  router.get("/:documentId/invites", requireDocumentOwner(), (req: Request, res: Response) => {
     const documentId = req.params.documentId!;
     try {
       const invites = getDocumentInvites(documentId);
@@ -294,7 +342,7 @@ export function buildDocumentsRouter(): Router {
 
   /**
    * POST /:documentId/invites
-   * 为文档添加访客邀请。需具备编辑权限。
+   * 添加邀请。仅创建者。
    *
    * 请求体字段：
    * - targetVisitorId: string  必填，被邀请的访客ID
@@ -304,7 +352,7 @@ export function buildDocumentsRouter(): Router {
    * - 仅创建者可邀请。
    * - 目标访客不能已是该域成员（邀请与域成员互斥）。
    */
-  router.post("/:documentId/invites", requireDocumentAccess("edit"), (req: Request, res: Response) => {
+  router.post("/:documentId/invites", requireDocumentOwner(), (req: Request, res: Response) => {
     if (!req.visitor) {
       res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
       return;
@@ -329,11 +377,9 @@ export function buildDocumentsRouter(): Router {
 
   /**
    * DELETE /:documentId/invites/:targetVisitorId
-   * 移除文档对指定访客的邀请。需具备编辑权限。
-   *
-   * 仅创建者可移除邀请。
+   * 移除邀请。仅创建者。
    */
-  router.delete("/:documentId/invites/:targetVisitorId", requireDocumentAccess("edit"), (req: Request, res: Response) => {
+  router.delete("/:documentId/invites/:targetVisitorId", requireDocumentOwner(), (req: Request, res: Response) => {
     if (!req.visitor) {
       res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
       return;

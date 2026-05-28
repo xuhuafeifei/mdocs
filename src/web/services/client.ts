@@ -46,6 +46,21 @@ export interface ApiError {
   message: string;
 }
 
+export const MDOCS_API_ERROR_EVENT = "mdocs-api-error";
+
+function emitApiError(err: ApiRequestError): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(MDOCS_API_ERROR_EVENT, {
+      detail: {
+        status: err.status,
+        code: err.code,
+        message: err.message,
+      },
+    }),
+  );
+}
+
 /**
  * 检查当前是否为 Demo Mode。
  * 由构建参数 `VITE_DEMO_MODE=true` 控制，编译后固定不变。
@@ -117,6 +132,57 @@ async function demoApi<T>(
     const url = new URL(path, window.location.origin);
     const domainId = url.searchParams.get("domainId") || "default";
     return mockFetchTree(domainId) as unknown as T;
+  }
+
+  if (path.match(/^\/api\/documents\/[^/]+\/sync-status$/) && method === "GET") {
+    const documentId = path.split("/")[3]!;
+    const url = new URL(path, window.location.origin);
+    const base = url.searchParams.get("baseCommitId");
+    const doc = await mockGetDocument(documentId);
+    const head = doc.headCommitId ?? null;
+    if (!base || !head || base === head) {
+      return { status: "up_to_date", headCommitId: head } as unknown as T;
+    }
+    return { status: "behind", headCommitId: head } as unknown as T;
+  }
+
+  if (path === "/api/documents/convert" && method === "POST") {
+    const b = body as { content?: string; from?: string; to?: string };
+    const content = typeof b.content === "string" ? b.content : "";
+    if (b.from === "lexical" && b.to === "markdown") {
+      try {
+        const parsed = JSON.parse(content) as { root?: unknown };
+        if (parsed?.root) {
+          return { content: "[Lexical preview]\n\n" + content.slice(0, 2000) } as unknown as T;
+        }
+      } catch {
+        /* */
+      }
+    }
+    if (b.from === "markdown" && b.to === "lexical") {
+      return {
+        content: JSON.stringify({
+          root: {
+            children: [
+              {
+                children: [{ detail: 0, format: 0, mode: "normal", text: content, type: "text", version: 1 }],
+                direction: "ltr",
+                format: "",
+                indent: 0,
+                type: "paragraph",
+                version: 1,
+              },
+            ],
+            direction: "ltr",
+            format: "",
+            indent: 0,
+            type: "root",
+            version: 1,
+          },
+        }),
+      } as unknown as T;
+    }
+    return { content } as unknown as T;
   }
 
   // 获取单个文档
@@ -295,40 +361,52 @@ export async function api<T>(
   path: string,
   init: RequestInit & { requireAuth?: boolean } = {},
 ): Promise<T> {
-  // Demo Mode 使用 Mock API，跳过网络请求
-  if (isDemoMode()) {
-    return demoApi<T>(path, init);
-  }
-
-  // 构建请求头
-  const headers = new Headers(init.headers);
-  // 如果有请求体且未设置 Content-Type，默认设为 application/json
-  if (!headers.has("Content-Type") && init.body) {
-    headers.set("Content-Type", "application/json");
-  }
-  // Token 由后端通过 HttpOnly Cookie 自动携带，无需手动注入请求头
-
-  // 执行 fetch 请求
-  const res = await fetch(path, { ...init, headers });
-  // 204 No Content 直接返回 undefined
-  if (res.status === 204) {
-    return undefined as T;
-  }
-  // 读取响应文本
-  const text = await res.text();
-  let body: unknown;
   try {
-    // 尝试解析为 JSON
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    // 解析失败说明后端返回了非 JSON 响应
-    throw new ApiRequestError(res.status, "BAD_RESPONSE", "response is not valid JSON");
+    // Demo Mode 使用 Mock API，跳过网络请求
+    if (isDemoMode()) {
+      return demoApi<T>(path, init);
+    }
+
+    // 构建请求头
+    const headers = new Headers(init.headers);
+    // 如果有请求体且未设置 Content-Type，默认设为 application/json
+    if (!headers.has("Content-Type") && init.body) {
+      headers.set("Content-Type", "application/json");
+    }
+    // Token 由后端通过 HttpOnly Cookie 自动携带，无需手动注入请求头
+
+    // 执行 fetch 请求
+    const res = await fetch(path, { ...init, headers });
+    // 204 No Content 直接返回 undefined
+    if (res.status === 204) {
+      return undefined as T;
+    }
+    // 读取响应文本
+    const text = await res.text();
+    let body: unknown;
+    try {
+      // 尝试解析为 JSON
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      // 解析失败说明后端返回了非 JSON 响应
+      throw new ApiRequestError(res.status, "BAD_RESPONSE", "response is not valid JSON");
+    }
+    // 处理 HTTP 错误状态
+    if (!res.ok) {
+      const err = (body as { error?: ApiError } | null)?.error;
+      throw new ApiRequestError(
+        res.status,
+        err?.code ?? "UNKNOWN",
+        err?.message ?? "request failed",
+        (err as { details?: unknown } | undefined)?.details,
+      );
+    }
+    // 返回响应中的 data 字段
+    return (body as { data: T }).data;
+  } catch (err) {
+    if (err instanceof ApiRequestError) {
+      emitApiError(err);
+    }
+    throw err;
   }
-  // 处理 HTTP 错误状态
-  if (!res.ok) {
-    const err = (body as { error?: ApiError } | null)?.error;
-    throw new ApiRequestError(res.status, err?.code ?? "UNKNOWN", err?.message ?? "request failed");
-  }
-  // 返回响应中的 data 字段
-  return (body as { data: T }).data;
 }

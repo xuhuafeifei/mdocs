@@ -13,12 +13,13 @@ import { BookOpen, File, Folder, LogOut, MessageSquare, PanelLeftClose, PanelLef
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
-import type { DocumentDetail } from "../../shared/types/document";
+import type { DocumentDetail, VersionConflictDetails } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
 import type { TreeNode } from "../../shared/types/tree";
 import { isPublicWritePermission } from "../../shared/permissions.js";
 import {
   ApiRequestError,
+  MDOCS_API_ERROR_EVENT,
   clearVisitorId,
   storeVisitorId,
   isDemoMode,
@@ -46,13 +47,26 @@ import { SettingsPage } from "./SettingsPage";
 import { MessageDialog } from "./MessageDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
-import { ConflictNotice } from "./ConflictNotice";
+import { ConflictModal } from "./ConflictModal";
+import { MergeView } from "./MergeView";
 import { CommentsPanel } from "./CommentsPanel";
-import { getDraft, saveDraft as saveDraftRecord, deleteDraftIfUnchanged, markDraftPublishError } from "../storage/drafts";
+import {
+  getDraft,
+  saveDraft as saveDraftRecord,
+  deleteDraft,
+  deleteDraftIfUnchanged,
+  markDraftPublishError,
+  saveDraftConflict,
+  clearDraftConflict,
+  rebuildDraftAfterMerge,
+  type DraftConflictRecord,
+} from "../storage/drafts";
 import { translateError, localizeDomainName, parentDirForCreates } from "./utils";
 import { useAutoPublish } from "./hooks/useAutoPublish";
+import { useDocumentVersion } from "./hooks/useDocumentVersion";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 import "./App.css";
+import "./merge.css";
 import "./domain.css";
 import "./comments.css";
 
@@ -159,6 +173,61 @@ export function App() {
   // ---- 当前打开的文档详情 ----
   const [activeDoc, setActiveDoc] = useState<DocumentDetail | null>(null);
 
+  /** 客户端认定的服务端 head（开编 / 拉取 / 发布成功后更新） */
+  const [syncedHeadCommitId, setSyncedHeadCommitId] = useState<string | null>(null);
+  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [mergeViewOpen, setMergeViewOpen] = useState(false);
+  const [editorDraftExists, setEditorDraftExists] = useState(false);
+
+  // 有未发布草稿时先不做后台 sync 轮询，避免副本分支与远端 head 混用带来的状态噪声
+  const syncTargetDocumentId = activeDoc?.documentId && !editorDraftExists
+    ? activeDoc.documentId
+    : null;
+  const { syncBehind, remoteHeadCommitId } = useDocumentVersion(
+    syncTargetDocumentId,
+    syncedHeadCommitId,
+  );
+
+  const [mergeConflict, setMergeConflict] = useState<DraftConflictRecord | null>(null);
+
+  useEffect(() => {
+    if (!mergeViewOpen || !activeDoc) {
+      setMergeConflict(null);
+      return;
+    }
+    void (async () => {
+      const draft = await getDraft(activeDoc.documentId);
+      if (draft?.conflict) {
+        setMergeConflict(draft.conflict);
+        return;
+      }
+      if (draft && syncedHeadCommitId && remoteHeadCommitId) {
+        const editBase = draft.baseCommitId ?? syncedHeadCommitId;
+        if (!editBase) return;
+        const built: DraftConflictRecord = {
+          baseCommitId: editBase,
+          expectedHeadCommitId: remoteHeadCommitId,
+          localSnapshotContent: draft.content,
+        };
+        await saveDraftConflict(activeDoc.documentId, {
+          baseCommitId: built.baseCommitId,
+          conflictStatus: "diverged",
+          conflict: built,
+        });
+        setMergeConflict(built);
+      }
+    })();
+  }, [mergeViewOpen, activeDoc, syncedHeadCommitId, remoteHeadCommitId]);
+
+  useEffect(() => {
+    if (!activeDoc || !syncBehind || !editorDraftExists) return;
+    void getDraft(activeDoc.documentId).then(async (draft) => {
+      if (!draft || draft.conflict || draft.conflictStatus === "publish_conflict") return;
+      if (draft.conflictStatus === "diverged") return;
+      await saveDraftRecord({ ...draft, conflictStatus: "diverged" });
+    });
+  }, [activeDoc?.documentId, syncBehind, editorDraftExists]);
+
   // ---- 全局 Toast 消息（如「已发布」） ----
   const [message, setMessage] = useState<string | null>(null);
 
@@ -221,6 +290,19 @@ export function App() {
     // 清理函数：组件卸载或 message 变化时移除监听，防止内存泄漏
     return () => window.removeEventListener("pointerdown", dismiss, true);
   }, [message]);
+
+  // 全局 API 错误统一弹窗入口：网络层抛出的 ApiRequestError 会分发该事件。
+  useEffect(() => {
+    const onApiError = (ev: Event): void => {
+      const custom = ev as CustomEvent<{ status?: number; code?: string; message?: string }>;
+      // 409 冲突统一由业务弹窗处理（如 ConflictModal / MergeView），不走通用错误弹窗
+      if (custom.detail?.status === 409) return;
+      const msg = custom.detail?.message;
+      if (msg) setAlertMessage(msg);
+    };
+    window.addEventListener(MDOCS_API_ERROR_EVENT, onApiError);
+    return () => window.removeEventListener(MDOCS_API_ERROR_EVENT, onApiError);
+  }, []);
 
   /**
    * 应用启动引导：先尝试 Cookie 静默登录 → 失败再走注册页。
@@ -300,87 +382,40 @@ export function App() {
   }
 
   /**
-   * 打开文档：优先从本地草稿加载（减少网络请求），无草稿时再请求服务器。
-   * 若本地有草稿，还会把服务器返回的元数据缓存到草稿中，方便下次离线打开。
-   * 使用 expectedDocIdRef 进行竞态保护：快速切换文档时，旧请求返回后如果不匹配则丢弃。
+   * 打开文档：先拉服务端最新文档，再按本地草稿副本覆盖编辑视图。
+   * 若存在未发布草稿，正文与展示信息以草稿副本为准（服务端仍负责写操作裁决）。
    */
   async function openDocument(docId: string): Promise<void> {
-    // 标记当前预期的 documentId，用于竞态保护
     expectedDocIdRef.current = docId;
     try {
-      // ========== 步骤 1：优先从本地草稿加载 ==========
-      // 先查 IndexedDB 看是否有该文档的本地草稿
       const draft = await getDraft(docId);
-      // 竞态检查：如果用户已经切换到其他文档，当前请求的结果已过时，直接丢弃
       if (expectedDocIdRef.current !== docId) return;
-      // 草稿必须满足以下条件才算可用：
-      // - 存在且未标记为已发布
-      // - 包含相对路径、域 ID、所有者 ID（即之前打开过时缓存过元数据）
-      if (draft && !draft.published && draft.relativePath && draft.domainId && draft.ownerVisitorId) {
-        console.log("[openDocument] loaded from local draft, content preview:", draft.content.slice(0, 100));
-        // 直接用草稿数据构建 DocumentDetail，跳过网络请求
-        setActiveDoc({
-          documentId: draft.documentId,
-          relativePath: draft.relativePath,
-          displayName: draft.displayName,
-          content: draft.content,
-          permission: draft.permission!,
-          ownerVisitorId: draft.ownerVisitorId!,
-          domainId: draft.domainId,
-        } as DocumentDetail);
-        // 切换到文档所属的域
-        if (draft.domainId !== currentDomainId) {
-          localStorage.setItem("mdocs.currentDomainId", draft.domainId);
-          setCurrentDomainId(draft.domainId);
-          // 刷新新域的文档树
-          void refreshTree(draft.domainId);
-        }
-        // 设置新建文档的默认父路径为当前文档所在文件夹
-        setSelectedCreateParentPath(parentDirForCreates(draft.relativePath));
-        // 本地加载成功，直接返回
-        return;
-      }
 
-      // ========== 步骤 2：本地没有可用草稿，从服务器获取完整文档 ==========
       const doc = await getDocumentApi(docId);
-      // 竞态检查：如果用户已经切换到其他文档，当前请求的结果已过时，直接丢弃
       if (expectedDocIdRef.current !== docId) return;
-      // 切换到文档所属的域（关键修复：URL 跳转时自动切换域）
+
       if (doc.domainId !== currentDomainId) {
         localStorage.setItem("mdocs.currentDomainId", doc.domainId);
         setCurrentDomainId(doc.domainId);
-        // 刷新新域的文档树
         void refreshTree(doc.domainId);
       }
-      // 设置新建文档的默认父路径（根据当前域是否个人域决定是否去掉前缀）
       setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
 
-      // ========== 步骤 3：把服务器元数据缓存到草稿中 ==========
-      // 这样下次打开同一文档时，步骤 1 就能命中本地草稿，跳过网络请求
-      if (draft && !draft.published) {
-        console.log("[App.openDocument] saveDraftRecord (cache metadata), documentId:", docId);
-        await saveDraftRecord({
-          ...draft,
-          relativePath: doc.relativePath,
-          permission: doc.permission,
-          ownerVisitorId: doc.ownerVisitorId,
-          domainId: doc.domainId,
-        });
-      }
+      const head = doc.headCommitId ?? null;
+      setSyncedHeadCommitId(head);
 
-      // 再次做竞态检查，因为 saveDraftRecord 也是异步的
       if (expectedDocIdRef.current !== docId) return;
-
-      // ========== 步骤 4：决定最终展示的内容 ==========
-      // 如果有本地草稿（但只有内容，没有元数据），用草稿内容覆盖服务器内容
-      // 如果没有草稿，直接使用服务器返回的完整文档
-      setActiveDoc(draft && !draft.published
-        ? { ...doc, content: draft.content, displayName: draft.displayName }
-        : doc);
+      setActiveDoc(
+        draft && !draft.published
+          ? {
+            ...doc,
+            content: draft.content,
+            displayName: draft.displayName,
+          }
+          : doc,
+      );
     } catch (err) {
-      // 竞态检查：如果已经切换文档，不显示旧请求的错误
       if (expectedDocIdRef.current !== docId) return;
-      // 打开文档失败（如文档不存在、无权限），显示错误提示
       setAlertMessage(translateError(t, err));
     }
   }
@@ -396,8 +431,8 @@ export function App() {
       // URL 中有文档 ID，尝试打开该文档
       void openDocument(documentId);
     } else {
-      // URL 中没有文档 ID，清空当前文档，展示欢迎页
       setActiveDoc(null);
+      setSyncedHeadCommitId(null);
     }
     // 注意：openDocument 在 effect 内部定义，eslint 会提示缺少依赖
     // 但将 openDocument 加入依赖会导致无限循环，因此忽略该规则
@@ -486,33 +521,149 @@ export function App() {
     return result;
   }, [bookmarks, domainNameLookup]);
 
-  // ---- 发布冲突标记 ----
-  const [conflict, setConflict] = useState(false);
+  async function persistPublishConflict(
+    documentId: string,
+    localContent: string,
+    displayName: string,
+    baseCommitId: string,
+    details: VersionConflictDetails,
+  ): Promise<void> {
+    let draft = await getDraft(documentId);
+    if (!draft && activeDoc?.documentId === documentId) {
+      draft = {
+        documentId,
+        content: localContent,
+        displayName,
+        updatedAt: Date.now(),
+        published: false,
+        baseCommitId,
+        relativePath: activeDoc.relativePath,
+        permission: activeDoc.permission,
+        ownerVisitorId: activeDoc.ownerVisitorId,
+        domainId: activeDoc.domainId,
+      };
+      await saveDraftRecord(draft);
+    }
+    if (draft) {
+      await saveDraftConflict(documentId, {
+        baseCommitId,
+        conflictStatus: "publish_conflict",
+        conflict: {
+          baseCommitId,
+          expectedHeadCommitId: details.headCommitId,
+          localSnapshotContent: localContent,
+        },
+      });
+    }
+    setConflictModalOpen(true);
+  }
 
   /**
-   * 发布文档：将内容推送到服务器，成功后清除冲突标记并刷新树。
-   * 目前所有发布失败都视为潜在冲突（待细化）。
+   * 发布文档：带 version.baseCommitId 乐观锁。
    */
   async function publishDocument(content: string, displayName: string, documentId: string, permission?: number): Promise<void> {
+    const draftForPublish = await getDraft(documentId);
+    const baseCommitId =
+      draftForPublish?.baseCommitId ?? syncedHeadCommitId ?? activeDoc?.headCommitId;
+    if (!baseCommitId) {
+      setAlertMessage(t("syncHeadMissing"));
+      throw new Error("missing baseCommitId");
+    }
     try {
-      // 向后端 PUT 更新文档内容和标题
-      const updated = await updateDocumentApi(documentId, { content, displayName, permission });
-      // 如果当前正在编辑的就是这篇文档，更新本地状态以反映最新内容
+      const updated = await updateDocumentApi(documentId, {
+        content,
+        displayName,
+        permission,
+        version: { baseCommitId },
+      });
       setActiveDoc((prev) => (prev && prev.documentId === documentId ? updated : prev));
-      // 刷新侧边栏文档树（文档修改时间等可能变化）
+      setSyncedHeadCommitId(updated.headCommitId ?? null);
+      await clearDraftConflict(documentId);
       await refreshTree();
-      // 清除冲突标记（发布成功说明没有冲突）
-      setConflict(false);
-      // 显示「已发布」Toast 提示
+      setConflictModalOpen(false);
       setMessage(t("published"));
-      // 1.2 秒后自动隐藏 Toast
       window.setTimeout(() => setMessage(null), 1200);
     } catch (err) {
-      // TODO: 未来需要区分真正的 Git 冲突和其他错误
-      // 目前将所有发布失败都标记为冲突，提醒用户注意
-      setConflict(true);
+      if (
+        err instanceof ApiRequestError &&
+        err.status === 409 &&
+        err.code === "VERSION_CONFLICT" &&
+        err.details &&
+        typeof err.details === "object"
+      ) {
+        await persistPublishConflict(
+          documentId,
+          content,
+          displayName,
+          baseCommitId,
+          err.details as VersionConflictDetails,
+        );
+      }
       throw err;
     }
+  }
+
+  /** 无本地未发布草稿时：只读拉远端正文与 meta，不写服务端、不删草稿。 */
+  async function executePullRemote(): Promise<void> {
+    if (!activeDoc) return;
+    const doc = await getDocumentApi(activeDoc.documentId);
+    if (doc.domainId !== currentDomainId) {
+      localStorage.setItem("mdocs.currentDomainId", doc.domainId);
+      setCurrentDomainId(doc.domainId);
+      void refreshTree(doc.domainId);
+    }
+    setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
+    setActiveDoc(doc);
+    setSyncedHeadCommitId(doc.headCommitId ?? null);
+    setMessage(t("syncPullDone"));
+    window.setTimeout(() => setMessage(null), 1200);
+  }
+
+  async function handleSyncClick(): Promise<void> {
+    if (!activeDoc) return;
+    const draft = await getDraft(activeDoc.documentId);
+    // 有未发布草稿时，当前版本不做覆盖式 sync / pull（本地副本优先）
+    if (draft && !draft.published) return;
+    const conflictPending =
+      draft?.conflictStatus === "publish_conflict" ||
+      draft?.conflictStatus === "diverged" ||
+      Boolean(draft?.conflict);
+    if (conflictPending) {
+      setMergeViewOpen(true);
+      return;
+    }
+    await executePullRemote();
+  }
+
+  async function handleMergeSuccess(updated: DocumentDetail): Promise<void> {
+    setActiveDoc(updated);
+    const head = updated.headCommitId ?? null;
+    setSyncedHeadCommitId(head);
+    setMergeViewOpen(false);
+    setConflictModalOpen(false);
+    if (head) {
+      await rebuildDraftAfterMerge({
+        documentId: updated.documentId,
+        content: updated.content,
+        displayName: updated.displayName,
+        headCommitId: head,
+        relativePath: updated.relativePath,
+        permission: updated.permission,
+        ownerVisitorId: updated.ownerVisitorId,
+        domainId: updated.domainId,
+      });
+      setEditorDraftExists(true);
+    } else {
+      await clearDraftConflict(updated.documentId);
+      await deleteDraft(updated.documentId);
+    }
+    if (updated.domainId !== currentDomainId) {
+      localStorage.setItem("mdocs.currentDomainId", updated.domainId);
+      setCurrentDomainId(updated.domainId);
+    }
+    void refreshTree(updated.domainId);
+    setMessage(t("published"));
+    window.setTimeout(() => setMessage(null), 1200);
   }
 
   /**
@@ -525,8 +676,23 @@ export function App() {
       const draft = await getDraft(docId);
       // 如果草稿不存在，直接返回（可能已被其他逻辑删除）
       if (!draft) return;
-      // 将草稿内容发布到服务器
-      await updateDocumentApi(docId, { content: draft.content, displayName: draft.displayName });
+      const baseCommitId = draft.baseCommitId;
+      if (!baseCommitId) {
+        const doc = await getDocumentApi(docId);
+        if (doc.headCommitId) {
+          await saveDraftRecord({ ...draft, baseCommitId: doc.headCommitId });
+        }
+      }
+      const base = (await getDraft(docId))?.baseCommitId;
+      if (!base) {
+        setAlertMessage(t("syncHeadMissing"));
+        return;
+      }
+      await updateDocumentApi(docId, {
+        content: draft.content,
+        displayName: draft.displayName,
+        version: { baseCommitId: base },
+      });
       // 乐观锁：只有草稿在 API 调用期间没被修改过，才删除本地草稿
       const deleted = await deleteDraftIfUnchanged(docId, draft.updatedAt);
       if (!deleted) {
@@ -866,11 +1032,14 @@ export function App() {
                       });
                     }}
                     onPublish={publishDocument}
-                    onDelete={() => {
-                      // 如果是目录描述文档，删除整个目录
+                    syncBehind={syncBehind}
+                    onSyncClick={() => void handleSyncClick()}
+                    onDraftExistsChange={setEditorDraftExists}
+                    syncedHeadCommitId={syncedHeadCommitId}
+                    canManageInvites={Boolean(visitor && visitor.visitorId === activeDoc.ownerVisitorId)}
+                    onDelete={async () => {
                       if (activeDoc.relativePath.endsWith("/___desc___.md")) {
                         const folderPath = activeDoc.relativePath.replace(/\/___desc___\.md$/, "");
-                        // 直接传 desc 文档的 ID，后端会自动找父目录
                         requestDeleteFolder(activeDoc.documentId, folderPath);
                       } else {
                         requestDeleteDocument(activeDoc.documentId, activeDoc.relativePath);
@@ -940,8 +1109,23 @@ export function App() {
             )}
 
             {/* 发布冲突提示条 */}
-            {conflict && (
-              <ConflictNotice onDismiss={() => setConflict(false)} />
+            <ConflictModal
+              open={conflictModalOpen}
+              onClose={() => setConflictModalOpen(false)}
+              onResolve={() => {
+                setConflictModalOpen(false);
+                setMergeViewOpen(true);
+              }}
+            />
+            {mergeViewOpen && activeDoc && mergeConflict && (
+              <MergeView
+                documentId={activeDoc.documentId}
+                displayName={activeDoc.displayName}
+                conflict={mergeConflict}
+                onClose={() => setMergeViewOpen(false)}
+                onSuccess={handleMergeSuccess}
+                onError={(msg) => setAlertMessage(msg)}
+              />
             )}
 
             {/* 全局 Toast 消息 */}

@@ -1,0 +1,165 @@
+.mdocs-lexical-md-bridge {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.mdocs-conflict-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+}
+
+.mdocs-conflict-modal-panel {
+  width: min(440px, 92vw);
+  padding: 20px 24px;
+  border-radius: 8px;
+  background: #fff5f5;
+  border: 2px solid #cf1322;
+  box-shadow: 0 8px 24px rgba(207, 19, 34, 0.25);
+}
+
+.mdocs-conflict-modal-title {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  color: #cf1322;
+}
+
+.mdocs-conflict-modal-body {
+  margin: 0 0 16px;
+  color: #434343;
+  line-height: 1.5;
+}
+
+.mdocs-conflict-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.mdocs-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.mdocs-sync-btn.behind {
+  border-color: #1677ff;
+  color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2);
+  animation: mdocs-sync-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes mdocs-sync-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(22, 119, 255, 0.35);
+  }
+}
+
+.mdocs-merge-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  background: var(--mdocs-bg, #fff);
+}
+
+.mdocs-merge-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--mdocs-border, #e5e5e5);
+}
+
+.mdocs-merge-toolbar h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.mdocs-merge-toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mdocs-merge-columns {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px;
+  min-height: 0;
+  background: var(--mdocs-border, #e5e5e5);
+}
+
+.mdocs-merge-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--mdocs-bg, #fff);
+}
+
+.mdocs-merge-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--mdocs-border, #e5e5e5);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mdocs-merge-pane-tabs button {
+  margin-left: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mdocs-merge-pane-tabs button.active {
+  border-color: var(--mdocs-border, #e5e5e5);
+  background: var(--mdocs-hover-bg, #f5f5f5);
+}
+
+.mdocs-merge-textarea,
+.mdocs-merge-readonly,
+.mdocs-merge-preview {
+  flex: 1;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  border: none;
+  resize: none;
+}
+
+.mdocs-merge-preview {
+  font-family: inherit;
+}
+
+.mdocs-merge-preview pre {
+  white-space: pre-wrap;
+}

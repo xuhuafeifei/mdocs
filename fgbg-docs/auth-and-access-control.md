@@ -103,6 +103,7 @@
 
 - **位置**：`document_invites` 表。
 - **语义**：对圈外访客单独授予 `read` 或 `edit`。
+- **HTTP**：`GET/POST/DELETE …/documents/:id/invites` 仅 **文档创建者** 可调用；被 invite 授予 `edit` 的用户可编辑正文，但不可列出或变更邀请列表。（服务层 `add/remove` 亦校验 owner；此前 `GET` 列表曾与「任意 edit」中间件不一致，已收紧。）
 - **约束**：与域成员互斥。已是域成员的人不能被 invite。
 - **检查时机**：每次读/写前重算，不缓存。
 

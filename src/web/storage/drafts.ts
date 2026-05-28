@@ -1,14 +1,22 @@
 /**
  * 本地草稿存储（IndexedDB）
  * 提供草稿的增删改查能力，作为自动保存的持久化层。
- * 使用 IndexedDB 而非 localStorage，因为草稿内容可能很大（Lexical JSON）。
  */
+import type { DraftConflictRecord, DraftConflictStatus } from "./draft-version.js";
+
+export type { DraftConflictRecord, DraftConflictStatus };
 
 // ---- 数据库配置 ----
 const DB_NAME = "mdocs-drafts";
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 const STORE = "drafts";
 
+/**
+ * IndexedDB 主键为 `documentId`。
+ *
+ * **只存「草稿本体」**：正文 + 展示名 + 时间戳；以及发布失败 / 同步 head / merge 冲突等扩展字段。
+ * 路径、域、owner、`permission` 等文档 meta **不写入草稿**，始终以 `GET /api/documents/:id` 为准。
+ */
 export interface DraftRecord {
   documentId: string;
   /** Lexical JSON serialization */
@@ -16,30 +24,31 @@ export interface DraftRecord {
   displayName: string;
   updatedAt: number;
   published: boolean;
-  // Cached document metadata — avoids a network fetch when re-opening a draft.
   relativePath?: string;
   permission?: number;
   ownerVisitorId?: string;
   domainId?: string;
-  // Publish failure tracking
   publishError?: string;
   publishErrorAt?: number;
+  /** 开编基准：草稿**首次创建**时对应的服务端 headCommitId，之后不再随自动保存更新 */
+  baseCommitId?: string;
+  conflictStatus?: DraftConflictStatus;
+  conflict?: DraftConflictRecord;
 }
 
-// ---- 数据库连接单例 ----
 let _dbPromise: Promise<IDBDatabase> | null = null;
 
-/**
- * 打开 IndexedDB 连接，按需创建对象存储。
- * 使用单例模式缓存 Promise，避免重复打开数据库。
- */
 function openDB(): Promise<IDBDatabase> {
   if (!_dbPromise) {
     _dbPromise = new Promise((resolve, reject) => {
       const req = indexedDB.open(DB_NAME, DB_VERSION);
-      // 数据库版本升级时创建对象存储（以 documentId 为主键）
-      req.onupgradeneeded = () => {
-        req.result.createObjectStore(STORE, { keyPath: "documentId" });
+      req.onupgradeneeded = (ev) => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(STORE)) {
+          db.createObjectStore(STORE, { keyPath: "documentId" });
+        }
+        // v2→v3：草稿不再缓存文档 meta（旧字段存盘仍在，读出后下次保存会丢弃）
+        void ev.oldVersion;
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -49,21 +58,130 @@ function openDB(): Promise<IDBDatabase> {
 }
 
 /**
- * 保存或更新草稿记录（按 documentId 覆盖）。
+ * 写入/更新正文草稿：覆盖 content / displayName / updatedAt，并合并保留 conflict、publishError。
+ * `baseCommitId` 仅在**尚无该 documentId 草稿**时，用当时的 head 写入一次（开编基准）。
  */
+export async function upsertContentDraft(params: {
+  documentId: string;
+  content: string;
+  displayName: string;
+  /** 开编时服务端 head；仅首次创建草稿时写入 baseCommitId */
+  headCommitIdAtEditStart?: string | null;
+  /** 首次落盘时写入的文档快照 meta（后续自动保存不覆盖） */
+  snapshotMeta?: {
+    relativePath: string;
+    permission: number;
+    ownerVisitorId: string;
+    domainId: string;
+  };
+}): Promise<void> {
+  const existing = await getDraft(params.documentId);
+  const record: DraftRecord = {
+    documentId: params.documentId,
+    content: params.content,
+    displayName: params.displayName,
+    updatedAt: Date.now(),
+    published: false,
+  };
+  if (existing?.baseCommitId) {
+    record.baseCommitId = existing.baseCommitId;
+  } else {
+    const head = params.headCommitIdAtEditStart?.trim();
+    if (head) record.baseCommitId = head;
+  }
+  if (existing?.relativePath) {
+    record.relativePath = existing.relativePath;
+  } else if (params.snapshotMeta) {
+    record.relativePath = params.snapshotMeta.relativePath;
+  }
+  if (existing?.permission != null) {
+    record.permission = existing.permission;
+  } else if (params.snapshotMeta) {
+    record.permission = params.snapshotMeta.permission;
+  }
+  if (existing?.ownerVisitorId) {
+    record.ownerVisitorId = existing.ownerVisitorId;
+  } else if (params.snapshotMeta) {
+    record.ownerVisitorId = params.snapshotMeta.ownerVisitorId;
+  }
+  if (existing?.domainId) {
+    record.domainId = existing.domainId;
+  } else if (params.snapshotMeta) {
+    record.domainId = params.snapshotMeta.domainId;
+  }
+
+  if (existing?.publishError) {
+    record.publishError = existing.publishError;
+    record.publishErrorAt = existing.publishErrorAt;
+  }
+  if (existing?.conflictStatus) {
+    record.conflictStatus = existing.conflictStatus;
+  }
+  if (existing?.conflict) {
+    record.conflict = existing.conflict;
+  }
+  await saveDraft(record);
+}
+
+/**
+ * Merge 发布成功后：用服务端合成稿重建本地草稿，开编基准 = 新 head（冲突字段清空）。
+ */
+export async function rebuildDraftAfterMerge(params: {
+  documentId: string;
+  content: string;
+  displayName: string;
+  headCommitId: string;
+  relativePath: string;
+  permission: number;
+  ownerVisitorId: string;
+  domainId: string;
+}): Promise<void> {
+  await saveDraft({
+    documentId: params.documentId,
+    content: params.content,
+    displayName: params.displayName,
+    updatedAt: Date.now(),
+    published: false,
+    baseCommitId: params.headCommitId,
+    relativePath: params.relativePath,
+    permission: params.permission,
+    ownerVisitorId: params.ownerVisitorId,
+    domainId: params.domainId,
+    conflictStatus: "none",
+  });
+}
+
+function sanitizeDraft(doc: DraftRecord): DraftRecord {
+  const sanitized: DraftRecord = {
+    documentId: doc.documentId,
+    content: doc.content,
+    displayName: doc.displayName,
+    updatedAt: doc.updatedAt,
+    published: doc.published,
+  };
+  if (doc.relativePath) sanitized.relativePath = doc.relativePath;
+  if (doc.permission != null) sanitized.permission = doc.permission;
+  if (doc.ownerVisitorId) sanitized.ownerVisitorId = doc.ownerVisitorId;
+  if (doc.domainId) sanitized.domainId = doc.domainId;
+  if (doc.publishError != null) sanitized.publishError = doc.publishError;
+  if (doc.publishErrorAt != null) sanitized.publishErrorAt = doc.publishErrorAt;
+  if (doc.baseCommitId) sanitized.baseCommitId = doc.baseCommitId;
+  if (doc.conflictStatus != null) sanitized.conflictStatus = doc.conflictStatus;
+  if (doc.conflict != null) sanitized.conflict = doc.conflict;
+  return sanitized;
+}
+
 export async function saveDraft(doc: DraftRecord): Promise<void> {
   const db = await openDB();
+  const sanitized = sanitizeDraft(doc);
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(doc);
+    tx.objectStore(STORE).put(sanitized);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-/**
- * 根据文档 ID 读取草稿。
- */
 export async function getDraft(documentId: string): Promise<DraftRecord | undefined> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -74,9 +192,6 @@ export async function getDraft(documentId: string): Promise<DraftRecord | undefi
   });
 }
 
-/**
- * 删除指定文档的草稿。
- */
 export async function deleteDraft(documentId: string): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -87,10 +202,6 @@ export async function deleteDraft(documentId: string): Promise<void> {
   });
 }
 
-/**
- * 乐观锁删除：仅当草稿的 updatedAt 与预期一致时才删除。
- * 用于防止自动发布期间草稿被用户继续编辑而导致误删。
- */
 export async function deleteDraftIfUnchanged(
   documentId: string,
   expectedUpdatedAt: number,
@@ -99,16 +210,13 @@ export async function deleteDraftIfUnchanged(
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
     const store = tx.objectStore(STORE);
-    // 先读取当前草稿
     const getReq = store.get(documentId);
     getReq.onsuccess = () => {
       const existing = getReq.result;
-      // 如果草稿不存在或 updatedAt 已变化，说明期间被修改了，不删除
       if (!existing || existing.updatedAt !== expectedUpdatedAt) {
         resolve(false);
         return;
       }
-      // updatedAt 一致，安全删除
       store.delete(documentId);
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => reject(tx.error);
@@ -117,11 +225,6 @@ export async function deleteDraftIfUnchanged(
   });
 }
 
-/**
- * 读取所有草稿记录（供草稿列表页和自动发布扫描使用）。
- *
- * @param opts.skipFailed — 跳过已标记为发布失败的草稿（auto-publish 用）
- */
 export async function listAllDrafts(opts?: { skipFailed?: boolean }): Promise<DraftRecord[]> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -138,9 +241,6 @@ export async function listAllDrafts(opts?: { skipFailed?: boolean }): Promise<Dr
   });
 }
 
-/**
- * 标记草稿发布失败（如服务端文档不存在）。
- */
 export async function markDraftPublishError(documentId: string, error: string): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -150,11 +250,13 @@ export async function markDraftPublishError(documentId: string, error: string): 
     req.onsuccess = () => {
       const existing = req.result;
       if (existing) {
-        store.put({
-          ...existing,
-          publishError: error,
-          publishErrorAt: Date.now(),
-        });
+        store.put(
+          sanitizeDraft({
+            ...existing,
+            publishError: error,
+            publishErrorAt: Date.now(),
+          }),
+        );
       }
       resolve();
     };
@@ -162,9 +264,6 @@ export async function markDraftPublishError(documentId: string, error: string): 
   });
 }
 
-/**
- * 清除草稿的发布失败标记（用户点击重试时调用）。
- */
 export async function clearDraftPublishError(documentId: string): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -174,14 +273,45 @@ export async function clearDraftPublishError(documentId: string): Promise<void> 
     req.onsuccess = () => {
       const existing = req.result;
       if (existing) {
-        store.put({
-          ...existing,
-          publishError: undefined,
-          publishErrorAt: undefined,
-        });
+        store.put(
+          sanitizeDraft({
+            ...existing,
+            publishError: undefined,
+            publishErrorAt: undefined,
+          }),
+        );
       }
       resolve();
     };
     req.onerror = () => reject(req.error);
+  });
+}
+
+/** 写入发布冲突快照（409 或进入 diverged 后手动 merge 前） */
+export async function saveDraftConflict(
+  documentId: string,
+  patch: {
+    conflict: DraftConflictRecord;
+    conflictStatus: DraftConflictStatus;
+    baseCommitId: string;
+  },
+): Promise<void> {
+  const existing = await getDraft(documentId);
+  if (!existing) return;
+  await saveDraft({
+    ...existing,
+    baseCommitId: patch.baseCommitId,
+    conflictStatus: patch.conflictStatus,
+    conflict: patch.conflict,
+  });
+}
+
+export async function clearDraftConflict(documentId: string): Promise<void> {
+  const existing = await getDraft(documentId);
+  if (!existing) return;
+  await saveDraft({
+    ...existing,
+    conflict: undefined,
+    conflictStatus: "none",
   });
 }

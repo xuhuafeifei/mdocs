@@ -75,9 +75,9 @@
 | POST | `/api/documents` | 创建文档 |
 | PUT | `/api/documents/:documentId` | 更新文档 |
 | DELETE | `/api/documents/:documentId` | 删除文档 |
-| GET | `/api/documents/:documentId/invites` | 获取文档邀请列表 |
-| POST | `/api/documents/:documentId/invites` | 添加文档邀请 |
-| DELETE | `/api/documents/:documentId/invites/:visitorId` | 移除文档邀请 |
+| GET | `/api/documents/:documentId/invites` | 获取邀请列表（仅文档创建者） |
+| POST | `/api/documents/:documentId/invites` | 添加邀请（仅创建者） |
+| DELETE | `/api/documents/:documentId/invites/:visitorId` | 移除邀请（仅创建者） |
 
 **`POST /api/documents`**
 - Body: `{ fileName: string, displayName?: string, content: string, domainId?: string, permission?: number, parentId?: string }`

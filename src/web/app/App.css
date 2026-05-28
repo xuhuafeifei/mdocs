@@ -1184,13 +1184,15 @@ strong.label {
   position: absolute;
   right: 20px;
   bottom: 20px;
-  padding: 8px 14px;
-  background: rgba(33, 33, 33, 0.9);
-  color: #ffffff;
-  border-radius: var(--mdocs-radius);
+  padding: 10px 14px;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
   font-size: 12px;
   z-index: 20;
   animation: toast-in 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .mdocs-toast.success {

@@ -283,6 +283,7 @@ export async function mockCreateDocument(input: {
     createdAt: now,
     fileType: "md",
     parentId: parentIdResolved,
+    headCommitId: `commit-${documentId}-1`,
   };
 
   const db = await getDB();
@@ -302,15 +303,31 @@ export async function mockCreateDocument(input: {
  */
 export async function mockUpdateDocument(
   documentId: string,
-  input: { content: string; displayName?: string; permission?: number },
+  input: {
+    content: string;
+    displayName?: string;
+    permission?: number;
+    version?: { baseCommitId?: string; merge?: { expectedHeadCommitId: string } };
+  },
 ): Promise<DocumentDetail> {
   const db = await getDB();
   const existing = await mockGetDocument(documentId);
+  const head = existing.headCommitId ?? `commit-${documentId}-1`;
+  const base = input.version?.baseCommitId;
+  if (base && base !== head && !input.version?.merge) {
+    throw new ApiRequestError(409, "VERSION_CONFLICT", "version conflict", {
+      headCommitId: head,
+      content: existing.content,
+      contentHash: existing.contentHash,
+    });
+  }
+  const nextHead = `commit-${documentId}-${Date.now()}`;
   const updated: DocumentDetail = {
     ...existing,
     ...input,
     contentHash: hashContent(input.content),
     updatedAt: new Date().toISOString(),
+    headCommitId: nextHead,
   };
 
   await new Promise((resolve, reject) => {
