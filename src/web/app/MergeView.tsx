@@ -78,6 +78,7 @@ export interface MergeViewProps {
 export function MergeView(props: MergeViewProps) {
   const { t } = useI18n();
   const [localMd, setLocalMd] = useState("");
+  const [remoteLexical, setRemoteLexical] = useState<string | null>(null);
   const [remoteMd, setRemoteMd] = useState("");
   const [mergedMd, setMergedMd] = useState("");
   const [busy, setBusy] = useState(false);
@@ -86,19 +87,15 @@ export function MergeView(props: MergeViewProps) {
   useEffect(() => {
     let cancelled = false;
     setLoadingRemote(true);
+    setRemoteLexical(null);
+    setRemoteMd("");
     void (async () => {
       try {
         const doc = await getDocumentApi(props.documentId);
         if (cancelled) return;
-        const { content } = await convertContentApi({
-          content: doc.content,
-          from: "lexical",
-          to: "markdown",
-        });
-        if (!cancelled) setRemoteMd(content);
+        setRemoteLexical(doc.content);
       } catch {
         if (!cancelled) props.onError(t("mergeLoadRemoteFailed"));
-      } finally {
         if (!cancelled) setLoadingRemote(false);
       }
     })();
@@ -106,6 +103,11 @@ export function MergeView(props: MergeViewProps) {
       cancelled = true;
     };
   }, [props.documentId, props.onError, t]);
+
+  const handleRemoteMd = useCallback((md: string) => {
+    setRemoteMd(md);
+    setLoadingRemote(false);
+  }, []);
 
   const handleLocalMd = useCallback((md: string) => {
     setLocalMd(md);
@@ -146,6 +148,16 @@ export function MergeView(props: MergeViewProps) {
         onMarkdown={handleLocalMd}
         onError={() => props.onError(t("mergeLoadLocalFailed"))}
       />
+      {remoteLexical ? (
+        <LexicalMarkdownBridge
+          lexicalJson={remoteLexical}
+          onMarkdown={handleRemoteMd}
+          onError={() => {
+            setLoadingRemote(false);
+            props.onError(t("mergeLoadRemoteFailed"));
+          }}
+        />
+      ) : null}
       <header className="mdocs-merge-toolbar">
         <h2>{t("mergeTitle")}</h2>
         <div className="mdocs-merge-toolbar-actions">
