@@ -10,8 +10,10 @@ const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
 
 const fileStoreMocks = vi.hoisted(() => ({
   lastWriteContent: "",
+  commitBlobs: new Map<string, string>(),
   reset() {
     fileStoreMocks.lastWriteContent = "";
+    fileStoreMocks.commitBlobs.clear();
   },
 }));
 
@@ -31,16 +33,23 @@ vi.mock("../storage/file-store.js", () => ({
       .update(fileStoreMocks.lastWriteContent || "{}")
       .digest("hex"),
   }),
-  writeCommitBlob: (contentHash: string, content: string) => ({
-    blobRef: `${contentHash.slice(0, 2)}/${contentHash.slice(2)}`,
-    bytes: content.length,
-  }),
+  writeCommitBlob: (contentHash: string, content: string) => {
+    const blobRef = `${contentHash.slice(0, 2)}/${contentHash.slice(2)}`;
+    fileStoreMocks.commitBlobs.set(blobRef, content);
+    return { blobRef, bytes: content.length };
+  },
+  readCommitBlob: (blobRef: string) => {
+    const content = fileStoreMocks.commitBlobs.get(blobRef);
+    if (!content) throw new Error("commit blob not found");
+    return content;
+  },
   deleteDocumentFile: () => {},
   sha256: (buf: Buffer) => createHash("sha256").update(buf).digest("hex"),
 }));
 
 import { DocumentError } from "../access/access-control.js";
-import { createDocument, updateDocument } from "./document.service.js";
+import { createDocument, getDocumentMergeContext, updateDocument } from "./document.service.js";
+import { findCommitById } from "../db/repositories/commit.repo.js";
 import { findDocumentById } from "../db/repositories/document.repo.js";
 import { insertDocumentInvite } from "../db/repositories/document.repo.js";
 import {
@@ -247,5 +256,37 @@ describe("updateDocument merge 发布", () => {
         },
       }),
     ).toThrow(DocumentError);
+  });
+});
+
+describe("getDocumentMergeContext", () => {
+  it("线性落后：LCA 为 localBase 并返回其 blob 正文", () => {
+    const created = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "merge-ctx.md",
+      content: '{"v":1}',
+      domainId: "default",
+    });
+    const localBase = created.headCommitId!;
+    const remote = updateDocument({
+      actorVisitorId: OWNER,
+      documentId: created.documentId,
+      content: '{"v":2}',
+      version: { localBaseCommitId: localBase },
+    });
+
+    const ctx = getDocumentMergeContext(
+      created.documentId,
+      localBase,
+      remote.headCommitId!,
+    );
+
+    expect(ctx.mode).toBe("three_way");
+    expect(ctx.mergeBaseCommitId).toBe(localBase);
+    const baseCommit = findCommitById(testDbRef.db!, localBase)!;
+    expect(ctx.mergeBaseContent).toBe(
+      fileStoreMocks.commitBlobs.get(baseCommit.blob_ref),
+    );
+    expect(ctx.mergeBaseContent).toBe('{"v":1}');
   });
 });

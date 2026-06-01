@@ -6,6 +6,7 @@ import {
   convertDocumentContent,
   getDocument,
   getDocumentInvites,
+  getDocumentMergeContext,
   getDocumentSyncStatus,
   listDocuments,
   listFolderChildren,
@@ -167,6 +168,42 @@ export function buildDocumentsRouter(): Router {
         res.json({ data: status });
       } catch (err) {
         respondError(res, err, "documents-route.sync-status");
+      }
+    },
+  );
+
+  /**
+   * GET /:documentId/merge-context
+   * merge UI：LCA commit id + 祖先正文（Lexical JSON）。
+   */
+  router.get(
+    "/:documentId/merge-context",
+    requireDocumentAccess("read"),
+    (req: Request, res: Response) => {
+      const documentId = req.params.documentId!;
+      const localBaseCommitId =
+        typeof req.query.localBaseCommitId === "string"
+          ? req.query.localBaseCommitId.trim()
+          : "";
+      const remoteCommitId =
+        typeof req.query.remoteCommitId === "string"
+          ? req.query.remoteCommitId.trim()
+          : "";
+      if (!localBaseCommitId || !remoteCommitId) {
+        res.status(400).json({
+          error: { code: "BAD_REQUEST", message: "localBaseCommitId and remoteCommitId are required" },
+        });
+        return;
+      }
+      try {
+        const ctx = getDocumentMergeContext(
+          documentId,
+          localBaseCommitId,
+          remoteCommitId,
+        );
+        res.json({ data: ctx });
+      } catch (err) {
+        respondError(res, err, "documents-route.merge-context");
       }
     },
   );

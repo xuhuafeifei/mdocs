@@ -11,6 +11,7 @@
 import { api, ApiRequestError, isDemoMode } from "./client";
 import type {
   DocumentDetail,
+  DocumentMergeContext,
   DocumentSyncStatus,
   PublishVersionContext,
 } from "../../shared/types/document";
@@ -265,6 +266,20 @@ export function getDocumentSyncStatusApi(
     ? `?localBaseCommitId=${encodeURIComponent(localBaseCommitId)}`
     : "";
   return api(`/api/documents/${encodeURIComponent(documentId)}/sync-status${q}`);
+}
+
+export function getDocumentMergeContextApi(
+  documentId: string,
+  localBaseCommitId: string,
+  remoteCommitId: string,
+): Promise<DocumentMergeContext> {
+  const params = new URLSearchParams({
+    localBaseCommitId,
+    remoteCommitId,
+  });
+  return api(
+    `/api/documents/${encodeURIComponent(documentId)}/merge-context?${params}`,
+  );
 }
 
 export function convertContentApi(input: {

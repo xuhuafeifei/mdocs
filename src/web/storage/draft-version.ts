@@ -9,4 +9,6 @@ export interface DraftConflictRecord {
   remoteCommitId: string;
   /** merge 前本地支 Lexical JSON，冲突瞬间冻结 */
   localSnapshotContent: string;
+  /** 开编分叉点正文 Lexical JSON（三方 merge 的 base） */
+  localBaseSnapshotContent?: string;
 }

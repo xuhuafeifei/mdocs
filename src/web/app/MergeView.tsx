@@ -1,70 +1,29 @@
 /**
- * 三栏手动 Merge：左本地 / 中合成 / 右远端（均为 Markdown）。
+ * IDEA 式三方 merge：左 local / 中 CodeMirror 结果（行内决议）/ 右 remote。
  */
-import { useCallback, useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import { LexicalMarkdownBridge } from "./LexicalMarkdownBridge";
+import { MergeCodeMirrorPane } from "./merge/MergeCodeMirrorPane";
+import { MergeResultEditor } from "./merge/MergeResultEditor";
+import {
+  assembleMergedMarkdown,
+  buildThreeWayMergePlan,
+  countConflicts,
+  countUnresolvedConflicts,
+  stripConflictPlaceholders,
+  updateConflictResolution,
+  type ConflictResolution,
+  type MergeSegment,
+} from "./merge/merge-plan";
 import {
   convertContentApi,
   getDocumentApi,
+  getDocumentMergeContextApi,
   updateDocumentApi,
 } from "../services/endpoints";
 import type { DraftConflictRecord } from "../storage/drafts";
 import type { DocumentDetail } from "../../shared/types/document";
-
-type PaneMode = "source" | "preview";
-
-function MergePane(props: {
-  title: string;
-  markdown: string;
-  editable?: boolean;
-  onChange?: (v: string) => void;
-}) {
-  const { t } = useI18n();
-  const [mode, setMode] = useState<PaneMode>("source");
-
-  return (
-    <section className="mdocs-merge-pane">
-      <header className="mdocs-merge-pane-header">
-        <span>{props.title}</span>
-        <div className="mdocs-merge-pane-tabs">
-          <button
-            type="button"
-            className={mode === "source" ? "active" : ""}
-            onClick={() => setMode("source")}
-          >
-            {t("mergeSource")}
-          </button>
-          <button
-            type="button"
-            className={mode === "preview" ? "active" : ""}
-            onClick={() => setMode("preview")}
-          >
-            {t("mergePreview")}
-          </button>
-        </div>
-      </header>
-      {mode === "source" ? (
-        props.editable ? (
-          <textarea
-            className="mdocs-merge-textarea"
-            value={props.markdown}
-            onChange={(e) => props.onChange?.(e.target.value)}
-            spellCheck={false}
-          />
-        ) : (
-          <pre className="mdocs-merge-readonly">{props.markdown}</pre>
-        )
-      ) : (
-        <div className="mdocs-merge-preview">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{props.markdown || ""}</ReactMarkdown>
-        </div>
-      )}
-    </section>
-  );
-}
 
 export interface MergeViewProps {
   documentId: string;
@@ -78,17 +37,25 @@ export interface MergeViewProps {
 export function MergeView(props: MergeViewProps) {
   const { t } = useI18n();
   const [localMd, setLocalMd] = useState("");
+  const [baseMd, setBaseMd] = useState("");
+  const [baseLexical, setBaseLexical] = useState<string | null>(null);
+  const [baseMissing, setBaseMissing] = useState(false);
+  const [baseReady, setBaseReady] = useState(false);
   const [remoteLexical, setRemoteLexical] = useState<string | null>(null);
   const [remoteMd, setRemoteMd] = useState("");
-  const [mergedMd, setMergedMd] = useState("");
+  const [segments, setSegments] = useState<MergeSegment[] | null>(null);
+  const [manualEdit, setManualEdit] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loadingRemote, setLoadingRemote] = useState(true);
+  const resultEditorGetTextRef = useRef<(() => string) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoadingRemote(true);
     setRemoteLexical(null);
     setRemoteMd("");
+    setSegments(null);
+    setManualEdit(false);
     void (async () => {
       try {
         const doc = await getDocumentApi(props.documentId);
@@ -104,6 +71,50 @@ export function MergeView(props: MergeViewProps) {
     };
   }, [props.documentId, props.onError, t]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setBaseLexical(null);
+    setBaseMd("");
+    setBaseMissing(false);
+    setBaseReady(false);
+    void (async () => {
+      try {
+        const ctx = await getDocumentMergeContextApi(
+          props.documentId,
+          props.conflict.localBaseCommitId,
+          props.conflict.remoteCommitId,
+        );
+        if (cancelled) return;
+        if (ctx.mode === "three_way" && ctx.mergeBaseContent) {
+          setBaseLexical(ctx.mergeBaseContent);
+          return;
+        }
+        if (props.conflict.localBaseSnapshotContent) {
+          setBaseLexical(props.conflict.localBaseSnapshotContent);
+          return;
+        }
+        setBaseMissing(true);
+        setBaseReady(true);
+      } catch {
+        if (cancelled) return;
+        if (props.conflict.localBaseSnapshotContent) {
+          setBaseLexical(props.conflict.localBaseSnapshotContent);
+          return;
+        }
+        setBaseMissing(true);
+        setBaseReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    props.documentId,
+    props.conflict.localBaseCommitId,
+    props.conflict.remoteCommitId,
+    props.conflict.localBaseSnapshotContent,
+  ]);
+
   const handleRemoteMd = useCallback((md: string) => {
     setRemoteMd(md);
     setLoadingRemote(false);
@@ -111,14 +122,62 @@ export function MergeView(props: MergeViewProps) {
 
   const handleLocalMd = useCallback((md: string) => {
     setLocalMd(md);
-    setMergedMd((prev) => (prev ? prev : md));
   }, []);
 
+  const handleBaseMd = useCallback((md: string) => {
+    setBaseMd(md);
+    setBaseReady(true);
+  }, []);
+
+  const handleBaseBridgeError = useCallback(() => {
+    if (props.conflict.localBaseSnapshotContent && baseLexical !== props.conflict.localBaseSnapshotContent) {
+      setBaseLexical(props.conflict.localBaseSnapshotContent);
+      return;
+    }
+    setBaseMissing(true);
+    setBaseMd("");
+    setBaseReady(true);
+  }, [props.conflict.localBaseSnapshotContent, baseLexical]);
+
+  useEffect(() => {
+    if (!localMd || !remoteMd || loadingRemote || !baseReady) return;
+    setSegments(buildThreeWayMergePlan(localMd, baseMd, remoteMd));
+    setManualEdit(false);
+  }, [localMd, remoteMd, baseMd, baseReady, loadingRemote, props.conflict.remoteCommitId]);
+
+  const publishMd = useMemo(() => {
+    if (!segments) return "";
+    return assembleMergedMarkdown(segments);
+  }, [segments]);
+
+  const conflictTotal = segments ? countConflicts(segments) : 0;
+  const unresolvedCount = segments ? countUnresolvedConflicts(segments) : 0;
+
+  function handleResolve(
+    conflictId: string,
+    resolution: ConflictResolution,
+    manualLines?: string[],
+  ): void {
+    setSegments((prev) =>
+      prev ? updateConflictResolution(prev, conflictId, resolution, manualLines) : prev,
+    );
+    setManualEdit(false);
+  }
+
   async function completeMerge(): Promise<void> {
+    if (unresolvedCount > 0) {
+      props.onError(t("mergeConflictsUnresolved", { count: String(unresolvedCount) }));
+      return;
+    }
+    const raw =
+      manualEdit && resultEditorGetTextRef.current
+        ? resultEditorGetTextRef.current()
+        : publishMd;
+    const body = stripConflictPlaceholders(raw);
     setBusy(true);
     try {
       const { content: lexical } = await convertContentApi({
-        content: mergedMd,
+        content: body,
         from: "markdown",
         to: "lexical",
       });
@@ -142,6 +201,8 @@ export function MergeView(props: MergeViewProps) {
     }
   }
 
+  const ready = Boolean(localMd && remoteMd && segments && !loadingRemote && baseReady);
+
   return (
     <div className="mdocs-merge-overlay">
       <LexicalMarkdownBridge
@@ -149,6 +210,13 @@ export function MergeView(props: MergeViewProps) {
         onMarkdown={handleLocalMd}
         onError={() => props.onError(t("mergeLoadLocalFailed"))}
       />
+      {baseLexical ? (
+        <LexicalMarkdownBridge
+          lexicalJson={baseLexical}
+          onMarkdown={handleBaseMd}
+          onError={handleBaseBridgeError}
+        />
+      ) : null}
       {remoteLexical ? (
         <LexicalMarkdownBridge
           lexicalJson={remoteLexical}
@@ -160,23 +228,69 @@ export function MergeView(props: MergeViewProps) {
         />
       ) : null}
       <header className="mdocs-merge-toolbar">
-        <h2>{t("mergeTitle")}</h2>
+        <div className="mdocs-merge-toolbar-title">
+          <h2>{t("mergeTitle")}</h2>
+          {ready && conflictTotal > 0 ? (
+            <span
+              className={`mdocs-merge-conflict-pill ${unresolvedCount > 0 ? "pending" : "resolved"}`}
+            >
+              {unresolvedCount > 0
+                ? t("mergeConflictsPending", {
+                    unresolved: String(unresolvedCount),
+                    total: String(conflictTotal),
+                  })
+                : t("mergeConflictsResolved", { total: String(conflictTotal) })}
+            </span>
+          ) : null}
+          {baseMissing ? (
+            <span className="mdocs-merge-base-warning">{t("mergeBaseMissing")}</span>
+          ) : null}
+        </div>
         <div className="mdocs-merge-toolbar-actions">
           <button type="button" className="secondary" disabled={busy} onClick={props.onClose}>
             {t("cancel")}
           </button>
-          <button type="button" className="primary" disabled={busy || loadingRemote} onClick={() => void completeMerge()}>
+          <button
+            type="button"
+            className="primary"
+            disabled={busy || !ready || unresolvedCount > 0}
+            onClick={() => void completeMerge()}
+          >
             {busy ? t("publishing") : t("mergeComplete")}
           </button>
         </div>
       </header>
-      <div className="mdocs-merge-columns">
-        <MergePane title={t("mergeLocal")} markdown={localMd} />
-        <MergePane title={t("mergeResult")} markdown={mergedMd} editable onChange={setMergedMd} />
-        <MergePane
-          title={loadingRemote ? t("mergeLoadingRemote") : t("mergeRemote")}
-          markdown={remoteMd}
-        />
+      <div className="mdocs-merge-body">
+        <aside className="mdocs-merge-side">
+          <header className="mdocs-merge-pane-header mdocs-merge-pane-header-static">
+            {t("mergeLocal")}
+          </header>
+          <MergeCodeMirrorPane doc={localMd} readOnly className="mdocs-merge-cm-side" />
+        </aside>
+        <main className="mdocs-merge-center">
+          {!ready ? (
+            <p className="mdocs-merge-loading">{t("mergeLoadingRemote")}</p>
+          ) : (
+            <>
+              <header className="mdocs-merge-result-header">
+                <h3>{t("mergeResult")}</h3>
+                <span className="mdocs-merge-result-hint">{t("mergeResultInlineHint")}</span>
+              </header>
+              <MergeResultEditor
+                segments={segments!}
+                onResolve={handleResolve}
+                getTextRef={resultEditorGetTextRef}
+                onDocumentEdited={() => setManualEdit(true)}
+              />
+            </>
+          )}
+        </main>
+        <aside className="mdocs-merge-side">
+          <header className="mdocs-merge-pane-header mdocs-merge-pane-header-static">
+            {loadingRemote ? t("mergeLoadingRemote") : t("mergeRemote")}
+          </header>
+          <MergeCodeMirrorPane doc={remoteMd} readOnly className="mdocs-merge-cm-side" />
+        </aside>
       </div>
     </div>
   );

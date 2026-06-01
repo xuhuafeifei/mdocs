@@ -72,6 +72,17 @@ export interface DocumentSyncStatus {
   headCommitId: string | null;
 }
 
+/** GET /documents/:id/merge-context 响应 */
+export type DocumentMergeContextMode = "three_way" | "two_way";
+
+export interface DocumentMergeContext {
+  mode: DocumentMergeContextMode;
+  /** LCA commit；two_way 时为 null */
+  mergeBaseCommitId: string | null;
+  /** LCA 正文（Lexical JSON）；two_way 时为 null */
+  mergeBaseContent: string | null;
+}
+
 export interface ConvertContentRequest {
   content: string;
   from: 'lexical' | 'markdown';

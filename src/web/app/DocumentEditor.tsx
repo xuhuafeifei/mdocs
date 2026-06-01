@@ -116,6 +116,8 @@ interface DocumentEditorProps {
   onConflictModalRequest?: () => void;
   onMergeRequest?: () => void;
   syncLocalBaseCommitId?: string | null;
+  /** 打开文档时服务端 Lexical 正文，用于首次草稿写入 merge base 快照 */
+  localBaseSnapshotLexicalAtEditStart?: string | null;
   onDelete: () => Promise<void>;
   /** Called by App.tsx before navigation to flush pending changes */
   saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
@@ -257,6 +259,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     displayName,
     enabled: props.canEdit,
     localBaseCommitIdAtEditStart: props.syncLocalBaseCommitId ?? props.document.headCommitId ?? null,
+    localBaseSnapshotContentAtEditStart: props.localBaseSnapshotLexicalAtEditStart ?? null,
     snapshotMeta: {
       relativePath: props.document.relativePath,
       permission: props.document.permission,
@@ -576,6 +579,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       content: jsonContent,
       displayName,
       localBaseCommitIdAtEditStart: props.syncLocalBaseCommitId ?? props.document.headCommitId ?? null,
+      localBaseSnapshotContentAtEditStart: props.localBaseSnapshotLexicalAtEditStart ?? null,
       snapshotMeta: {
         relativePath: props.document.relativePath,
         permission: props.document.permission,

@@ -30,6 +30,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/merge": "^6.12.1",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.43.0",
     "@lexical/rich-text": "0.42.0",
     "@lobehub/editor": "npm:@fgbg/lobe-editor@1.0.0-fork.12",
     "@lobehub/ui": "^5.0.0",
@@ -37,6 +42,7 @@
     "antd": "^6.1.1",
     "antd-style": "^4.1.0",
     "better-sqlite3": "11.10.0",
+    "codemirror": "^6.0.2",
     "cookie-parser": "^1.4.7",
     "es-toolkit": "^1.46.1",
     "express": "^4.21.0",
@@ -44,6 +50,7 @@
     "lucide-react": "^0.562.0",
     "motion": "^12.0.0",
     "multer": "^2.1.1",
+    "node-diff3": "^3.2.0",
     "react-markdown": "10.1.0",
     "react-router-dom": "^7.14.2",
     "remark": "^15.0.1",

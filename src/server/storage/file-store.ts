@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { resolveCommitBlobAbsolutePath, resolveDocAbsolutePath } from "./paths.js";
+import { resolveCommitBlobAbsolutePath, resolveDocAbsolutePath, StoragePathError } from "./paths.js";
 
 /** 单篇文档允许的最大字节数（2 MB），超过则拒绝写入。 */
 const MAX_DOC_BYTES = 2 * 1024 * 1024;
@@ -84,6 +84,26 @@ export function writeCommitBlob(contentHash: string, content: string): { blobRef
   // 与 resolveCommitBlobAbsolutePath 使用同一套相对路径规则
   const blobRef = `${contentHash.slice(0, 2)}/${contentHash.slice(2)}`;
   return { blobRef, bytes: buf.byteLength };
+}
+
+/**
+ * 按 document_commits.blob_ref 读取历史快照正文（UTF-8 Lexical JSON 字符串）。
+ */
+export function readCommitBlob(blobRef: string): string {
+  const ref = blobRef.trim();
+  if (!/^[a-f0-9]{2}\/[a-f0-9]{62}$/.test(ref)) {
+    throw new StoragePathError("invalid commit blob ref");
+  }
+  const contentHash = ref.slice(0, 2) + ref.slice(3);
+  const abs = resolveCommitBlobAbsolutePath(contentHash);
+  if (!fs.existsSync(abs)) {
+    throw new Error("commit blob not found");
+  }
+  const buf = fs.readFileSync(abs);
+  if (buf.byteLength > MAX_DOC_BYTES) {
+    throw new Error("commit blob is too large");
+  }
+  return buf.toString("utf8");
 }
 
 /**

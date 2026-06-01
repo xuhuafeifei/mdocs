@@ -20,8 +20,10 @@ import { insertCommit, insertCommitParent } from "../db/repositories/commit.repo
 import {
   assertCommitBelongsToDocument,
   assertMergeFork,
+  findMergeBaseCommitId,
   isAncestorOf,
 } from "./commit-graph.js";
+import { findCommitById } from "../db/repositories/commit.repo.js";
 import {
   findDomainById,
   isDomainMember,
@@ -41,6 +43,7 @@ import {
 import { insertAuditLog } from "../db/repositories/audit.repo.js";
 import {
   deleteDocumentFile,
+  readCommitBlob,
   readDocument,
   sha256,
   writeCommitBlob,
@@ -53,6 +56,7 @@ import {
 } from "../search/document-index-manager.js";
 import type {
   DocumentDetail,
+  DocumentMergeContext,
   DocumentSummary,
   DocumentSyncStatus,
   PublishVersionContext,
@@ -980,6 +984,42 @@ export function getDocumentSyncStatus(
     return { status: "behind", headCommitId: head };
   }
   return { status: "ahead", headCommitId: head };
+}
+
+/**
+ * 为 merge UI 提供 LCA 正文：根据 localBase / remote 在 DAG 上求 mergeBase，读取 blob。
+ * 无法求 LCA 或读 blob 失败时返回 two_way（前端可退化为开编快照或两方 diff）。
+ */
+export function getDocumentMergeContext(
+  documentId: string,
+  localBaseCommitId: string,
+  remoteCommitId: string,
+): DocumentMergeContext {
+  const row = findDocumentById(getDb(), documentId);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+
+  const db = getDb();
+  assertCommitBelongsToDocument(db, localBaseCommitId, documentId);
+  assertCommitBelongsToDocument(db, remoteCommitId, documentId);
+
+  let mergeBaseCommitId: string;
+  try {
+    mergeBaseCommitId = findMergeBaseCommitId(db, localBaseCommitId, remoteCommitId);
+  } catch {
+    return { mode: "two_way", mergeBaseCommitId: null, mergeBaseContent: null };
+  }
+
+  const baseCommit = findCommitById(db, mergeBaseCommitId);
+  if (!baseCommit) {
+    return { mode: "two_way", mergeBaseCommitId: null, mergeBaseContent: null };
+  }
+
+  try {
+    const mergeBaseContent = readCommitBlob(baseCommit.blob_ref);
+    return { mode: "three_way", mergeBaseCommitId, mergeBaseContent };
+  } catch {
+    return { mode: "two_way", mergeBaseCommitId: null, mergeBaseContent: null };
+  }
 }
 
 /** 内容格式转换（merge 发布：markdown → Lexical）。 */

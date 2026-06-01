@@ -146,6 +146,29 @@ async function demoApi<T>(
     return { status: "behind", headCommitId: head } as unknown as T;
   }
 
+  if (path.match(/^\/api\/documents\/[^/]+\/merge-context$/) && method === "GET") {
+    const documentId = path.split("/")[3]!;
+    const url = new URL(path, window.location.origin);
+    const localBase = url.searchParams.get("localBaseCommitId");
+    const remote = url.searchParams.get("remoteCommitId");
+    if (!localBase || !remote) {
+      throw new ApiRequestError(400, "BAD_REQUEST", "localBaseCommitId and remoteCommitId are required");
+    }
+    const doc = await mockGetDocument(documentId);
+    if (localBase === remote) {
+      return {
+        mode: "three_way",
+        mergeBaseCommitId: localBase,
+        mergeBaseContent: doc.content,
+      } as unknown as T;
+    }
+    return {
+      mode: "three_way",
+      mergeBaseCommitId: localBase,
+      mergeBaseContent: doc.content,
+    } as unknown as T;
+  }
+
   if (path === "/api/documents/convert" && method === "POST") {
     const b = body as { content?: string; from?: string; to?: string };
     const content = typeof b.content === "string" ? b.content : "";

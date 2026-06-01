@@ -171,6 +171,8 @@ export function App() {
 
   // ---- 当前打开的文档详情 ----
   const [activeDoc, setActiveDoc] = useState<DocumentDetail | null>(null);
+  /** 打开文档时服务端 Lexical 正文（未叠草稿），供 merge base 快照 */
+  const serverLexicalAtOpenRef = useRef<Record<string, string>>({});
 
   /** 客户端认定的服务端 head（开编 / 拉取 / 发布成功后更新） */
   const [syncLocalBaseCommitId, setSyncLocalBaseCommitId] = useState<string | null>(null);
@@ -207,6 +209,7 @@ export function App() {
           localBaseCommitId: editBase,
           remoteCommitId: remoteCommitId,
           localSnapshotContent: draft.content,
+          localBaseSnapshotContent: draft.localBaseSnapshotContent,
         };
         await saveDraftConflict(activeDoc.documentId, {
           localBaseCommitId: built.localBaseCommitId,
@@ -392,6 +395,7 @@ export function App() {
 
       const doc = await getDocumentApi(docId);
       if (expectedDocIdRef.current !== docId) return;
+      serverLexicalAtOpenRef.current[docId] = doc.content;
 
       if (doc.domainId !== currentDomainId) {
         localStorage.setItem("mdocs.currentDomainId", doc.domainId);
@@ -555,6 +559,7 @@ export function App() {
           localBaseCommitId,
           remoteCommitId: details.headCommitId,
           localSnapshotContent: localContent,
+          localBaseSnapshotContent: draft.localBaseSnapshotContent,
         },
       });
     }
@@ -1020,6 +1025,9 @@ export function App() {
                     onSyncClick={() => void handleSyncClick()}
                     onDraftExistsChange={setEditorDraftExists}
                     syncLocalBaseCommitId={syncLocalBaseCommitId}
+                    localBaseSnapshotLexicalAtEditStart={
+                      serverLexicalAtOpenRef.current[activeDoc.documentId] ?? null
+                    }
                     canManageInvites={Boolean(visitor && visitor.visitorId === activeDoc.ownerVisitorId)}
                     onDelete={async () => {
                       if (activeDoc.relativePath.endsWith("/___desc___.md")) {

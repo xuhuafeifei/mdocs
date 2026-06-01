@@ -105,8 +105,9 @@ merge 发布时 **`localBaseCommitId` 必填**。
 
 ## 实现备注
 
-- 当前**无**按 commit id 读取正文的公开 API；开编时可在草稿增加 `localBaseSnapshotContent` 以降低 merge UI 开发量（仅覆盖「线性落后」；reset 须检测后禁用自动 diff）。
-- `mergeBaseCommitId` 由服务端根据 DAG 计算；浏览器仅有 id 时无法在 reset 场景下自行推导。
+- **`GET /api/documents/:id/merge-context`**：`localBaseCommitId` + `remoteCommitId` → 服务端 `findMergeBaseCommitId` + `readCommitBlob`，返回 `{ mode, mergeBaseCommitId, mergeBaseContent }`（`mergeBaseContent` 为 Lexical JSON）。
+- merge UI 优先用该接口的祖先正文做三路 diff；`mode: two_way` 或请求失败时退化为两方 diff，并可选用草稿里的 `localBaseSnapshotContent` 作为近似 base（仅覆盖线性落后等场景）。
+- `mergeBaseCommitId` 由服务端根据 DAG 计算；浏览器仅有 id 时无法在 reset 场景下自行推导 LCA 正文。
 
 ## 相关文档
 
