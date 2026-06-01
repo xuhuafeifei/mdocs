@@ -259,10 +259,10 @@ export function updateDocumentApi(
 
 export function getDocumentSyncStatusApi(
   documentId: string,
-  baseCommitId?: string,
+  localBaseCommitId?: string,
 ): Promise<DocumentSyncStatus> {
-  const q = baseCommitId
-    ? `?baseCommitId=${encodeURIComponent(baseCommitId)}`
+  const q = localBaseCommitId
+    ? `?localBaseCommitId=${encodeURIComponent(localBaseCommitId)}`
     : "";
   return api(`/api/documents/${encodeURIComponent(documentId)}/sync-status${q}`);
 }

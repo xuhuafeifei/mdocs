@@ -1,7 +1,7 @@
 /**
  * 文档提交 DAG 的图遍历与校验。
  *
- * 用于 merge 发布前确认：base 是否为 expectedHead 的祖先（分叉是否成立）。
+ * 命名见 fgbg-docs/commit-naming-and-merge-base.md
  */
 import type Database from "better-sqlite3";
 import { DocumentError } from "../access/access-control.js";
@@ -17,7 +17,6 @@ export function isAncestorOf(
   nodeId: string,
 ): boolean {
   if (ancestorId === nodeId) return true;
-  // hash set优化
   const visited = new Set<string>();
   const queue = [nodeId];
   while (queue.length > 0) {
@@ -25,7 +24,6 @@ export function isAncestorOf(
     const parents = listParentCommitIds(db, cur);
     for (const p of parents) {
       if (p === ancestorId) return true;
-      // bfs的时候会存在重复遍历的情况，set 去重
       if (!visited.has(p)) {
         visited.add(p);
         queue.push(p);
@@ -48,30 +46,69 @@ export function assertCommitBelongsToDocument(
 }
 
 /**
+ * 求两提交在 DAG 上的最近公共祖先（LCA），用于 merge 三路 diff 的 mergeBaseCommitId。
+ * 若一方是另一方的祖先，返回祖先侧节点。
+ */
+export function findMergeBaseCommitId(
+  db: Database.Database,
+  commitA: string,
+  commitB: string,
+): string {
+  if (commitA === commitB) return commitA;
+  if (isAncestorOf(db, commitA, commitB)) return commitA;
+  if (isAncestorOf(db, commitB, commitA)) return commitB;
+
+  const ancestorsOfA = new Set<string>();
+  const queueA = [commitA];
+  while (queueA.length > 0) {
+    const cur = queueA.shift()!;
+    if (ancestorsOfA.has(cur)) continue;
+    ancestorsOfA.add(cur);
+    for (const p of listParentCommitIds(db, cur)) {
+      queueA.push(p);
+    }
+  }
+
+  const visitedB = new Set<string>();
+  const queueB = [commitB];
+  while (queueB.length > 0) {
+    const cur = queueB.shift()!;
+    if (ancestorsOfA.has(cur)) return cur;
+    if (visitedB.has(cur)) continue;
+    visitedB.add(cur);
+    for (const p of listParentCommitIds(db, cur)) {
+      queueB.push(p);
+    }
+  }
+
+  throw new DocumentError(
+    "BAD_REQUEST",
+    "无法计算 mergeBaseCommitId：两提交无公共祖先",
+    400,
+  );
+}
+
+/**
  * merge 发布前校验分叉关系。
- * - base 与 expectedHead 不能相同（否则应走普通线性发布）
- * - base 必须是 expectedHead 的祖先（共同祖先之后分两路改）
+ * - localBaseCommitId 与 remoteCommitId 不能相同（否则应走普通线性发布）
+ * - localBaseCommitId 必须是 remoteCommitId 的祖先（允许远端在分叉后线性前进）
  */
 export function assertMergeFork(
   db: Database.Database,
-  baseCommitId: string,
-  expectedHeadCommitId: string,
+  localBaseCommitId: string,
+  remoteCommitId: string,
 ): void {
-  /* 
-   * 如果 base(本地 commit 的父节点) 和 expect(远端文章最新的节点)相同
-   * 则不走 conflict merge逻辑, 应该走普通线性发布逻辑
-   */
-  if (baseCommitId === expectedHeadCommitId) {
+  if (localBaseCommitId === remoteCommitId) {
     throw new DocumentError(
       "BAD_REQUEST",
-      "合并发布要求 base 与 expectedHead 不同",
+      "合并发布要求 localBaseCommitId 与 remoteCommitId 不同",
       400,
     );
   }
-  if (!isAncestorOf(db, baseCommitId, expectedHeadCommitId)) {
+  if (!isAncestorOf(db, localBaseCommitId, remoteCommitId)) {
     throw new DocumentError(
       "BAD_REQUEST",
-      "base 不是 expectedHead 的祖先，无法合并",
+      "localBaseCommitId 不是 remoteCommitId 的祖先，无法合并",
       400,
     );
   }

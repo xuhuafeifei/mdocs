@@ -45,7 +45,7 @@
 - `displayName`
 - `updatedAt`
 - `published`
-- `baseCommitId`（开编时 commit，首次创建写入，后续不改）
+- `localBaseCommitId`（开编分叉点，首次创建写入，后续不改；命名见 [commit-naming-and-merge-base.md](./commit-naming-and-merge-base.md)）
 - `headCommitIdAtOpen`（记录打开时远端 head，便于诊断）
 - `relativePath`
 - `domainId`
@@ -56,8 +56,8 @@
 
 说明：
 
-- 本文里把 `baseCommitId` 视为“副本分叉点”，不是“每次同步的最新 head”。
-- 若保留 `syncedHeadCommitId`（内存态），其职责必须非常单一，避免与 `baseCommitId` 混用。
+- 本文里把 `localBaseCommitId` 视为“副本分叉点”，不是 `remoteCommitId`（当前服务端 head）。
+- 内存态 `syncLocalBaseCommitId` 用于 sync-status 轮询：有草稿时用草稿的 `localBaseCommitId`，无草稿时用打开文档时的 head。
 
 ---
 
@@ -67,12 +67,12 @@
 
 1. 用户打开文档（仅展示，不立刻建草稿）。
 2. 用户第一次产生 dirty 内容。
-3. 写入全量草稿副本（含 meta + `baseCommitId`）。
+3. 写入全量草稿副本（含 meta + `localBaseCommitId`）。
 
 ### B. 自动保存
 
 - 仅更新：`content`、`displayName`、`updatedAt`（和必要状态位）。
-- 不改：`baseCommitId`、`relativePath`、`domainId`、`permission`、`ownerVisitorId`。
+- 不改：`localBaseCommitId`、`relativePath`、`domainId`、`permission`、`ownerVisitorId`。
 
 ### C. 发布
 

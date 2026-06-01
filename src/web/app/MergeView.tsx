@@ -126,9 +126,9 @@ export function MergeView(props: MergeViewProps) {
         content: lexical,
         displayName: props.displayName,
         version: {
-          baseCommitId: props.conflict.baseCommitId,
+          localBaseCommitId: props.conflict.localBaseCommitId,
           merge: {
-            expectedHeadCommitId: props.conflict.expectedHeadCommitId,
+            remoteCommitId: props.conflict.remoteCommitId,
             localSnapshotContent: props.conflict.localSnapshotContent,
           },
         },

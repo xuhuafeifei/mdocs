@@ -9,14 +9,15 @@ const POLL_MS = 10_000;
 
 export function useDocumentVersion(
   documentId: string | null,
-  syncedHeadCommitId: string | null | undefined,
+  /** 用于 sync-status 比较的开编分叉点；无草稿时多为打开文档时的 head */
+  syncLocalBaseCommitId: string | null | undefined,
 ) {
-  const [remoteHeadCommitId, setRemoteHeadCommitId] = useState<string | null>(null);
+  const [remoteCommitId, setRemoteCommitId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<DocumentSyncStatusKind>("up_to_date");
 
   useEffect(() => {
     if (!documentId) {
-      setRemoteHeadCommitId(null);
+      setRemoteCommitId(null);
       setSyncStatus("up_to_date");
       return;
     }
@@ -29,10 +30,10 @@ export function useDocumentVersion(
       try {
         const res = await getDocumentSyncStatusApi(
           docId,
-          syncedHeadCommitId ?? undefined,
+          syncLocalBaseCommitId ?? undefined,
         );
         if (cancelled) return;
-        setRemoteHeadCommitId(res.headCommitId);
+        setRemoteCommitId(res.headCommitId);
         setSyncStatus(res.status);
       } catch {
         /* 网络错误时保持上次状态 */
@@ -45,11 +46,14 @@ export function useDocumentVersion(
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [documentId, syncedHeadCommitId]);
+  }, [documentId, syncLocalBaseCommitId]);
 
   const syncBehind =
-    Boolean(syncedHeadCommitId && remoteHeadCommitId && syncedHeadCommitId !== remoteHeadCommitId) ||
-    syncStatus === "behind";
+    Boolean(
+      syncLocalBaseCommitId &&
+        remoteCommitId &&
+        syncLocalBaseCommitId !== remoteCommitId,
+    ) || syncStatus === "behind";
 
-  return { remoteHeadCommitId, syncStatus, syncBehind };
+  return { remoteCommitId, syncStatus, syncBehind };
 }

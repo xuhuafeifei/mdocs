@@ -3,10 +3,10 @@
 export type DraftConflictStatus = "none" | "publish_conflict" | "diverged";
 
 export interface DraftConflictRecord {
-  /** 开编时服务端 head（与 DraftRecord.baseCommitId 同源） */
-  baseCommitId: string;
-  /** 冲突/合并时远端当前 head */
-  expectedHeadCommitId: string;
+  /** 开编分叉点（与 DraftRecord.localBaseCommitId 同源） */
+  localBaseCommitId: string;
+  /** 进入冲突 / merge 时远端 tip */
+  remoteCommitId: string;
   /** merge 前本地支 Lexical JSON，冲突瞬间冻结 */
   localSnapshotContent: string;
 }

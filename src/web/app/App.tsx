@@ -174,7 +174,7 @@ export function App() {
   const [activeDoc, setActiveDoc] = useState<DocumentDetail | null>(null);
 
   /** 客户端认定的服务端 head（开编 / 拉取 / 发布成功后更新） */
-  const [syncedHeadCommitId, setSyncedHeadCommitId] = useState<string | null>(null);
+  const [syncLocalBaseCommitId, setSyncLocalBaseCommitId] = useState<string | null>(null);
   const [conflictModalOpen, setConflictModalOpen] = useState(false);
   const [mergeViewOpen, setMergeViewOpen] = useState(false);
   const [editorDraftExists, setEditorDraftExists] = useState(false);
@@ -183,9 +183,9 @@ export function App() {
   const syncTargetDocumentId = activeDoc?.documentId && !editorDraftExists
     ? activeDoc.documentId
     : null;
-  const { syncBehind, remoteHeadCommitId } = useDocumentVersion(
+  const { syncBehind, remoteCommitId } = useDocumentVersion(
     syncTargetDocumentId,
-    syncedHeadCommitId,
+    syncLocalBaseCommitId,
   );
 
   const [mergeConflict, setMergeConflict] = useState<DraftConflictRecord | null>(null);
@@ -201,23 +201,23 @@ export function App() {
         setMergeConflict(draft.conflict);
         return;
       }
-      if (draft && syncedHeadCommitId && remoteHeadCommitId) {
-        const editBase = draft.baseCommitId ?? syncedHeadCommitId;
+      if (draft && syncLocalBaseCommitId && remoteCommitId) {
+        const editBase = draft.localBaseCommitId ?? syncLocalBaseCommitId;
         if (!editBase) return;
         const built: DraftConflictRecord = {
-          baseCommitId: editBase,
-          expectedHeadCommitId: remoteHeadCommitId,
+          localBaseCommitId: editBase,
+          remoteCommitId: remoteCommitId,
           localSnapshotContent: draft.content,
         };
         await saveDraftConflict(activeDoc.documentId, {
-          baseCommitId: built.baseCommitId,
+          localBaseCommitId: built.localBaseCommitId,
           conflictStatus: "diverged",
           conflict: built,
         });
         setMergeConflict(built);
       }
     })();
-  }, [mergeViewOpen, activeDoc, syncedHeadCommitId, remoteHeadCommitId]);
+  }, [mergeViewOpen, activeDoc, syncLocalBaseCommitId, remoteCommitId]);
 
   useEffect(() => {
     if (!activeDoc || !syncBehind || !editorDraftExists) return;
@@ -402,7 +402,11 @@ export function App() {
       setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
 
       const head = doc.headCommitId ?? null;
-      setSyncedHeadCommitId(head);
+      const localBase =
+        draft && !draft.published && draft.localBaseCommitId
+          ? draft.localBaseCommitId
+          : head;
+      setSyncLocalBaseCommitId(localBase);
 
       if (expectedDocIdRef.current !== docId) return;
       setActiveDoc(
@@ -432,7 +436,7 @@ export function App() {
       void openDocument(documentId);
     } else {
       setActiveDoc(null);
-      setSyncedHeadCommitId(null);
+      setSyncLocalBaseCommitId(null);
     }
     // 注意：openDocument 在 effect 内部定义，eslint 会提示缺少依赖
     // 但将 openDocument 加入依赖会导致无限循环，因此忽略该规则
@@ -525,7 +529,7 @@ export function App() {
     documentId: string,
     localContent: string,
     displayName: string,
-    baseCommitId: string,
+    localBaseCommitId: string,
     details: VersionConflictDetails,
   ): Promise<void> {
     let draft = await getDraft(documentId);
@@ -536,7 +540,7 @@ export function App() {
         displayName,
         updatedAt: Date.now(),
         published: false,
-        baseCommitId,
+        localBaseCommitId,
         relativePath: activeDoc.relativePath,
         permission: activeDoc.permission,
         ownerVisitorId: activeDoc.ownerVisitorId,
@@ -546,11 +550,11 @@ export function App() {
     }
     if (draft) {
       await saveDraftConflict(documentId, {
-        baseCommitId,
+        localBaseCommitId,
         conflictStatus: "publish_conflict",
         conflict: {
-          baseCommitId,
-          expectedHeadCommitId: details.headCommitId,
+          localBaseCommitId,
+          remoteCommitId: details.headCommitId,
           localSnapshotContent: localContent,
         },
       });
@@ -559,25 +563,25 @@ export function App() {
   }
 
   /**
-   * 发布文档：带 version.baseCommitId 乐观锁。
+   * 发布文档：带 version.localBaseCommitId 乐观锁。
    */
   async function publishDocument(content: string, displayName: string, documentId: string, permission?: number): Promise<void> {
     const draftForPublish = await getDraft(documentId);
-    const baseCommitId =
-      draftForPublish?.baseCommitId ?? syncedHeadCommitId ?? activeDoc?.headCommitId;
-    if (!baseCommitId) {
+    const localBaseCommitId =
+      draftForPublish?.localBaseCommitId ?? syncLocalBaseCommitId ?? activeDoc?.headCommitId;
+    if (!localBaseCommitId) {
       setAlertMessage(t("syncHeadMissing"));
-      throw new Error("missing baseCommitId");
+      throw new Error("missing localBaseCommitId");
     }
     try {
       const updated = await updateDocumentApi(documentId, {
         content,
         displayName,
         permission,
-        version: { baseCommitId },
+        version: { localBaseCommitId },
       });
       setActiveDoc((prev) => (prev && prev.documentId === documentId ? updated : prev));
-      setSyncedHeadCommitId(updated.headCommitId ?? null);
+      setSyncLocalBaseCommitId(updated.headCommitId ?? null);
       await clearDraftConflict(documentId);
       await refreshTree();
       setConflictModalOpen(false);
@@ -595,7 +599,7 @@ export function App() {
           documentId,
           content,
           displayName,
-          baseCommitId,
+          localBaseCommitId,
           err.details as VersionConflictDetails,
         );
       }
@@ -614,7 +618,7 @@ export function App() {
     }
     setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
     setActiveDoc(doc);
-    setSyncedHeadCommitId(doc.headCommitId ?? null);
+    setSyncLocalBaseCommitId(doc.headCommitId ?? null);
     setMessage(t("syncPullDone"));
     window.setTimeout(() => setMessage(null), 1200);
   }
@@ -638,7 +642,7 @@ export function App() {
   async function handleMergeSuccess(updated: DocumentDetail): Promise<void> {
     setActiveDoc(updated);
     const head = updated.headCommitId ?? null;
-    setSyncedHeadCommitId(head);
+    setSyncLocalBaseCommitId(head);
     setMergeViewOpen(false);
     setConflictModalOpen(false);
     if (head) {
@@ -676,14 +680,14 @@ export function App() {
       const draft = await getDraft(docId);
       // 如果草稿不存在，直接返回（可能已被其他逻辑删除）
       if (!draft) return;
-      const baseCommitId = draft.baseCommitId;
-      if (!baseCommitId) {
+      const localBaseCommitId = draft.localBaseCommitId;
+      if (!localBaseCommitId) {
         const doc = await getDocumentApi(docId);
         if (doc.headCommitId) {
-          await saveDraftRecord({ ...draft, baseCommitId: doc.headCommitId });
+          await saveDraftRecord({ ...draft, localBaseCommitId: doc.headCommitId });
         }
       }
-      const base = (await getDraft(docId))?.baseCommitId;
+      const base = (await getDraft(docId))?.localBaseCommitId;
       if (!base) {
         setAlertMessage(t("syncHeadMissing"));
         return;
@@ -691,7 +695,7 @@ export function App() {
       await updateDocumentApi(docId, {
         content: draft.content,
         displayName: draft.displayName,
-        version: { baseCommitId: base },
+        version: { localBaseCommitId: base },
       });
       // 乐观锁：只有草稿在 API 调用期间没被修改过，才删除本地草稿
       const deleted = await deleteDraftIfUnchanged(docId, draft.updatedAt);
@@ -1035,7 +1039,7 @@ export function App() {
                     syncBehind={syncBehind}
                     onSyncClick={() => void handleSyncClick()}
                     onDraftExistsChange={setEditorDraftExists}
-                    syncedHeadCommitId={syncedHeadCommitId}
+                    syncLocalBaseCommitId={syncLocalBaseCommitId}
                     canManageInvites={Boolean(visitor && visitor.visitorId === activeDoc.ownerVisitorId)}
                     onDelete={async () => {
                       if (activeDoc.relativePath.endsWith("/___desc___.md")) {

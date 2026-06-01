@@ -17,8 +17,8 @@ interface UseAutoSaveOptions {
   debounceMs?: number;
   /** When false, skip Lexical listeners (e.g. read-only). */
   enabled?: boolean;
-  /** 当前已知的文档 head；仅在该 documentId 尚无草稿时写入 `baseCommitId`（开编基准） */
-  headCommitIdAtEditStart?: string | null;
+  /** 开编时服务端 head；仅在该 documentId 尚无草稿时写入 localBaseCommitId */
+  localBaseCommitIdAtEditStart?: string | null;
   /** 首次创建草稿时一并落盘的文档 meta 快照 */
   snapshotMeta?: {
     relativePath: string;
@@ -53,7 +53,7 @@ export function useAutoSave({
   displayName,
   debounceMs = 1000,
   enabled = true,
-  headCommitIdAtEditStart,
+  localBaseCommitIdAtEditStart,
   snapshotMeta,
 }: UseAutoSaveOptions) {
   // ---- 状态：内容是否有未保存的变更 ----
@@ -92,11 +92,11 @@ export function useAutoSave({
   // ---- 使用 ref 保存频繁变化的值，避免 performSave 依赖变化导致监听器反复注册 ----
   const documentIdRef = useRef(documentId);
   const displayNameRef = useRef(displayName);
-  const headAtEditStartRef = useRef(headCommitIdAtEditStart);
+  const headAtEditStartRef = useRef(localBaseCommitIdAtEditStart);
   const snapshotMetaRef = useRef(snapshotMeta);
   documentIdRef.current = documentId;
   displayNameRef.current = displayName;
-  headAtEditStartRef.current = headCommitIdAtEditStart;
+  headAtEditStartRef.current = localBaseCommitIdAtEditStart;
   snapshotMetaRef.current = snapshotMeta;
 
   /**
@@ -120,7 +120,7 @@ export function useAutoSave({
       documentId: documentIdRef.current,
       content: jsonContent,
       displayName: displayNameRef.current,
-      headCommitIdAtEditStart: headAtEditStartRef.current,
+      localBaseCommitIdAtEditStart: headAtEditStartRef.current,
       snapshotMeta: snapshotMetaRef.current,
     });
     // 保存成功后，用当前 markdown 内容更新对比基线
@@ -243,7 +243,7 @@ export function useAutoSave({
       cancelAnimationFrame(raf);
       cleanupRef.current?.();
     };
-  }, [enabled, editor, documentId, displayName, debounceMs, headCommitIdAtEditStart, snapshotMeta, performSave]);
+  }, [enabled, editor, documentId, displayName, debounceMs, localBaseCommitIdAtEditStart, snapshotMeta, performSave]);
 
   /**
    * 编辑器失焦时立即保存（取消待执行的防抖定时器，若内容有变更则立即执行）。

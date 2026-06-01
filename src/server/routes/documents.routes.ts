@@ -158,10 +158,12 @@ export function buildDocumentsRouter(): Router {
     requireDocumentAccess("read"),
     (req: Request, res: Response) => {
       const documentId = req.params.documentId!;
-      const baseCommitId =
-        typeof req.query.baseCommitId === "string" ? req.query.baseCommitId : undefined;
+      const localBaseCommitId =
+        typeof req.query.localBaseCommitId === "string"
+          ? req.query.localBaseCommitId
+          : undefined;
       try {
-        const status = getDocumentSyncStatus(documentId, baseCommitId);
+        const status = getDocumentSyncStatus(documentId, localBaseCommitId);
         res.json({ data: status });
       } catch (err) {
         respondError(res, err, "documents-route.sync-status");
@@ -203,7 +205,7 @@ export function buildDocumentsRouter(): Router {
    * - displayName?: string  可选，新展示名
    * - permission?: number   可选，新权限档位
    * - contentFormat?: 'markdown' | 'lexical'
-   * - version?: { baseCommitId?, merge?: { expectedHeadCommitId, localSnapshotContent? } }
+   * - version?: { localBaseCommitId?, merge?: { remoteCommitId, localSnapshotContent? } }
    */
   router.put("/:documentId", requireDocumentAccess("edit"), (req: Request, res: Response) => {
     // 中间件只校验了文档访问权，编辑操作仍需确认已登录（ req.visitor 存在）
@@ -401,15 +403,15 @@ export function buildDocumentsRouter(): Router {
 function parsePublishVersion(raw: unknown): PublishVersionContext | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const v = raw as Record<string, unknown>;
-  const baseCommitId =
-    typeof v.baseCommitId === "string" ? v.baseCommitId : undefined;
+  const localBaseCommitId =
+    typeof v.localBaseCommitId === "string" ? v.localBaseCommitId : undefined;
 
   let merge: PublishVersionContext["merge"];
   if (v.merge && typeof v.merge === "object") {
     const m = v.merge as Record<string, unknown>;
-    if (typeof m.expectedHeadCommitId === "string") {
+    if (typeof m.remoteCommitId === "string") {
       merge = {
-        expectedHeadCommitId: m.expectedHeadCommitId,
+        remoteCommitId: m.remoteCommitId,
         localSnapshotContent:
           typeof m.localSnapshotContent === "string"
             ? m.localSnapshotContent
@@ -418,8 +420,8 @@ function parsePublishVersion(raw: unknown): PublishVersionContext | undefined {
     }
   }
 
-  if (!baseCommitId && !merge) return undefined;
-  return { baseCommitId, merge };
+  if (!localBaseCommitId && !merge) return undefined;
+  return { localBaseCommitId, merge };
 }
 
 /**

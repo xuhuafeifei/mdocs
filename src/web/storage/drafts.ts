@@ -8,7 +8,7 @@ export type { DraftConflictRecord, DraftConflictStatus };
 
 // ---- 数据库配置 ----
 const DB_NAME = "mdocs-drafts";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE = "drafts";
 
 /**
@@ -30,8 +30,8 @@ export interface DraftRecord {
   domainId?: string;
   publishError?: string;
   publishErrorAt?: number;
-  /** 开编基准：草稿**首次创建**时对应的服务端 headCommitId，之后不再随自动保存更新 */
-  baseCommitId?: string;
+  /** 开编分叉点：草稿**首次创建**时对应的服务端 head，之后不再随自动保存更新 */
+  localBaseCommitId?: string;
   conflictStatus?: DraftConflictStatus;
   conflict?: DraftConflictRecord;
 }
@@ -47,8 +47,37 @@ function openDB(): Promise<IDBDatabase> {
         if (!db.objectStoreNames.contains(STORE)) {
           db.createObjectStore(STORE, { keyPath: "documentId" });
         }
-        // v2→v3：草稿不再缓存文档 meta（旧字段存盘仍在，读出后下次保存会丢弃）
-        void ev.oldVersion;
+        const oldVersion = ev.oldVersion;
+        if (oldVersion > 0 && oldVersion < 4) {
+          const tx = req.transaction!;
+          const store = tx.objectStore(STORE);
+          const cursorReq = store.openCursor();
+          cursorReq.onsuccess = () => {
+            const cursor = cursorReq.result;
+            if (!cursor) return;
+            const v = cursor.value as Record<string, unknown>;
+            if (typeof v.baseCommitId === "string" && !v.localBaseCommitId) {
+              v.localBaseCommitId = v.baseCommitId;
+              delete v.baseCommitId;
+            }
+            const conflict = v.conflict as Record<string, unknown> | undefined;
+            if (conflict) {
+              if (typeof conflict.baseCommitId === "string" && !conflict.localBaseCommitId) {
+                conflict.localBaseCommitId = conflict.baseCommitId;
+                delete conflict.baseCommitId;
+              }
+              if (
+                typeof conflict.expectedHeadCommitId === "string" &&
+                !conflict.remoteCommitId
+              ) {
+                conflict.remoteCommitId = conflict.expectedHeadCommitId;
+                delete conflict.expectedHeadCommitId;
+              }
+            }
+            cursor.update(v);
+            cursor.continue();
+          };
+        }
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -59,14 +88,14 @@ function openDB(): Promise<IDBDatabase> {
 
 /**
  * 写入/更新正文草稿：覆盖 content / displayName / updatedAt，并合并保留 conflict、publishError。
- * `baseCommitId` 仅在**尚无该 documentId 草稿**时，用当时的 head 写入一次（开编基准）。
+ * `localBaseCommitId` 仅在**尚无该 documentId 草稿**时，用当时的 head 写入一次（开编基准）。
  */
 export async function upsertContentDraft(params: {
   documentId: string;
   content: string;
   displayName: string;
-  /** 开编时服务端 head；仅首次创建草稿时写入 baseCommitId */
-  headCommitIdAtEditStart?: string | null;
+  /** 开编时服务端 head；仅首次创建草稿时写入 localBaseCommitId */
+  localBaseCommitIdAtEditStart?: string | null;
   /** 首次落盘时写入的文档快照 meta（后续自动保存不覆盖） */
   snapshotMeta?: {
     relativePath: string;
@@ -83,11 +112,11 @@ export async function upsertContentDraft(params: {
     updatedAt: Date.now(),
     published: false,
   };
-  if (existing?.baseCommitId) {
-    record.baseCommitId = existing.baseCommitId;
+  if (existing?.localBaseCommitId) {
+    record.localBaseCommitId = existing.localBaseCommitId;
   } else {
-    const head = params.headCommitIdAtEditStart?.trim();
-    if (head) record.baseCommitId = head;
+    const head = params.localBaseCommitIdAtEditStart?.trim();
+    if (head) record.localBaseCommitId = head;
   }
   if (existing?.relativePath) {
     record.relativePath = existing.relativePath;
@@ -142,7 +171,7 @@ export async function rebuildDraftAfterMerge(params: {
     displayName: params.displayName,
     updatedAt: Date.now(),
     published: false,
-    baseCommitId: params.headCommitId,
+    localBaseCommitId: params.headCommitId,
     relativePath: params.relativePath,
     permission: params.permission,
     ownerVisitorId: params.ownerVisitorId,
@@ -165,7 +194,7 @@ function sanitizeDraft(doc: DraftRecord): DraftRecord {
   if (doc.domainId) sanitized.domainId = doc.domainId;
   if (doc.publishError != null) sanitized.publishError = doc.publishError;
   if (doc.publishErrorAt != null) sanitized.publishErrorAt = doc.publishErrorAt;
-  if (doc.baseCommitId) sanitized.baseCommitId = doc.baseCommitId;
+  if (doc.localBaseCommitId) sanitized.localBaseCommitId = doc.localBaseCommitId;
   if (doc.conflictStatus != null) sanitized.conflictStatus = doc.conflictStatus;
   if (doc.conflict != null) sanitized.conflict = doc.conflict;
   return sanitized;
@@ -293,14 +322,14 @@ export async function saveDraftConflict(
   patch: {
     conflict: DraftConflictRecord;
     conflictStatus: DraftConflictStatus;
-    baseCommitId: string;
+    localBaseCommitId: string;
   },
 ): Promise<void> {
   const existing = await getDraft(documentId);
   if (!existing) return;
   await saveDraft({
     ...existing,
-    baseCommitId: patch.baseCommitId,
+    localBaseCommitId: patch.localBaseCommitId,
     conflictStatus: patch.conflictStatus,
     conflict: patch.conflict,
   });

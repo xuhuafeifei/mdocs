@@ -406,15 +406,15 @@ export function updateDocument(params: {
   const displayName = params.displayName?.trim() || row.display_name;
   const now = new Date().toISOString();
   const version = params.version;
-  const baseCommitId = version?.baseCommitId;
+  const localBaseCommitId = version?.localBaseCommitId;
   const mergeCtx = version?.merge;
 
   // 冲突解决后的合并发布：插 r_local + 双父 merge 节点
   if (mergeCtx) {
-    if (!baseCommitId) {
+    if (!localBaseCommitId) {
       throw new DocumentError(
         "BAD_REQUEST",
-        "merge 发布需要在 version 中提供 baseCommitId",
+        "merge 发布需要在 version 中提供 localBaseCommitId",
         400,
       );
     }
@@ -428,15 +428,15 @@ export function updateDocument(params: {
       content,
       displayName,
       permission: params.permission,
-      baseCommitId,
-      expectedHeadCommitId: mergeCtx.expectedHeadCommitId,
+      localBaseCommitId,
+      remoteCommitId: mergeCtx.remoteCommitId,
       localSnapshotContent,
       now,
     });
   }
 
   // 普通线性发布：客户端 base 必须等于当前 head（未传 version 则跳过校验）
-  assertNoVersionConflict(db, row, baseCommitId);
+  assertNoVersionConflict(db, row, localBaseCommitId);
 
   const write = writeDocument(row.domain_id, row.relative_path, content);
   const commitId = randomUUID();
@@ -736,23 +736,23 @@ function throwVersionConflict(
 }
 
 /**
- * 普通发布前的乐观锁：baseCommitId 与 head 不一致则冲突。
- * 未传 baseCommitId 时跳过（兼容尚未接入的前端）。
+ * 普通发布前的乐观锁：localBaseCommitId 与 head 不一致则冲突。
+ * 未传 localBaseCommitId 时跳过（兼容尚未接入的前端）。
  */
 function assertNoVersionConflict(
   db: ReturnType<typeof getDb>,
   row: DocumentRow,
-  baseCommitId: string | undefined,
+  localBaseCommitId: string | undefined,
 ): void {
-  // 客户端没传 base：旧版前端或未启用冲突检测，直接放行（不进行冲突校验）
+  // 客户端没传 localBase：旧版前端或未启用冲突检测，直接放行（不进行冲突校验）
   // 文档尚无 head：历史数据/异常态，无法比对，也放行
-  if (!baseCommitId || !row.head_commit_id) return;
+  if (!localBaseCommitId || !row.head_commit_id) return;
 
   // 客户端认为的「我基于的那一版」仍等于服务端当前 head → 无人插队，可 fast-forward 发布
-  if (baseCommitId === row.head_commit_id) return;
+  if (localBaseCommitId === row.head_commit_id) return;
 
-  // 走到这里：base 有值且与 head 不同 → 说明在你编辑期间 head 已被别人/另一标签推进 → 409
-  assertCommitBelongsToDocument(db, baseCommitId, row.document_id);
+  // 走到这里：localBase 有值且与 head 不同 → 说明在你编辑期间 head 已被别人/另一标签推进 → 409
+  assertCommitBelongsToDocument(db, localBaseCommitId, row.document_id);
   const { content, contentHash } = readDocument(row.domain_id, row.relative_path);
   throwVersionConflict(row, content, contentHash);
 }
@@ -762,14 +762,14 @@ function assertNoVersionConflict(
  *
  * 提交图（merge 完成后）示意：
  *
- *     base（开编时的 head，version.baseCommitId）
- *      ├── expectedHead（冲突时远端最新，version.merge.expectedHeadCommitId）
- *      └── r_local（本地支，本次首次落库；父 = base）
+ *     localBaseCommitId（开编分叉点，version.localBaseCommitId）
+ *      ├── remoteCommitId（冲突时远端 tip，version.merge.remoteCommitId）
+ *      └── localCommitId（r_local，本次首次落库；父 = localBaseCommitId）
  *             \      /
- *              merge（合成稿，新 head；父 = expectedHead + r_local）
+ *              mergeCommitId（合成稿，新 head；父 = remoteCommitId + localCommitId）
  *
  * 步骤：
- * 1. 校验：expectedHead 仍为当前 head；base 是 expectedHead 的祖先（assertMergeFork）
+ * 1. 校验：remoteCommitId 仍为当前 head；localBase 是 remote 的祖先（assertMergeFork）
  * 2. 写盘：工作区 = 合成稿；commits 目录落 r_local / merge 快照（writeCommitBlob）
  * 3. 事务：插 r_local + merge 节点与边，更新 documents.head_commit_id
  */
@@ -779,8 +779,8 @@ function publishMergeDocument(params: {
   content: string;
   displayName: string;
   permission?: number;
-  baseCommitId: string;
-  expectedHeadCommitId: string;
+  localBaseCommitId: string;
+  remoteCommitId: string;
   /** 已按 contentFormat 转换后的本地快照；未传则用 content */
   localSnapshotContent?: string;
   now: string;
@@ -793,7 +793,7 @@ function publishMergeDocument(params: {
     throw new DocumentError("BAD_REQUEST", "文档尚无提交历史，无法合并发布", 400);
   }
   // 合并过程中若 head 又被别人推进，同样 409
-  if (params.expectedHeadCommitId !== row.head_commit_id) {
+  if (params.remoteCommitId !== row.head_commit_id) {
     const { content: serverContent, contentHash } = readDocument(
       row.domain_id,
       row.relative_path,
@@ -801,9 +801,9 @@ function publishMergeDocument(params: {
     throwVersionConflict(row, serverContent, contentHash);
   }
 
-  assertCommitBelongsToDocument(db, params.baseCommitId, row.document_id);
-  assertCommitBelongsToDocument(db, params.expectedHeadCommitId, row.document_id);
-  assertMergeFork(db, params.baseCommitId, params.expectedHeadCommitId);
+  assertCommitBelongsToDocument(db, params.localBaseCommitId, row.document_id);
+  assertCommitBelongsToDocument(db, params.remoteCommitId, row.document_id);
+  assertMergeFork(db, params.localBaseCommitId, params.remoteCommitId);
 
   // 写盘：工作区 + 两份历史快照（r_local 支 / merge 结果）
   const localContent = params.localSnapshotContent ?? content;
@@ -838,7 +838,7 @@ function publishMergeDocument(params: {
     });
     insertCommitParent(db, {
       childCommitId: localCommitId,
-      parentCommitId: params.baseCommitId,
+      parentCommitId: params.localBaseCommitId,
     });
 
     updateDocumentContent(db, {
@@ -862,7 +862,7 @@ function publishMergeDocument(params: {
     // 这里存储的是远端head
     insertCommitParent(db, {
       childCommitId: mergeCommitId,
-      parentCommitId: params.expectedHeadCommitId,
+      parentCommitId: params.remoteCommitId,
     });
     // 这里存储的是r_local
     insertCommitParent(db, {
@@ -881,8 +881,8 @@ function publishMergeDocument(params: {
       targetType: "document",
       targetId: row.document_id,
       metadata: {
-        baseCommitId: params.baseCommitId,
-        expectedHeadCommitId: params.expectedHeadCommitId,
+        localBaseCommitId: params.localBaseCommitId,
+        remoteCommitId: params.remoteCommitId,
         localCommitId,
         mergeCommitId,
       },
@@ -935,26 +935,26 @@ function normalizeDocumentContent(
 // ============================================================
 
 /**
- * 比较客户端 baseCommitId 与服务端 head，用于 Sync 指示。
- * - up_to_date：base 未传、无 head、或 base === head
- * - behind：base 是 head 的祖先（远端有更新）
- * - ahead：其余（含分叉、脏 base）
+ * 比较客户端 localBaseCommitId 与服务端 head（remoteCommitId），用于 Sync 指示。
+ * - up_to_date：localBase 未传、无 head、或 localBase === head
+ * - behind：localBase 是 head 的祖先（远端有更新）
+ * - ahead：其余（含分叉、历史回退等）
  */
 export function getDocumentSyncStatus(
   documentId: string,
-  baseCommitId: string | undefined,
+  localBaseCommitId: string | undefined,
 ): DocumentSyncStatus {
   const row = findDocumentById(getDb(), documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   const head = row.head_commit_id;
-  if (!baseCommitId || !head) {
+  if (!localBaseCommitId || !head) {
     return { status: "up_to_date", headCommitId: head };
   }
-  if (baseCommitId === head) {
+  if (localBaseCommitId === head) {
     return { status: "up_to_date", headCommitId: head };
   }
   const db = getDb();
-  if (isAncestorOf(db, baseCommitId, head)) {
+  if (isAncestorOf(db, localBaseCommitId, head)) {
     return { status: "behind", headCommitId: head };
   }
   return { status: "ahead", headCommitId: head };

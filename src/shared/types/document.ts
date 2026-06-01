@@ -10,7 +10,7 @@ export interface DocumentSummary {
   permission: number;
   fileType: string;
   parentId: string | null;
-  /** 服务端维护的当前提交指针（用于 pull/merge 冲突检测）。 */
+  /** 服务端当前 head（同 remoteCommitId，资源字段保留 head 说法）。 */
   headCommitId?: string;
 }
 
@@ -40,17 +40,17 @@ export interface VersionConflictDetails {
 
 /** merge 发布：冲突解决后再次 PUT 时携带 */
 export interface PublishMergeContext {
-  /** 409 发生时的服务端 head，必须仍等于当前 head */
-  expectedHeadCommitId: string;
+  /** 409 / 打开 merge 时的远端 tip，必须仍等于当前 head */
+  remoteCommitId: string;
   /** r_local 快照正文；格式与顶层 content 相同，由 contentFormat 统一转换 */
   localSnapshotContent?: string;
 }
 
 /** 发布时的版本语义（乐观锁 / 合并） */
 export interface PublishVersionContext {
-  /** 客户端开编或上次同步时的 head */
-  baseCommitId?: string;
-  /** 存在时表示合并发布；此时 baseCommitId 必填 */
+  /** 开编分叉点（首次未发布编辑时服务端 head） */
+  localBaseCommitId?: string;
+  /** 存在时表示合并发布；此时 localBaseCommitId 必填 */
   merge?: PublishMergeContext;
 }
 

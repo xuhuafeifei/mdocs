@@ -82,7 +82,7 @@ describe("updateDocument 版本冲突", () => {
       actorVisitorId: OWNER,
       documentId: created.documentId,
       content: '{"v":2}',
-      version: { baseCommitId: base },
+      version: { localBaseCommitId: base },
     });
     expect(updated.headCommitId).not.toBe(base);
     const row = findDocumentById(testDbRef.db!, created.documentId);
@@ -101,7 +101,7 @@ describe("updateDocument 版本冲突", () => {
       actorVisitorId: OWNER,
       documentId: created.documentId,
       content: '{"v":2}',
-      version: { baseCommitId: base },
+      version: { localBaseCommitId: base },
     });
     fileStoreMocks.lastWriteContent = '{"v":2}';
 
@@ -110,7 +110,7 @@ describe("updateDocument 版本冲突", () => {
         actorVisitorId: OWNER,
         documentId: created.documentId,
         content: '{"v":3}',
-        version: { baseCommitId: base },
+        version: { localBaseCommitId: base },
       }),
     ).toThrow(DocumentError);
 
@@ -119,7 +119,7 @@ describe("updateDocument 版本冲突", () => {
         actorVisitorId: OWNER,
         documentId: created.documentId,
         content: '{"v":3}',
-        version: { baseCommitId: base },
+        version: { localBaseCommitId: base },
       });
     } catch (e) {
       const err = e as DocumentError;
@@ -163,7 +163,7 @@ describe("updateDocument merge 发布", () => {
       actorVisitorId: OWNER,
       documentId: created.documentId,
       content: '{"remote":true}',
-      version: { baseCommitId: base },
+      version: { localBaseCommitId: base },
     });
     const head = remote.headCommitId!;
 
@@ -172,9 +172,9 @@ describe("updateDocument merge 发布", () => {
       documentId: created.documentId,
       content: '{"merged":true}',
       version: {
-        baseCommitId: base,
+        localBaseCommitId: base,
         merge: {
-          expectedHeadCommitId: head,
+          remoteCommitId: head,
           localSnapshotContent: '{"local":true}',
         },
       },
@@ -190,7 +190,7 @@ describe("updateDocument merge 发布", () => {
     expect(listParentCommitIds(testDbRef.db!, localCommitId!)).toEqual([base]);
   });
 
-  it("expectedHead 与当前 head 不一致时 409", () => {
+  it("remoteCommitId 与当前 head 不一致时 409", () => {
     const created = createDocument({
       actorVisitorId: OWNER,
       fileName: "merge-stale.md",
@@ -202,13 +202,13 @@ describe("updateDocument merge 发布", () => {
       actorVisitorId: OWNER,
       documentId: created.documentId,
       content: '{"r":1}',
-      version: { baseCommitId: base },
+      version: { localBaseCommitId: base },
     });
     updateDocument({
       actorVisitorId: OWNER,
       documentId: created.documentId,
       content: '{"r":2}',
-      version: { baseCommitId: remote.headCommitId },
+      version: { localBaseCommitId: remote.headCommitId },
     });
 
     expect(() =>
@@ -217,8 +217,8 @@ describe("updateDocument merge 发布", () => {
         documentId: created.documentId,
         content: '{"m":1}',
         version: {
-          baseCommitId: base,
-          merge: { expectedHeadCommitId: remote.headCommitId! },
+          localBaseCommitId: base,
+          merge: { remoteCommitId: remote.headCommitId! },
         },
       }),
     ).toThrow(DocumentError);

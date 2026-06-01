@@ -147,6 +147,7 @@ This project is implemented independently from `markdown-docs` (`~/ddmc/markdown
 | HTTP API endpoints, types, error codes | `fgbg-docs/api-reference.md` |
 | Frontend structure, key components, routing | `fgbg-docs/frontend-structure.md` |
 | Visitor identity, token lifecycle, 5-level permission model | `fgbg-docs/auth-and-access-control.md` |
+| Commit naming, merge-base, draft fork semantics | `fgbg-docs/commit-naming-and-merge-base.md` |
 | Dev setup, build, debug | `fgbg-docs/development-environment.md` |
 | Test strategy, running tests | `fgbg-docs/testing-strategy.md` |
 | Technical decision records | `fgbg-docs/adr/` |

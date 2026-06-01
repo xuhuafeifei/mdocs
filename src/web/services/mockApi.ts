@@ -307,13 +307,13 @@ export async function mockUpdateDocument(
     content: string;
     displayName?: string;
     permission?: number;
-    version?: { baseCommitId?: string; merge?: { expectedHeadCommitId: string } };
+    version?: { localBaseCommitId?: string; merge?: { remoteCommitId: string } };
   },
 ): Promise<DocumentDetail> {
   const db = await getDB();
   const existing = await mockGetDocument(documentId);
   const head = existing.headCommitId ?? `commit-${documentId}-1`;
-  const base = input.version?.baseCommitId;
+  const base = input.version?.localBaseCommitId;
   if (base && base !== head && !input.version?.merge) {
     throw new ApiRequestError(409, "VERSION_CONFLICT", "version conflict", {
       headCommitId: head,

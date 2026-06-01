@@ -137,7 +137,7 @@ async function demoApi<T>(
   if (path.match(/^\/api\/documents\/[^/]+\/sync-status$/) && method === "GET") {
     const documentId = path.split("/")[3]!;
     const url = new URL(path, window.location.origin);
-    const base = url.searchParams.get("baseCommitId");
+    const base = url.searchParams.get("localBaseCommitId");
     const doc = await mockGetDocument(documentId);
     const head = doc.headCommitId ?? null;
     if (!base || !head || base === head) {

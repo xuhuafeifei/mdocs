@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import Database from "better-sqlite3";
 import { applySchema } from "../db/schema.js";
 import { insertCommit, insertCommitParent } from "../db/repositories/commit.repo.js";
-import { isAncestorOf, assertMergeFork } from "./commit-graph.js";
+import { isAncestorOf, assertMergeFork, findMergeBaseCommitId } from "./commit-graph.js";
 import { DocumentError } from "../access/access-control.js";
 
 describe("commit-graph", () => {
@@ -50,9 +50,15 @@ describe("commit-graph", () => {
     expect(isAncestorOf(db, "commit-d", "commit-a")).toBe(false);
   });
 
-  it("assertMergeFork：base 必须是 expectedHead 的真祖先", () => {
+  it("assertMergeFork：localBase 必须是 remote 的真祖先", () => {
     expect(() => assertMergeFork(db, "commit-a", "commit-d")).not.toThrow();
     expect(() => assertMergeFork(db, "commit-d", "commit-d")).toThrow(DocumentError);
     expect(() => assertMergeFork(db, "commit-d", "commit-a")).toThrow(DocumentError);
+  });
+
+  it("findMergeBaseCommitId：线性链与 reset 方向", () => {
+    expect(findMergeBaseCommitId(db, "commit-a", "commit-d")).toBe("commit-a");
+    expect(findMergeBaseCommitId(db, "commit-d", "commit-a")).toBe("commit-a");
+    expect(findMergeBaseCommitId(db, "commit-c", "commit-d")).toBe("commit-c");
   });
 });

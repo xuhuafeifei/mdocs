@@ -115,7 +115,7 @@ interface DocumentEditorProps {
   canManageInvites?: boolean;
   onConflictModalRequest?: () => void;
   onMergeRequest?: () => void;
-  syncedHeadCommitId?: string | null;
+  syncLocalBaseCommitId?: string | null;
   onDelete: () => Promise<void>;
   /** Called by App.tsx before navigation to flush pending changes */
   saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
@@ -242,7 +242,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
   }, [props.document.content]);
 
   /**
-   * 自动保存仅持久化正文与 displayName；开编基准 baseCommitId 仅在首次生成草稿时写入。
+   * 自动保存仅持久化正文与 displayName；localBaseCommitId 仅在首次生成草稿时写入。
    * 首次保存会落一份文档 meta 快照，后续自动保存仅更新内容相关字段。
    */
   const {
@@ -256,7 +256,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     documentId: props.document.documentId,
     displayName,
     enabled: props.canEdit,
-    headCommitIdAtEditStart: props.syncedHeadCommitId ?? props.document.headCommitId ?? null,
+    localBaseCommitIdAtEditStart: props.syncLocalBaseCommitId ?? props.document.headCommitId ?? null,
     snapshotMeta: {
       relativePath: props.document.relativePath,
       permission: props.document.permission,
@@ -575,7 +575,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       documentId: props.document.documentId,
       content: jsonContent,
       displayName,
-      headCommitIdAtEditStart: props.syncedHeadCommitId ?? props.document.headCommitId ?? null,
+      localBaseCommitIdAtEditStart: props.syncLocalBaseCommitId ?? props.document.headCommitId ?? null,
       snapshotMeta: {
         relativePath: props.document.relativePath,
         permission: props.document.permission,
