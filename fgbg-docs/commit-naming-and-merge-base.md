@@ -71,6 +71,12 @@ interface PublishVersionContext {
 
 merge 发布时 **`localBaseCommitId` 必填**。
 
+### merge 发布响应职责
+
+- 当 `version.merge` 存在时，`PUT /api/documents/:id` 仅返回 **204 No Content**（表示 merge 发布成功）。
+- merge 后的文档详情（含权限派生字段）由前端随后 `GET /api/documents/:id` 获取。
+- 这样可保持职责边界清晰：写接口负责“是否写成功”，读接口负责“资源最终视图”。
+
 ### `GET /api/documents/:id/sync-status?localBaseCommitId=…`
 
 用客户端持有的分叉点与当前 `headCommitId`（即 `remoteCommitId`）比较，返回 `up_to_date` / `behind` / `ahead`。

@@ -122,7 +122,7 @@ export function MergeView(props: MergeViewProps) {
         from: "markdown",
         to: "lexical",
       });
-      const updated = await updateDocumentApi(props.documentId, {
+      await updateDocumentApi(props.documentId, {
         content: lexical,
         displayName: props.displayName,
         version: {
@@ -133,6 +133,7 @@ export function MergeView(props: MergeViewProps) {
           },
         },
       });
+      const updated = await getDocumentApi(props.documentId);
       props.onSuccess(updated);
     } catch (err) {
       props.onError(err instanceof Error ? err.message : String(err));

@@ -227,6 +227,7 @@ export function buildDocumentsRouter(): Router {
     }
     const documentId = req.params.documentId!;
     try {
+      const version = parsePublishVersion(body.version);
       const doc = updateDocument({
         actorVisitorId: req.visitor.visitor_id,
         documentId,
@@ -234,8 +235,13 @@ export function buildDocumentsRouter(): Router {
         displayName: typeof body.displayName === "string" ? body.displayName : undefined,
         permission: typeof body.permission === "number" ? body.permission : undefined,
         contentFormat: body.contentFormat === 'markdown' ? 'markdown' : undefined,
-        version: parsePublishVersion(body.version),
+        version,
       });
+      // merge 发布仅返回成功状态：前端需随后 GET 文档详情，避免混合写接口职责。
+      if (version?.merge) {
+        res.status(204).end();
+        return;
+      }
       res.json({ data: doc });
     } catch (err) {
       respondError(res, err, "documents-route.update");

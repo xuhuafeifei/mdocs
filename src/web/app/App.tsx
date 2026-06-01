@@ -58,7 +58,6 @@ import {
   markDraftPublishError,
   saveDraftConflict,
   clearDraftConflict,
-  rebuildDraftAfterMerge,
   type DraftConflictRecord,
 } from "../storage/drafts";
 import { translateError, localizeDomainName, parentDirForCreates } from "./utils";
@@ -640,31 +639,12 @@ export function App() {
   }
 
   async function handleMergeSuccess(updated: DocumentDetail): Promise<void> {
-    setActiveDoc(updated);
-    const head = updated.headCommitId ?? null;
-    setSyncLocalBaseCommitId(head);
+    await clearDraftConflict(updated.documentId);
+    await deleteDraft(updated.documentId);
+    setEditorDraftExists(false);
     setMergeViewOpen(false);
     setConflictModalOpen(false);
-    if (head) {
-      await rebuildDraftAfterMerge({
-        documentId: updated.documentId,
-        content: updated.content,
-        displayName: updated.displayName,
-        headCommitId: head,
-        relativePath: updated.relativePath,
-        permission: updated.permission,
-        ownerVisitorId: updated.ownerVisitorId,
-        domainId: updated.domainId,
-      });
-      setEditorDraftExists(true);
-    } else {
-      await clearDraftConflict(updated.documentId);
-      await deleteDraft(updated.documentId);
-    }
-    if (updated.domainId !== currentDomainId) {
-      localStorage.setItem("mdocs.currentDomainId", updated.domainId);
-      setCurrentDomainId(updated.domainId);
-    }
+    await openDocument(updated.documentId);
     void refreshTree(updated.domainId);
     setMessage(t("published"));
     window.setTimeout(() => setMessage(null), 1200);

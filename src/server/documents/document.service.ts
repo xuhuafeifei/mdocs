@@ -492,6 +492,10 @@ export function updateDocument(params: {
     }
   });
 
+  // 写后直接返回最新 DocumentDetail（而非要求前端再 GET）：
+  // 1) 降低竞争态：避免 PUT 与后续 GET 间隙被他人再次推进 head；
+  // 2) 单一真相：以后端实际落库结果为准（权限、head、invite 派生字段等）。
+  const invitedEdit = resolveInvitedEditFlag(db, row, params.actorVisitorId);
   return buildDocumentDetail(row, {
     displayName,
     content,
@@ -501,6 +505,7 @@ export function updateDocument(params: {
     permission:
       params.permission !== undefined ? params.permission : row.permission,
     headCommitId: commitId,
+    invitedEdit,
   });
 }
 
@@ -706,6 +711,7 @@ function buildDocumentDetail(
     updatedAt: string;
     permission: number;
     headCommitId: string;
+    invitedEdit?: boolean;
   },
 ): DocumentDetail {
   return {
@@ -716,6 +722,7 @@ function buildDocumentDetail(
     updatedBy: overrides.updatedBy,
     updatedAt: overrides.updatedAt,
     permission: overrides.permission,
+    ...(overrides.invitedEdit ? { invitedEdit: true } : {}),
   };
 }
 
@@ -900,6 +907,10 @@ function publishMergeDocument(params: {
     }
   });
 
+  // merge 发布同样采用“写后即返回最新资源”：
+  // - 避免前端二次查询引入时序偏差；
+  // - 确保 UI 使用服务端合并后的最终状态作为唯一真相。
+  const invitedEdit = resolveInvitedEditFlag(db, row, actorVisitorId);
   return buildDocumentDetail(row, {
     displayName,
     content,
@@ -909,6 +920,7 @@ function publishMergeDocument(params: {
     permission:
       params.permission !== undefined ? params.permission : row.permission,
     headCommitId: mergeCommitId,
+    invitedEdit,
   });
 }
 
@@ -928,6 +940,16 @@ function normalizeDocumentContent(
   contentFormat?: "markdown" | "lexical",
 ): string {
   return contentFormat === "markdown" ? markdownToLexicalJson(content) : content;
+}
+
+function resolveInvitedEditFlag(
+  db: ReturnType<typeof getDb>,
+  row: DocumentRow,
+  actorVisitorId: string,
+): boolean {
+  if (row.owner_visitor_id === actorVisitorId) return false;
+  const invite = findDocumentInvite(db, row.document_id, actorVisitorId);
+  return invite?.permission === "edit";
 }
 
 // ============================================================

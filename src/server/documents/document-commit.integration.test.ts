@@ -42,12 +42,14 @@ vi.mock("../storage/file-store.js", () => ({
 import { DocumentError } from "../access/access-control.js";
 import { createDocument, updateDocument } from "./document.service.js";
 import { findDocumentById } from "../db/repositories/document.repo.js";
+import { insertDocumentInvite } from "../db/repositories/document.repo.js";
 import {
   countParents,
   listParentCommitIds,
 } from "../db/repositories/commit.repo.js";
 
 const OWNER = "owner-commit-test";
+const INVITED_EDITOR = "invited-editor";
 
 beforeAll(() => {
   const db = new Database(":memory:");
@@ -58,6 +60,10 @@ beforeAll(() => {
     `INSERT INTO visitors (visitor_id, visitor_name, visitor_token_hash, created_at)
      VALUES (?, ?, ?, ?)`,
   ).run(OWNER, "Owner", "hash", now);
+  db.prepare(
+    `INSERT INTO visitors (visitor_id, visitor_name, visitor_token_hash, created_at)
+     VALUES (?, ?, ?, ?)`,
+  ).run(INVITED_EDITOR, "Invited", "hash2", now);
 });
 
 afterEach(() => {
@@ -70,6 +76,25 @@ afterEach(() => {
 });
 
 describe("updateDocument 版本冲突", () => {
+  it("invite 编辑者发布后返回 invitedEdit=true", () => {
+    const created = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "invite-edit.md",
+      content: '{"v":1}',
+      domainId: "default",
+    });
+    insertDocumentInvite(testDbRef.db!, created.documentId, INVITED_EDITOR, "edit");
+
+    const updated = updateDocument({
+      actorVisitorId: INVITED_EDITOR,
+      documentId: created.documentId,
+      content: '{"v":2}',
+      version: { localBaseCommitId: created.headCommitId! },
+    });
+
+    expect(updated.invitedEdit).toBe(true);
+  });
+
   it("base 与 head 一致时成功并推进 head", () => {
     const created = createDocument({
       actorVisitorId: OWNER,
