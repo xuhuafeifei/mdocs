@@ -1,5 +1,7 @@
 # 草稿副本模型与轻量预览方案（实施清单）
 
+> **心智模型以 [`active-doc-meta-and-draft-model.md`](./active-doc-meta-and-draft-model.md) 为准**；本文为实施清单与历史讨论，冲突时服从该文。
+
 > 目标：把“未发布草稿”收敛为清晰的一套模型，降低 Sync / Pull / Merge 的心智复杂度，并补一个低成本预览入口。
 
 ## 一、已对齐的产品规则

@@ -146,6 +146,7 @@ This project is implemented independently from `markdown-docs` (`~/ddmc/markdown
 | DB tables, fields, indexes, migration strategy | `fgbg-docs/database-schema.md` |
 | HTTP API endpoints, types, error codes | `fgbg-docs/api-reference.md` |
 | Frontend structure, key components, routing | `fgbg-docs/frontend-structure.md` |
+| activeDocMeta, draft, open/publish data flow (target model) | `fgbg-docs/active-doc-meta-and-draft-model.md` |
 | Visitor identity, token lifecycle, 5-level permission model | `fgbg-docs/auth-and-access-control.md` |
 | Commit naming, merge-base, draft fork semantics | `fgbg-docs/commit-naming-and-merge-base.md` |
 | Dev setup, build, debug | `fgbg-docs/development-environment.md` |

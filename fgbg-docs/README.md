@@ -11,6 +11,7 @@
 | 数据库表结构、字段含义、索引、迁移策略 | [`database-schema.md`](./database-schema.md) |
 | HTTP API 端点清单、请求/响应类型、错误码 | [`api-reference.md`](./api-reference.md) |
 | 前端目录组织、关键组件、状态管理、路由 | [`frontend-structure.md`](./frontend-structure.md) |
+| 打开文档 / activeDocMeta / 草稿 / 发布数据分工（目标心智模型） | [`active-doc-meta-and-draft-model.md`](./active-doc-meta-and-draft-model.md) |
 | 访客身份机制、Token 生命周期、五级权限模型 | [`auth-and-access-control.md`](./auth-and-access-control.md) |
 | 如何本地运行、构建、调试、常用脚本 | [`development-environment.md`](./development-environment.md) |
 | 测试分层、运行方式、关键用例 | [`testing-strategy.md`](./testing-strategy.md) |
