@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Block } from "@lobehub/ui";
-import { upsertContentDraft, getDraft } from "../storage/drafts";
+import { upsertContentDraft } from "../storage/drafts";
 
 import {
   INSERT_CODEINLINE_COMMAND,
@@ -45,7 +45,8 @@ import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
 import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, RefreshCw, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star } from "lucide-react";
 
-import type { DocumentDetail } from "../../shared/types/document";
+import type { ActiveDocumentMeta } from "../../shared/types/document";
+import { getDocumentTaskQueue } from "./documentTaskQueue";
 import type { DomainSummary } from "../../shared/types/domain";
 import {
   DocumentPermission,
@@ -102,7 +103,11 @@ function OutlineSideRail({ editor }: { editor: IEditor }) {
 }
 
 interface DocumentEditorProps {
-  document: DocumentDetail;
+  meta: ActiveDocumentMeta;
+  initialContent: string;
+  initialDisplayName: string;
+  /** 打开 / pull / publish 后递增，驱动编辑器载入新正文 */
+  contentRevision: number;
   canEdit: boolean;
   domains: DomainSummary[];
   currentDomainId: string;
@@ -111,13 +116,9 @@ interface DocumentEditorProps {
   syncBehind?: boolean;
   onSyncClick?: () => void;
   onDraftExistsChange?: (exists: boolean) => void;
-  /** 是否可管理协作者邀请（路由层仅限 owner） */
   canManageInvites?: boolean;
   onConflictModalRequest?: () => void;
   onMergeRequest?: () => void;
-  syncLocalBaseCommitId?: string | null;
-  /** 打开文档时服务端 Lexical 正文，用于首次草稿写入 merge base 快照 */
-  localBaseSnapshotLexicalAtEditStart?: string | null;
   onDelete: () => Promise<void>;
   /** Called by App.tsx before navigation to flush pending changes */
   saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
@@ -140,7 +141,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const docInfoMenuRef = useRef<HTMLDivElement>(null);
   const [visitors, setVisitors] = useState<VisitorDirectoryEntry[]>([]);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
-  const [permissionDraft, setPermissionDraft] = useState<DocumentPermissionValue>(props.document.permission as DocumentPermissionValue);
+  const [permissionDraft, setPermissionDraft] = useState<DocumentPermissionValue>(props.meta.permission as DocumentPermissionValue);
   const [permissionBusy, setPermissionBusy] = useState(false);
   const [showInvitePicker, setShowInvitePicker] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
@@ -180,7 +181,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
   // ---- 文档标题（显示名称）----
   // 用户可以在输入框中修改，失焦时自动保存
-  const [displayName, setDisplayName] = useState(props.document.displayName);
+  const [displayName, setDisplayName] = useState(props.initialDisplayName);
 
   // ---- 发布中状态 ----
   // true 时禁用发布按钮，防止重复提交
@@ -212,18 +213,17 @@ export function DocumentEditor(props: DocumentEditorProps) {
     setEditorSurfaceReady(false);
     setEditor(null);
     editorRef.current = null;
-  }, [props.document.documentId]);
+  }, [props.meta.documentId]);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setEditorSurfaceReady(true));
     return () => cancelAnimationFrame(id);
-  }, [props.document.documentId]);
+  }, [props.meta.documentId]);
 
-  // ---- 最新内容引用 ----
-  // 用于 handleInit 中读取最新内容（useCallback 的闭包不会自动更新）
-  const contentRef = useRef(props.document.content);
-  // 每次 props.document.content 变化时同步更新 ref
-  contentRef.current = props.document.content;
+  const contentRef = useRef(props.initialContent);
+  useEffect(() => {
+    contentRef.current = props.initialContent;
+  }, [props.initialContent, props.contentRevision]);
 
   /**
    * 检测传入内容是 Lexical JSON 还是原始 Markdown。
@@ -231,17 +231,16 @@ export function DocumentEditor(props: DocumentEditorProps) {
    */
   const contentType = useMemo<"json" | "markdown">(() => {
     // 如果内容为空，按 JSON 处理（编辑器会创建空文档）
-    if (!props.document.content) return "json";
+    if (!props.initialContent) return "json";
     try {
-      // 尝试解析为 JSON，检查是否有 Lexical 的根节点结构
-      const p = JSON.parse(props.document.content);
+      const p = JSON.parse(props.initialContent);
       // 如果有 root.children，说明是 Lexical JSON 格式
       return p?.root?.children ? "json" : "markdown";
     } catch {
       // 解析失败说明是原始 Markdown 字符串
       return "markdown";
     }
-  }, [props.document.content]);
+  }, [props.initialContent, props.contentRevision]);
 
   /**
    * 自动保存仅持久化正文与 displayName；localBaseCommitId 仅在首次生成草稿时写入。
@@ -250,21 +249,18 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const {
     isDirty: _isDirty,
     draftExists,
-    clearDraft,
-    loadDraftContent,
     markDraftSaved,
   } = useAutoSave({
     editor,
-    documentId: props.document.documentId,
+    documentId: props.meta.documentId,
     displayName,
     enabled: props.canEdit,
-    localBaseCommitIdAtEditStart: props.syncLocalBaseCommitId ?? props.document.headCommitId ?? null,
-    localBaseSnapshotContentAtEditStart: props.localBaseSnapshotLexicalAtEditStart ?? null,
+    localBaseCommitIdAtEditStart: props.meta.headCommitId ?? null,
     snapshotMeta: {
-      relativePath: props.document.relativePath,
-      permission: props.document.permission,
-      ownerVisitorId: props.document.ownerVisitorId,
-      domainId: props.document.domainId,
+      relativePath: props.meta.relativePath,
+      permission: props.meta.permission,
+      ownerVisitorId: props.meta.ownerVisitorId,
+      domainId: props.meta.domainId,
     },
   });
 
@@ -275,44 +271,15 @@ export function DocumentEditor(props: DocumentEditorProps) {
   // ---- 发布保护：拦截浏览器关闭事件，防止未保存内容丢失 ----
   usePublishGuard({ isDirty: _isDirty, draftExists });
 
-  /**
-   * 编辑器初始化后，检查并加载本地草稿内容和标题。
-   * 处理场景：编辑内容 → 切到设置页 → 返回文档页，此时 activeDoc 是旧的服务器内容。
-   */
+  /** pull / publish 后由 App 递增 contentRevision，将编辑器载入最新 initialContent */
   useEffect(() => {
     if (!editor) return;
-    getDraft(props.document.documentId).then((draft) => {
-      if (draft && draft.content !== props.document.content) {
-        console.log("[DocumentEditor] restoring draft after remount, documentId:", props.document.documentId);
-        try {
-          editor.setDocument("json", draft.content);
-          // 如果草稿标题与文档标题不同，也更新显示名称
-          if (draft.displayName && draft.displayName !== props.document.displayName) {
-            setDisplayName(draft.displayName);
-          }
-        } catch {
-          // 忽略错误
-        }
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, props.document.documentId]);
-
-  /**
-   * 同一 documentId 下，若服务端正文已更新且本地无未发布草稿，主动把内容同步到编辑器。
-   * 用于「拉取更新」后避免 activeDoc 已更新但编辑器仍停留旧内容。
-   */
-  useEffect(() => {
-    if (!editor) return;
-    void getDraft(props.document.documentId).then((draft) => {
-      if (draft && !draft.published) return;
-      try {
-        editor.setDocument(contentType, props.document.content || "");
-      } catch {
-        // 忽略编辑器暂不可写状态
-      }
-    });
-  }, [editor, props.document.documentId, props.document.content, contentType]);
+    try {
+      editor.setDocument(contentType, props.initialContent || "");
+    } catch {
+      /* 编辑器暂不可写 */
+    }
+  }, [editor, props.meta.documentId, props.contentRevision, props.initialContent, contentType]);
 
   /**
    * 同步编辑器语言与 mdocs 全局语言设置。
@@ -328,12 +295,12 @@ export function DocumentEditor(props: DocumentEditorProps) {
    * 确保打开不同文档时，标题栏显示正确的文档名称。
    */
   useEffect(() => {
-    setDisplayName(props.document.displayName);
-  }, [props.document.displayName, props.document.documentId]);
+    setDisplayName(props.initialDisplayName);
+  }, [props.initialDisplayName, props.meta.documentId, props.contentRevision]);
 
   useEffect(() => {
-    setPermissionDraft(props.document.permission as DocumentPermissionValue);
-  }, [props.document.permission, props.document.documentId]);
+    setPermissionDraft(props.meta.permission as DocumentPermissionValue);
+  }, [props.meta.permission, props.meta.documentId]);
 
   /**
    * 切换文档时检查当前文档的收藏状态。
@@ -342,7 +309,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     let mounted = true;
     (async () => {
       try {
-        const result = await checkBookmarkApi(props.document.documentId);
+        const result = await checkBookmarkApi(props.meta.documentId);
         if (mounted) {
           setIsBookmarked(result.bookmarked);
         }
@@ -353,7 +320,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     return () => {
       mounted = false;
     };
-  }, [props.document.documentId]);
+  }, [props.meta.documentId]);
 
   /**
    * 切换收藏状态。
@@ -363,11 +330,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
     setBookmarkBusy(true);
     try {
       if (isBookmarked) {
-        await removeBookmarkApi(props.document.documentId);
+        await removeBookmarkApi(props.meta.documentId);
         setIsBookmarked(false);
         props.onShowToast?.(t("bookmarkRemoved"));
       } else {
-        await addBookmarkApi(props.document.documentId);
+        await addBookmarkApi(props.meta.documentId);
         setIsBookmarked(true);
         props.onShowToast?.(t("bookmarkAdded"));
       }
@@ -452,9 +419,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       const content = safeLexicalJsonString(editor);
       if (!content) return;
       // 调用 App.tsx 传入的 onPublish，执行实际的 API 请求
-      await props.onPublish(content, displayName, props.document.documentId);
-      // 发布成功后清除本地草稿（草稿已不需要）
-      await clearDraft();
+      await props.onPublish(content, displayName, props.meta.documentId);
     } catch (err) {
       // 发布失败时继续抛出，让上层冲突处理逻辑可生效
       throw err;
@@ -472,7 +437,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     // 如果没有编辑权限，不处理
     if (!props.canEdit) return;
     // 获取原始标题（去除首尾空格）
-    const prev = props.document.displayName.trim();
+    const prev = props.initialDisplayName.trim();
     // 获取当前输入框中的标题（去除首尾空格）
     const next = displayName.trim();
     // 如果没有变化，跳过发布
@@ -486,8 +451,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
   }
 
   const currentDomain = useMemo(
-    () => props.domains.find((d) => d.domainId === props.document.domainId),
-    [props.domains, props.document.domainId],
+    () => props.domains.find((d) => d.domainId === props.meta.domainId),
+    [props.domains, props.meta.domainId],
   );
 
   const allowedPermissions = useMemo<DocumentPermissionValue[]>(() => {
@@ -504,7 +469,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
   }
 
   async function savePermission(): Promise<void> {
-    if (permissionBusy || permissionDraft === props.document.permission) {
+    if (permissionBusy || permissionDraft === props.meta.permission) {
       setShowPermissionDialog(false);
       return;
     }
@@ -514,8 +479,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
         editor
           ? safeLexicalJsonString(editor)
           : null;
-      const payload = content ?? props.document.content;
-      await props.onPublish(payload, displayName, props.document.documentId, permissionDraft);
+      const payload = content ?? props.initialContent;
+      await props.onPublish(payload, displayName, props.meta.documentId, permissionDraft);
       setShowPermissionDialog(false);
       props.onShowToast?.(t("docInfoPermissionUpdated"));
     } finally {
@@ -535,14 +500,14 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
       for (const [visitorId] of existingInvites) {
         if (!newIds.has(visitorId)) {
-          await removeDocumentInviteApi(props.document.documentId, visitorId);
+          await removeDocumentInviteApi(props.meta.documentId, visitorId);
         }
       }
 
       for (const { visitorId, permission } of result) {
         const oldPerm = existingInvites.get(visitorId);
         if (!oldPerm || oldPerm !== permission) {
-          await addDocumentInviteApi(props.document.documentId, visitorId, permission);
+          await addDocumentInviteApi(props.meta.documentId, visitorId, permission);
         }
       }
 
@@ -563,30 +528,31 @@ export function DocumentEditor(props: DocumentEditorProps) {
     if (!editor || !props.canEdit) return;
     // 内容没有变更则跳过，防止切文章时 guardNavigate 无条件触发保存
     if (!_isDirty) {
-      console.log("[DocumentEditor.saveDraft] skipped: not dirty, documentId:", props.document.documentId);
+      console.log("[DocumentEditor.saveDraft] skipped: not dirty, documentId:", props.meta.documentId);
       return;
     }
     // 将当前编辑器内容序列化为 JSON
     const jsonContent = safeLexicalJsonString(editor);
     if (!jsonContent) return;
-    console.log("[DocumentEditor.saveDraft] saving draft, documentId:", props.document.documentId, "content preview:", jsonContent.slice(0, 80));
+    console.log("[DocumentEditor.saveDraft] saving draft, documentId:", props.meta.documentId, "content preview:", jsonContent.slice(0, 80));
     // Mark as saved synchronously BEFORE async IndexedDB write,
     // so the navigation guard sees clean state immediately.
     markDraftSaved();
     // 异步写入 IndexedDB
-    await upsertContentDraft({
-      documentId: props.document.documentId,
-      content: jsonContent,
-      displayName,
-      localBaseCommitIdAtEditStart: props.syncLocalBaseCommitId ?? props.document.headCommitId ?? null,
-      localBaseSnapshotContentAtEditStart: props.localBaseSnapshotLexicalAtEditStart ?? null,
-      snapshotMeta: {
-        relativePath: props.document.relativePath,
-        permission: props.document.permission,
-        ownerVisitorId: props.document.ownerVisitorId,
-        domainId: props.document.domainId,
-      },
-    });
+    await getDocumentTaskQueue(props.meta.documentId).execute(() =>
+      upsertContentDraft({
+        documentId: props.meta.documentId,
+        content: jsonContent,
+        displayName,
+        localBaseCommitIdAtEditStart: props.meta.headCommitId ?? null,
+        snapshotMeta: {
+          relativePath: props.meta.relativePath,
+          permission: props.meta.permission,
+          ownerVisitorId: props.meta.ownerVisitorId,
+          domainId: props.meta.domainId,
+        },
+      }),
+    );
   }
 
   /**
@@ -730,7 +696,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       // 文件上传插件：将文件上传到服务器资源存储
       withProps(ReactFilePlugin, {
         handleUpload: async (file: File) => {
-          const url = await uploadAssetApi(file, props.document.documentId);
+          const url = await uploadAssetApi(file, props.meta.documentId);
           return { url };
         },
       }),
@@ -744,7 +710,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           const res = await fetch(url);
           const blob = await res.blob();
           const file = new File([blob], "image.png", { type: blob.type });
-          const serverUrl = await uploadAssetApi(file, props.document.documentId);
+          const serverUrl = await uploadAssetApi(file, props.meta.documentId);
           return { url: serverUrl };
         },
       }),
@@ -906,19 +872,19 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 <div style={{ padding: "4px 16px", fontSize: "13px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
                     <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCreator")}</span>
-                    <span>{getVisitorName(props.document.ownerVisitorId)}</span>
+                    <span>{getVisitorName(props.meta.ownerVisitorId)}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
                     <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCreatedAt")}</span>
-                    <span>{new Date(props.document.createdAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
+                    <span>{new Date(props.meta.createdAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
                     <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoSize")}</span>
-                    <span>{formatFileSize(new Blob([props.document.content]).size)}</span>
+                    <span>{formatFileSize(new Blob([props.initialContent]).size)}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoUpdatedAt")}</span>
-                    <span>{new Date(props.document.updatedAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
+                    <span>{new Date(props.meta.updatedAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
                   </div>
                 </div>
                 {/* 分隔线 */}
@@ -969,7 +935,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     void (async () => {
                       setInviteLoading(true);
                       try {
-                        const invites = await getDocumentInvitesApi(props.document.documentId);
+                        const invites = await getDocumentInvitesApi(props.meta.documentId);
                         const inviteMap = new Map(invites.map((i) => [i.visitorId, i.permission]));
                         setExistingInvites(inviteMap);
                         setShowInvitePicker(true);
@@ -1001,7 +967,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                   onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
                   onClick={() => {
                     setShowDocInfoMenu(false);
-                    setPermissionDraft(props.document.permission as DocumentPermissionValue);
+                    setPermissionDraft(props.meta.permission as DocumentPermissionValue);
                     setShowPermissionDialog(true);
                   }}
                 >
@@ -1022,7 +988,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           <div className="mdocs-dialog card" style={{ maxWidth: 480 }}>
             <h1 style={{ fontSize: "1.1rem", marginBottom: 12 }}>{t("docInfoChangePermission")}</h1>
             <div className="muted" style={{ marginBottom: 12 }}>
-              {t("domainPermission")}：{currentDomain ? localizeDomainName(currentDomain.domainName, lang, t) : props.document.domainId}
+              {t("domainPermission")}：{currentDomain ? localizeDomainName(currentDomain.domainName, lang, t) : props.meta.domainId}
             </div>
             <div style={{ display: "grid", gap: 8 }}>
               {allowedPermissions.map((permission) => (
@@ -1094,8 +1060,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 <div className="mdocs-editor-scroll-host">
                   {editorSurfaceReady ? (
                     <Editor
-                      key={props.document.documentId}
-                      content={props.document.content}
+                      key={props.meta.documentId}
+                      content={props.initialContent}
                       type={contentType}
                       confirmPasteMarkdown
                       // 编辑模式下可编辑，只读模式下不可编辑

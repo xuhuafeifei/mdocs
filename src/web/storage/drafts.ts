@@ -32,8 +32,6 @@ export interface DraftRecord {
   publishErrorAt?: number;
   /** 开编分叉点：草稿**首次创建**时对应的服务端 head，之后不再随自动保存更新 */
   localBaseCommitId?: string;
-  /** 开编时服务端正文 Lexical JSON，仅首次创建草稿时写入 */
-  localBaseSnapshotContent?: string;
   conflictStatus?: DraftConflictStatus;
   conflict?: DraftConflictRecord;
 }
@@ -98,8 +96,6 @@ export async function upsertContentDraft(params: {
   displayName: string;
   /** 开编时服务端 head；仅首次创建草稿时写入 localBaseCommitId */
   localBaseCommitIdAtEditStart?: string | null;
-  /** 开编时服务端正文；仅首次创建草稿时写入 localBaseSnapshotContent */
-  localBaseSnapshotContentAtEditStart?: string | null;
   /** 首次落盘时写入的文档快照 meta（后续自动保存不覆盖） */
   snapshotMeta?: {
     relativePath: string;
@@ -121,12 +117,6 @@ export async function upsertContentDraft(params: {
   } else {
     const head = params.localBaseCommitIdAtEditStart?.trim();
     if (head) record.localBaseCommitId = head;
-  }
-  if (existing?.localBaseSnapshotContent) {
-    record.localBaseSnapshotContent = existing.localBaseSnapshotContent;
-  } else {
-    const baseSnap = params.localBaseSnapshotContentAtEditStart?.trim();
-    if (baseSnap) record.localBaseSnapshotContent = baseSnap;
   }
   if (existing?.relativePath) {
     record.relativePath = existing.relativePath;
@@ -205,7 +195,6 @@ function sanitizeDraft(doc: DraftRecord): DraftRecord {
   if (doc.publishError != null) sanitized.publishError = doc.publishError;
   if (doc.publishErrorAt != null) sanitized.publishErrorAt = doc.publishErrorAt;
   if (doc.localBaseCommitId) sanitized.localBaseCommitId = doc.localBaseCommitId;
-  if (doc.localBaseSnapshotContent) sanitized.localBaseSnapshotContent = doc.localBaseSnapshotContent;
   if (doc.conflictStatus != null) sanitized.conflictStatus = doc.conflictStatus;
   if (doc.conflict != null) sanitized.conflict = doc.conflict;
   return sanitized;

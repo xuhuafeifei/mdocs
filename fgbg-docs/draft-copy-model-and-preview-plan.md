@@ -59,7 +59,7 @@
 说明：
 
 - 本文里把 `localBaseCommitId` 视为“副本分叉点”，不是 `remoteCommitId`（当前服务端 head）。
-- 内存态 `syncLocalBaseCommitId` 用于 sync-status 轮询：有草稿时用草稿的 `localBaseCommitId`，无草稿时用打开文档时的 head。
+- 轮询与 UI meta 见 [active-doc-meta-and-draft-model.md](./active-doc-meta-and-draft-model.md)（有草稿不轮询；`activeDocMeta.headCommitId` 来自 GET）。
 
 ---
 

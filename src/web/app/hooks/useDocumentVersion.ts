@@ -9,8 +9,8 @@ const POLL_MS = 10_000;
 
 export function useDocumentVersion(
   documentId: string | null,
-  /** 用于 sync-status 比较的开编分叉点；无草稿时多为打开文档时的 head */
-  syncLocalBaseCommitId: string | null | undefined,
+  /** 有草稿时为 draft.localBaseCommitId，否则为 activeDocMeta.headCommitId */
+  editBaseCommitId: string | null | undefined,
 ) {
   const [remoteCommitId, setRemoteCommitId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<DocumentSyncStatusKind>("up_to_date");
@@ -28,10 +28,7 @@ export function useDocumentVersion(
 
     async function poll(): Promise<void> {
       try {
-        const res = await getDocumentSyncStatusApi(
-          docId,
-          syncLocalBaseCommitId ?? undefined,
-        );
+        const res = await getDocumentSyncStatusApi(docId, editBaseCommitId ?? undefined);
         if (cancelled) return;
         setRemoteCommitId(res.headCommitId);
         setSyncStatus(res.status);
@@ -46,14 +43,11 @@ export function useDocumentVersion(
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [documentId, syncLocalBaseCommitId]);
+  }, [documentId, editBaseCommitId]);
 
   const syncBehind =
-    Boolean(
-      syncLocalBaseCommitId &&
-        remoteCommitId &&
-        syncLocalBaseCommitId !== remoteCommitId,
-    ) || syncStatus === "behind";
+    Boolean(editBaseCommitId && remoteCommitId && editBaseCommitId !== remoteCommitId) ||
+    syncStatus === "behind";
 
   return { remoteCommitId, syncStatus, syncBehind };
 }

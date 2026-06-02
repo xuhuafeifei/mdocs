@@ -21,6 +21,9 @@ export interface DocumentDetail extends DocumentSummary {
   invitedEdit?: boolean;
 }
 
+/** 当前打开文档的服务端 meta（不含正文），供 UI 壳共享。见 fgbg-docs/active-doc-meta-and-draft-model.md */
+export type ActiveDocumentMeta = Omit<DocumentDetail, "content" | "contentHash">;
+
 export interface CreateDocumentRequest {
   domainId?: string;
   relativePath: string;

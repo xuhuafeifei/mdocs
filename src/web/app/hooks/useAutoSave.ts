@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { IEditor } from "@lobehub/editor";
+import { getDocumentTaskQueue } from "../documentTaskQueue";
 import { deleteDraft, getDraft, upsertContentDraft } from "../../storage/drafts";
 
 interface UseAutoSaveOptions {
@@ -19,8 +20,6 @@ interface UseAutoSaveOptions {
   enabled?: boolean;
   /** 开编时服务端 head；仅在该 documentId 尚无草稿时写入 localBaseCommitId */
   localBaseCommitIdAtEditStart?: string | null;
-  /** 开编时服务端正文 Lexical；仅首次创建草稿时写入 localBaseSnapshotContent */
-  localBaseSnapshotContentAtEditStart?: string | null;
   /** 首次创建草稿时一并落盘的文档 meta 快照 */
   snapshotMeta?: {
     relativePath: string;
@@ -56,7 +55,6 @@ export function useAutoSave({
   debounceMs = 1000,
   enabled = true,
   localBaseCommitIdAtEditStart,
-  localBaseSnapshotContentAtEditStart,
   snapshotMeta,
 }: UseAutoSaveOptions) {
   // ---- 状态：内容是否有未保存的变更 ----
@@ -96,12 +94,10 @@ export function useAutoSave({
   const documentIdRef = useRef(documentId);
   const displayNameRef = useRef(displayName);
   const headAtEditStartRef = useRef(localBaseCommitIdAtEditStart);
-  const baseSnapshotAtEditStartRef = useRef(localBaseSnapshotContentAtEditStart);
   const snapshotMetaRef = useRef(snapshotMeta);
   documentIdRef.current = documentId;
   displayNameRef.current = displayName;
   headAtEditStartRef.current = localBaseCommitIdAtEditStart;
-  baseSnapshotAtEditStartRef.current = localBaseSnapshotContentAtEditStart;
   snapshotMetaRef.current = snapshotMeta;
 
   /**
@@ -121,14 +117,15 @@ export function useAutoSave({
     const jsonContent = safeGetJsonString(editor);
     if (jsonContent == null) return;
     console.log("[useAutoSave] performSave saving draft, documentId:", documentIdRef.current, "content preview:", jsonContent.slice(0, 80));
-    await upsertContentDraft({
-      documentId: documentIdRef.current,
-      content: jsonContent,
-      displayName: displayNameRef.current,
-      localBaseCommitIdAtEditStart: headAtEditStartRef.current,
-      localBaseSnapshotContentAtEditStart: baseSnapshotAtEditStartRef.current,
-      snapshotMeta: snapshotMetaRef.current,
-    });
+    await getDocumentTaskQueue(documentIdRef.current).execute(() =>
+      upsertContentDraft({
+        documentId: documentIdRef.current,
+        content: jsonContent,
+        displayName: displayNameRef.current,
+        localBaseCommitIdAtEditStart: headAtEditStartRef.current,
+        snapshotMeta: snapshotMetaRef.current,
+      }),
+    );
     // 保存成功后，用当前 markdown 内容更新对比基线
     lastContentRef.current = safeGetMarkdown(editor) ?? lastContentRef.current;
     // 标记草稿已存在（用于 UI 显示保存状态点）

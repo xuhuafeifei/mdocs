@@ -89,18 +89,10 @@ export function MergeView(props: MergeViewProps) {
           setBaseLexical(ctx.mergeBaseContent);
           return;
         }
-        if (props.conflict.localBaseSnapshotContent) {
-          setBaseLexical(props.conflict.localBaseSnapshotContent);
-          return;
-        }
         setBaseMissing(true);
         setBaseReady(true);
       } catch {
         if (cancelled) return;
-        if (props.conflict.localBaseSnapshotContent) {
-          setBaseLexical(props.conflict.localBaseSnapshotContent);
-          return;
-        }
         setBaseMissing(true);
         setBaseReady(true);
       }
@@ -108,12 +100,7 @@ export function MergeView(props: MergeViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [
-    props.documentId,
-    props.conflict.localBaseCommitId,
-    props.conflict.remoteCommitId,
-    props.conflict.localBaseSnapshotContent,
-  ]);
+  }, [props.documentId, props.conflict.localBaseCommitId, props.conflict.remoteCommitId]);
 
   const handleRemoteMd = useCallback((md: string) => {
     setRemoteMd(md);
@@ -130,14 +117,10 @@ export function MergeView(props: MergeViewProps) {
   }, []);
 
   const handleBaseBridgeError = useCallback(() => {
-    if (props.conflict.localBaseSnapshotContent && baseLexical !== props.conflict.localBaseSnapshotContent) {
-      setBaseLexical(props.conflict.localBaseSnapshotContent);
-      return;
-    }
     setBaseMissing(true);
     setBaseMd("");
     setBaseReady(true);
-  }, [props.conflict.localBaseSnapshotContent, baseLexical]);
+  }, []);
 
   useEffect(() => {
     if (!localMd || !remoteMd || loadingRemote || !baseReady) return;

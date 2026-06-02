@@ -13,7 +13,9 @@ import { BookOpen, File, Folder, LogOut, MessageSquare, PanelLeftClose, PanelLef
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
-import type { DocumentDetail, VersionConflictDetails } from "../../shared/types/document";
+import type { ActiveDocumentMeta, DocumentDetail, VersionConflictDetails } from "../../shared/types/document";
+import { documentDetailToMeta } from "./documentMeta";
+import { getDocumentTaskQueue } from "./documentTaskQueue";
 import type { DomainSummary } from "../../shared/types/domain";
 import type { TreeNode } from "../../shared/types/tree";
 import { isPublicWritePermission } from "../../shared/permissions.js";
@@ -54,7 +56,6 @@ import {
   getDraft,
   saveDraft as saveDraftRecord,
   deleteDraft,
-  deleteDraftIfUnchanged,
   markDraftPublishError,
   saveDraftConflict,
   clearDraftConflict,
@@ -169,49 +170,45 @@ export function App() {
   // ---- 路由导航函数 ----
   const navigate = useNavigate();
 
-  // ---- 当前打开的文档详情 ----
-  const [activeDoc, setActiveDoc] = useState<DocumentDetail | null>(null);
-  /** 打开文档时服务端 Lexical 正文（未叠草稿），供 merge base 快照 */
-  const serverLexicalAtOpenRef = useRef<Record<string, string>>({});
+  // ---- 当前打开文档的服务端 meta（不含正文） ----
+  const [activeDocMeta, setActiveDocMeta] = useState<ActiveDocumentMeta | null>(null);
+  const [editorContent, setEditorContent] = useState<{
+    documentId: string;
+    content: string;
+    displayName: string;
+  } | null>(null);
+  const [contentRevision, setContentRevision] = useState(0);
+  const [editBaseCommitId, setEditBaseCommitId] = useState<string | null>(null);
 
-  /** 客户端认定的服务端 head（开编 / 拉取 / 发布成功后更新） */
-  const [syncLocalBaseCommitId, setSyncLocalBaseCommitId] = useState<string | null>(null);
   const [conflictModalOpen, setConflictModalOpen] = useState(false);
   const [mergeViewOpen, setMergeViewOpen] = useState(false);
   const [editorDraftExists, setEditorDraftExists] = useState(false);
 
-  // 有未发布草稿时先不做后台 sync 轮询，避免副本分支与远端 head 混用带来的状态噪声
-  const syncTargetDocumentId = activeDoc?.documentId && !editorDraftExists
-    ? activeDoc.documentId
-    : null;
-  const { syncBehind, remoteCommitId } = useDocumentVersion(
-    syncTargetDocumentId,
-    syncLocalBaseCommitId,
-  );
+  const syncTargetDocumentId = activeDocMeta?.documentId ?? null;
+  const { syncBehind, remoteCommitId } = useDocumentVersion(syncTargetDocumentId, editBaseCommitId);
 
   const [mergeConflict, setMergeConflict] = useState<DraftConflictRecord | null>(null);
 
   useEffect(() => {
-    if (!mergeViewOpen || !activeDoc) {
+    if (!mergeViewOpen || !activeDocMeta) {
       setMergeConflict(null);
       return;
     }
     void (async () => {
-      const draft = await getDraft(activeDoc.documentId);
+      const draft = await getDraft(activeDocMeta.documentId);
       if (draft?.conflict) {
         setMergeConflict(draft.conflict);
         return;
       }
-      if (draft && syncLocalBaseCommitId && remoteCommitId) {
-        const editBase = draft.localBaseCommitId ?? syncLocalBaseCommitId;
+      if (draft && editBaseCommitId && remoteCommitId) {
+        const editBase = draft.localBaseCommitId ?? editBaseCommitId;
         if (!editBase) return;
         const built: DraftConflictRecord = {
           localBaseCommitId: editBase,
-          remoteCommitId: remoteCommitId,
+          remoteCommitId,
           localSnapshotContent: draft.content,
-          localBaseSnapshotContent: draft.localBaseSnapshotContent,
         };
-        await saveDraftConflict(activeDoc.documentId, {
+        await saveDraftConflict(activeDocMeta.documentId, {
           localBaseCommitId: built.localBaseCommitId,
           conflictStatus: "diverged",
           conflict: built,
@@ -219,16 +216,35 @@ export function App() {
         setMergeConflict(built);
       }
     })();
-  }, [mergeViewOpen, activeDoc, syncLocalBaseCommitId, remoteCommitId]);
+  }, [mergeViewOpen, activeDocMeta, editBaseCommitId, remoteCommitId]);
 
   useEffect(() => {
-    if (!activeDoc || !syncBehind || !editorDraftExists) return;
-    void getDraft(activeDoc.documentId).then(async (draft) => {
+    if (!activeDocMeta || !syncBehind || !editorDraftExists) return;
+    void getDraft(activeDocMeta.documentId).then(async (draft) => {
       if (!draft || draft.conflict || draft.conflictStatus === "publish_conflict") return;
       if (draft.conflictStatus === "diverged") return;
       await saveDraftRecord({ ...draft, conflictStatus: "diverged" });
     });
-  }, [activeDoc?.documentId, syncBehind, editorDraftExists]);
+  }, [activeDocMeta?.documentId, syncBehind, editorDraftExists]);
+
+  useEffect(() => {
+    if (!activeDocMeta) {
+      setEditBaseCommitId(null);
+      return;
+    }
+    let cancelled = false;
+    void getDraft(activeDocMeta.documentId).then((draft) => {
+      if (cancelled) return;
+      if (draft && !draft.published && draft.localBaseCommitId) {
+        setEditBaseCommitId(draft.localBaseCommitId);
+      } else {
+        setEditBaseCommitId(activeDocMeta.headCommitId ?? null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDocMeta?.documentId, activeDocMeta?.headCommitId, editorDraftExists]);
 
   // ---- 全局 Toast 消息（如「已发布」） ----
   const [message, setMessage] = useState<string | null>(null);
@@ -383,9 +399,39 @@ export function App() {
     setTree(nodes);
   }
 
+  function loadEditorFromServer(doc: DocumentDetail): void {
+    setEditorContent({
+      documentId: doc.documentId,
+      content: doc.content,
+      displayName: doc.displayName,
+    });
+    setContentRevision((r) => r + 1);
+    setEditorDraftExists(false);
+  }
+
+  function loadEditorFromDraft(docId: string, draft: NonNullable<Awaited<ReturnType<typeof getDraft>>>): void {
+    setEditorContent({
+      documentId: docId,
+      content: draft.content,
+      displayName: draft.displayName,
+    });
+    setContentRevision((r) => r + 1);
+    setEditorDraftExists(true);
+  }
+
+  /** publish 成功后：删草稿 + GET，若仍打开本篇则刷新 meta 与编辑器。 */
+  async function finalizeAfterPublish(docId: string): Promise<DocumentDetail> {
+    await deleteDraft(docId);
+    const doc = await getDocumentApi(docId);
+    if (activeDocMeta?.documentId === docId && expectedDocIdRef.current === docId) {
+      setActiveDocMeta(documentDetailToMeta(doc));
+      loadEditorFromServer(doc);
+    }
+    return doc;
+  }
+
   /**
-   * 打开文档：先拉服务端最新文档，再按本地草稿副本覆盖编辑视图。
-   * 若存在未发布草稿，正文与展示信息以草稿副本为准（服务端仍负责写操作裁决）。
+   * 打开文档：GET 写入 activeDocMeta；正文互斥来自草稿或 GET。
    */
   async function openDocument(docId: string): Promise<void> {
     expectedDocIdRef.current = docId;
@@ -395,7 +441,6 @@ export function App() {
 
       const doc = await getDocumentApi(docId);
       if (expectedDocIdRef.current !== docId) return;
-      serverLexicalAtOpenRef.current[docId] = doc.content;
 
       if (doc.domainId !== currentDomainId) {
         localStorage.setItem("mdocs.currentDomainId", doc.domainId);
@@ -404,23 +449,14 @@ export function App() {
       }
       setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
 
-      const head = doc.headCommitId ?? null;
-      const localBase =
-        draft && !draft.published && draft.localBaseCommitId
-          ? draft.localBaseCommitId
-          : head;
-      setSyncLocalBaseCommitId(localBase);
-
+      setActiveDocMeta(documentDetailToMeta(doc));
       if (expectedDocIdRef.current !== docId) return;
-      setActiveDoc(
-        draft && !draft.published
-          ? {
-            ...doc,
-            content: draft.content,
-            displayName: draft.displayName,
-          }
-          : doc,
-      );
+
+      if (draft && !draft.published) {
+        loadEditorFromDraft(docId, draft);
+      } else {
+        loadEditorFromServer(doc);
+      }
     } catch (err) {
       if (expectedDocIdRef.current !== docId) return;
       setAlertMessage(translateError(t, err));
@@ -438,8 +474,9 @@ export function App() {
       // URL 中有文档 ID，尝试打开该文档
       void openDocument(documentId);
     } else {
-      setActiveDoc(null);
-      setSyncLocalBaseCommitId(null);
+      setActiveDocMeta(null);
+      setEditorContent(null);
+      setEditBaseCommitId(null);
     }
     // 注意：openDocument 在 effect 内部定义，eslint 会提示缺少依赖
     // 但将 openDocument 加入依赖会导致无限循环，因此忽略该规则
@@ -463,7 +500,8 @@ export function App() {
     t,
     // 文档创建成功后的回调：设置为当前文档并跳转路由
     onDocCreated: (doc: DocumentDetail) => {
-      setActiveDoc(doc);
+      setActiveDocMeta(documentDetailToMeta(doc));
+      loadEditorFromServer(doc);
       setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
       navigate(`/doc/${doc.documentId}`);
     },
@@ -536,7 +574,7 @@ export function App() {
     details: VersionConflictDetails,
   ): Promise<void> {
     let draft = await getDraft(documentId);
-    if (!draft && activeDoc?.documentId === documentId) {
+    if (!draft && activeDocMeta?.documentId === documentId) {
       draft = {
         documentId,
         content: localContent,
@@ -544,10 +582,10 @@ export function App() {
         updatedAt: Date.now(),
         published: false,
         localBaseCommitId,
-        relativePath: activeDoc.relativePath,
-        permission: activeDoc.permission,
-        ownerVisitorId: activeDoc.ownerVisitorId,
-        domainId: activeDoc.domainId,
+        relativePath: activeDocMeta.relativePath,
+        permission: activeDocMeta.permission,
+        ownerVisitorId: activeDocMeta.ownerVisitorId,
+        domainId: activeDocMeta.domainId,
       };
       await saveDraftRecord(draft);
     }
@@ -559,7 +597,6 @@ export function App() {
           localBaseCommitId,
           remoteCommitId: details.headCommitId,
           localSnapshotContent: localContent,
-          localBaseSnapshotContent: draft.localBaseSnapshotContent,
         },
       });
     }
@@ -570,66 +607,67 @@ export function App() {
    * 发布文档：带 version.localBaseCommitId 乐观锁。
    */
   async function publishDocument(content: string, displayName: string, documentId: string, permission?: number): Promise<void> {
-    const draftForPublish = await getDraft(documentId);
-    const localBaseCommitId =
-      draftForPublish?.localBaseCommitId ?? syncLocalBaseCommitId ?? activeDoc?.headCommitId;
-    if (!localBaseCommitId) {
-      setAlertMessage(t("syncHeadMissing"));
-      throw new Error("missing localBaseCommitId");
-    }
-    try {
-      const updated = await updateDocumentApi(documentId, {
-        content,
-        displayName,
-        permission,
-        version: { localBaseCommitId },
-      });
-      setActiveDoc((prev) => (prev && prev.documentId === documentId ? updated : prev));
-      setSyncLocalBaseCommitId(updated.headCommitId ?? null);
-      await clearDraftConflict(documentId);
-      await refreshTree();
-      setConflictModalOpen(false);
-      setMessage(t("published"));
-      window.setTimeout(() => setMessage(null), 1200);
-    } catch (err) {
-      if (
-        err instanceof ApiRequestError &&
-        err.status === 409 &&
-        err.code === "VERSION_CONFLICT" &&
-        err.details &&
-        typeof err.details === "object"
-      ) {
-        await persistPublishConflict(
-          documentId,
+    return getDocumentTaskQueue(documentId).execute(async () => {
+      const draftForPublish = await getDraft(documentId);
+      const localBaseCommitId =
+        draftForPublish?.localBaseCommitId ?? activeDocMeta?.headCommitId;
+      if (!localBaseCommitId) {
+        setAlertMessage(t("syncHeadMissing"));
+        throw new Error("missing localBaseCommitId");
+      }
+      try {
+        await updateDocumentApi(documentId, {
           content,
           displayName,
-          localBaseCommitId,
-          err.details as VersionConflictDetails,
-        );
+          permission,
+          version: { localBaseCommitId },
+        });
+        await clearDraftConflict(documentId);
+        await finalizeAfterPublish(documentId);
+        await refreshTree();
+        setConflictModalOpen(false);
+        setMessage(t("published"));
+        window.setTimeout(() => setMessage(null), 1200);
+      } catch (err) {
+        if (
+          err instanceof ApiRequestError &&
+          err.status === 409 &&
+          err.code === "VERSION_CONFLICT" &&
+          err.details &&
+          typeof err.details === "object"
+        ) {
+          await persistPublishConflict(
+            documentId,
+            content,
+            displayName,
+            localBaseCommitId,
+            err.details as VersionConflictDetails,
+          );
+        }
+        throw err;
       }
-      throw err;
-    }
+    });
   }
 
   /** 无本地未发布草稿时：只读拉远端正文与 meta，不写服务端、不删草稿。 */
   async function executePullRemote(): Promise<void> {
-    if (!activeDoc) return;
-    const doc = await getDocumentApi(activeDoc.documentId);
+    if (!activeDocMeta) return;
+    const doc = await getDocumentApi(activeDocMeta.documentId);
     if (doc.domainId !== currentDomainId) {
       localStorage.setItem("mdocs.currentDomainId", doc.domainId);
       setCurrentDomainId(doc.domainId);
       void refreshTree(doc.domainId);
     }
     setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
-    setActiveDoc(doc);
-    setSyncLocalBaseCommitId(doc.headCommitId ?? null);
+    setActiveDocMeta(documentDetailToMeta(doc));
+    loadEditorFromServer(doc);
     setMessage(t("syncPullDone"));
     window.setTimeout(() => setMessage(null), 1200);
   }
 
   async function handleSyncClick(): Promise<void> {
-    if (!activeDoc) return;
-    const draft = await getDraft(activeDoc.documentId);
+    if (!activeDocMeta) return;
+    const draft = await getDraft(activeDocMeta.documentId);
     // 有未发布草稿时，当前版本不做覆盖式 sync / pull（本地副本优先）
     if (draft && !draft.published) return;
     const conflictPending =
@@ -661,38 +699,38 @@ export function App() {
    */
   async function publishDraftFromList(docId: string): Promise<void> {
     try {
-      // 从 IndexedDB 读取该文档的本地草稿
-      const draft = await getDraft(docId);
-      // 如果草稿不存在，直接返回（可能已被其他逻辑删除）
-      if (!draft) return;
-      const localBaseCommitId = draft.localBaseCommitId;
-      if (!localBaseCommitId) {
-        const doc = await getDocumentApi(docId);
-        if (doc.headCommitId) {
-          await saveDraftRecord({ ...draft, localBaseCommitId: doc.headCommitId });
+      await getDocumentTaskQueue(docId).execute(async () => {
+        const draft = await getDraft(docId);
+        if (!draft) return;
+        let localBaseCommitId = draft.localBaseCommitId;
+        if (!localBaseCommitId) {
+          const doc = await getDocumentApi(docId);
+          localBaseCommitId = doc.headCommitId ?? undefined;
+          if (localBaseCommitId) {
+            await saveDraftRecord({ ...draft, localBaseCommitId });
+          }
         }
-      }
-      const base = (await getDraft(docId))?.localBaseCommitId;
-      if (!base) {
-        setAlertMessage(t("syncHeadMissing"));
-        return;
-      }
-      await updateDocumentApi(docId, {
-        content: draft.content,
-        displayName: draft.displayName,
-        version: { localBaseCommitId: base },
+        if (!localBaseCommitId) {
+          setAlertMessage(t("syncHeadMissing"));
+          return;
+        }
+        const latest = await getDraft(docId);
+        if (!latest) return;
+        await updateDocumentApi(docId, {
+          content: latest.content,
+          displayName: latest.displayName,
+          version: { localBaseCommitId },
+        });
+        await clearDraftConflict(docId);
+        if (activeDocMeta?.documentId === docId) {
+          await finalizeAfterPublish(docId);
+        } else {
+          await deleteDraft(docId);
+        }
+        await refreshTree();
+        setMessage(t("published"));
+        window.setTimeout(() => setMessage(null), 1200);
       });
-      // 乐观锁：只有草稿在 API 调用期间没被修改过，才删除本地草稿
-      const deleted = await deleteDraftIfUnchanged(docId, draft.updatedAt);
-      if (!deleted) {
-        console.log("[publishDraftFromList] draft modified during publish, keeping:", docId);
-        // 草稿在发布过程中被用户继续编辑了，保留草稿供下次扫描/发布
-      }
-      // 刷新文档树，更新文档状态
-      await refreshTree();
-      // 显示发布成功提示
-      setMessage(t("published"));
-      window.setTimeout(() => setMessage(null), 1200);
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 404) {
         // 服务端文档已不存在，标记草稿为发布失败（不再重复扫描）
@@ -731,8 +769,9 @@ export function App() {
       if (deleteConfirm.type === "document") {
         await deleteDocumentApi(deleteConfirm.id);
         // 如果当前正在编辑的就是这篇文档，需要清理编辑器状态
-        if (activeDoc?.documentId === deleteConfirm.id) {
-          setActiveDoc(null);
+        if (activeDocMeta?.documentId === deleteConfirm.id) {
+          setActiveDocMeta(null);
+          setEditorContent(null);
           setSelectedCreateParentPath("");
           navigate("/");
         }
@@ -740,8 +779,9 @@ export function App() {
         await deleteFolderApi(deleteConfirm.id);
         // 如果删除的文件夹包含当前文档，需要清空编辑器
         // 这里简单处理：先全部刷新，之后让树重新加载
-        if (activeDoc) {
-          setActiveDoc(null);
+        if (activeDocMeta) {
+          setActiveDocMeta(null);
+          setEditorContent(null);
           setSelectedCreateParentPath("");
           navigate("/");
         }
@@ -994,27 +1034,25 @@ export function App() {
 
           {/* ========== 主内容区 ========== */}
           <main className="mdocs-main">
-            {activeDoc ? (
+            {activeDocMeta && editorContent && editorContent.documentId === activeDocMeta.documentId ? (
               <div className="mdocs-editor-with-comments">
                 {/* 编辑器区域 */}
                 <div className="mdocs-editor-container">
                   <DocumentEditor
-                    // key 使用 documentId，切换文档时强制重新挂载编辑器，避免状态混淆
-                    key={activeDoc.documentId}
-                    document={activeDoc}
-                    // 判断当前访客是否有编辑权限：
-                    // - 文档所有者可编辑
-                    // - permission === 4（public_write，公开可编辑）时所有人可编辑
-                    // - 通过邀请获得编辑权限
-                    canEdit={Boolean(visitor && (activeDoc.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDoc.permission) || activeDoc.invitedEdit === true))}
+                    key={activeDocMeta.documentId}
+                    meta={activeDocMeta}
+                    initialContent={editorContent.content}
+                    initialDisplayName={editorContent.displayName}
+                    contentRevision={contentRevision}
+                    canEdit={Boolean(visitor && (activeDocMeta.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDocMeta.permission) || activeDocMeta.invitedEdit === true))}
                     domains={domains}
                     currentDomainId={currentDomainId}
-                    // 切换域：清空当前文档，加载新域的树
                     onDomainChange={(domainId) => {
                       guardNavigate(() => {
                         localStorage.setItem("mdocs.currentDomainId", domainId);
                         setCurrentDomainId(domainId);
-                        setActiveDoc(null);
+                        setActiveDocMeta(null);
+                        setEditorContent(null);
                         setSelectedCreateParentPath("");
                         navigate("/");
                         void refreshTree(domainId);
@@ -1024,35 +1062,31 @@ export function App() {
                     syncBehind={syncBehind}
                     onSyncClick={() => void handleSyncClick()}
                     onDraftExistsChange={setEditorDraftExists}
-                    syncLocalBaseCommitId={syncLocalBaseCommitId}
-                    localBaseSnapshotLexicalAtEditStart={
-                      serverLexicalAtOpenRef.current[activeDoc.documentId] ?? null
-                    }
-                    canManageInvites={Boolean(visitor && visitor.visitorId === activeDoc.ownerVisitorId)}
+                    onConflictModalRequest={() => setConflictModalOpen(true)}
+                    onMergeRequest={() => setMergeViewOpen(true)}
+                    canManageInvites={Boolean(visitor && visitor.visitorId === activeDocMeta.ownerVisitorId)}
                     onDelete={async () => {
-                      if (activeDoc.relativePath.endsWith("/___desc___.md")) {
-                        const folderPath = activeDoc.relativePath.replace(/\/___desc___\.md$/, "");
-                        requestDeleteFolder(activeDoc.documentId, folderPath);
+                      if (activeDocMeta.relativePath.endsWith("/___desc___.md")) {
+                        const folderPath = activeDocMeta.relativePath.replace(/\/___desc___\.md$/, "");
+                        requestDeleteFolder(activeDocMeta.documentId, folderPath);
                       } else {
-                        requestDeleteDocument(activeDoc.documentId, activeDoc.relativePath);
+                        requestDeleteDocument(activeDocMeta.documentId, activeDocMeta.relativePath);
                       }
                     }}
                     saveBeforeNavRef={saveBeforeNavRef}
                     onShowToast={setMessage}
-                    // 评论相关
                     onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
                     commentPanelOpen={commentPanelOpen}
                     commentCount={commentCount}
                   />
                 </div>
 
-                {/* 评论抽屉面板 - 能读文档就能看评论 */}
                 {commentPanelOpen && (
                   <CommentsPanel
-                    documentId={activeDoc.documentId}
+                    documentId={activeDocMeta.documentId}
                     visitorId={visitor?.visitorId}
                     visitorName={visitor?.visitorName}
-                    documentOwnerId={activeDoc.ownerVisitorId}
+                    documentOwnerId={activeDocMeta.ownerVisitorId}
                     onClose={() => setCommentPanelOpen(false)}
                   />
                 )}
@@ -1077,7 +1111,8 @@ export function App() {
                       guardNavigate(() => {
                         localStorage.setItem("mdocs.currentDomainId", domainId);
                         setCurrentDomainId(domainId);
-                        setActiveDoc(null);
+                        setActiveDocMeta(null);
+                        setEditorContent(null);
                         setSelectedCreateParentPath("");
                         navigate("/");
                         void refreshTree(domainId);
@@ -1109,10 +1144,10 @@ export function App() {
                 setMergeViewOpen(true);
               }}
             />
-            {mergeViewOpen && activeDoc && mergeConflict && (
+            {mergeViewOpen && activeDocMeta && mergeConflict && (
               <MergeView
-                documentId={activeDoc.documentId}
-                displayName={activeDoc.displayName}
+                documentId={activeDocMeta.documentId}
+                displayName={activeDocMeta.displayName}
                 conflict={mergeConflict}
                 onClose={() => setMergeViewOpen(false)}
                 onSuccess={handleMergeSuccess}
@@ -1158,7 +1193,8 @@ export function App() {
                     style={{ background: "#d32f2f" }}
                     onClick={() => {
                       clearVisitorId();
-                      setActiveDoc(null);
+                      setActiveDocMeta(null);
+                      setEditorContent(null);
                       setVisitor(null);
                       setTree([]);
                       setShowLogoutConfirm(false);

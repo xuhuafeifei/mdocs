@@ -45,16 +45,21 @@
 | `VisitorPickerModal` | `src/web/app/VisitorPickerModal.tsx` | 访客选择弹窗（邀请/添加成员） |
 | `VisitorRegisterDialog` | `src/web/app/VisitorRegisterDialog.tsx` | 首次访问的昵称输入弹窗 |
 | `ConflictNotice` | `src/web/app/ConflictNotice.tsx` | 保存冲突提示 |
+| `MergeView` | `src/web/app/MergeView.tsx` | 409 / diverged 时行级 merge（CodeMirror 三栏） |
+| `ConflictModal` | `src/web/app/ConflictModal.tsx` | 冲突入口弹窗 |
 | `ConfirmDialog` | `src/web/app/ConfirmDialog.tsx` | 通用确认弹窗（标题、消息、取消/确认按钮、busy 状态） |
 | `MessageDialog` | `src/web/app/MessageDialog.tsx` | 通用消息弹窗（标题、消息、「知道了」按钮） |
 
 ## 状态管理
 
 - **无全局状态库**：使用 React 原生 `useState` / `useReducer` + Context。
-- **关键状态**：
-  - 当前访客：`src/web/app/hooks/useVisitor.ts`
-  - 当前域/文档树：`src/web/app/hooks/useTree.ts` 或 `App.tsx` 内状态
-  - 编辑器内容：`DocumentEditor.tsx` 内部管理，通过回调同步到父组件
+- **关键状态**（`App.tsx`）：
+  - `activeDocMeta`：当前打开文档的服务端 meta（`ActiveDocumentMeta`，不含正文），见 [active-doc-meta-and-draft-model.md](./active-doc-meta-and-draft-model.md)
+  - `editorContent` + `contentRevision`：正文载入编辑器；`contentRevision` 在 pull/publish 后递增以触发 `setDocument`（非 commitId）
+  - `editorDraftExists`：是否有未发布 IndexedDB 草稿（有草稿时不做 sync-status 轮询）
+  - 文档树、域、访客等同屏状态
+- **串行队列**：`documentTaskQueue.ts` — 按 `documentId` 串行 auto save / publish
+- **编辑器**：`DocumentEditor` 接收 `meta` + `initialContent`，内部 Lexical 状态；auto save 见 `hooks/useAutoSave.ts`
 
 ## API 交互
 
