@@ -1,5 +1,12 @@
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+/** 编译后位于 dist/server/config/，前端构建产物在 dist/web/ */
+const defaultWebDistDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../web",
+);
 
 /** 应用配置对象，包含服务运行所需的全部路径与参数。 */
 export interface AppConfig {
@@ -65,7 +72,9 @@ export function getConfig(): AppConfig {
     // 历史提交快照：路径仅由正文 SHA-256 决定，见 resolveCommitBlobAbsolutePath
     commitsDir: path.join(dataDir, "files", "commits"),
     logsDir: path.join(dataDir, "logs"),
-    webDistDir: path.resolve(process.cwd(), "dist/web"),
+    webDistDir: process.env.MDOCS_WEB_DIST?.trim()
+      ? path.resolve(process.env.MDOCS_WEB_DIST)
+      : defaultWebDistDir,
     logging,
     defaultDomainId: "default",
   };
