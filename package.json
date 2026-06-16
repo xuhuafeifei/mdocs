@@ -1,6 +1,6 @@
 {
   "name": "@fgbg/mdocs",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "A Markdown knowledge base for small teams",
   "license": "MIT",
   "type": "module",
@@ -36,7 +36,7 @@
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.43.0",
     "@lexical/rich-text": "0.42.0",
-    "@lobehub/editor": "npm:@fgbg/lobe-editor@1.0.0-fork.12",
+    "@lobehub/editor": "npm:@fgbg/lobe-editor@1.0.0-fork.13",
     "@lobehub/ui": "^5.0.0",
     "@node-rs/jieba": "^2.0.1",
     "antd": "^6.1.1",
