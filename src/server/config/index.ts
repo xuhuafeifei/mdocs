@@ -40,8 +40,8 @@ export function getConfig(): AppConfig {
     ? path.resolve(process.env.MDOCS_DATA_DIR)
     : path.join(os.homedir(), ".mdocs");
 
-  // 网络监听地址与端口
-  const host = process.env.MDOCS_HOST?.trim() || "127.0.0.1";
+  // 网络监听地址与端口（默认 0.0.0.0 以便服务器/容器对外可访问；本地仅本机可设 MDOCS_HOST=127.0.0.1）
+  const host = process.env.MDOCS_HOST?.trim() || "0.0.0.0";
   const port = process.env.MDOCS_PORT ? Number(process.env.MDOCS_PORT) : 4000;
 
   // 组装日志配置

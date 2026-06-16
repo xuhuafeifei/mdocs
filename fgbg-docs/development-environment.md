@@ -34,6 +34,11 @@ pnpm install
 
 ## 开发配置
 
+### 监听地址
+
+- 默认 `0.0.0.0:4000`（`MDOCS_HOST` / `MDOCS_PORT`，见 `src/server/config/index.ts`）
+- 本地开发若不想局域网可访问：`export MDOCS_HOST=127.0.0.1`
+
 ### Vite 代理
 
 开发时前端端口 5173，后端 4000。Vite 配置中已将 `/api` 代理到 `localhost:4000`，因此前端代码中直接写 `/api/xxx` 即可。
