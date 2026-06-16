@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import compression from "compression";
 import express, { type Application } from "express";
 import cookieParser from "cookie-parser";
 import { getConfig } from "./config/index.js";
@@ -87,7 +88,20 @@ export function buildApp(): Application {
 
   // 若前端构建产物存在，则提供静态文件服务与单页应用回退
   if (fs.existsSync(cfg.webDistDir)) {
-    app.use(express.static(cfg.webDistDir));
+    app.use(compression());
+
+    const assetsDir = path.join(cfg.webDistDir, "assets");
+    if (fs.existsSync(assetsDir)) {
+      app.use(
+        "/assets",
+        express.static(assetsDir, {
+          maxAge: "1y",
+          immutable: true,
+        }),
+      );
+    }
+
+    app.use(express.static(cfg.webDistDir, { maxAge: 0, index: false }));
     app.get("*", (_req, res) => {
       const indexHtml = path.join(cfg.webDistDir, "index.html");
       if (fs.existsSync(indexHtml)) {
