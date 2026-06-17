@@ -298,6 +298,8 @@ export type TranslationKey =
   | "unknownTitle"
   | "draftPublishFailedNotice"
   | "draftPublishFailedSyncHead"
+  | "draftPublishFailedGeneric"
+  | "publishFailed"
   | "recoverDraft"
   | "recoverDraftDesc"
   | "recoverTargetFolder"

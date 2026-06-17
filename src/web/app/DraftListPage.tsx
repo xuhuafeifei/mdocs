@@ -5,7 +5,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
-import { listAllDrafts, deleteDraft, clearDraftPublishError, DRAFT_PUBLISH_ERROR, type DraftRecord } from "../storage/drafts";
+import { listAllDrafts, deleteDraft, clearDraftPublishError, getDraft, type DraftRecord } from "../storage/drafts";
+import { DraftPublishAborted, formatDraftPublishFailureMessage } from "./draftPublishFailure";
 import { RecoveryDialog } from "./RecoveryDialog";
 
 interface DraftListPageProps {
@@ -112,9 +113,14 @@ export function DraftListPage({ onPublish, onClose, onCountChange, onRecover }: 
       });
       // 显示发布成功提示
       showToast(t("published"), "success");
-    } catch {
-      // 发布失败，显示错误提示
-      showToast(t("publishFailed"), "error");
+    } catch (err) {
+      if (!(err instanceof DraftPublishAborted)) {
+        showToast(t("publishFailed"), "error");
+      }
+      const updated = await getDraft(docId);
+      if (updated) {
+        setDrafts((prev) => prev.map((d) => (d.documentId === docId ? updated : d)));
+      }
     } finally {
       // 无论成功失败，都要从发布集合中移除该 ID
       setPublishingIds((prev) => {
@@ -215,13 +221,8 @@ export function DraftListPage({ onPublish, onClose, onCountChange, onRecover }: 
     });
   };
 
-  const formatPublishError = (draft: DraftRecord): string => {
-    const name = draft.displayName || t("unknownTitle");
-    if (draft.publishError === DRAFT_PUBLISH_ERROR.SYNC_HEAD_MISSING) {
-      return t("draftPublishFailedSyncHead", { name });
-    }
-    return t("draftPublishFailedNotice", { name });
-  };
+  const formatPublishError = (draft: DraftRecord): string =>
+    formatDraftPublishFailureMessage(t, draft, draft.publishError ?? "UNKNOWN");
 
   const unpublished = drafts;
 

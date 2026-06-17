@@ -56,14 +56,19 @@ import {
   getDraft,
   saveDraft as saveDraftRecord,
   deleteDraft,
-  markDraftPublishError,
   clearDraftPublishError,
   DRAFT_PUBLISH_ERROR,
   saveDraftConflict,
   clearDraftConflict,
   type DraftConflictRecord,
+  type DraftRecord,
 } from "../storage/drafts";
 import { translateError, localizeDomainName, parentDirForCreates } from "./utils";
+import {
+  DraftPublishAborted,
+  failDraftPublish,
+  formatDraftPublishFailureMessage,
+} from "./draftPublishFailure";
 import { useAutoPublish } from "./hooks/useAutoPublish";
 import { useDocumentVersion } from "./hooks/useDocumentVersion";
 import mdocsLogo from "../assets/mdocs-logo.svg";
@@ -705,31 +710,50 @@ export function App() {
   }
 
   /**
+   * 草稿发布失败：IndexedDB 打标 + 提示，并抛出以阻止调用方误判成功。
+   */
+  async function reportDraftPublishFailure(
+    docId: string,
+    err: unknown,
+    draft?: DraftRecord | null,
+  ): Promise<never> {
+    try {
+      await failDraftPublish(docId, err, draft);
+    } catch (aborted) {
+      if (!(aborted instanceof DraftPublishAborted)) throw aborted;
+      const record = draft ?? (await getDraft(docId));
+      setMessage(
+        formatDraftPublishFailureMessage(t, record, aborted.code, aborted.cause ?? err),
+      );
+      window.setTimeout(() => setMessage(null), 4000);
+      throw aborted;
+    }
+  }
+
+  /**
    * 从草稿列表发布单篇草稿（供自动发布或批量发布调用）。
    * 使用乐观锁：仅当草稿在 API 调用期间未被修改时才删除本地草稿。
    */
   async function publishDraftFromList(docId: string): Promise<void> {
+    let draft: DraftRecord | undefined;
     try {
       await getDocumentTaskQueue(docId).execute(async () => {
-        const draft = await getDraft(docId);
-        if (!draft) return;
-        let localBaseCommitId = draft.localBaseCommitId;
+        const current = await getDraft(docId);
+        if (!current) return;
+        draft = current;
+        let localBaseCommitId = current.localBaseCommitId;
         if (!localBaseCommitId) {
           const doc = await getDocumentApi(docId);
           localBaseCommitId = doc.headCommitId ?? undefined;
           if (localBaseCommitId) {
-            await saveDraftRecord({ ...draft, localBaseCommitId });
-            if (draft.publishError === DRAFT_PUBLISH_ERROR.SYNC_HEAD_MISSING) {
+            await saveDraftRecord({ ...current, localBaseCommitId });
+            if (current.publishError === DRAFT_PUBLISH_ERROR.SYNC_HEAD_MISSING) {
               await clearDraftPublishError(docId);
             }
           }
         }
         if (!localBaseCommitId) {
-          const draftName = draft.displayName || t("unknownTitle");
-          setMessage(t("draftPublishFailedSyncHead", { name: draftName }));
-          window.setTimeout(() => setMessage(null), 4000);
-          await markDraftPublishError(docId, DRAFT_PUBLISH_ERROR.SYNC_HEAD_MISSING);
-          return;
+          throw new DraftPublishAborted(DRAFT_PUBLISH_ERROR.SYNC_HEAD_MISSING);
         }
         const latest = await getDraft(docId);
         if (!latest) return;
@@ -739,6 +763,7 @@ export function App() {
           version: { localBaseCommitId },
         });
         await clearDraftConflict(docId);
+        await clearDraftPublishError(docId);
         if (activeDocMeta?.documentId === docId) {
           await finalizeAfterPublish(docId);
         } else {
@@ -749,17 +774,7 @@ export function App() {
         window.setTimeout(() => setMessage(null), 1200);
       });
     } catch (err) {
-      if (err instanceof ApiRequestError && err.status === 404) {
-        // 服务端文档已不存在，标记草稿为发布失败（不再重复扫描）
-        // 显示草稿名称，方便用户定位
-        const draft = await getDraft(docId);
-        const draftName = draft?.displayName || t("unknownTitle");
-        setMessage(t("draftPublishFailedNotice", { name: draftName }));
-        await markDraftPublishError(docId, DRAFT_PUBLISH_ERROR.DOC_NOT_FOUND);
-        return;
-      }
-      // 其他错误显示错误弹窗
-      setAlertMessage(translateError(t, err));
+      await reportDraftPublishFailure(docId, err, draft);
     }
   }
 

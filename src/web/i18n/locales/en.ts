@@ -306,6 +306,8 @@ export const en: Record<TranslationKey, string> = {
   draftPublishFailedNotice: "Draft \"{{name}}\" publish failed: document not found",
   draftPublishFailedSyncHead:
     "Draft \"{{name}}\" publish failed: missing version baseline — reopen the document or fix on server",
+  draftPublishFailedGeneric: "Draft \"{{name}}\" publish failed: {{reason}}",
+  publishFailed: "Publish failed",
   recoverDraft: "Save As New Document",
   recoverDraftDesc: "Save the draft of \"{{name}}\" as a brand new document",
   recoverTargetFolder: "Target Folder",

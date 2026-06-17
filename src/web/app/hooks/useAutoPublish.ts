@@ -1,7 +1,8 @@
 /**
  * 自动发布 Hook（类似 Linux pdflush）
  * 定时扫描 IndexedDB 中的未发布草稿，当草稿闲置超过 30 秒时自动推送到服务器。
- * 注意：实际删除草稿的乐观锁逻辑由调用方（App.tsx 的 publishDraftFromList）负责。
+ * 发布失败由 publishDraftFromList → reportDraftPublishFailure 统一打标 publishError，
+ * 下次扫描 listAllDrafts({ skipFailed: true }) 会跳过。
  */
 import { useEffect, useRef } from "react";
 import { listAllDrafts } from "../../storage/drafts";
