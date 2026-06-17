@@ -13,6 +13,7 @@ import { insertAuditLog } from "../db/repositories/audit.repo.js";
 import { FOLDER_DESC_FILENAME, folderDescPathForFolder } from "../../shared/folderDesc.js";
 import { normalisePathSegmentForStorage } from "../../shared/storagePath.js";
 import { writeDocument } from "../storage/file-store.js";
+import { insertMarkdownDocumentWithInitialCommit } from "../documents/initial-commit.js";
 import { getConfig } from "../config/index.js";
 import { useLogger } from "../logger/logger.js";
 
@@ -178,21 +179,20 @@ function createFolder(params: {
       parentId: params.parentId ?? null,
     });
 
-    // 创建 ___desc___.md 文档
-    writeDocument(domainId, descPath, descContent);
-    insertDocument(db, {
-      documentId: randomUUID(),
+    // 创建 ___desc___.md（与普通 md 相同：首版 commit + head）
+    const descDocumentId = randomUUID();
+    insertMarkdownDocumentWithInitialCommit(db, {
+      documentId: descDocumentId,
       domainId,
       relativePath: descPath,
       displayName: params.name,
+      content: descContent,
       ownerVisitorId: params.actorVisitorId,
-      createdBy: params.actorVisitorId,
-      updatedBy: params.actorVisitorId,
-      contentHash: '',
+      actorVisitorId: params.actorVisitorId,
       createdAt: now,
       updatedAt: now,
       permission,
-      fileType: 'md',
+      fileType: "md",
       parentId: folderId,
     });
 

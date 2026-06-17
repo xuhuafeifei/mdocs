@@ -23,7 +23,8 @@ vi.mock("../db/connection.js", () => ({
 // mock file-store：不写磁盘
 vi.mock("../storage/file-store.js", () => ({
   writeDocument: () => ({ contentHash: "mock-hash", bytes: 0 }),
-  readDocument: () => ({ content: "", contentHash: "mock-hash" }),
+  readDocument: () => ({ content: "# test", contentHash: "mock-hash" }),
+  writeCommitBlob: () => ({ blobRef: "ab/mock", bytes: 0 }),
   deleteDocumentFile: () => {},
 }));
 
@@ -63,8 +64,10 @@ vi.mock("../logger/logger.js", () => ({
 import { buildDocumentTree } from "./tree.service.js";
 import { createDocument, removeFolder } from "./document.service.js";
 import { findDocumentById, countChildrenByParent, listDocumentsByPathPrefix } from "../db/repositories/document.repo.js";
+import { findCommitById } from "../db/repositories/commit.repo.js";
 import { getDb } from "../db/connection.js";
 import { buildFoldersRouter } from "../routes/folders.routes.js";
+import { FOLDER_DESC_FILENAME } from "../../shared/folderDesc.js";
 import type { Express } from "express";
 import express from "express";
 
@@ -131,6 +134,8 @@ beforeAll(() => {
 
 afterEach(() => {
   const db = testDbRef.db!;
+  db.exec("DELETE FROM commit_parents");
+  db.exec("DELETE FROM document_commits");
   db.exec("DELETE FROM documents");
   db.exec("DELETE FROM document_invites");
   db.exec("DELETE FROM audit_logs");
@@ -295,6 +300,12 @@ describe("POST /api/folders", () => {
     expect(response.status).toBe(201);
     expect(json.data.folderId).toBeTruthy();
     expect(json.data.path).toBe("new-folder");
+
+    const desc = getDb()
+      .prepare(`SELECT head_commit_id FROM documents WHERE relative_path = ?`)
+      .get(`new-folder/${FOLDER_DESC_FILENAME}`) as { head_commit_id: string | null };
+    expect(desc.head_commit_id).toBeTruthy();
+    expect(findCommitById(getDb(), desc.head_commit_id!)).toBeTruthy();
   });
 
   it("创建子目录", async () => {

@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { backfillFolderDescHeadCommits } from "../documents/initial-commit.js";
 
 /** 数据库初始化所需的全部 DDL 语句，按顺序执行。 */
 const SCHEMA_STATEMENTS: string[] = [
@@ -185,6 +186,7 @@ export function applySchema(db: Database.Database): void {
     migrateDocumentsTable(db);
     migrateDocumentsDirty(db);
     migrateDocumentsHeadCommit(db);
+    backfillFolderDescHeadCommits(db);
     migrateVisitorsRecoveryCode(db);
     migrateVisitorsPasswordHash(db);
     migrateVisitorSessions(db);
