@@ -19,7 +19,9 @@ vi.mock("../storage/file-store.js", () => ({
         children: [{ type: "text", text: "测试文档内容" }]
       }]
     }
-  }) }),
+  }), contentHash: "mock-hash" }),
+  writeCommitBlob: () => ({ blobRef: "ab/mock", bytes: 0 }),
+  readCommitBlob: () => "",
   deleteDocumentFile: () => {},
 }));
 
