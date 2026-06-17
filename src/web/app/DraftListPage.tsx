@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
-import { listAllDrafts, deleteDraft, clearDraftPublishError, type DraftRecord } from "../storage/drafts";
+import { listAllDrafts, deleteDraft, clearDraftPublishError, DRAFT_PUBLISH_ERROR, type DraftRecord } from "../storage/drafts";
 import { RecoveryDialog } from "./RecoveryDialog";
 
 interface DraftListPageProps {
@@ -215,6 +215,14 @@ export function DraftListPage({ onPublish, onClose, onCountChange, onRecover }: 
     });
   };
 
+  const formatPublishError = (draft: DraftRecord): string => {
+    const name = draft.displayName || t("unknownTitle");
+    if (draft.publishError === DRAFT_PUBLISH_ERROR.SYNC_HEAD_MISSING) {
+      return t("draftPublishFailedSyncHead", { name });
+    }
+    return t("draftPublishFailedNotice", { name });
+  };
+
   const unpublished = drafts;
 
   return (
@@ -265,7 +273,7 @@ export function DraftListPage({ onPublish, onClose, onCountChange, onRecover }: 
                       </span>
                       {isFailed ? (
                         <span className="mdocs-drawer-item-error">
-                          {formatTime(d.publishErrorAt!)} · {t("draftPublishFailedNotice", { name: d.displayName || t("unknownTitle") })}
+                          {formatTime(d.publishErrorAt!)} · {formatPublishError(d)}
                         </span>
                       ) : (
                         <span className="mdocs-drawer-item-meta">

@@ -36,6 +36,14 @@ export interface DraftRecord {
   conflict?: DraftConflictRecord;
 }
 
+/** 自动发布失败后写入草稿，供 listAllDrafts({ skipFailed: true }) 跳过重试。 */
+export const DRAFT_PUBLISH_ERROR = {
+  DOC_NOT_FOUND: "DOC_NOT_FOUND",
+  SYNC_HEAD_MISSING: "SYNC_HEAD_MISSING",
+} as const;
+
+export type DraftPublishErrorCode = (typeof DRAFT_PUBLISH_ERROR)[keyof typeof DRAFT_PUBLISH_ERROR];
+
 let _dbPromise: Promise<IDBDatabase> | null = null;
 
 function openDB(): Promise<IDBDatabase> {

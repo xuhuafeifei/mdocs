@@ -302,6 +302,7 @@ export const zh: Record<TranslationKey, string> = {
   localSnapshot: "本地快照",
   unknownTitle: "未命名文档",
   draftPublishFailedNotice: "草稿「{{name}}」发布失败：文档不存在",
+  draftPublishFailedSyncHead: "草稿「{{name}}」发布失败：缺少版本基准，请重新打开文档",
   recoverDraft: "另存为新文档",
   recoverDraftDesc: "将「{{name}}」的草稿内容保存为一篇全新文档",
   recoverTargetFolder: "目标目录",

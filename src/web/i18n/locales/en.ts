@@ -304,6 +304,8 @@ export const en: Record<TranslationKey, string> = {
   localSnapshot: "Local snapshot",
   unknownTitle: "Untitled document",
   draftPublishFailedNotice: "Draft \"{{name}}\" publish failed: document not found",
+  draftPublishFailedSyncHead:
+    "Draft \"{{name}}\" publish failed: missing version baseline — reopen the document or fix on server",
   recoverDraft: "Save As New Document",
   recoverDraftDesc: "Save the draft of \"{{name}}\" as a brand new document",
   recoverTargetFolder: "Target Folder",

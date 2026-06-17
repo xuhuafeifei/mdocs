@@ -297,6 +297,7 @@ export type TranslationKey =
   | "localSnapshot"
   | "unknownTitle"
   | "draftPublishFailedNotice"
+  | "draftPublishFailedSyncHead"
   | "recoverDraft"
   | "recoverDraftDesc"
   | "recoverTargetFolder"

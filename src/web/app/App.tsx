@@ -8,7 +8,7 @@
  * 5. 新建文档/文件夹的模态框管理
  * 6. 全局消息提示与冲突处理
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, File, Folder, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
@@ -50,13 +50,15 @@ import { MessageDialog } from "./MessageDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
 import { ConflictModal } from "./ConflictModal";
-import { MergeView } from "./MergeView";
+const MergeView = lazy(() => import("./MergeView").then((m) => ({ default: m.MergeView })));
 import { CommentsPanel } from "./CommentsPanel";
 import {
   getDraft,
   saveDraft as saveDraftRecord,
   deleteDraft,
   markDraftPublishError,
+  clearDraftPublishError,
+  DRAFT_PUBLISH_ERROR,
   saveDraftConflict,
   clearDraftConflict,
   type DraftConflictRecord,
@@ -449,6 +451,15 @@ export function App() {
       }
       setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
 
+      if (doc.headCommitId && draft && !draft.published) {
+        if (draft.publishError === DRAFT_PUBLISH_ERROR.SYNC_HEAD_MISSING) {
+          await clearDraftPublishError(docId);
+        }
+        if (!draft.localBaseCommitId) {
+          await saveDraftRecord({ ...draft, localBaseCommitId: doc.headCommitId });
+        }
+      }
+
       setActiveDocMeta(documentDetailToMeta(doc));
       if (expectedDocIdRef.current !== docId) return;
 
@@ -708,10 +719,16 @@ export function App() {
           localBaseCommitId = doc.headCommitId ?? undefined;
           if (localBaseCommitId) {
             await saveDraftRecord({ ...draft, localBaseCommitId });
+            if (draft.publishError === DRAFT_PUBLISH_ERROR.SYNC_HEAD_MISSING) {
+              await clearDraftPublishError(docId);
+            }
           }
         }
         if (!localBaseCommitId) {
-          setAlertMessage(t("syncHeadMissing"));
+          const draftName = draft.displayName || t("unknownTitle");
+          setMessage(t("draftPublishFailedSyncHead", { name: draftName }));
+          window.setTimeout(() => setMessage(null), 4000);
+          await markDraftPublishError(docId, DRAFT_PUBLISH_ERROR.SYNC_HEAD_MISSING);
           return;
         }
         const latest = await getDraft(docId);
@@ -738,7 +755,7 @@ export function App() {
         const draft = await getDraft(docId);
         const draftName = draft?.displayName || t("unknownTitle");
         setMessage(t("draftPublishFailedNotice", { name: draftName }));
-        await markDraftPublishError(docId, "DOC_NOT_FOUND");
+        await markDraftPublishError(docId, DRAFT_PUBLISH_ERROR.DOC_NOT_FOUND);
         return;
       }
       // 其他错误显示错误弹窗
@@ -1145,14 +1162,16 @@ export function App() {
               }}
             />
             {mergeViewOpen && activeDocMeta && mergeConflict && (
-              <MergeView
-                documentId={activeDocMeta.documentId}
-                displayName={activeDocMeta.displayName}
-                conflict={mergeConflict}
-                onClose={() => setMergeViewOpen(false)}
-                onSuccess={handleMergeSuccess}
-                onError={(msg) => setAlertMessage(msg)}
-              />
+              <Suspense fallback={<div className="merge-view-loading">{t("mergeLoadingRemote")}</div>}>
+                <MergeView
+                  documentId={activeDocMeta.documentId}
+                  displayName={activeDocMeta.displayName}
+                  conflict={mergeConflict}
+                  onClose={() => setMergeViewOpen(false)}
+                  onSuccess={handleMergeSuccess}
+                  onError={(msg) => setAlertMessage(msg)}
+                />
+              </Suspense>
             )}
 
             {/* 全局 Toast 消息 */}
