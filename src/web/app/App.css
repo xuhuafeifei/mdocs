@@ -394,6 +394,70 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+/* 创建/重置后的密钥结果：贴在对应卡片按钮下方 */
+.mdocs-settings-secret-result {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+.mdocs-settings-secret-result--ok {
+  border-color: var(--mdocs-success, #4caf50);
+  background: var(--mdocs-success-soft, #f1f8f1);
+}
+
+.mdocs-settings-secret-result--warn {
+  border-color: #e67e22;
+  background: #fef9f0;
+}
+
+.mdocs-settings-secret-result-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mdocs-settings-secret-value {
+  margin-top: 8px;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  color: var(--mdocs-text, #1f2937);
+}
+
+.mdocs-settings-secret-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.25rem;
+  letter-spacing: 0.1em;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 8px;
+  user-select: all;
+}
+
+.mdocs-settings-secret-result-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.mdocs-settings-copy-feedback {
+  margin-top: 10px;
+  font-size: 0.875rem;
+}
+
+.mdocs-settings-copy-feedback--ok {
+  color: var(--mdocs-success-text, #2e7d32);
+}
+
+.mdocs-settings-copy-feedback--err {
+  color: var(--mdocs-error-text, #c62828);
+}
+
 .mdocs-settings-search {
   width: 100%;
   padding: 10px 14px;

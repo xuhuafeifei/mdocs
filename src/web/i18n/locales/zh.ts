@@ -316,6 +316,7 @@ export const zh: Record<TranslationKey, string> = {
   cliTokenGenerated: "已生成新的 CLI Token",
   cliTokenCopy: "复制",
   cliTokenCopied: "已复制",
+  cliTokenCopyFailed: "复制失败，请手动选中上方内容复制",
   cliTokenResetConfirm: "重置将吊销当前所有已有 Token，并生成新的 Token。确认重置？",
   cliTokenActive: "活跃",
   cliTokenRevoked: "已吊销",

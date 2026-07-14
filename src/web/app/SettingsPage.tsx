@@ -84,12 +84,14 @@ export function SettingsPage(props: {
   const [cliTokenBusy, setCliTokenBusy] = useState(false);
   // 是否显示重置确认弹窗
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  // 是否刚复制成功（用于按钮文字切换）
+  // 是否刚复制成功（用于按钮文字切换与卡内提示）
   const [cliTokenCopied, setCliTokenCopied] = useState(false);
+  const [cliTokenCopyFailed, setCliTokenCopyFailed] = useState(false);
 
   // ---- 恢复码相关 ----
   const [recoveryCodeResult, setRecoveryCodeResult] = useState<string | null>(null);
   const [recoveryCodeCopied, setRecoveryCodeCopied] = useState(false);
+  const [recoveryCodeCopyFailed, setRecoveryCodeCopyFailed] = useState(false);
   const [recoveryCodeBusy, setRecoveryCodeBusy] = useState(false);
 
   // ---- 密码设置相关 ----
@@ -511,6 +513,50 @@ export function SettingsPage(props: {
                         : t("cliTokenCreate")}
                   </button>
                 </div>
+                {/* 生成结果紧贴本卡按钮下方 */}
+                {cliTokenResult && (
+                  <div className="mdocs-settings-secret-result mdocs-settings-secret-result--ok">
+                    <div className="mdocs-settings-secret-result-head">
+                      <span className="mdocs-settings-card-title">{t("cliTokenGenerated")}</span>
+                      <span className="mdocs-settings-secret-value">{cliTokenResult.token}</span>
+                    </div>
+                    <div className="mdocs-settings-secret-result-actions">
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              await navigator.clipboard.writeText(cliTokenResult.token);
+                              setCliTokenCopyFailed(false);
+                              setCliTokenCopied(true);
+                              window.setTimeout(() => setCliTokenCopied(false), 2000);
+                            } catch {
+                              setCliTokenCopied(false);
+                              setCliTokenCopyFailed(true);
+                              window.setTimeout(() => setCliTokenCopyFailed(false), 3000);
+                            }
+                          })();
+                        }}
+                      >
+                        {cliTokenCopied ? t("cliTokenCopied") : t("cliTokenCopy")}
+                      </button>
+                      <button type="button" onClick={() => setCliTokenResult(null)}>
+                        {t("close")}
+                      </button>
+                    </div>
+                    {cliTokenCopied && (
+                      <div className="mdocs-settings-copy-feedback mdocs-settings-copy-feedback--ok" role="status">
+                        ✓ {t("cliTokenCopied")}
+                      </div>
+                    )}
+                    {cliTokenCopyFailed && (
+                      <div className="mdocs-settings-copy-feedback mdocs-settings-copy-feedback--err" role="status">
+                        {t("cliTokenCopyFailed")}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 恢复码管理卡片 */}
@@ -531,6 +577,52 @@ export function SettingsPage(props: {
                     {recoveryCodeBusy ? "…" : "生成恢复码"}
                   </button>
                 </div>
+                {recoveryCodeResult && (
+                  <div className="mdocs-settings-secret-result mdocs-settings-secret-result--warn">
+                    <div className="mdocs-settings-secret-result-head">
+                      <span className="mdocs-settings-card-title">🔑 你的恢复码</span>
+                      <span className="mdocs-settings-item-desc" style={{ marginTop: 8 }}>
+                        请立即复制保存，关闭后不可再查看。
+                      </span>
+                      <div className="mdocs-settings-secret-code">{recoveryCodeResult}</div>
+                    </div>
+                    <div className="mdocs-settings-secret-result-actions">
+                      <button
+                        type="button"
+                        className="primary"
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              await navigator.clipboard.writeText(recoveryCodeResult);
+                              setRecoveryCodeCopyFailed(false);
+                              setRecoveryCodeCopied(true);
+                              window.setTimeout(() => setRecoveryCodeCopied(false), 2000);
+                            } catch {
+                              setRecoveryCodeCopied(false);
+                              setRecoveryCodeCopyFailed(true);
+                              window.setTimeout(() => setRecoveryCodeCopyFailed(false), 3000);
+                            }
+                          })();
+                        }}
+                      >
+                        {recoveryCodeCopied ? "已复制" : "复制恢复码"}
+                      </button>
+                      <button type="button" onClick={() => setRecoveryCodeResult(null)}>
+                        {t("close")}
+                      </button>
+                    </div>
+                    {recoveryCodeCopied && (
+                      <div className="mdocs-settings-copy-feedback mdocs-settings-copy-feedback--ok" role="status">
+                        ✓ 已复制到剪贴板
+                      </div>
+                    )}
+                    {recoveryCodeCopyFailed && (
+                      <div className="mdocs-settings-copy-feedback mdocs-settings-copy-feedback--err" role="status">
+                        复制失败，请手动选中上方内容复制
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 密码设置卡片 */}
@@ -567,87 +659,6 @@ export function SettingsPage(props: {
                 </form>
               </div>
             </div>
-
-            {/* CLI Token 生成结果弹窗：仅展示一次，关闭后不可再查看 */}
-            {cliTokenResult && (
-              <div className="mdocs-settings-card" style={{ marginTop: 16, borderColor: "#4caf50", background: "#f1f8f1" }}>
-                <div className="mdocs-settings-item">
-                  <span className="mdocs-settings-item-info">
-                    <span className="mdocs-settings-card-title">{t("cliTokenGenerated")}</span>
-                    <span className="mdocs-settings-item-desc" style={{ wordBreak: "break-all", fontFamily: "monospace", marginTop: 8 }}>
-                      {cliTokenResult.token}
-                    </span>
-                  </span>
-                  <span style={{ display: "flex", gap: 8 }}>
-                    {/* 复制按钮 */}
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => {
-                        navigator.clipboard.writeText(cliTokenResult.token);
-                        setCliTokenCopied(true);
-                        setTimeout(() => setCliTokenCopied(false), 2000);
-                      }}
-                    >
-                      {cliTokenCopied ? t("cliTokenCopied") : t("cliTokenCopy")}
-                    </button>
-                    {/* 关闭按钮 */}
-                    <button
-                      type="button"
-                      onClick={() => setCliTokenResult(null)}
-                    >
-                      {t("close")}
-                    </button>
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* 恢复码生成结果：仅展示一次 */}
-            {recoveryCodeResult && (
-              <div className="mdocs-settings-card" style={{ marginTop: 16, borderColor: "#e67e22", background: "#fef9f0" }}>
-                <div className="mdocs-settings-item">
-                  <span className="mdocs-settings-item-info">
-                    <span className="mdocs-settings-card-title">🔑 你的恢复码</span>
-                    <span className="mdocs-settings-item-desc" style={{ marginTop: 8 }}>
-                      请立即复制保存，关闭后不可再查看。
-                    </span>
-                    <div style={{
-                      fontFamily: "monospace",
-                      fontSize: "1.25rem",
-                      letterSpacing: "0.1em",
-                      background: "#fff",
-                      border: "1px solid #e0e0e0",
-                      borderRadius: 8,
-                      padding: "10px 14px",
-                      marginTop: 8,
-                      userSelect: "all",
-                    }}>
-                      {recoveryCodeResult}
-                    </div>
-                  </span>
-                  <span style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button
-                      type="button"
-                      className="primary"
-                      onClick={() => {
-                        navigator.clipboard.writeText(recoveryCodeResult);
-                        setRecoveryCodeCopied(true);
-                        setTimeout(() => setRecoveryCodeCopied(false), 2000);
-                      }}
-                    >
-                      {recoveryCodeCopied ? "已复制" : "复制恢复码"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRecoveryCodeResult(null)}
-                    >
-                      {t("close")}
-                    </button>
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
         ) : tab === "bookmarks" ? (
           // ---- 我的收藏 Tab ----

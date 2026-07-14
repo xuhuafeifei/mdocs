@@ -319,6 +319,7 @@ export const en: Record<TranslationKey, string> = {
   cliTokenGenerated: "New CLI Token generated",
   cliTokenCopy: "Copy",
   cliTokenCopied: "Copied",
+  cliTokenCopyFailed: "Copy failed — select the token above and copy manually",
   cliTokenResetConfirm: "Resetting will revoke all existing tokens and generate a new one. Confirm?",
   cliTokenActive: "Active",
   cliTokenRevoked: "Revoked",

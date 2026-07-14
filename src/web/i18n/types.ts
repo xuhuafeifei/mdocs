@@ -313,6 +313,7 @@ export type TranslationKey =
   | "cliTokenGenerated"
   | "cliTokenCopy"
   | "cliTokenCopied"
+  | "cliTokenCopyFailed"
   | "cliTokenResetConfirm"
   | "cliTokenActive"
   | "cliTokenRevoked"

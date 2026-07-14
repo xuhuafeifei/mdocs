@@ -112,6 +112,8 @@ interface DocumentEditorProps {
   domains: DomainSummary[];
   currentDomainId: string;
   onDomainChange: (domainId: string) => void;
+  /** 域下拉刷新后回写 App 的 domains 状态 */
+  onDomainsChange?: (domains: DomainSummary[]) => void;
   onPublish: (content: string, displayName: string, documentId: string, permission?: number) => Promise<void>;
   syncBehind?: boolean;
   onSyncClick?: () => void;
@@ -740,6 +742,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           domains={props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY]}
           value={props.currentDomainId}
           onChange={props.onDomainChange}
+          onDomainsChange={props.onDomainsChange}
           ariaLabel={t("currentDomainAria")}
           localizeName={(name: string) => localizeDomainName(name, lang, t)}
         />

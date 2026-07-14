@@ -2,9 +2,11 @@
  * 域选择器（自定义下拉组件）
  * 替代原生 select，支持展示域名称本地化、私有域锁图标、无障碍属性。
  * 点击外部或按 Escape 自动关闭下拉菜单。
+ * 每次打开下拉时临时拉取最新域列表，避免设置页新建域后主页仍显示旧数据。
  */
 import { useEffect, useRef, useState } from "react";
 import type { DomainSummary } from "../../shared/types/domain";
+import { fetchDomainsSafe } from "../services/domainsBootstrap";
 
 interface DomainSelectProps {
   domains: DomainSummary[];
@@ -12,11 +14,16 @@ interface DomainSelectProps {
   onChange: (domainId: string) => void;
   ariaLabel: string;
   localizeName: (name: string) => string;
+  /** 拉取到最新域列表后回传给父组件（可选，用于同步 App 等上层状态） */
+  onDomainsChange?: (domains: DomainSummary[]) => void;
 }
 
-export function DomainSelect({ domains, value, onChange, ariaLabel, localizeName }: DomainSelectProps) {
+export function DomainSelect({ domains, value, onChange, ariaLabel, localizeName, onDomainsChange }: DomainSelectProps) {
   // ---- 下拉菜单是否打开 ----
   const [open, setOpen] = useState(false);
+
+  // ---- 展示用列表：打开时刷新，平时跟随 props ----
+  const [list, setList] = useState(domains);
 
   // ---- 触发按钮引用（用于定位和焦点管理） ----
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -24,8 +31,12 @@ export function DomainSelect({ domains, value, onChange, ariaLabel, localizeName
   // ---- 下拉菜单引用（用于点击外部关闭） ----
   const menuRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    setList(domains);
+  }, [domains]);
+
   // ---- 当前选中的域 ----
-  const selected = domains.find((d) => d.domainId === value);
+  const selected = list.find((d) => d.domainId === value);
 
   // ---- 当前选中的是否是私有域（用于显示锁图标） ----
   const isPrivate = selected?.permission === "private";
@@ -74,6 +85,21 @@ export function DomainSelect({ domains, value, onChange, ariaLabel, localizeName
     setOpen(false);
   }
 
+  /**
+   * 打开时临时拉取域列表；关闭则直接收起。
+   */
+  function handleTriggerClick() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    void fetchDomainsSafe().then((fresh) => {
+      setList(fresh);
+      onDomainsChange?.(fresh);
+    });
+  }
+
   return (
     <div className="mdocs-domain-select-wrapper">
       {/* 触发按钮 */}
@@ -84,7 +110,7 @@ export function DomainSelect({ domains, value, onChange, ariaLabel, localizeName
         aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="listbox"
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleTriggerClick}
       >
         <span className="mdocs-domain-select-text">
           {/* 显示本地化后的域名称 */}
@@ -105,7 +131,7 @@ export function DomainSelect({ domains, value, onChange, ariaLabel, localizeName
       {/* 下拉菜单 */}
       {open && (
         <div ref={menuRef} className="mdocs-domain-select-menu card" role="listbox" aria-label={ariaLabel}>
-          {domains.map((d) => (
+          {list.map((d) => (
             <button
               key={d.domainId}
               type="button"

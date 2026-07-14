@@ -1090,6 +1090,7 @@ export function App() {
                         void refreshTree(domainId);
                       });
                     }}
+                    onDomainsChange={setDomains}
                     onPublish={publishDocument}
                     syncBehind={syncBehind}
                     onSyncClick={() => void handleSyncClick()}
@@ -1150,6 +1151,7 @@ export function App() {
                         void refreshTree(domainId);
                       });
                     }}
+                    onDomainsChange={setDomains}
                     ariaLabel={t("domainLabel")}
                     localizeName={(name: string) => localizeDomainName(name, lang, t)}
                   />

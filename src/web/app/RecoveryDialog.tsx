@@ -150,6 +150,7 @@ export function RecoveryDialog({ draft, onClose, onSuccess }: RecoveryDialogProp
                 domains={domains}
                 value={selectedDomainId}
                 onChange={setSelectedDomainId}
+                onDomainsChange={setDomains}
                 ariaLabel={t("domainLabel")}
                 localizeName={(name: string) => localizeDomainName(name, lang, t)}
               />
