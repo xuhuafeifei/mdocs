@@ -65,8 +65,8 @@ else:
 | `src/web/app/hooks/useCreateModal.ts` | 移除前端路径拼接逻辑，直接传 `fileName` + `parentId` |
 | `src/server/documents/document.service.integration.test.ts` | 所有 `createDocument` 调用从 `relativePath` → `fileName` |
 | `src/server/documents/tree-and-folders.test.ts` | 同上 |
-| `fgbg-docs/api-reference.md` | 更新 API 文档 |
-| `fgbg-docs/adr/003-api-path-calculation.md` | 本文 |
+| `.mdocs-docs/archive/api-reference.md` | 更新 API 文档 |
+| `.mdocs-docs/decisions/003-api-path-calculation.md` | 本文 |
 
 ## 后果
 

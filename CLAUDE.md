@@ -136,19 +136,25 @@ Vitest with jsdom environment. Test files live alongside source (`src/**/*.test.
 
 This project is implemented independently from `markdown-docs` (`~/ddmc/markdown-docs`). Code must not be copied or mechanically adapted from that project. The Vditor + Meta2d flow is the only acknowledged port — everything else is from scratch.
 
-## fgbg-docs (本项目开发文档)
+## .mdocs-docs (本项目开发契约)
 
-`fgbg-docs/` 是 mdocs 项目专用的开发文档，**不要把这个目录名当成通用惯例去其他项目找**。讨论以下主题时先读对应文档：
+开发文档已迁到 `.mdocs-docs/`（mdocs-dev 结构）。**先查 `map/`**，长文在 `archive/`。
 
 | Topic | Read this |
 |-------|-----------|
-| Architecture, data flow, runtime layout | `fgbg-docs/architecture-overview.md` |
-| DB tables, fields, indexes, migration strategy | `fgbg-docs/database-schema.md` |
-| HTTP API endpoints, types, error codes | `fgbg-docs/api-reference.md` |
-| Frontend structure, key components, routing | `fgbg-docs/frontend-structure.md` |
-| activeDocMeta, draft, open/publish data flow (target model) | `fgbg-docs/active-doc-meta-and-draft-model.md` |
-| Visitor identity, token lifecycle, 5-level permission model | `fgbg-docs/auth-and-access-control.md` |
-| Commit naming, merge-base, draft fork semantics | `fgbg-docs/commit-naming-and-merge-base.md` |
-| Dev setup, build, debug | `fgbg-docs/development-environment.md` |
-| Test strategy, running tests | `fgbg-docs/testing-strategy.md` |
-| Technical decision records | `fgbg-docs/adr/` |
+| 文档地图 / 需求索引 | `.mdocs-docs/README.md` |
+| 关键词 → 代码坐标 | `.mdocs-docs/map/` |
+| Architecture, data flow, runtime layout | `.mdocs-docs/archive/architecture-overview.md` |
+| DB tables, fields, indexes, migration strategy | `.mdocs-docs/archive/database-schema.md` |
+| HTTP API endpoints, types, error codes | `.mdocs-docs/archive/api-reference.md` |
+| Frontend structure, key components, routing | `.mdocs-docs/archive/frontend-structure.md` |
+| activeDocMeta, draft, open/publish data flow | `.mdocs-docs/archive/active-doc-meta-and-draft-model.md` |
+| Visitor identity, token, permissions | `.mdocs-docs/archive/auth-and-access-control.md` |
+| Commit naming, merge-base, draft fork | `.mdocs-docs/archive/commit-naming-and-merge-base.md` |
+| Dev setup, build, debug | `.mdocs-docs/archive/development-environment.md` |
+| Test strategy | `.mdocs-docs/archive/testing-strategy.md` |
+| Technical decisions (ADR) | `.mdocs-docs/decisions/` |
+| Bug fix records | `.mdocs-docs/bug-fixes/` |
+| Feature design contracts | `.mdocs-docs/requirements/` |
+
+旧路径 `fgbg-docs/` 仅保留跳转说明，勿再写入。

@@ -1,7 +1,7 @@
 /**
  * 文档提交 DAG 的图遍历与校验。
  *
- * 命名见 fgbg-docs/commit-naming-and-merge-base.md
+ * 命名见 .mdocs-docs/archive/commit-naming-and-merge-base.md
  */
 import type Database from "better-sqlite3";
 import { DocumentError } from "../access/access-control.js";
