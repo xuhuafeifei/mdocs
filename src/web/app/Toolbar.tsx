@@ -20,7 +20,10 @@ import {
   useEditorState,
   type ChatInputActionsProps,
 } from "@lobehub/editor/react";
+import { $createParagraphNode, $getRoot } from "lexical";
 import {
+  ArrowDownToLine,
+  ArrowUpToLine,
   BoldIcon,
   CodeXmlIcon,
   FileUpIcon,
@@ -42,6 +45,34 @@ import {
 import { type CSSProperties, type FC, useMemo } from "react";
 
 import { openFileSelector } from "./actions";
+
+/** Insert an empty paragraph at the document start and move the caret into it. */
+function insertParagraphAtStart(editor: IEditor) {
+  const lexical = editor.getLexicalEditor();
+  if (!lexical) return;
+  lexical.update(() => {
+    const root = $getRoot();
+    const paragraph = $createParagraphNode();
+    const first = root.getFirstChild();
+    if (first) first.insertBefore(paragraph);
+    else root.append(paragraph);
+    paragraph.selectStart();
+  });
+  editor.focus();
+}
+
+/** Insert an empty paragraph after the last block and move the caret into it. */
+function insertParagraphAtEnd(editor: IEditor) {
+  const lexical = editor.getLexicalEditor();
+  if (!lexical) return;
+  lexical.update(() => {
+    const root = $getRoot();
+    const paragraph = $createParagraphNode();
+    root.append(paragraph);
+    paragraph.selectStart();
+  });
+  editor.focus();
+}
 
 export interface ToolbarProps {
   className?: string;
@@ -154,6 +185,18 @@ const Toolbar: FC<ToolbarProps> = ({
           label: "Redo",
           onClick: editorState.redo,
           tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Redo).keys },
+        },
+        {
+          icon: ArrowUpToLine,
+          key: "insertLineTop",
+          label: "Insert line at top",
+          onClick: () => insertParagraphAtStart(editor),
+        },
+        {
+          icon: ArrowDownToLine,
+          key: "insertLineBottom",
+          label: "Insert line at end",
+          onClick: () => insertParagraphAtEnd(editor),
         },
         // 分隔线
         { type: "divider" },

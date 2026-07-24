@@ -13,6 +13,8 @@ import {
   INSERT_LINK_COMMAND,
   INSERT_MATH_COMMAND,
   INSERT_MENTION_COMMAND,
+  INSERT_MARKMAP_COMMAND,
+  INSERT_META2D_COMMAND,
   INSERT_TABLE_COMMAND,
   ReactAutoCompletePlugin,
   ReactCodePlugin,
@@ -37,8 +39,10 @@ import {
   Heading2Icon,
   Heading3Icon,
   MinusIcon,
+  Network,
   SigmaIcon,
   Table2Icon,
+  Workflow,
 } from "lucide-react";
 import { type FC, useEffect, useMemo, useRef, useState } from "react";
 
@@ -264,6 +268,28 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
         label: "InsertCodeBlock",
         onSelect: (ed) => {
           ed.dispatchCommand(INSERT_CODEMIRROR_COMMAND, undefined);
+          queueMicrotask(() => {
+            ed.focus();
+          });
+        },
+      },
+      {
+        icon: Workflow,
+        key: "meta2d",
+        label: "Meta2d",
+        onSelect: (ed) => {
+          ed.dispatchCommand(INSERT_META2D_COMMAND, undefined);
+          queueMicrotask(() => {
+            ed.focus();
+          });
+        },
+      },
+      {
+        icon: Network,
+        key: "markmap",
+        label: "Markmap",
+        onSelect: (ed) => {
+          ed.dispatchCommand(INSERT_MARKMAP_COMMAND, undefined);
           queueMicrotask(() => {
             ed.focus();
           });

@@ -21,6 +21,8 @@ import {
   INSERT_HORIZONTAL_RULE_COMMAND,
   INSERT_LINK_COMMAND,
   INSERT_MATH_COMMAND,
+  INSERT_MARKMAP_COMMAND,
+  INSERT_META2D_COMMAND,
   INSERT_TABLE_COMMAND,
   ReactCodePlugin,
   ReactCodemirrorPlugin,
@@ -43,7 +45,7 @@ import {
 } from "@lobehub/editor";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
-import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, RefreshCw, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star } from "lucide-react";
+import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, Network, RefreshCw, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star, Workflow } from "lucide-react";
 
 import type { ActiveDocumentMeta } from "../../shared/types/document";
 import { getDocumentTaskQueue } from "./documentTaskQueue";
@@ -648,6 +650,24 @@ export function DocumentEditor(props: DocumentEditorProps) {
         label: "Code Block",
         onSelect: (editor: IEditor) => {
           editor.dispatchCommand(INSERT_CODEMIRROR_COMMAND, undefined);
+          queueMicrotask(() => editor.focus());
+        },
+      },
+      {
+        icon: Workflow,
+        key: "meta2d",
+        label: "Meta2d",
+        onSelect: (editor: IEditor) => {
+          editor.dispatchCommand(INSERT_META2D_COMMAND, undefined);
+          queueMicrotask(() => editor.focus());
+        },
+      },
+      {
+        icon: Network,
+        key: "markmap",
+        label: "Markmap",
+        onSelect: (editor: IEditor) => {
+          editor.dispatchCommand(INSERT_MARKMAP_COMMAND, undefined);
           queueMicrotask(() => editor.focus());
         },
       },
