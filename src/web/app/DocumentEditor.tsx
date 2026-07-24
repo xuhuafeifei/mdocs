@@ -21,9 +21,9 @@ import {
   INSERT_HORIZONTAL_RULE_COMMAND,
   INSERT_LINK_COMMAND,
   INSERT_MATH_COMMAND,
-  INSERT_MARKMAP_COMMAND,
   INSERT_META2D_COMMAND,
   INSERT_TABLE_COMMAND,
+  $createMarkmapNode,
   ReactCodePlugin,
   ReactCodemirrorPlugin,
   ReactFilePlugin,
@@ -45,6 +45,7 @@ import {
 } from "@lobehub/editor";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
+import { $insertNodes } from "lexical";
 import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, Network, RefreshCw, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star, Workflow } from "lucide-react";
 
 import type { ActiveDocumentMeta } from "../../shared/types/document";
@@ -667,7 +668,12 @@ export function DocumentEditor(props: DocumentEditorProps) {
         key: "markmap",
         label: "Markmap",
         onSelect: (editor: IEditor) => {
-          editor.dispatchCommand(INSERT_MARKMAP_COMMAND, undefined);
+          // fork.15 exports $createMarkmapNode but not INSERT_MARKMAP_COMMAND
+          const lexical = editor.getLexicalEditor();
+          if (!lexical) return;
+          lexical.update(() => {
+            $insertNodes([$createMarkmapNode("", { autoOpenEditor: true })]);
+          });
           queueMicrotask(() => editor.focus());
         },
       },

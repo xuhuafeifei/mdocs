@@ -13,9 +13,9 @@ import {
   INSERT_LINK_COMMAND,
   INSERT_MATH_COMMAND,
   INSERT_MENTION_COMMAND,
-  INSERT_MARKMAP_COMMAND,
   INSERT_META2D_COMMAND,
   INSERT_TABLE_COMMAND,
+  $createMarkmapNode,
   ReactAutoCompletePlugin,
   ReactCodePlugin,
   ReactCodemirrorPlugin,
@@ -34,6 +34,7 @@ import {
 } from "@lobehub/editor";
 import { Editor, useEditor, withProps } from "@lobehub/editor/react";
 import { Avatar, type CollapseProps, Text } from "@lobehub/ui";
+import { $insertNodes } from "lexical";
 import {
   Heading1Icon,
   Heading2Icon,
@@ -289,7 +290,12 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
         key: "markmap",
         label: "Markmap",
         onSelect: (ed) => {
-          ed.dispatchCommand(INSERT_MARKMAP_COMMAND, undefined);
+          // fork.15 exports $createMarkmapNode but not INSERT_MARKMAP_COMMAND
+          const lexical = ed.getLexicalEditor();
+          if (!lexical) return;
+          lexical.update(() => {
+            $insertNodes([$createMarkmapNode("", { autoOpenEditor: true })]);
+          });
           queueMicrotask(() => {
             ed.focus();
           });
