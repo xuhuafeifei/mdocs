@@ -184,6 +184,9 @@ export function App() {
     content: string;
     displayName: string;
   } | null>(null);
+  /** Keep latest editor payload for publish finalize (avoid stale closure). */
+  const editorContentRef = useRef(editorContent);
+  editorContentRef.current = editorContent;
   const [contentRevision, setContentRevision] = useState(0);
   const [editBaseCommitId, setEditBaseCommitId] = useState<string | null>(null);
 
@@ -426,13 +429,35 @@ export function App() {
     setEditorDraftExists(true);
   }
 
-  /** publish 成功后：删草稿 + GET，若仍打开本篇则刷新 meta 与编辑器。 */
-  async function finalizeAfterPublish(docId: string): Promise<DocumentDetail> {
+  /**
+   * publish 成功后：删草稿 + GET 拉新 meta。
+   * 若仍打开本篇：更新 head / 清「未保存」；当服务端正文与刚发布内容一致时不 bump contentRevision，
+   * 避免 editor.setDocument 整棵重挂导致视口跳动。
+   */
+  async function finalizeAfterPublish(
+    docId: string,
+    publishedContent?: string,
+  ): Promise<DocumentDetail> {
     await deleteDraft(docId);
     const doc = await getDocumentApi(docId);
     if (activeDocMeta?.documentId === docId && expectedDocIdRef.current === docId) {
       setActiveDocMeta(documentDetailToMeta(doc));
-      loadEditorFromServer(doc);
+      setEditorDraftExists(false);
+
+      const prev = editorContentRef.current;
+      const serverMatchesPublished =
+        publishedContent !== undefined && doc.content === publishedContent;
+      const serverMatchesLoaded =
+        prev?.documentId === docId && prev.content === doc.content;
+
+      if (serverMatchesPublished || serverMatchesLoaded) {
+        // Keep DOM: do not change `content` in editorContent (that prop alone would setDocument).
+        if (prev?.documentId === docId && prev.displayName !== doc.displayName) {
+          setEditorContent({ ...prev, displayName: doc.displayName });
+        }
+      } else {
+        loadEditorFromServer(doc);
+      }
     }
     return doc;
   }
@@ -639,7 +664,7 @@ export function App() {
           version: { localBaseCommitId },
         });
         await clearDraftConflict(documentId);
-        await finalizeAfterPublish(documentId);
+        await finalizeAfterPublish(documentId, content);
         await refreshTree();
         setConflictModalOpen(false);
         setMessage(t("published"));
@@ -765,7 +790,7 @@ export function App() {
         await clearDraftConflict(docId);
         await clearDraftPublishError(docId);
         if (activeDocMeta?.documentId === docId) {
-          await finalizeAfterPublish(docId);
+          await finalizeAfterPublish(docId, latest.content);
         } else {
           await deleteDraft(docId);
         }
