@@ -58,6 +58,7 @@ export async function runOnboardingChat(params: {
   const tools = createSkillTools(skills);
   const systemPrompt = buildSystemPrompt();
   const sourcesById = new Map<string, ManualSourceRef>();
+  let emittedError = false;
 
   const agent = new Agent({
     initialState: { systemPrompt, model, tools },
@@ -70,6 +71,20 @@ export async function runOnboardingChat(params: {
       event.assistantMessageEvent.type === "text_delta"
     ) {
       onEvent({ type: "text_delta", text: event.assistantMessageEvent.delta });
+      return;
+    }
+    if (event.type === "message_end" && event.message.role === "assistant") {
+      const msg = event.message as {
+        stopReason?: string;
+        errorMessage?: string;
+      };
+      if (
+        (msg.stopReason === "error" || msg.stopReason === "aborted") &&
+        msg.errorMessage
+      ) {
+        emittedError = true;
+        onEvent({ type: "error", message: msg.errorMessage });
+      }
       return;
     }
     if (
@@ -91,6 +106,11 @@ export async function runOnboardingChat(params: {
 
   try {
     await agent.prompt(message);
+    const leftover = agent.state.errorMessage;
+    // prompt 在模型鉴权失败时仍可能 resolve，再兜底一次
+    if (leftover && !emittedError) {
+      onEvent({ type: "error", message: leftover });
+    }
     onEvent({ type: "done" });
   } catch (err) {
     if (signal?.aborted) return;

@@ -122,7 +122,10 @@ export function buildAgentRouter(): Router {
     res.flushHeaders?.();
 
     const ac = new AbortController();
-    req.on("close", () => ac.abort());
+    // 监听响应 close：客户端中途断开时 abort；正常 res.end() 后 writableEnded=true 不再 abort
+    res.on("close", () => {
+      if (!res.writableEnded) ac.abort();
+    });
 
     try {
       await runOnboardingChat({
@@ -136,7 +139,7 @@ export function buildAgentRouter(): Router {
         log.error("chat failed: %s", (err as Error).message);
       }
     } finally {
-      res.end();
+      if (!res.writableEnded) res.end();
     }
   });
 

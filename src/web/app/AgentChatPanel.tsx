@@ -1,5 +1,7 @@
 import { History, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import deepseekLogoUrl from "../assets/deepseek.svg";
 import {
   fetchAgentStatusApi,
@@ -21,8 +23,13 @@ const SUGGESTIONS = ["如何发布文档？", "草稿是什么？", "如何创�
  * 上手助手浮层：入口旁弹出；接 /api/agent/chat SSE。
  * 新会话 / 历史仍为假 UI。
  */
-export function AgentChatPanel(props: { open: boolean; onClose: () => void }) {
-  const { open, onClose } = props;
+export function AgentChatPanel(props: {
+  open: boolean;
+  onClose: () => void;
+  visitorName?: string;
+}) {
+  const { open, onClose, visitorName } = props;
+  const userInitial = (visitorName?.trim().charAt(0) || "我").toUpperCase();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -238,6 +245,11 @@ export function AgentChatPanel(props: { open: boolean; onClose: () => void }) {
                       (m.role === "user" ? " mdocs-agent-panel-msg-user" : " mdocs-agent-panel-msg-assistant")
                     }
                   >
+                    {m.role === "assistant" ? (
+                      <div className="mdocs-agent-panel-avatar mdocs-agent-panel-avatar-ai" aria-hidden>
+                        <img src={deepseekLogoUrl} alt="" />
+                      </div>
+                    ) : null}
                     <div className="mdocs-agent-panel-msg-bubble">
                       {m.role === "assistant" && m.sources && m.sources.length > 0 ? (
                         <details className="mdocs-agent-panel-sources" open>
@@ -245,18 +257,33 @@ export function AgentChatPanel(props: { open: boolean; onClose: () => void }) {
                             已阅读 {m.sources.length} 个页面
                           </summary>
                           <ol>
-                            {m.sources.map((s, i) => (
+                            {m.sources.map((s) => (
                               <li key={s.id}>
                                 <a href={s.url} target="_blank" rel="noreferrer">
-                                  {i + 1}. {s.name}
+                                  {s.name}
                                 </a>
                               </li>
                             ))}
                           </ol>
                         </details>
                       ) : null}
-                      {m.content || (m.role === "assistant" && sending ? "…" : "")}
+                      {m.role === "assistant" ? (
+                        m.content ? (
+                          <div className="mdocs-agent-panel-md">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                          </div>
+                        ) : sending ? (
+                          "…"
+                        ) : null
+                      ) : (
+                        m.content
+                      )}
                     </div>
+                    {m.role === "user" ? (
+                      <div className="mdocs-agent-panel-avatar mdocs-agent-panel-avatar-user" aria-hidden>
+                        {userInitial}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>

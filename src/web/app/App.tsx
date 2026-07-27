@@ -969,7 +969,11 @@ export function App() {
           >
             <img src={deepseekLogoUrl} alt="" />
           </button>
-          <AgentChatPanel open={agentPanelOpen} onClose={() => setAgentPanelOpen(false)} />
+          <AgentChatPanel
+            open={agentPanelOpen}
+            onClose={() => setAgentPanelOpen(false)}
+            visitorName={visitor?.visitorName}
+          />
         </>
       )}
 
