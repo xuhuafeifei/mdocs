@@ -41,6 +41,18 @@
   |------|------|
   | `src/server/routes/` | `*.routes.ts` |
 
+### 上手 Agent / Model 配置
+
+- **关键词**：`agent` `DeepSeek` `agent_model_configs` `onboarding`
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/server/agent/Config/config.ts` | `getVisitorAgentConfig` `upsertVisitorAgentConfig` |
+  | `src/server/agent/Agent/run.ts` | `getAgentStatus` `runOnboardingChat` |
+  | `src/server/routes/agent.routes.ts` | `buildAgentRouter` |
+  | `src/server/db/repositories/agent-model-config.repo.ts` | `findAgentModelConfigByOwner` |
+  | `src/web/app/AgentConfigPanel.tsx` | `AgentConfigPanel` |
+
 ### 搜索
 
 - **关键词**：`FTS5` `search` `index`

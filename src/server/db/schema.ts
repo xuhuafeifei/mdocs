@@ -169,6 +169,16 @@ const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_comments_document ON document_comments (document_id, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_comments_parent ON document_comments (parent_id)`,
   `CREATE INDEX IF NOT EXISTS idx_comments_visitor ON document_comments (visitor_id)`,
+  `CREATE TABLE IF NOT EXISTS agent_model_configs (
+    id TEXT PRIMARY KEY,
+    owner_visitor_id TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    provider TEXT NOT NULL DEFAULT 'deepseek',
+    model_id TEXT NOT NULL,
+    api_key TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (owner_visitor_id) REFERENCES visitors(visitor_id) ON DELETE CASCADE
+  )`,
 ];
 
 

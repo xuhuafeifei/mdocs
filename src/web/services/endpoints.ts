@@ -578,3 +578,30 @@ export function deleteCommentApi(documentId: string, commentId: string): Promise
     { method: "DELETE" },
   );
 }
+
+// ========== Agent model config ==========
+
+export type AgentModelId = "deepseek-v4-flash" | "deepseek-v4-pro";
+
+export interface AgentModelConfigPublic {
+  id: string;
+  name: string;
+  modelId: AgentModelId;
+  hasApiKey: boolean;
+  apiKeyMasked: string | null;
+}
+
+export function fetchAgentConfigApi(): Promise<AgentModelConfigPublic | null> {
+  return api<AgentModelConfigPublic | null>("/api/agent/config");
+}
+
+export function saveAgentConfigApi(input: {
+  modelId: AgentModelId;
+  name?: string;
+  apiKey?: string;
+}): Promise<AgentModelConfigPublic> {
+  return api<AgentModelConfigPublic>("/api/agent/config", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}

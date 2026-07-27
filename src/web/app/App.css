@@ -380,6 +380,84 @@
   font-weight: 600;
 }
 
+.mdocs-agent-config-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mdocs-agent-config-logo {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.mdocs-agent-config-field .mdocs-settings-card-title {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.mdocs-agent-config-select {
+  width: 100%;
+  max-width: 320px;
+}
+
+.mdocs-agent-config-select .mdocs-mini-select,
+.mdocs-agent-config-select .mdocs-mini-select-trigger {
+  width: 100%;
+}
+
+.mdocs-agent-config-select .mdocs-mini-select-trigger {
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: inherit;
+  min-width: 0;
+}
+
+.mdocs-agent-config-readonly {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--mdocs-text, #111827);
+  word-break: break-all;
+}
+
+.mdocs-agent-config-apikey {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.mdocs-agent-config-apikey input {
+  flex: 1;
+  min-width: 0;
+}
+
+.mdocs-agent-config-eye {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  border-radius: var(--mdocs-radius, 6px);
+  background: var(--mdocs-surface, #fff);
+  color: var(--mdocs-text-muted, #6b7280);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mdocs-agent-config-eye:hover {
+  background: var(--mdocs-bg-hover, #f5f5f5);
+}
+
+.mdocs-agent-config-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 /* === Settings cards === */
 .mdocs-settings-cards {
   display: flex;

@@ -14,6 +14,7 @@ import { DraftListPage } from "./DraftListPage";
 import { listAllDrafts } from "../storage/drafts";
 import { DomainManagementPanel } from "./DomainManagementPanel";
 import { MemberTemplatesPanel } from "./MemberTemplatesPanel";
+import { AgentConfigPanel } from "./AgentConfigPanel";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 import {
   createCliTokenApi,
@@ -43,7 +44,7 @@ function getBool(key: string, def: boolean): boolean {
   return v === "true";
 }
 
-type SettingsTab = "general" | "bookmarks" | "myDocuments" | "domainManagement" | "memberTemplates" | "savePublish";
+type SettingsTab = "general" | "bookmarks" | "myDocuments" | "domainManagement" | "memberTemplates" | "savePublish" | "agentConfig";
 
 export function SettingsPage(props: {
   onBack: () => void;
@@ -406,6 +407,13 @@ export function SettingsPage(props: {
             onClick={() => setTab("memberTemplates")}
           >
             {t("memberTemplates")}
+          </div>
+          {/* AI / 上手助手配置 */}
+          <div
+            className={"mdocs-config-item" + (tab === "agentConfig" ? " active" : "")}
+            onClick={() => setTab("agentConfig")}
+          >
+            {t("agentConfig")}
           </div>
           {/* 保存与发布 Tab */}
           <div
@@ -804,6 +812,8 @@ export function SettingsPage(props: {
         ) : tab === "memberTemplates" ? (
           // ---- 成员模板 Tab ----
           <MemberTemplatesPanel />
+        ) : tab === "agentConfig" ? (
+          <AgentConfigPanel />
         ) : (
           // ---- 保存与发布 Tab ----
           <div className="mdocs-settings">

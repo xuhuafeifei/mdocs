@@ -354,5 +354,17 @@ export type TranslationKey =
   | "myDocumentsColUpdated"
   | "myDocumentsColCreated"
   | "myDocumentsNoMatch"
+  // Agent model config
+  | "agentConfig"
+  | "agentConfigDesc"
+  | "agentConfigName"
+  | "agentConfigNameDefault"
+  | "agentConfigModel"
+  | "agentConfigApiKey"
+  | "agentConfigApiKeyPlaceholder"
+  | "agentConfigApiKeyConfigured"
+  | "agentConfigId"
+  | "agentConfigShowKey"
+  | "agentConfigHideKey"
   // Logout
   | "logout";

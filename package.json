@@ -10,10 +10,14 @@
   "files": [
     "bin",
     "dist",
+    "agent-skills",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
+    "skills:build": "node ./scripts/build-agent-skills.mjs",
+    "predev": "pnpm skills:build",
+    "prepack": "pnpm skills:build",
     "dev:server": "tsx watch src/server/main.ts",
     "dev:web": "vite",
     "dev:web:fresh": "vite --force",
@@ -35,6 +39,8 @@
     "@codemirror/merge": "^6.12.1",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.43.0",
+    "@earendil-works/pi-agent-core": "^0.82.1",
+    "@earendil-works/pi-ai": "^0.82.1",
     "@lexical/rich-text": "0.42.0",
     "@lobehub/editor": "npm:@fgbg/lobe-editor@1.0.0-fork.16",
     "@lobehub/ui": "^5.0.0",

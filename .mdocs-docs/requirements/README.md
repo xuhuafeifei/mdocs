@@ -2,8 +2,11 @@
 
 已落地功能契约（自 `fgbg-docs` **直接搬入**）。状态一律视为 **已同意（历史）**。本期未强制拆满「需求分析 / 设计契约 / 代码索引」三件套。
 
+进行中的新需求单独标注。
+
 | 夹 | 入口 |
 |----|------|
+| [onboarding-ai](./onboarding-ai/需求分析.md) | **进行中**：上手 Agent（无编写能力） |
 | [bookmarks](./bookmarks/设计契约.md) | 文档收藏 |
 | [auto-save-draft](./auto-save-draft/设计契约.md) | 自动保存草稿 |
 | [recovery-code](./recovery-code/设计契约.md) | 恢复码 |
