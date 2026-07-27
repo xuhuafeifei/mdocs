@@ -1,4 +1,4 @@
-import { Agent } from "@earendil-works/pi-agent-core";
+import { Agent, type AgentEvent } from "@earendil-works/pi-agent-core";
 import {
   createModels,
   createProvider,
@@ -12,6 +12,10 @@ import {
 import { getSkillLoader } from "../Skill/skill-loader.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { createSkillTools, type ManualSourceRef } from "./tools.js";
+import {
+  AgentSessionManager,
+  type AgentSessionMessage,
+} from "./session-manager.js";
 
 /** 推给路由 / 前端的流式片段（路由只负责写出 SSE） */
 export type AgentStreamEvent =
@@ -38,7 +42,7 @@ export function getAgentStatus(visitorId: string) {
 }
 
 /**
- * 上手 Agent 主流程：model → create agent → load skill → 组装 prompt → prompt。
+ * 上手 Agent 主流程：config → session hydrate → agent → subscribe → prompt。
  * 流式进度经 onEvent 上抛，路由不感知 Pi / skill 细节。
  */
 export async function runOnboardingChat(params: {
@@ -48,6 +52,7 @@ export async function runOnboardingChat(params: {
   signal?: AbortSignal;
 }): Promise<void> {
   const { visitorId, message, onEvent, signal } = params;
+
   const cfg = getVisitorAgentConfig(visitorId);
   if (!cfg?.apiKey) throw new Error("missing_api_key");
 
@@ -57,49 +62,30 @@ export async function runOnboardingChat(params: {
   const { models, model } = createDeepSeekModel(cfg);
   const tools = createSkillTools(skills);
   const systemPrompt = buildSystemPrompt();
-  const sourcesById = new Map<string, ManualSourceRef>();
-  let emittedError = false;
+
+  const sessionManager = new AgentSessionManager(visitorId);
+  const { sessionId, messages: history } =
+    await sessionManager.loadLastOpenedMessages();
 
   const agent = new Agent({
-    initialState: { systemPrompt, model, tools },
+    initialState: {
+      systemPrompt,
+      model,
+      tools,
+      messages: toPiMessages(history, model),
+    },
     streamFn: models.streamSimple.bind(models),
   });
 
-  const unsub = agent.subscribe((event) => {
-    if (
-      event.type === "message_update" &&
-      event.assistantMessageEvent.type === "text_delta"
-    ) {
-      onEvent({ type: "text_delta", text: event.assistantMessageEvent.delta });
-      return;
-    }
-    if (event.type === "message_end" && event.message.role === "assistant") {
-      const msg = event.message as {
-        stopReason?: string;
-        errorMessage?: string;
-      };
-      if (
-        (msg.stopReason === "error" || msg.stopReason === "aborted") &&
-        msg.errorMessage
-      ) {
-        emittedError = true;
-        onEvent({ type: "error", message: msg.errorMessage });
-      }
-      return;
-    }
-    if (
-      event.type === "tool_execution_end" &&
-      event.toolName === "mdocs_manual_content" &&
-      !event.isError
-    ) {
-      const source = (event.result as { details?: { source?: ManualSourceRef | null } } | null)
-        ?.details?.source;
-      if (source?.url && !sourcesById.has(source.id)) {
-        sourcesById.set(source.id, source);
-        onEvent({ type: "sources", items: [...sourcesById.values()] });
-      }
-    }
-  });
+  const track = { emittedError: false };
+  const unsub = agent.subscribe(
+    bindAgentEvents({
+      sessionId,
+      sessionManager,
+      onEvent,
+      track,
+    }),
+  );
 
   const onAbort = () => agent.abort();
   signal?.addEventListener("abort", onAbort);
@@ -108,7 +94,7 @@ export async function runOnboardingChat(params: {
     await agent.prompt(message);
     const leftover = agent.state.errorMessage;
     // prompt 在模型鉴权失败时仍可能 resolve，再兜底一次
-    if (leftover && !emittedError) {
+    if (leftover && !track.emittedError) {
       onEvent({ type: "error", message: leftover });
     }
     onEvent({ type: "done" });
@@ -121,6 +107,137 @@ export async function runOnboardingChat(params: {
     signal?.removeEventListener("abort", onAbort);
     unsub();
   }
+}
+
+// —— helpers（主流程外）——
+
+const EMPTY_USAGE = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  totalTokens: 0,
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+};
+
+/** jsonl 历史 → Pi Agent.messages（请求内内存副本） */
+function toPiMessages(history: AgentSessionMessage[], model: Model<any>) {
+  const ts = Date.now();
+  return history.map((m) => {
+    if (m.role === "user") {
+      return { role: "user" as const, content: m.content, timestamp: ts };
+    }
+    return {
+      role: "assistant" as const,
+      content: [{ type: "text" as const, text: m.content }],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      usage: EMPTY_USAGE,
+      stopReason: "stop" as const,
+      timestamp: ts,
+    };
+  });
+}
+
+function extractUserContent(userMsg: { content?: unknown }): string {
+  const c = userMsg.content;
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) {
+    return c
+      .filter((x): x is { type: string; text: string } => x?.type === "text")
+      .map((x) => x.text)
+      .join("");
+  }
+  return "";
+}
+
+function extractAssistantVisibleText(assistantMsg: {
+  content?: unknown;
+}): string {
+  const content = assistantMsg.content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((x): x is { type: string; text: string } => x?.type === "text")
+    .map((x) => x.text)
+    .join("");
+}
+
+/** SSE + session 落盘：只写 user / 最终 assistant 文本，忽略 thinking / tool */
+function bindAgentEvents(opts: {
+  sessionId: string;
+  sessionManager: AgentSessionManager;
+  onEvent: (event: AgentStreamEvent) => void;
+  track: { emittedError: boolean };
+}): (event: AgentEvent) => Promise<void> {
+  const { sessionId, sessionManager, onEvent, track } = opts;
+  const sourcesById = new Map<string, ManualSourceRef>();
+  let appendedUser = false;
+  let appendedAssistant = false;
+
+  return async (event) => {
+    if (
+      event.type === "message_update" &&
+      event.assistantMessageEvent.type === "text_delta"
+    ) {
+      onEvent({ type: "text_delta", text: event.assistantMessageEvent.delta });
+      return;
+    }
+
+    if (event.type === "message_end") {
+      if (event.message.role === "user") {
+        if (!appendedUser) {
+          appendedUser = true;
+          const content = extractUserContent(event.message);
+          if (content) await sessionManager.appendUser(sessionId, content);
+        }
+        return;
+      }
+
+      if (event.message.role === "assistant") {
+        const msg = event.message as {
+          stopReason?: string;
+          errorMessage?: string;
+        };
+
+        if (
+          (msg.stopReason === "error" || msg.stopReason === "aborted") &&
+          msg.errorMessage
+        ) {
+          track.emittedError = true;
+          onEvent({ type: "error", message: msg.errorMessage });
+          return;
+        }
+
+        // toolUse = 准备调工具，不是最终可见回答
+        if (
+          !appendedAssistant &&
+          (msg.stopReason === "stop" || msg.stopReason === "length")
+        ) {
+          appendedAssistant = true;
+          const visibleText = extractAssistantVisibleText(event.message);
+          if (visibleText) {
+            await sessionManager.appendAssistant(sessionId, visibleText);
+          }
+        }
+        return;
+      }
+    }
+
+    if (
+      event.type === "tool_execution_end" &&
+      event.toolName === "mdocs_manual_content" &&
+      !event.isError
+    ) {
+      const source = (
+        event.result as { details?: { source?: ManualSourceRef | null } } | null
+      )?.details?.source;
+      if (source?.url && !sourcesById.has(source.id)) {
+        sourcesById.set(source.id, source);
+        onEvent({ type: "sources", items: [...sourcesById.values()] });
+      }
+    }
+  };
 }
 
 function createDeepSeekModel(cfg: VisitorAgentConfig) {

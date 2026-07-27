@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import deepseekLogoUrl from "../assets/deepseek.svg";
 import {
   fetchAgentStatusApi,
+  fetchAgentSessionApi,
   streamAgentChatApi,
   type AgentSourceRef,
   type AgentStatus,
@@ -68,6 +69,32 @@ export function AgentChatPanel(props: {
           setStatus(null);
           setStatusError(err instanceof Error ? err.message : String(err));
         }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const s = await fetchAgentSessionApi();
+        if (cancelled) return;
+        const loaded: ChatMessage[] = s.messages.map((m, i) => ({
+          id: `h-${s.sessionId}-${i}-${m.role}`,
+          role: m.role,
+          content: m.content,
+        }));
+        setMessages((prev) => {
+          // 避免用户刚发送消息时，异步回放覆盖 UI
+          if (prev.length > 0) return prev;
+          return loaded;
+        });
+      } catch {
+        /* ignore */
       }
     })();
     return () => {
@@ -273,7 +300,11 @@ export function AgentChatPanel(props: {
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                           </div>
                         ) : sending ? (
-                          "…"
+                          <span className="mdocs-agent-panel-thinking" aria-label="思考中">
+                            <span />
+                            <span />
+                            <span />
+                          </span>
                         ) : null
                       ) : (
                         m.content

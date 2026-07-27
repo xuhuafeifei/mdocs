@@ -4,6 +4,7 @@ import {
   runOnboardingChat,
   type AgentStreamEvent,
 } from "../agent/Agent/run.js";
+import { getAgentSessionForApi } from "../agent/Agent/session-manager.js";
 import {
   getVisitorAgentConfig,
   isAgentModelId,
@@ -91,6 +92,16 @@ export function buildAgentRouter(): Router {
       }
       throw err;
     }
+  });
+
+  router.get("/session", async (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+
+    const data = await getAgentSessionForApi(req.visitor.visitor_id);
+    res.json({ data });
   });
 
   router.post("/chat", async (req: Request, res: Response) => {

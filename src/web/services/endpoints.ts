@@ -630,6 +630,20 @@ export function fetchAgentStatusApi(): Promise<AgentStatus> {
   return api<AgentStatus>("/api/agent/status");
 }
 
+export interface AgentSessionMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AgentSessionResponse {
+  sessionId: string;
+  messages: AgentSessionMessage[];
+}
+
+export function fetchAgentSessionApi(): Promise<AgentSessionResponse> {
+  return api<AgentSessionResponse>("/api/agent/session");
+}
+
 /** POST /api/agent/chat，解析 SSE `data: {...}` 行 */
 export async function streamAgentChatApi(
   message: string,
