@@ -310,6 +310,220 @@
   color: var(--mdocs-text);
 }
 
+/* === Agent 固定悬浮入口 === */
+.mdocs-agent-fab {
+  position: fixed;
+  left: 12px;
+  bottom: 64px;
+  z-index: 200;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--mdocs-surface, #fff);
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.mdocs-agent-fab:hover,
+.mdocs-agent-fab.open {
+  border-color: var(--mdocs-accent, #4d6bfe);
+  box-shadow: 0 2px 12px rgba(77, 107, 254, 0.25);
+}
+
+.mdocs-agent-fab img {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+/* === Agent 对话框（贴入口右侧上方） === */
+.mdocs-agent-panel {
+  position: fixed;
+  left: 56px;
+  bottom: 64px;
+  z-index: 201;
+  width: min(380px, calc(100vw - 72px));
+  height: min(520px, calc(100vh - 96px));
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #f7f9fc 0%, #ffffff 40%);
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+}
+
+.mdocs-agent-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--mdocs-border, #e5e5e5);
+  background: rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
+}
+
+.mdocs-agent-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mdocs-text, #111827);
+  min-width: 0;
+}
+
+.mdocs-agent-panel-title-logo {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.mdocs-agent-panel-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mdocs-agent-panel-icon-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mdocs-text-muted, #6b7280);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mdocs-agent-panel-icon-btn:hover,
+.mdocs-agent-panel-icon-btn.active {
+  background: var(--mdocs-hover-bg, #f0f0f0);
+  color: var(--mdocs-text, #111827);
+}
+
+.mdocs-agent-panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 14px 10px;
+}
+
+.mdocs-agent-panel-welcome {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mdocs-agent-panel-hello {
+  margin: 8px 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--mdocs-text, #111827);
+}
+
+.mdocs-agent-panel-desc {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--mdocs-text-muted, #6b7280);
+}
+
+.mdocs-agent-panel-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mdocs-agent-panel-chip {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  font-size: 13px;
+  color: var(--mdocs-text, #111827);
+}
+
+.mdocs-agent-panel-input-wrap {
+  position: relative;
+  margin-top: 12px;
+  flex-shrink: 0;
+}
+
+.mdocs-agent-panel-input {
+  width: 100%;
+  resize: none;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  border-radius: 10px;
+  padding: 10px 40px 10px 12px;
+  font: inherit;
+  font-size: 13px;
+  background: #fff;
+  color: var(--mdocs-text, #111827);
+  box-sizing: border-box;
+}
+
+.mdocs-agent-panel-input:disabled {
+  opacity: 0.85;
+  cursor: not-allowed;
+}
+
+.mdocs-agent-panel-send {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: #c7d2fe;
+  color: #fff;
+  cursor: not-allowed;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.mdocs-agent-panel-footnote {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--mdocs-text-muted, #9ca3af);
+  text-align: center;
+}
+
+.mdocs-agent-panel-history {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  gap: 6px;
+}
+
+.mdocs-agent-panel-history-empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--mdocs-text, #111827);
+}
+
+.mdocs-agent-panel-history-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--mdocs-text-muted, #6b7280);
+}
+
 .mdocs-visitor-avatar {
   width: 26px;
   height: 26px;

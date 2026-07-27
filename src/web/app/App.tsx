@@ -46,6 +46,7 @@ import { TreeContextMenu } from "./TreeContextMenu";
 import { DocumentEditor } from "./DocumentEditor";
 import { DomainSelect } from "./DomainSelect";
 import { SettingsPage } from "./SettingsPage";
+import { AgentChatPanel } from "./AgentChatPanel";
 import { MessageDialog } from "./MessageDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
@@ -72,6 +73,7 @@ import {
 import { useAutoPublish } from "./hooks/useAutoPublish";
 import { useDocumentVersion } from "./hooks/useDocumentVersion";
 import mdocsLogo from "../assets/mdocs-logo.svg";
+import deepseekLogoUrl from "../assets/deepseek.svg";
 import "./App.css";
 import "./merge.css";
 import "./domain.css";
@@ -277,6 +279,9 @@ export function App() {
 
   // ---- 当前视图：docs（文档）或 settings（设置） ----
   const [view, setView] = useState<"docs" | "settings">("docs");
+
+  // ---- 上手助手浮层 ----
+  const [agentPanelOpen, setAgentPanelOpen] = useState(false);
 
   // ---- 导航前保存草稿的引用 ----
   // DocumentEditor 会通过这个 ref 暴露 saveDraft 方法
@@ -950,6 +955,22 @@ export function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Agent 固定悬浮入口 + 附近对话框壳 */}
+      {!isDemoMode() && (
+        <>
+          <button
+            type="button"
+            className={"mdocs-agent-fab" + (agentPanelOpen ? " open" : "")}
+            aria-label="打开上手助手"
+            aria-expanded={agentPanelOpen}
+            onClick={() => setAgentPanelOpen((v) => !v)}
+          >
+            <img src={deepseekLogoUrl} alt="" />
+          </button>
+          <AgentChatPanel open={agentPanelOpen} onClose={() => setAgentPanelOpen(false)} />
+        </>
       )}
 
       {/* 根据当前视图渲染设置页或文档页 */}
