@@ -10,6 +10,21 @@ import {
 
 export const DEEPSEEK_ENDPOINT = "https://api.deepseek.com";
 
+/** 已部署 mdocs-site 文档根（写死）；skill source 去掉 .md 后拼 .html */
+export const MDOCS_SITE_DOCS_BASE =
+  "https://xuhuafeifei.github.io/mdocs-site/docs";
+
+export function skillSourceToUrl(source: string | undefined): string | null {
+  if (!source?.trim()) return null;
+  const pathPart = source
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\//, "")
+    .replace(/\.(md|mdx)$/i, "");
+  if (!pathPart || pathPart.includes("..")) return null;
+  return `${MDOCS_SITE_DOCS_BASE}/${pathPart}.html`;
+}
+
 export const AGENT_MODEL_IDS = ["deepseek-v4-flash", "deepseek-v4-pro"] as const;
 export type AgentModelId = (typeof AGENT_MODEL_IDS)[number];
 

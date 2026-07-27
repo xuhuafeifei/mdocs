@@ -24,7 +24,7 @@ if (!fs.existsSync(siteDocs)) {
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 
-/** @type {{ id: string, name: string, description: string, keywords: string[] }[]} */
+/** @type {{ id: string, name: string, description: string, keywords: string[], source: string }[]} */
 const index = [];
 
 for (const rel of walk(siteDocs)) {
@@ -42,7 +42,7 @@ for (const rel of walk(siteDocs)) {
   fs.mkdirSync(dir, { recursive: true });
   const body = `---\nid: ${id}\nname: ${JSON.stringify(name)}\ndescription: ${JSON.stringify(description)}\nkeywords: []\nsource: ${rel}\n---\n\n${stripFrontmatter(raw)}\n`;
   fs.writeFileSync(path.join(dir, "SKILL.md"), body);
-  index.push({ id, name, description, keywords: [] });
+  index.push({ id, name, description, keywords: [], source: rel });
 }
 
 fs.writeFileSync(path.join(outDir, "index.json"), JSON.stringify(index, null, 2) + "\n");

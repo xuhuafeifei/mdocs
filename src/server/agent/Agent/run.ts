@@ -11,11 +11,12 @@ import {
 } from "../Config/config.js";
 import { getSkillLoader } from "../Skill/skill-loader.js";
 import { buildSystemPrompt } from "./system-prompt.js";
-import { createSkillTools } from "./tools.js";
+import { createSkillTools, type ManualSourceRef } from "./tools.js";
 
 /** 推给路由 / 前端的流式片段（路由只负责写出 SSE） */
 export type AgentStreamEvent =
   | { type: "text_delta"; text: string }
+  | { type: "sources"; items: ManualSourceRef[] }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -56,6 +57,7 @@ export async function runOnboardingChat(params: {
   const { models, model } = createDeepSeekModel(cfg);
   const tools = createSkillTools(skills);
   const systemPrompt = buildSystemPrompt();
+  const sourcesById = new Map<string, ManualSourceRef>();
 
   const agent = new Agent({
     initialState: { systemPrompt, model, tools },
@@ -68,6 +70,19 @@ export async function runOnboardingChat(params: {
       event.assistantMessageEvent.type === "text_delta"
     ) {
       onEvent({ type: "text_delta", text: event.assistantMessageEvent.delta });
+      return;
+    }
+    if (
+      event.type === "tool_execution_end" &&
+      event.toolName === "mdocs_manual_content" &&
+      !event.isError
+    ) {
+      const source = (event.result as { details?: { source?: ManualSourceRef | null } } | null)
+        ?.details?.source;
+      if (source?.url && !sourcesById.has(source.id)) {
+        sourcesById.set(source.id, source);
+        onEvent({ type: "sources", items: [...sourcesById.values()] });
+      }
     }
   });
 

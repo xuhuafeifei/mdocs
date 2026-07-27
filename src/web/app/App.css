@@ -448,12 +448,107 @@
 
 .mdocs-agent-panel-chip {
   display: block;
+  width: 100%;
+  text-align: left;
   padding: 10px 12px;
   border-radius: 8px;
   background: #fff;
   border: 1px solid var(--mdocs-border, #e5e5e5);
   font-size: 13px;
   color: var(--mdocs-text, #111827);
+  cursor: pointer;
+}
+
+.mdocs-agent-panel-chip:hover:not(:disabled) {
+  border-color: var(--mdocs-accent, #4d6bfe);
+}
+
+.mdocs-agent-panel-chip:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mdocs-agent-panel-status-warn {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mdocs-agent-panel-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
+.mdocs-agent-panel-msg {
+  display: flex;
+}
+
+.mdocs-agent-panel-msg-user {
+  justify-content: flex-end;
+}
+
+.mdocs-agent-panel-msg-assistant {
+  justify-content: flex-start;
+}
+
+.mdocs-agent-panel-msg-bubble {
+  max-width: 92%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mdocs-agent-panel-msg-user .mdocs-agent-panel-msg-bubble {
+  background: var(--mdocs-accent, #4d6bfe);
+  color: #fff;
+}
+
+.mdocs-agent-panel-msg-assistant .mdocs-agent-panel-msg-bubble {
+  background: #fff;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  color: var(--mdocs-text, #111827);
+}
+
+.mdocs-agent-panel-sources {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f3f6fb;
+  font-size: 12px;
+}
+
+.mdocs-agent-panel-sources summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--mdocs-text-muted, #4b5563);
+  list-style: none;
+}
+
+.mdocs-agent-panel-sources summary::-webkit-details-marker {
+  display: none;
+}
+
+.mdocs-agent-panel-sources ol {
+  margin: 8px 0 0;
+  padding-left: 1.2em;
+}
+
+.mdocs-agent-panel-sources a {
+  color: var(--mdocs-accent, #4d6bfe);
+  text-decoration: none;
+}
+
+.mdocs-agent-panel-sources a:hover {
+  text-decoration: underline;
 }
 
 .mdocs-agent-panel-input-wrap {
@@ -488,11 +583,16 @@
   height: 28px;
   border: none;
   border-radius: 8px;
-  background: #c7d2fe;
+  background: var(--mdocs-accent, #4d6bfe);
   color: #fff;
-  cursor: not-allowed;
+  cursor: pointer;
   font-size: 14px;
   line-height: 1;
+}
+
+.mdocs-agent-panel-send:disabled {
+  background: #c7d2fe;
+  cursor: not-allowed;
 }
 
 .mdocs-agent-panel-footnote {

@@ -2,6 +2,12 @@ import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { SkillLoader } from "../Skill/skill-loader.js";
 
+export type ManualSourceRef = {
+  id: string;
+  name: string;
+  url: string;
+};
+
 export function createSkillTools(skills: SkillLoader): AgentTool[] {
   return [
     {
@@ -26,9 +32,12 @@ export function createSkillTools(skills: SkillLoader): AgentTool[] {
         const id = (params as { id: string }).id;
         const body = skills.read(id);
         if (!body) throw new Error(`手册章节不存在: ${id}，请先调用「查询 mdocs 手册大纲」`);
+        const source: ManualSourceRef | null = body.url
+          ? { id: body.id, name: body.name, url: body.url }
+          : null;
         return {
           content: [{ type: "text", text: body.content }],
-          details: { id: body.id },
+          details: { id: body.id, source },
         };
       },
     },

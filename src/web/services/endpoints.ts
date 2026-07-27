@@ -605,3 +605,91 @@ export function saveAgentConfigApi(input: {
     body: JSON.stringify(input),
   });
 }
+
+export interface AgentStatus {
+  enabled: boolean;
+  skillsReady: boolean;
+  model: string | null;
+  configId?: string | null;
+  reason?: string;
+}
+
+export type AgentStreamEvent =
+  | { type: "text_delta"; text: string }
+  | { type: "sources"; items: AgentSourceRef[] }
+  | { type: "done" }
+  | { type: "error"; message: string };
+
+export interface AgentSourceRef {
+  id: string;
+  name: string;
+  url: string;
+}
+
+export function fetchAgentStatusApi(): Promise<AgentStatus> {
+  return api<AgentStatus>("/api/agent/status");
+}
+
+/** POST /api/agent/chat，解析 SSE `data: {...}` 行 */
+export async function streamAgentChatApi(
+  message: string,
+  opts: {
+    signal?: AbortSignal;
+    onEvent: (event: AgentStreamEvent) => void;
+  },
+): Promise<void> {
+  const res = await fetch("/api/agent/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+    signal: opts.signal,
+  });
+
+  if (!res.ok) {
+    let messageText = `HTTP ${res.status}`;
+    try {
+      const body = (await res.json()) as { error?: { message?: string } };
+      if (body.error?.message) messageText = body.error.message;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(messageText);
+  }
+
+  if (!res.body) throw new Error("empty response body");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n");
+    buffer = parts.pop() ?? "";
+    for (const line of parts) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const payload = trimmed.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        opts.onEvent(JSON.parse(payload) as AgentStreamEvent);
+      } catch {
+        /* skip malformed chunk */
+      }
+    }
+  }
+
+  const tail = buffer.trim();
+  if (tail.startsWith("data:")) {
+    const payload = tail.slice(5).trim();
+    if (payload && payload !== "[DONE]") {
+      try {
+        opts.onEvent(JSON.parse(payload) as AgentStreamEvent);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
