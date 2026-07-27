@@ -42,10 +42,28 @@ export function AgentChatPanel(props: {
   const listRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const idRef = useRef(0);
+  /** 用户是否贴在底部；上滑阅读时为 false，不再强制滚 */
+  const stickToBottomRef = useRef(true);
 
   function nextId(prefix: string) {
     idRef.current += 1;
     return `${prefix}-${idRef.current}`;
+  }
+
+  function isNearBottom(el: HTMLElement, threshold = 48): boolean {
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+  }
+
+  function scrollToBottomIfStuck() {
+    const el = listRef.current;
+    if (!el || !stickToBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function onListScroll() {
+    const el = listRef.current;
+    if (!el) return;
+    stickToBottomRef.current = isNearBottom(el);
   }
 
   useEffect(() => {
@@ -111,12 +129,6 @@ export function AgentChatPanel(props: {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [messages, sending]);
-
   async function sendMessage(raw: string) {
     const text = raw.trim();
     if (!text || sending) return;
@@ -135,11 +147,14 @@ export function AgentChatPanel(props: {
 
     const userMsg: ChatMessage = { id: nextId("u"), role: "user", content: text };
     const assistantId = nextId("a");
+    stickToBottomRef.current = true;
     setMessages((prev) => [...prev, userMsg, { id: assistantId, role: "assistant", content: "" }]);
     setInput("");
     setSending(true);
     setStreamError(null);
     setHistoryOpen(false);
+    // 发问瞬间贴底一次，方便看到思考动画；之后仅 AI 出字且仍贴底时跟随
+    requestAnimationFrame(() => scrollToBottomIfStuck());
 
     try {
       await streamAgentChatApi(text, {
@@ -151,6 +166,7 @@ export function AgentChatPanel(props: {
                 m.id === assistantId ? { ...m, content: m.content + event.text } : m,
               ),
             );
+            requestAnimationFrame(() => scrollToBottomIfStuck());
           } else if (event.type === "sources") {
             setMessages((prev) =>
               prev.map((m) =>
@@ -237,7 +253,11 @@ export function AgentChatPanel(props: {
         </div>
       ) : (
         <div className="mdocs-agent-panel-body">
-          <div className="mdocs-agent-panel-welcome" ref={listRef}>
+          <div
+            className="mdocs-agent-panel-welcome"
+            ref={listRef}
+            onScroll={onListScroll}
+          >
             {messages.length === 0 ? (
               <>
                 <p className="mdocs-agent-panel-hello">你好，我是 mdocs 上手助手</p>
