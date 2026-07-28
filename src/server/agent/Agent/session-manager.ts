@@ -10,14 +10,25 @@ export interface AgentSessionMessage {
   content: string;
 }
 
+export interface AgentSessionSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
+type SessionMetaEntry = {
+  id: string;
+  title?: string;
+  updatedAt?: string;
+};
+
 type SessionMeta = {
   lastOpenedSessionId: string;
-  sessions?: Array<{
-    id: string;
-    title?: string;
-    updatedAt?: string;
-  }>;
+  sessions: SessionMetaEntry[];
 };
+
+const SESSION_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function safeString(v: unknown): string | null {
   if (typeof v !== "string") return null;
@@ -29,8 +40,17 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function isSessionId(id: string): boolean {
+  return SESSION_ID_RE.test(id);
+}
+
+function titleFromUserContent(content: string): string {
+  const oneLine = content.replace(/\s+/g, " ").trim();
+  if (!oneLine) return "新会话";
+  return oneLine.length > 36 ? `${oneLine.slice(0, 36)}…` : oneLine;
+}
+
 export class AgentSessionManager {
-  private readonly tenantDir: string;
   private readonly sessionDir: string;
   private readonly metaPath: string;
 
@@ -38,9 +58,7 @@ export class AgentSessionManager {
 
   constructor(private readonly visitorId: string) {
     const { dataDir } = getConfig();
-    // tenant 仅用于访客私有运行时数据（知识库仍走 files/）
-    this.tenantDir = path.join(dataDir, "tenant", visitorId);
-    this.sessionDir = path.join(this.tenantDir, "agent", "session");
+    this.sessionDir = path.join(dataDir, "tenant", visitorId, "agent", "session");
     this.metaPath = path.join(this.sessionDir, "session.json");
   }
 
@@ -57,65 +75,59 @@ export class AgentSessionManager {
       const txt = await fs.promises.readFile(this.metaPath, "utf8");
       const parsed = JSON.parse(txt) as Partial<SessionMeta> | null;
       const lastOpenedSessionId = safeString(parsed?.lastOpenedSessionId);
-      if (!lastOpenedSessionId) return null;
-      return {
-        lastOpenedSessionId,
-        sessions: Array.isArray(parsed?.sessions) ? parsed!.sessions : undefined,
-      };
+      if (!lastOpenedSessionId || !isSessionId(lastOpenedSessionId)) return null;
+      const sessions = Array.isArray(parsed?.sessions)
+        ? parsed!.sessions.filter((s) => s && isSessionId(String(s.id ?? "")))
+        : [];
+      return { lastOpenedSessionId, sessions };
     } catch (err) {
-      if (err && typeof err === "object" && "code" in err && (err as any).code === "ENOENT") return null;
+      if (err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "ENOENT") {
+        return null;
+      }
       return null;
     }
   }
 
   private async writeMeta(meta: SessionMeta): Promise<void> {
-    const txt = JSON.stringify(meta, null, 2);
-    await fs.promises.writeFile(this.metaPath, txt, "utf8");
+    await fs.promises.writeFile(this.metaPath, JSON.stringify(meta, null, 2), "utf8");
   }
 
-  private ensureSessionEntry(meta: SessionMeta, sessionId: string): void {
-    if (!meta.sessions) meta.sessions = [];
-    const exists = meta.sessions.some((s) => s.id === sessionId);
-    if (!exists) meta.sessions.push({ id: sessionId, updatedAt: nowIso() });
-    meta.sessions = meta.sessions
-      .filter((s) => safeString(s?.id) === s.id)
-      .map((s) => (s.id === sessionId ? { ...s, updatedAt: s.updatedAt ?? nowIso() } : s));
-  }
-
-  async ensureLastOpened(): Promise<string> {
-    await this.ensureSessionDir();
-    if (this.cachedSessionId) return this.cachedSessionId;
-
-    const meta = await this.readMeta();
-    if (!meta) {
-      const sessionId = randomUUID();
-      const created: SessionMeta = {
-        lastOpenedSessionId: sessionId,
-        sessions: [{ id: sessionId, updatedAt: nowIso() }],
-      };
-      await this.writeMeta(created);
-      this.cachedSessionId = sessionId;
-      return sessionId;
+  private ensureSessionEntry(
+    meta: SessionMeta,
+    sessionId: string,
+    patch?: { title?: string; touchUpdatedAt?: boolean },
+  ): void {
+    const idx = meta.sessions.findIndex((s) => s.id === sessionId);
+    const now = nowIso();
+    if (idx < 0) {
+      meta.sessions.push({
+        id: sessionId,
+        title: patch?.title,
+        updatedAt: now,
+      });
+      return;
     }
-
-    const sessionId = meta.lastOpenedSessionId;
-    this.ensureSessionEntry(meta, sessionId);
-    // 维护 sessions.updatedAt（首次读也做一次轻更新）
-    const updatedAt = nowIso();
-    meta.sessions = meta.sessions?.map((s) => (s.id === sessionId ? { ...s, updatedAt } : s));
-    meta.lastOpenedSessionId = sessionId;
-    await this.writeMeta(meta);
-
-    this.cachedSessionId = sessionId;
-    return sessionId;
+    const cur = meta.sessions[idx]!;
+    meta.sessions[idx] = {
+      ...cur,
+      title: patch?.title !== undefined ? patch.title : cur.title,
+      updatedAt: patch?.touchUpdatedAt === false ? cur.updatedAt ?? now : now,
+    };
   }
 
-  async loadLastOpenedMessages(): Promise<{ sessionId: string; messages: AgentSessionMessage[] }> {
-    const sessionId = await this.ensureLastOpened();
-    const jsonlPath = this.jsonlPath(sessionId);
+  private sortSummaries(sessions: SessionMetaEntry[]): AgentSessionSummary[] {
+    return sessions
+      .map((s) => ({
+        id: s.id,
+        title: (s.title?.trim() || "新会话"),
+        updatedAt: s.updatedAt ?? nowIso(),
+      }))
+      .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+  }
 
+  private async loadTranscript(sessionId: string): Promise<AgentSessionMessage[]> {
     try {
-      const txt = await fs.promises.readFile(jsonlPath, "utf8");
+      const txt = await fs.promises.readFile(this.jsonlPath(sessionId), "utf8");
       const lines = txt.split("\n").map((l) => l.trim()).filter(Boolean);
       const messages: AgentSessionMessage[] = [];
       for (const line of lines) {
@@ -129,40 +141,123 @@ export class AgentSessionManager {
           /* ignore invalid line */
         }
       }
-      return { sessionId, messages };
+      return messages;
     } catch (err) {
-      if (err && typeof err === "object" && "code" in err && (err as any).code === "ENOENT") {
-        return { sessionId, messages: [] };
+      if (err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "ENOENT") {
+        return [];
       }
-      return { sessionId, messages: [] };
+      return [];
     }
   }
 
-  private async touchLastOpened(sessionId: string): Promise<void> {
+  async ensureLastOpened(): Promise<string> {
+    await this.ensureSessionDir();
+    if (this.cachedSessionId) return this.cachedSessionId;
+
     const meta = await this.readMeta();
     if (!meta) {
+      const sessionId = randomUUID();
       await this.writeMeta({
         lastOpenedSessionId: sessionId,
         sessions: [{ id: sessionId, updatedAt: nowIso() }],
       });
-      return;
+      this.cachedSessionId = sessionId;
+      return sessionId;
     }
-    meta.lastOpenedSessionId = sessionId;
-    this.ensureSessionEntry(meta, sessionId);
-    meta.sessions = meta.sessions?.map((s) => (s.id === sessionId ? { ...s, updatedAt: nowIso() } : s));
+
+    this.ensureSessionEntry(meta, meta.lastOpenedSessionId, { touchUpdatedAt: false });
     await this.writeMeta(meta);
+    this.cachedSessionId = meta.lastOpenedSessionId;
+    return meta.lastOpenedSessionId;
+  }
+
+  async listSessions(): Promise<{
+    lastOpenedSessionId: string;
+    sessions: AgentSessionSummary[];
+  }> {
+    const lastOpenedSessionId = await this.ensureLastOpened();
+    const meta = (await this.readMeta())!;
+    return {
+      lastOpenedSessionId,
+      sessions: this.sortSummaries(meta.sessions),
+    };
+  }
+
+  async loadLastOpenedMessages(): Promise<{
+    sessionId: string;
+    messages: AgentSessionMessage[];
+  }> {
+    const sessionId = await this.ensureLastOpened();
+    return { sessionId, messages: await this.loadTranscript(sessionId) };
+  }
+
+  /** 新建空会话并设为 lastOpened */
+  async createSession(): Promise<{ sessionId: string; messages: AgentSessionMessage[] }> {
+    await this.ensureSessionDir();
+    const sessionId = randomUUID();
+    const meta = (await this.readMeta()) ?? {
+      lastOpenedSessionId: sessionId,
+      sessions: [],
+    };
+    meta.lastOpenedSessionId = sessionId;
+    this.ensureSessionEntry(meta, sessionId, { title: "新会话", touchUpdatedAt: true });
+    await this.writeMeta(meta);
+    this.cachedSessionId = sessionId;
+    return { sessionId, messages: [] };
+  }
+
+  /** 切换 lastOpened 并返回该会话 transcript */
+  async openSession(sessionId: string): Promise<{
+    sessionId: string;
+    messages: AgentSessionMessage[];
+  }> {
+    if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
+    await this.ensureSessionDir();
+    const meta = await this.readMeta();
+    const inMeta = Boolean(meta?.sessions.some((s) => s.id === sessionId));
+    const hasFile = fs.existsSync(this.jsonlPath(sessionId));
+    if (!inMeta && !hasFile) throw new Error("session_not_found");
+
+    const next = meta ?? { lastOpenedSessionId: sessionId, sessions: [] };
+    next.lastOpenedSessionId = sessionId;
+    this.ensureSessionEntry(next, sessionId, { touchUpdatedAt: true });
+    await this.writeMeta(next);
+    this.cachedSessionId = sessionId;
+    return { sessionId, messages: await this.loadTranscript(sessionId) };
+  }
+
+  private async touchLastOpened(
+    sessionId: string,
+    patch?: { titleIfEmpty?: string },
+  ): Promise<void> {
+    const meta = (await this.readMeta()) ?? {
+      lastOpenedSessionId: sessionId,
+      sessions: [],
+    };
+    meta.lastOpenedSessionId = sessionId;
+    const existing = meta.sessions.find((s) => s.id === sessionId);
+    const needTitle =
+      patch?.titleIfEmpty && !(existing?.title && existing.title.trim() && existing.title !== "新会话");
+    this.ensureSessionEntry(meta, sessionId, {
+      title: needTitle ? patch!.titleIfEmpty : undefined,
+      touchUpdatedAt: true,
+    });
+    await this.writeMeta(meta);
+    this.cachedSessionId = sessionId;
   }
 
   async appendUser(sessionId: string, content: string): Promise<void> {
+    if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
     await fs.promises.appendFile(
       this.jsonlPath(sessionId),
       JSON.stringify({ role: "user", content, ts: nowIso() }) + "\n",
       "utf8",
     );
-    await this.touchLastOpened(sessionId);
+    await this.touchLastOpened(sessionId, { titleIfEmpty: titleFromUserContent(content) });
   }
 
   async appendAssistant(sessionId: string, content: string): Promise<void> {
+    if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
     await fs.promises.appendFile(
       this.jsonlPath(sessionId),
       JSON.stringify({ role: "assistant", content, ts: nowIso() }) + "\n",
@@ -176,7 +271,17 @@ export async function getAgentSessionForApi(visitorId: string): Promise<{
   sessionId: string;
   messages: AgentSessionMessage[];
 }> {
-  const manager = new AgentSessionManager(visitorId);
-  return manager.loadLastOpenedMessages();
+  return new AgentSessionManager(visitorId).loadLastOpenedMessages();
 }
 
+export async function listAgentSessionsForApi(visitorId: string) {
+  return new AgentSessionManager(visitorId).listSessions();
+}
+
+export async function createAgentSessionForApi(visitorId: string) {
+  return new AgentSessionManager(visitorId).createSession();
+}
+
+export async function openAgentSessionForApi(visitorId: string, sessionId: string) {
+  return new AgentSessionManager(visitorId).openSession(sessionId);
+}

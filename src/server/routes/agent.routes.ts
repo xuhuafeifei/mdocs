@@ -4,7 +4,7 @@ import {
   runOnboardingChat,
   type AgentStreamEvent,
 } from "../agent/Agent/run.js";
-import { getAgentSessionForApi } from "../agent/Agent/session-manager.js";
+import { getAgentSessionForApi, createAgentSessionForApi, listAgentSessionsForApi, openAgentSessionForApi } from "../agent/Agent/session-manager.js";
 import {
   getVisitorAgentConfig,
   isAgentModelId,
@@ -102,6 +102,47 @@ export function buildAgentRouter(): Router {
 
     const data = await getAgentSessionForApi(req.visitor.visitor_id);
     res.json({ data });
+  });
+
+  router.get("/sessions", async (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const data = await listAgentSessionsForApi(req.visitor.visitor_id);
+    res.json({ data });
+  });
+
+  router.post("/sessions", async (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const data = await createAgentSessionForApi(req.visitor.visitor_id);
+    res.json({ data });
+  });
+
+  router.post("/session/open", async (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : "";
+    if (!sessionId) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "sessionId is required" } });
+      return;
+    }
+    try {
+      const data = await openAgentSessionForApi(req.visitor.visitor_id, sessionId);
+      res.json({ data });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "invalid_session_id" || msg === "session_not_found") {
+        res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
+        return;
+      }
+      throw err;
+    }
   });
 
   router.post("/chat", async (req: Request, res: Response) => {

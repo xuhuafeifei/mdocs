@@ -640,8 +640,34 @@ export interface AgentSessionResponse {
   messages: AgentSessionMessage[];
 }
 
+export interface AgentSessionSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
+export interface AgentSessionListResponse {
+  lastOpenedSessionId: string;
+  sessions: AgentSessionSummary[];
+}
+
 export function fetchAgentSessionApi(): Promise<AgentSessionResponse> {
   return api<AgentSessionResponse>("/api/agent/session");
+}
+
+export function fetchAgentSessionsApi(): Promise<AgentSessionListResponse> {
+  return api<AgentSessionListResponse>("/api/agent/sessions");
+}
+
+export function createAgentSessionApi(): Promise<AgentSessionResponse> {
+  return api<AgentSessionResponse>("/api/agent/sessions", { method: "POST" });
+}
+
+export function openAgentSessionApi(sessionId: string): Promise<AgentSessionResponse> {
+  return api<AgentSessionResponse>("/api/agent/session/open", {
+    method: "POST",
+    body: JSON.stringify({ sessionId }),
+  });
 }
 
 /** POST /api/agent/chat，解析 SSE `data: {...}` 行 */

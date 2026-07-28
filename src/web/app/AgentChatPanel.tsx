@@ -4,9 +4,13 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import deepseekLogoUrl from "../assets/deepseek.svg";
 import {
-  fetchAgentStatusApi,
+  createAgentSessionApi,
   fetchAgentSessionApi,
+  fetchAgentSessionsApi,
+  fetchAgentStatusApi,
+  openAgentSessionApi,
   streamAgentChatApi,
+  type AgentSessionSummary,
   type AgentSourceRef,
   type AgentStatus,
 } from "../services/endpoints";
@@ -20,9 +24,31 @@ type ChatMessage = {
 
 const SUGGESTIONS = ["如何发布文档？", "草稿是什么？", "如何创建域？"];
 
+function toChatMessages(sessionId: string, messages: { role: "user" | "assistant"; content: string }[]): ChatMessage[] {
+  return messages.map((m, i) => ({
+    id: `h-${sessionId}-${i}-${m.role}`,
+    role: m.role,
+    content: m.content,
+  }));
+}
+
+function formatSessionTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString(undefined, { month: "2-digit", day: "2-digit" });
+}
+
 /**
  * 上手助手浮层：入口旁弹出；接 /api/agent/chat SSE。
- * 新会话 / 历史仍为假 UI。
+ * 「+」新建 session；历史图标列出并切换 lastOpened。
  */
 export function AgentChatPanel(props: {
   open: boolean;
@@ -35,6 +61,9 @@ export function AgentChatPanel(props: {
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<AgentSessionSummary[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -64,6 +93,19 @@ export function AgentChatPanel(props: {
     const el = listRef.current;
     if (!el) return;
     stickToBottomRef.current = isNearBottom(el);
+  }
+
+  async function refreshSessions() {
+    setSessionsLoading(true);
+    try {
+      const list = await fetchAgentSessionsApi();
+      setSessions(list.sessions);
+      if (!sessionId) setSessionId(list.lastOpenedSessionId);
+    } catch {
+      /* ignore */
+    } finally {
+      setSessionsLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -101,15 +143,11 @@ export function AgentChatPanel(props: {
       try {
         const s = await fetchAgentSessionApi();
         if (cancelled) return;
-        const loaded: ChatMessage[] = s.messages.map((m, i) => ({
-          id: `h-${s.sessionId}-${i}-${m.role}`,
-          role: m.role,
-          content: m.content,
-        }));
+        setSessionId(s.sessionId);
         setMessages((prev) => {
           // 避免用户刚发送消息时，异步回放覆盖 UI
           if (prev.length > 0) return prev;
-          return loaded;
+          return toChatMessages(s.sessionId, s.messages);
         });
       } catch {
         /* ignore */
@@ -121,23 +159,36 @@ export function AgentChatPanel(props: {
   }, [open]);
 
   useEffect(() => {
+    if (!open || !historyOpen) return;
+    void refreshSessions();
+  }, [open, historyOpen]);
+
+  useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        if (historyOpen) {
+          setHistoryOpen(false);
+          return;
+        }
+        onClose();
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, onClose, historyOpen]);
 
   async function sendMessage(raw: string) {
     const text = raw.trim();
     if (!text || sending) return;
     if (!status?.enabled) {
-      setStreamError(status?.reason === "missing_api_key"
-        ? "请先在设置 → AI 配置 DeepSeek API Key"
-        : status?.reason === "skills_missing"
-          ? "手册 skills 未就绪，请确认已构建 agent-skills"
-          : "助手暂不可用");
+      setStreamError(
+        status?.reason === "missing_api_key"
+          ? "请先在设置 → AI 配置 DeepSeek API Key"
+          : status?.reason === "skills_missing"
+            ? "手册 skills 未就绪，请确认已构建 agent-skills"
+            : "助手暂不可用",
+      );
       return;
     }
 
@@ -153,7 +204,6 @@ export function AgentChatPanel(props: {
     setSending(true);
     setStreamError(null);
     setHistoryOpen(false);
-    // 发问瞬间贴底一次，方便看到思考动画；之后仅 AI 出字且仍贴底时跟随
     requestAnimationFrame(() => scrollToBottomIfStuck());
 
     try {
@@ -187,13 +237,42 @@ export function AgentChatPanel(props: {
     }
   }
 
-  function onNewSession() {
+  async function onNewSession() {
+    if (sending) return;
     abortRef.current?.abort();
-    setMessages([]);
-    setInput("");
     setStreamError(null);
     setHistoryOpen(false);
     setSending(false);
+    try {
+      const created = await createAgentSessionApi();
+      setSessionId(created.sessionId);
+      setMessages([]);
+      setInput("");
+      stickToBottomRef.current = true;
+    } catch (err) {
+      setStreamError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function onOpenSession(id: string) {
+    if (sending) return;
+    if (id === sessionId) {
+      setHistoryOpen(false);
+      return;
+    }
+    abortRef.current?.abort();
+    setStreamError(null);
+    try {
+      const opened = await openAgentSessionApi(id);
+      setSessionId(opened.sessionId);
+      setMessages(toChatMessages(opened.sessionId, opened.messages));
+      setInput("");
+      setHistoryOpen(false);
+      stickToBottomRef.current = true;
+      requestAnimationFrame(() => scrollToBottomIfStuck());
+    } catch (err) {
+      setStreamError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   if (!open) return null;
@@ -221,7 +300,8 @@ export function AgentChatPanel(props: {
             className="mdocs-agent-panel-icon-btn"
             title="新会话"
             aria-label="新会话"
-            onClick={onNewSession}
+            disabled={sending}
+            onClick={() => void onNewSession()}
           >
             <Plus size={16} strokeWidth={1.8} />
           </button>
@@ -248,8 +328,45 @@ export function AgentChatPanel(props: {
 
       {historyOpen ? (
         <div className="mdocs-agent-panel-history">
-          <p className="mdocs-agent-panel-history-empty">暂无历史会话</p>
-          <p className="mdocs-agent-panel-history-hint">多会话能力后续开放</p>
+          <div className="mdocs-agent-panel-history-head">
+            <span>历史会话</span>
+            <button
+              type="button"
+              className="mdocs-agent-panel-history-back"
+              onClick={() => setHistoryOpen(false)}
+            >
+              返回对话
+            </button>
+          </div>
+          {sessionsLoading ? (
+            <p className="mdocs-agent-panel-history-hint">加载中…</p>
+          ) : sessions.length === 0 ? (
+            <>
+              <p className="mdocs-agent-panel-history-empty">暂无历史会话</p>
+              <p className="mdocs-agent-panel-history-hint">发一条消息后会出现在这里</p>
+            </>
+          ) : (
+            <ul className="mdocs-agent-panel-history-list">
+              {sessions.map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    className={
+                      "mdocs-agent-panel-history-item" +
+                      (s.id === sessionId ? " active" : "")
+                    }
+                    disabled={sending}
+                    onClick={() => void onOpenSession(s.id)}
+                  >
+                    <span className="mdocs-agent-panel-history-title">{s.title}</span>
+                    <span className="mdocs-agent-panel-history-time">
+                      {formatSessionTime(s.updatedAt)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       ) : (
         <div className="mdocs-agent-panel-body">
@@ -289,7 +406,9 @@ export function AgentChatPanel(props: {
                     key={m.id}
                     className={
                       "mdocs-agent-panel-msg" +
-                      (m.role === "user" ? " mdocs-agent-panel-msg-user" : " mdocs-agent-panel-msg-assistant")
+                      (m.role === "user"
+                        ? " mdocs-agent-panel-msg-user"
+                        : " mdocs-agent-panel-msg-assistant")
                     }
                   >
                     {m.role === "assistant" ? (
@@ -300,9 +419,7 @@ export function AgentChatPanel(props: {
                     <div className="mdocs-agent-panel-msg-bubble">
                       {m.role === "assistant" && m.sources && m.sources.length > 0 ? (
                         <details className="mdocs-agent-panel-sources" open>
-                          <summary>
-                            已阅读 {m.sources.length} 个页面
-                          </summary>
+                          <summary>已阅读 {m.sources.length} 个页面</summary>
                           <ol>
                             {m.sources.map((s) => (
                               <li key={s.id}>
