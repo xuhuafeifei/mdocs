@@ -28,8 +28,20 @@ export function skillSourceToUrl(source: string | undefined): string | null {
 export const AGENT_MODEL_IDS = ["deepseek-v4-flash", "deepseek-v4-pro"] as const;
 export type AgentModelId = (typeof AGENT_MODEL_IDS)[number];
 
+/** 默认 context window；可在设置页按访客覆盖 */
+export const DEFAULT_AGENT_CONTEXT_WINDOW = 128_000;
+
 export function isAgentModelId(value: string): value is AgentModelId {
   return (AGENT_MODEL_IDS as readonly string[]).includes(value);
+}
+
+export function normalizeContextWindow(value: unknown, fallback = DEFAULT_AGENT_CONTEXT_WINDOW): number {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  const rounded = Math.floor(n);
+  if (rounded < 1000) return fallback;
+  if (rounded > 2_000_000) return 2_000_000;
+  return rounded;
 }
 
 export interface VisitorAgentConfig {
@@ -40,6 +52,7 @@ export interface VisitorAgentConfig {
   modelId: AgentModelId;
   apiKey: string;
   endpoint: string;
+  contextWindow: number;
 }
 
 export interface PublicAgentConfig {
@@ -48,6 +61,7 @@ export interface PublicAgentConfig {
   modelId: AgentModelId;
   hasApiKey: boolean;
   apiKeyMasked: string | null;
+  contextWindow: number;
 }
 
 /** 空白 name → `{visitorName}的 ds 配置` */
@@ -73,6 +87,7 @@ export function getVisitorAgentConfig(visitorId: string): VisitorAgentConfig | n
     modelId: row.model_id,
     apiKey: row.api_key,
     endpoint: DEEPSEEK_ENDPOINT,
+    contextWindow: normalizeContextWindow(row.context_window),
   };
 }
 
@@ -83,6 +98,7 @@ export function toPublicAgentConfig(cfg: VisitorAgentConfig): PublicAgentConfig 
     modelId: cfg.modelId,
     hasApiKey: Boolean(cfg.apiKey),
     apiKeyMasked: cfg.apiKey ? maskApiKey(cfg.apiKey) : null,
+    contextWindow: cfg.contextWindow,
   };
 }
 
@@ -92,6 +108,7 @@ export function upsertVisitorAgentConfig(input: {
   modelId: AgentModelId;
   name?: string;
   apiKey?: string;
+  contextWindow?: number;
 }): VisitorAgentConfig {
   const existing = findAgentModelConfigByOwner(getDb(), input.ownerVisitorId);
   const apiKey =
@@ -107,6 +124,12 @@ export function upsertVisitorAgentConfig(input: {
       ? existing.name
       : resolveConfigName(undefined, input.visitorName);
 
+  const contextWindow = normalizeContextWindow(
+    input.contextWindow !== undefined
+      ? input.contextWindow
+      : existing?.context_window ?? DEFAULT_AGENT_CONTEXT_WINDOW,
+  );
+
   const row = {
     id: existing?.id ?? randomUUID(),
     owner_visitor_id: input.ownerVisitorId,
@@ -114,6 +137,7 @@ export function upsertVisitorAgentConfig(input: {
     provider: "deepseek",
     model_id: input.modelId,
     api_key: apiKey,
+    context_window: contextWindow,
     updated_at: new Date().toISOString(),
   };
   upsertAgentModelConfig(getDb(), row);
@@ -126,6 +150,7 @@ export function upsertVisitorAgentConfig(input: {
     modelId: input.modelId,
     apiKey: row.api_key,
     endpoint: DEEPSEEK_ENDPOINT,
+    contextWindow,
   };
 }
 

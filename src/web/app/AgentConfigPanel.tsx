@@ -17,6 +17,7 @@ const MODEL_OPTIONS: { value: AgentModelId; label: string }[] = [
 type Draft = {
   name: string;
   modelId: AgentModelId;
+  contextWindow: number;
 };
 
 export function AgentConfigPanel() {
@@ -26,6 +27,7 @@ export function AgentConfigPanel() {
   const [configId, setConfigId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [modelId, setModelId] = useState<AgentModelId>("deepseek-v4-flash");
+  const [contextWindow, setContextWindow] = useState(128000);
   const [apiKey, setApiKey] = useState("");
   const [hasApiKey, setHasApiKey] = useState(false);
   const [apiKeyMasked, setApiKeyMasked] = useState<string | null>(null);
@@ -54,6 +56,7 @@ export function AgentConfigPanel() {
           setConfigId(cfg.id);
           setName(cfg.name);
           setModelId(cfg.modelId);
+          setContextWindow(cfg.contextWindow || 128000);
           setHasApiKey(cfg.hasApiKey);
           setApiKeyMasked(cfg.apiKeyMasked);
           setEditing(false);
@@ -71,7 +74,7 @@ export function AgentConfigPanel() {
   }, []);
 
   function startEdit() {
-    setDraft({ name, modelId });
+    setDraft({ name, modelId, contextWindow });
     setApiKey("");
     setShowApiKey(false);
     setSaved(false);
@@ -83,6 +86,7 @@ export function AgentConfigPanel() {
     if (draft) {
       setName(draft.name);
       setModelId(draft.modelId);
+      setContextWindow(draft.contextWindow);
     }
     setApiKey("");
     setShowApiKey(false);
@@ -97,9 +101,15 @@ export function AgentConfigPanel() {
     setError(null);
     setSaved(false);
     try {
-      const body: { modelId: AgentModelId; name?: string; apiKey?: string } = {
+      const body: {
+        modelId: AgentModelId;
+        name?: string;
+        apiKey?: string;
+        contextWindow: number;
+      } = {
         modelId,
         name,
+        contextWindow,
       };
       if (apiKey.trim()) body.apiKey = apiKey.trim();
       const cfg = await saveAgentConfigApi(body);
@@ -107,6 +117,7 @@ export function AgentConfigPanel() {
       setConfigId(cfg.id);
       setName(cfg.name);
       setModelId(cfg.modelId);
+      setContextWindow(cfg.contextWindow || 128000);
       setHasApiKey(cfg.hasApiKey);
       setApiKeyMasked(cfg.apiKeyMasked);
       setApiKey("");
@@ -174,6 +185,25 @@ export function AgentConfigPanel() {
                   <p className="mdocs-agent-config-readonly">{modelId}</p>
                 )}
               </div>
+              <label className="mdocs-settings-item" style={{ display: "block", marginBottom: 12 }}>
+                <span className="mdocs-settings-card-title">{t("agentConfigContextWindow")}</span>
+                <p className="mdocs-settings-item-desc" style={{ margin: "4px 0 6px" }}>
+                  {t("agentConfigContextWindowDesc")}
+                </p>
+                {editing ? (
+                  <input
+                    type="number"
+                    min={1000}
+                    max={2000000}
+                    step={1000}
+                    value={contextWindow}
+                    onChange={(e) => setContextWindow(Number(e.target.value) || 128000)}
+                    style={{ width: "100%" }}
+                  />
+                ) : (
+                  <p className="mdocs-agent-config-readonly">{contextWindow}</p>
+                )}
+              </label>
               <div className="mdocs-settings-item mdocs-agent-config-field" style={{ marginBottom: 12 }}>
                 <span className="mdocs-settings-card-title">{t("agentConfigApiKey")}</span>
                 {editing ? (

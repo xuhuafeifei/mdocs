@@ -17,12 +17,21 @@ import {
   AgentSessionManager,
   type AgentSessionMessage,
 } from "./session-manager.js";
+import {
+  getAgentContextUsageForApi,
+  mergeContextUsage,
+  type AgentContextUsage,
+} from "./context-usage.js";
+
+export type { AgentContextUsage };
+export { getAgentContextUsageForApi } from "./context-usage.js";
 
 /** 推给路由 / 前端的流式片段（路由只负责写出 SSE） */
 export type AgentStreamEvent =
   | { type: "text_delta"; text: string }
   | { type: "sources"; items: ManualSourceRef[] }
   | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
+  | { type: "context_usage"; percent: number; used: number; limit: number }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -85,7 +94,7 @@ export async function runOnboardingChat(params: {
     streamFn: models.streamSimple.bind(models),
   });
 
-  const track = { emittedError: false };
+  const track = { emittedError: false, lastUsageInput: 0 };
   const unsub = agent.subscribe(
     bindAgentEvents({
       sessionId,
@@ -105,6 +114,14 @@ export async function runOnboardingChat(params: {
     if (leftover && !track.emittedError) {
       onEvent({ type: "error", message: leftover });
     }
+    const estimated = await getAgentContextUsageForApi(visitorId);
+    const usage = mergeContextUsage(estimated, track.lastUsageInput);
+    onEvent({
+      type: "context_usage",
+      percent: usage.percent,
+      used: usage.used,
+      limit: usage.limit,
+    });
     onEvent({ type: "done" });
   } catch (err) {
     if (signal?.aborted) return;
@@ -176,7 +193,7 @@ function bindAgentEvents(opts: {
   sessionId: string;
   sessionManager: AgentSessionManager;
   onEvent: (event: AgentStreamEvent) => void;
-  track: { emittedError: boolean };
+  track: { emittedError: boolean; lastUsageInput: number };
 }): (event: AgentEvent) => Promise<void> {
   const { sessionId, sessionManager, onEvent, track } = opts;
   const sourcesById = new Map<string, ManualSourceRef>();
@@ -206,7 +223,12 @@ function bindAgentEvents(opts: {
         const msg = event.message as {
           stopReason?: string;
           errorMessage?: string;
+          usage?: { input?: number };
         };
+
+        if (typeof msg.usage?.input === "number" && msg.usage.input > 0) {
+          track.lastUsageInput = Math.max(track.lastUsageInput, msg.usage.input);
+        }
 
         if (
           (msg.stopReason === "error" || msg.stopReason === "aborted") &&
@@ -308,7 +330,7 @@ function createDeepSeekModel(cfg: VisitorAgentConfig) {
     reasoning: false,
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128000,
+    contextWindow: cfg.contextWindow,
     maxTokens: 8192,
     compat: {
       supportsDeveloperRole: false,

@@ -5,7 +5,9 @@ import { resolveDomainAccess } from "../../access/domain-access.js";
 import { getDb } from "../../db/connection.js";
 import {
   addDomainMember,
+  findDomainById,
   insertDomain,
+  listDomainMemberIds,
   listDomains,
 } from "../../db/repositories/domain.repo.js";
 import {
@@ -13,6 +15,7 @@ import {
   listDomainIdsWithDocumentInviteForVisitor,
   listDocumentsByVisitor,
 } from "../../db/repositories/document.repo.js";
+import { findVisitorById, listActiveVisitorsDirectory } from "../../db/repositories/visitor.repo.js";
 import { createDocument } from "../../documents/document.service.js";
 import { buildDocumentTree } from "../../documents/tree.service.js";
 import { createFolder } from "../../routes/folders.routes.js";
@@ -65,8 +68,133 @@ function flattenTree(nodes: TreeNode[], limit = 80): FlatTreeItem[] {
   return items;
 }
 
+/** 校验：域存在、restricted、且当前访客是创建者 */
+function requireRestrictedDomainAsCreator(domainId: string, actorVisitorId: string) {
+  const db = getDb();
+  const domain = findDomainById(db, domainId);
+  if (!domain) throw new Error("domain not found");
+  if (domain.creator_visitor_id !== actorVisitorId) {
+    throw new Error("only the creator can manage domain members");
+  }
+  if (domain.permission !== "restricted") {
+    throw new Error("member list applies to restricted domains only");
+  }
+  return { db, domain };
+}
+
 export function createAccountTools(visitorId: string): AgentTool[] {
   return [
+    {
+      name: "list_visitors",
+      label: "列出活跃访客",
+      description:
+        "列出系统中全部活跃访客（潜在可邀请成员），返回 visitorId / visitorName；当前用户会标 isMe=true。用于回答「有哪些人可以邀请进域/文档」。",
+      parameters: Type.Object({}),
+      execute: async () => {
+        const rows = listActiveVisitorsDirectory(getDb());
+        const visitors = rows.map((r) => ({
+          visitorId: r.visitor_id,
+          visitorName: r.visitor_name,
+          isMe: r.visitor_id === visitorId,
+        }));
+        return asToolResult({ total: visitors.length, visitors });
+      },
+    },
+    {
+      name: "list_domain_members",
+      label: "列出域成员",
+      description:
+        "列出 restricted 域的成员（仅域创建者可用）。返回 visitorId / visitorName / missing / disabled。",
+      parameters: Type.Object({
+        domainId: Type.String({ description: "域 ID" }),
+      }),
+      execute: async (_id, params) => {
+        const domainId = (params as { domainId: string }).domainId?.trim();
+        if (!domainId) throw new Error("domainId is required");
+        const { db, domain } = requireRestrictedDomainAsCreator(domainId, visitorId);
+        const ids = listDomainMemberIds(db, domainId);
+        const members = ids.map((id) => {
+          const v = findVisitorById(db, id);
+          if (!v) {
+            return { visitorId: id, visitorName: "", missing: true, disabled: false };
+          }
+          return {
+            visitorId: id,
+            visitorName: v.visitor_name,
+            missing: false,
+            disabled: v.disabled_at != null,
+          };
+        });
+        return asToolResult({
+          domainId,
+          domainName: domain.domain_name,
+          memberCount: members.length,
+          members,
+        });
+      },
+    },
+    {
+      name: "add_domain_members",
+      label: "添加域成员",
+      description:
+        "向 restricted 域追加成员（仅域创建者可用；不会清空现有成员）。visitorIds 来自「列出活跃访客」。创建者始终保留。",
+      parameters: Type.Object({
+        domainId: Type.String({ description: "域 ID" }),
+        visitorIds: Type.Array(Type.String({ description: "要添加的访客 ID" }), {
+          description: "访客 ID 数组",
+        }),
+      }),
+      execute: async (_id, params) => {
+        const { domainId: rawDomainId, visitorIds } = params as {
+          domainId: string;
+          visitorIds: string[];
+        };
+        const domainId = rawDomainId?.trim();
+        if (!domainId) throw new Error("domainId is required");
+        if (!Array.isArray(visitorIds) || visitorIds.length === 0) {
+          throw new Error("visitorIds must be a non-empty array");
+        }
+
+        const { db, domain } = requireRestrictedDomainAsCreator(domainId, visitorId);
+        const uniqueIds = [...new Set(visitorIds.map((id) => id.trim()).filter(Boolean))];
+        if (uniqueIds.length === 0) throw new Error("visitorIds must be a non-empty array");
+
+        const invalid: string[] = [];
+        const added: { visitorId: string; visitorName: string }[] = [];
+        const alreadyMember: string[] = [];
+        const before = new Set(listDomainMemberIds(db, domainId));
+
+        for (const vid of uniqueIds) {
+          const v = findVisitorById(db, vid);
+          if (!v) {
+            invalid.push(vid);
+            continue;
+          }
+          if (before.has(vid)) {
+            alreadyMember.push(vid);
+            continue;
+          }
+          addDomainMember(db, domainId, vid);
+          added.push({ visitorId: vid, visitorName: v.visitor_name });
+        }
+
+        if (invalid.length > 0 && added.length === 0) {
+          throw new Error(`unknown visitor ids: ${invalid.join(", ")}`);
+        }
+
+        // 确保创建者在成员列表中
+        addDomainMember(db, domainId, domain.creator_visitor_id);
+
+        return asToolResult({
+          domainId,
+          domainName: domain.domain_name,
+          added,
+          alreadyMember,
+          invalidVisitorIds: invalid,
+          memberCount: listDomainMemberIds(db, domainId).length,
+        });
+      },
+    },
     {
       name: "list_domains",
       label: "列出可见域",

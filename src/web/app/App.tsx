@@ -963,7 +963,7 @@ export function App() {
           <button
             type="button"
             className={"mdocs-agent-fab" + (agentPanelOpen ? " open" : "")}
-            aria-label="打开上手助手"
+            aria-label="打开 mdocs 智能 AI"
             aria-expanded={agentPanelOpen}
             onClick={() => setAgentPanelOpen((v) => !v)}
           >

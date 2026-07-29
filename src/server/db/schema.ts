@@ -176,6 +176,7 @@ const SCHEMA_STATEMENTS: string[] = [
     provider TEXT NOT NULL DEFAULT 'deepseek',
     model_id TEXT NOT NULL,
     api_key TEXT NOT NULL,
+    context_window INTEGER NOT NULL DEFAULT 128000,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (owner_visitor_id) REFERENCES visitors(visitor_id) ON DELETE CASCADE
   )`,
@@ -200,6 +201,7 @@ export function applySchema(db: Database.Database): void {
     migrateVisitorsRecoveryCode(db);
     migrateVisitorsPasswordHash(db);
     migrateVisitorSessions(db);
+    migrateAgentModelConfigContextWindow(db);
     ensureDefaultDomain(db);
   });
   tx();
@@ -389,4 +391,14 @@ function migrateVisitorSessions(db: Database.Database): void {
     WHERE visitor_token_hash IS NOT NULL
   `);
   stmt.run();
+}
+
+/** 为 agent_model_configs 增加 context_window（默认 128000） */
+function migrateAgentModelConfigContextWindow(db: Database.Database): void {
+  const rows = db.prepare(`PRAGMA table_info(agent_model_configs)`).all() as { name: string }[];
+  if (rows.length === 0) return;
+  if (rows.some((r) => r.name === "context_window")) return;
+  db.exec(
+    `ALTER TABLE agent_model_configs ADD COLUMN context_window INTEGER NOT NULL DEFAULT 128000`,
+  );
 }

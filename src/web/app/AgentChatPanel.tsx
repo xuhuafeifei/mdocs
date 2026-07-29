@@ -6,11 +6,13 @@ import deepseekLogoUrl from "../assets/deepseek.svg";
 import {
   type AgentDocumentTableRow,
   createAgentSessionApi,
+  fetchAgentContextUsageApi,
   fetchAgentSessionApi,
   fetchAgentSessionsApi,
   fetchAgentStatusApi,
   openAgentSessionApi,
   streamAgentChatApi,
+  type AgentContextUsage,
   type AgentSessionSummary,
   type AgentSourceRef,
   type AgentStatus,
@@ -51,8 +53,59 @@ function formatSessionTime(iso: string): string {
   return d.toLocaleDateString(undefined, { month: "2-digit", day: "2-digit" });
 }
 
+function formatTokenCount(n: number): string {
+  if (n >= 1000) {
+    const k = n / 1000;
+    return `${k >= 10 ? Math.round(k) : Math.round(k * 10) / 10}K`;
+  }
+  return String(n);
+}
+
+function ContextUsageRing(props: { percent: number; used: number; limit: number }) {
+  const size = 20;
+  const stroke = 2.5;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const pct = Math.min(100, Math.max(0, props.percent));
+  const offset = c * (1 - pct / 100);
+  const level = pct >= 90 ? "danger" : pct >= 70 ? "warn" : "ok";
+  const tip = `上下文 ${pct}% · 已用 ${formatTokenCount(props.used)} / ${formatTokenCount(props.limit)} tokens`;
+  return (
+    <span
+      className={"mdocs-agent-panel-context mdocs-agent-panel-context-" + level}
+      data-tooltip={tip}
+      aria-label={tip}
+      role="img"
+      tabIndex={0}
+    >
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <circle
+          className="mdocs-agent-panel-context-track"
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={stroke}
+        />
+        <circle
+          className="mdocs-agent-panel-context-value"
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </svg>
+    </span>
+  );
+}
+
 /**
- * 上手助手浮层：入口旁弹出；接 /api/agent/chat SSE。
+ * mdocs 智能 AI 浮层：入口旁弹出；接 /api/agent/chat SSE。
  * 「+」新建 session；历史图标列出并切换 lastOpened。
  */
 export function AgentChatPanel(props: {
@@ -73,6 +126,7 @@ export function AgentChatPanel(props: {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [contextUsage, setContextUsage] = useState<AgentContextUsage | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -114,6 +168,15 @@ export function AgentChatPanel(props: {
     }
   }
 
+  async function refreshContextUsage() {
+    try {
+      const usage = await fetchAgentContextUsageApi();
+      setContextUsage(usage);
+    } catch {
+      /* ignore */
+    }
+  }
+
   useEffect(() => {
     if (!open) {
       setHistoryOpen(false);
@@ -137,6 +200,7 @@ export function AgentChatPanel(props: {
         }
       }
     })();
+    void refreshContextUsage();
     return () => {
       cancelled = true;
     };
@@ -243,6 +307,12 @@ export function AgentChatPanel(props: {
                   : m,
               ),
             );
+          } else if (event.type === "context_usage") {
+            setContextUsage({
+              percent: event.percent,
+              used: event.used,
+              limit: event.limit,
+            });
           } else if (event.type === "error") {
             setStreamError(event.message);
           }
@@ -269,6 +339,7 @@ export function AgentChatPanel(props: {
       setMessages([]);
       setInput("");
       stickToBottomRef.current = true;
+      void refreshContextUsage();
     } catch (err) {
       setStreamError(err instanceof Error ? err.message : String(err));
     }
@@ -290,6 +361,7 @@ export function AgentChatPanel(props: {
       setHistoryOpen(false);
       stickToBottomRef.current = true;
       requestAnimationFrame(() => scrollToBottomIfStuck());
+      void refreshContextUsage();
     } catch (err) {
       setStreamError(err instanceof Error ? err.message : String(err));
     }
@@ -313,11 +385,11 @@ export function AgentChatPanel(props: {
       : null);
 
   return (
-    <div ref={panelRef} className="mdocs-agent-panel" role="dialog" aria-label="mdocs 上手助手">
+    <div ref={panelRef} className="mdocs-agent-panel" role="dialog" aria-label="mdocs 智能 AI">
       <header className="mdocs-agent-panel-header">
         <div className="mdocs-agent-panel-title">
           <img src={deepseekLogoUrl} alt="" className="mdocs-agent-panel-title-logo" />
-          <span>mdocs 上手助手</span>
+          <span>mdocs 智能 AI</span>
         </div>
         <div className="mdocs-agent-panel-actions">
           <button
@@ -402,7 +474,7 @@ export function AgentChatPanel(props: {
           >
             {messages.length === 0 ? (
               <>
-                <p className="mdocs-agent-panel-hello">你好，我是 mdocs 上手助手</p>
+                <p className="mdocs-agent-panel-hello">你好，我是 mdocs 智能 AI</p>
                 <p className="mdocs-agent-panel-desc">
                   可以问我域、草稿、发布、权限等怎么用。本期不协助写作。
                 </p>
@@ -529,6 +601,13 @@ export function AgentChatPanel(props: {
                 }
               }}
             />
+            {contextUsage ? (
+              <ContextUsageRing
+                percent={contextUsage.percent}
+                used={contextUsage.used}
+                limit={contextUsage.limit}
+              />
+            ) : null}
             <button
               type="button"
               className="mdocs-agent-panel-send"

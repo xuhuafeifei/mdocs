@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import {
   getAgentStatus,
+  getAgentContextUsageForApi,
   runOnboardingChat,
   type AgentStreamEvent,
 } from "../agent/Agent/run.js";
@@ -8,6 +9,7 @@ import { getAgentSessionForApi, createAgentSessionForApi, listAgentSessionsForAp
 import {
   getVisitorAgentConfig,
   isAgentModelId,
+  normalizeContextWindow,
   toPublicAgentConfig,
   upsertVisitorAgentConfig,
 } from "../agent/Config/config.js";
@@ -72,6 +74,10 @@ export function buildAgentRouter(): Router {
       "apiKey" in (req.body ?? {}) && typeof req.body.apiKey === "string"
         ? req.body.apiKey
         : undefined;
+    const contextWindowRaw =
+      "contextWindow" in (req.body ?? {}) ? req.body.contextWindow : undefined;
+    const contextWindow =
+      contextWindowRaw === undefined ? undefined : normalizeContextWindow(contextWindowRaw);
 
     try {
       const saved = upsertVisitorAgentConfig({
@@ -80,6 +86,7 @@ export function buildAgentRouter(): Router {
         modelId,
         name,
         apiKey,
+        contextWindow,
       });
       res.json({ data: toPublicAgentConfig(saved) });
     } catch (err) {
@@ -101,6 +108,15 @@ export function buildAgentRouter(): Router {
     }
 
     const data = await getAgentSessionForApi(req.visitor.visitor_id);
+    res.json({ data });
+  });
+
+  router.get("/context-usage", async (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const data = await getAgentContextUsageForApi(req.visitor.visitor_id);
     res.json({ data });
   });
 

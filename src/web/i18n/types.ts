@@ -360,6 +360,8 @@ export type TranslationKey =
   | "agentConfigName"
   | "agentConfigNameDefault"
   | "agentConfigModel"
+  | "agentConfigContextWindow"
+  | "agentConfigContextWindowDesc"
   | "agentConfigApiKey"
   | "agentConfigApiKeyPlaceholder"
   | "agentConfigApiKeyConfigured"

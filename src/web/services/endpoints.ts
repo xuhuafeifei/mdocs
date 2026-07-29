@@ -589,6 +589,7 @@ export interface AgentModelConfigPublic {
   modelId: AgentModelId;
   hasApiKey: boolean;
   apiKeyMasked: string | null;
+  contextWindow: number;
 }
 
 export function fetchAgentConfigApi(): Promise<AgentModelConfigPublic | null> {
@@ -599,6 +600,7 @@ export function saveAgentConfigApi(input: {
   modelId: AgentModelId;
   name?: string;
   apiKey?: string;
+  contextWindow?: number;
 }): Promise<AgentModelConfigPublic> {
   return api<AgentModelConfigPublic>("/api/agent/config", {
     method: "PUT",
@@ -618,6 +620,7 @@ export type AgentStreamEvent =
   | { type: "text_delta"; text: string }
   | { type: "sources"; items: AgentSourceRef[] }
   | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
+  | { type: "context_usage"; percent: number; used: number; limit: number }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -633,8 +636,18 @@ export interface AgentDocumentTableRow {
   summary: string;
 }
 
+export interface AgentContextUsage {
+  percent: number;
+  used: number;
+  limit: number;
+}
+
 export function fetchAgentStatusApi(): Promise<AgentStatus> {
   return api<AgentStatus>("/api/agent/status");
+}
+
+export function fetchAgentContextUsageApi(): Promise<AgentContextUsage> {
+  return api<AgentContextUsage>("/api/agent/context-usage");
 }
 
 export interface AgentSessionMessage {

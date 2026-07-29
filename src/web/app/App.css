@@ -385,6 +385,69 @@
   flex-shrink: 0;
 }
 
+.mdocs-agent-panel-context {
+  position: absolute;
+  right: 50px;
+  bottom: 10px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  cursor: help;
+  z-index: 1;
+  outline: none;
+}
+
+.mdocs-agent-panel-context:hover,
+.mdocs-agent-panel-context:focus-visible {
+  background: #f2f4f7;
+}
+
+.mdocs-agent-panel-context-track {
+  stroke: #d0d5dd;
+}
+
+.mdocs-agent-panel-context-value {
+  stroke: #3370ff;
+  transition: stroke-dashoffset 0.25s ease;
+}
+
+.mdocs-agent-panel-context-warn .mdocs-agent-panel-context-value {
+  stroke: #d97706;
+}
+
+.mdocs-agent-panel-context-danger .mdocs-agent-panel-context-value {
+  stroke: #e11d48;
+}
+
+.mdocs-agent-panel-context::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #1f2329;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
+}
+
+.mdocs-agent-panel-context:hover::after,
+.mdocs-agent-panel-context:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .mdocs-agent-panel-actions {
   display: inline-flex;
   align-items: center;
@@ -817,7 +880,7 @@
   resize: none;
   border: none;
   border-radius: 14px;
-  padding: 14px 48px 14px 14px;
+  padding: 14px 92px 14px 14px;
   font: inherit;
   font-size: 14px;
   line-height: 1.5;
