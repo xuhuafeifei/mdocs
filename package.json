@@ -1,6 +1,6 @@
 {
   "name": "@fgbg/mdocs",
-  "version": "0.8.13",
+  "version": "0.8.14",
   "description": "A Markdown knowledge base for small teams",
   "license": "MIT",
   "type": "module",
@@ -17,7 +17,7 @@
   "scripts": {
     "skills:build": "node ./scripts/build-agent-skills.mjs",
     "predev": "pnpm skills:build",
-    "prepack": "pnpm skills:build",
+    "prepack": "pnpm skills:build && pnpm build",
     "dev:server": "tsx watch src/server/main.ts",
     "dev:web": "vite",
     "dev:web:fresh": "vite --force",
