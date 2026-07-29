@@ -14,6 +14,7 @@ import {
   listDocumentsByPathPrefix,
   updateDocumentContent,
   updateDocumentHeadCommit,
+  updateDocumentLocation,
   type DocumentRow,
 } from "../db/repositories/document.repo.js";
 import { insertCommit, insertCommitParent } from "../db/repositories/commit.repo.js";
@@ -45,6 +46,7 @@ import {
   deleteDocumentFile,
   readCommitBlob,
   readDocument,
+  renameDocumentFile,
   sha256,
   writeCommitBlob,
   writeDocument,
@@ -543,6 +545,126 @@ export function removeDocument(params: {
   deleteDocumentFile(row.domain_id, row.relative_path);
   // 从全文索引中移除
   removeIndex(row.document_id);
+}
+
+// ============================================================
+//  移动文档（同域；改 parent_id + relative_path + 磁盘）
+// ============================================================
+
+function basenameRelativePath(relativePath: string): string {
+  const i = relativePath.lastIndexOf("/");
+  return i === -1 ? relativePath : relativePath.slice(i + 1);
+}
+
+export function moveDocument(params: {
+  actorVisitorId: string;
+  documentId: string;
+  parentId: string | null;
+}): DocumentDetail {
+  const db = getDb();
+  const row = findDocumentById(db, params.documentId);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+  if (row.owner_visitor_id !== params.actorVisitorId) {
+    throw new DocumentError("FORBIDDEN", "仅创建者可移动此文件", 403);
+  }
+  if (row.file_type !== "md") {
+    throw new DocumentError("INVALID_TYPE", "只能移动文档，不能移动文件夹", 400);
+  }
+
+  const currentParent = row.parent_id ?? null;
+  const targetParent = params.parentId;
+  if (currentParent === targetParent) {
+    return getDocument(params.documentId, params.actorVisitorId);
+  }
+
+  let newParentId: string | null;
+  let newRelativePath: string;
+  const baseName = basenameRelativePath(row.relative_path);
+
+  if (targetParent == null) {
+    newParentId = null;
+    newRelativePath = baseName;
+  } else {
+    const parentDoc = findDocumentById(db, targetParent);
+    if (!parentDoc || parentDoc.file_type !== "dir") {
+      throw new DocumentError(
+        "INVALID_PARENT",
+        "无效的父节点或父节点不是文件夹",
+        400,
+      );
+    }
+    if (parentDoc.domain_id !== row.domain_id) {
+      throw new DocumentError("CROSS_DOMAIN", "不能跨域移动文档", 400);
+    }
+    newParentId = targetParent;
+    const parentPath = parentDoc.relative_path.endsWith("/")
+      ? parentDoc.relative_path.slice(0, -1)
+      : parentDoc.relative_path;
+    newRelativePath = `${parentPath}/${baseName}`;
+  }
+
+  const existing = findDocumentByPath(db, row.domain_id, newRelativePath);
+  if (existing && existing.document_id !== row.document_id) {
+    throw new DocumentError("DOC_EXISTS", "目标位置已存在同名文档", 409);
+  }
+
+  const now = new Date().toISOString();
+  const oldPath = row.relative_path;
+  const pathChanged = oldPath !== newRelativePath;
+
+  if (pathChanged) {
+    try {
+      renameDocumentFile(row.domain_id, oldPath, newRelativePath);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new DocumentError("STORAGE_ERROR", msg, 500);
+    }
+  }
+
+  try {
+    const tx = db.transaction(() => {
+      updateDocumentLocation(db, {
+        documentId: row.document_id,
+        parentId: newParentId,
+        relativePath: newRelativePath,
+        updatedBy: params.actorVisitorId,
+        updatedAt: now,
+      });
+      insertAuditLog(db, {
+        actorVisitorId: params.actorVisitorId,
+        action: "document.move",
+        targetType: "document",
+        targetId: row.document_id,
+        metadata: {
+          fromRelativePath: oldPath,
+          toRelativePath: newRelativePath,
+          parentId: newParentId,
+        },
+        createdAt: now,
+      });
+    });
+    tx();
+  } catch (err) {
+    if (pathChanged) {
+      try {
+        renameDocumentFile(row.domain_id, newRelativePath, oldPath);
+      } catch {
+        // 回滚失败留给运维；主错误仍抛出
+      }
+    }
+    throw err;
+  }
+
+  markDirty(row.document_id);
+  process.nextTick(() => {
+    try {
+      rebuildDocument(row.document_id);
+    } catch {
+      // 定时器会再扫 dirty
+    }
+  });
+
+  return getDocument(params.documentId, params.actorVisitorId);
 }
 
 // ============================================================

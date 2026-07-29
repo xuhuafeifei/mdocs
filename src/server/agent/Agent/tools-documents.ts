@@ -3,10 +3,11 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { TreeNode } from "../../../shared/types/tree.js";
 import { getDb } from "../../db/connection.js";
 import { listDocumentsByVisitor } from "../../db/repositories/document.repo.js";
-import { createDocument } from "../../documents/document.service.js";
+import { createDocument, moveDocument } from "../../documents/document.service.js";
 import { buildDocumentTree } from "../../documents/tree.service.js";
 import { createFolder } from "../../routes/folders.routes.js";
 import { searchDocuments } from "../../search/search.service.js";
+import { DocumentError } from "../../access/access-control.js";
 
 function asToolResult(payload: unknown) {
   return {
@@ -175,6 +176,46 @@ export function createDocumentTools(visitorId: string): AgentTool[] {
           description: description?.trim() || undefined,
         });
         return asToolResult(result);
+      },
+    },
+    {
+      name: "move_document",
+      label: "移动文档",
+      description:
+        "将文档移到同域另一文件夹，或移到域根。仅文档创建者可成功。parentId 为文件夹 documentId；不传或传 null 表示移到域根。目标路径已有同名文件会失败。不移动文件夹。",
+      parameters: Type.Object({
+        documentId: Type.String({ description: "要移动的文档 documentId" }),
+        parentId: Type.Optional(
+          Type.String({ description: "目标文件夹 documentId；不传则移到域根" }),
+        ),
+      }),
+      execute: async (_id, params) => {
+        const { documentId: rawId, parentId: rawParent } = params as {
+          documentId: string;
+          parentId?: string;
+        };
+        const documentId = rawId?.trim();
+        if (!documentId) throw new Error("documentId is required");
+        const parentId = rawParent?.trim() ? rawParent.trim() : null;
+        try {
+          const doc = moveDocument({
+            actorVisitorId: visitorId,
+            documentId,
+            parentId,
+          });
+          return asToolResult({
+            documentId: doc.documentId,
+            domainId: doc.domainId,
+            parentId: doc.parentId,
+            relativePath: doc.relativePath,
+            displayName: doc.displayName,
+          });
+        } catch (err) {
+          if (err instanceof DocumentError) {
+            throw new Error(`${err.code}: ${err.message}`);
+          }
+          throw err;
+        }
       },
     },
   ];

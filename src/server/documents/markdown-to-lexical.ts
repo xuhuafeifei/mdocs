@@ -315,5 +315,7 @@ export function markdownToLexicalJson(markdown: string): string {
   const children = convertBlockChildren(
     (ast as unknown as Record<string, unknown>).children as unknown[],
   );
-  return JSON.stringify({ root: lexicalSerializedRoot(children) });
+  // Lexical 禁止 root.children 为空；空 markdown 落成一个空段落
+  const blocks = children.length > 0 ? children : [paragraphNode([])];
+  return JSON.stringify({ root: lexicalSerializedRoot(blocks) });
 }

@@ -210,6 +210,30 @@ export function updateDocumentHeadCommit(
   ).run(input.headCommitId, input.updatedBy, input.updatedAt, input.documentId);
 }
 
+/** 更新文档在树中的位置与磁盘相对路径（移动文档时使用）。 */
+export function updateDocumentLocation(
+  db: Database.Database,
+  input: {
+    documentId: string;
+    parentId: string | null;
+    relativePath: string;
+    updatedBy: string;
+    updatedAt: string;
+  },
+): void {
+  db.prepare(
+    `UPDATE documents
+     SET parent_id = ?, relative_path = ?, updated_by = ?, updated_at = ?
+     WHERE document_id = ?`,
+  ).run(
+    input.parentId,
+    input.relativePath,
+    input.updatedBy,
+    input.updatedAt,
+    input.documentId,
+  );
+}
+
 /**
  * 更新文档内容与元数据。
  *

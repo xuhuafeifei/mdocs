@@ -302,6 +302,17 @@ export function deleteDocumentApi(documentId: string): Promise<void> {
   });
 }
 
+/** 同域移动文档到目标文件夹；parentId=null 表示域根。仅 owner 成功。 */
+export function moveDocumentApi(
+  documentId: string,
+  parentId: string | null,
+): Promise<DocumentDetail> {
+  return api<DocumentDetail>(`/api/documents/${encodeURIComponent(documentId)}/move`, {
+    method: "POST",
+    body: JSON.stringify({ parentId }),
+  });
+}
+
 /**
  * 获取文档的协作者邀请列表。
  */
@@ -621,6 +632,7 @@ export type AgentStreamEvent =
   | { type: "sources"; items: AgentSourceRef[] }
   | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
   | { type: "context_usage"; percent: number; used: number; limit: number }
+  | { type: "tree_changed"; reason: string }
   | { type: "done" }
   | { type: "error"; message: string };
 

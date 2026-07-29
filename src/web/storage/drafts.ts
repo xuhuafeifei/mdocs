@@ -24,7 +24,6 @@ export interface DraftRecord {
   displayName: string;
   updatedAt: number;
   published: boolean;
-  relativePath?: string;
   permission?: number;
   ownerVisitorId?: string;
   domainId?: string;
@@ -106,7 +105,6 @@ export async function upsertContentDraft(params: {
   localBaseCommitIdAtEditStart?: string | null;
   /** 首次落盘时写入的文档快照 meta（后续自动保存不覆盖） */
   snapshotMeta?: {
-    relativePath: string;
     permission: number;
     ownerVisitorId: string;
     domainId: string;
@@ -125,11 +123,6 @@ export async function upsertContentDraft(params: {
   } else {
     const head = params.localBaseCommitIdAtEditStart?.trim();
     if (head) record.localBaseCommitId = head;
-  }
-  if (existing?.relativePath) {
-    record.relativePath = existing.relativePath;
-  } else if (params.snapshotMeta) {
-    record.relativePath = params.snapshotMeta.relativePath;
   }
   if (existing?.permission != null) {
     record.permission = existing.permission;
@@ -168,7 +161,6 @@ export async function rebuildDraftAfterMerge(params: {
   content: string;
   displayName: string;
   headCommitId: string;
-  relativePath: string;
   permission: number;
   ownerVisitorId: string;
   domainId: string;
@@ -180,7 +172,6 @@ export async function rebuildDraftAfterMerge(params: {
     updatedAt: Date.now(),
     published: false,
     localBaseCommitId: params.headCommitId,
-    relativePath: params.relativePath,
     permission: params.permission,
     ownerVisitorId: params.ownerVisitorId,
     domainId: params.domainId,
@@ -196,7 +187,6 @@ function sanitizeDraft(doc: DraftRecord): DraftRecord {
     updatedAt: doc.updatedAt,
     published: doc.published,
   };
-  if (doc.relativePath) sanitized.relativePath = doc.relativePath;
   if (doc.permission != null) sanitized.permission = doc.permission;
   if (doc.ownerVisitorId) sanitized.ownerVisitorId = doc.ownerVisitorId;
   if (doc.domainId) sanitized.domainId = doc.domainId;

@@ -22,7 +22,6 @@ interface UseAutoSaveOptions {
   localBaseCommitIdAtEditStart?: string | null;
   /** 首次创建草稿时一并落盘的文档 meta 快照 */
   snapshotMeta?: {
-    relativePath: string;
     permission: number;
     ownerVisitorId: string;
     domainId: string;

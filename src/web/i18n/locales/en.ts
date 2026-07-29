@@ -361,7 +361,7 @@ export const en: Record<TranslationKey, string> = {
   myDocumentsColCreated: "Created",
   myDocumentsNoMatch: "No matching documents",
   agentConfig: "AI",
-  agentConfigDesc: "Configure DeepSeek for mdocs 智能 AI. Only you can use this key.",
+  agentConfigDesc: "Configure DeepSeek for mdocs 智能助手. Only you can use this key.",
   agentConfigName: "Config name",
   agentConfigNameDefault: "Default: {{name}}'s ds config",
   agentConfigModel: "Model",
@@ -373,5 +373,7 @@ export const en: Record<TranslationKey, string> = {
   agentConfigId: "Config ID",
   agentConfigShowKey: "Show API Key",
   agentConfigHideKey: "Hide API Key",
+  agentFabOpen: "Open mdocs 智能助手",
+  agentFabReset: "Reset position",
   logout: "Sign out",
 };

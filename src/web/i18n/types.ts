@@ -368,5 +368,7 @@ export type TranslationKey =
   | "agentConfigId"
   | "agentConfigShowKey"
   | "agentConfigHideKey"
+  | "agentFabOpen"
+  | "agentFabReset"
   // Logout
   | "logout";

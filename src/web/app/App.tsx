@@ -33,6 +33,7 @@ import {
   fetchMe,
   fetchTreeApi,
   getDocumentApi,
+  moveDocumentApi,
   registerVisitorApi,
   updateDocumentApi,
   fetchBookmarksApi,
@@ -47,6 +48,7 @@ import { DocumentEditor } from "./DocumentEditor";
 import { DomainSelect } from "./DomainSelect";
 import { SettingsPage } from "./SettingsPage";
 import { AgentChatPanel } from "./AgentChatPanel";
+import { AgentFab, agentPanelAnchorStyle, useAgentFabPosition } from "./AgentFab";
 import { MessageDialog } from "./MessageDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
@@ -73,7 +75,6 @@ import {
 import { useAutoPublish } from "./hooks/useAutoPublish";
 import { useDocumentVersion } from "./hooks/useDocumentVersion";
 import mdocsLogo from "../assets/mdocs-logo.svg";
-import deepseekLogoUrl from "../assets/deepseek.svg";
 import "./App.css";
 import "./merge.css";
 import "./domain.css";
@@ -282,6 +283,7 @@ export function App() {
 
   // ---- 上手助手浮层 ----
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
+  const [agentFabPos, setAgentFabPos] = useAgentFabPosition();
 
   // ---- 导航前保存草稿的引用 ----
   // DocumentEditor 会通过这个 ref 暴露 saveDraft 方法
@@ -628,7 +630,6 @@ export function App() {
         updatedAt: Date.now(),
         published: false,
         localBaseCommitId,
-        relativePath: activeDocMeta.relativePath,
         permission: activeDocMeta.permission,
         ownerVisitorId: activeDocMeta.ownerVisitorId,
         domainId: activeDocMeta.domainId,
@@ -823,6 +824,30 @@ export function App() {
   }
 
   /**
+   * 拖拽移动文档：仅 API 成功后刷新树；打开中则更新 meta。非 owner 等错误走全局弹窗（409 需本地提示）。
+   */
+  async function handleMoveDocument(
+    documentId: string,
+    parentId: string | null,
+  ): Promise<void> {
+    try {
+      const doc = await moveDocumentApi(documentId, parentId);
+      await refreshTree(doc.domainId);
+      if (activeDocMeta?.documentId === documentId) {
+        setActiveDocMeta(documentDetailToMeta(doc));
+        setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
+      }
+    } catch (err) {
+      if (err instanceof ApiRequestError) {
+        // 409 被全局 API 错误监听跳过；其它错误全局已弹，这里补 409
+        if (err.status === 409) setAlertMessage(err.message);
+      } else {
+        setAlertMessage(translateError(t, err));
+      }
+    }
+  }
+
+  /**
    * 执行删除（用户在确认弹窗中点击「确定」时调用）。
    */
   async function executeDelete(): Promise<void> {
@@ -957,27 +982,26 @@ export function App() {
         </div>
       )}
 
-      {/* Agent 固定悬浮入口 + 附近对话框壳 */}
+      {/* Agent 可拖动悬浮入口 + 附近对话框壳 */}
       {!isDemoMode() && (
         <>
-          <button
-            type="button"
-            className={"mdocs-agent-fab" + (agentPanelOpen ? " open" : "")}
-            aria-label="打开 mdocs 智能 AI"
-            aria-expanded={agentPanelOpen}
-            onClick={() => setAgentPanelOpen((v) => !v)}
-          >
-            <img src={deepseekLogoUrl} alt="" />
-          </button>
+          <AgentFab
+            open={agentPanelOpen}
+            onToggle={() => setAgentPanelOpen((v) => !v)}
+            position={agentFabPos}
+            onPositionChange={setAgentFabPos}
+          />
           <AgentChatPanel
             open={agentPanelOpen}
             onClose={() => setAgentPanelOpen(false)}
             visitorName={visitor?.visitorName}
+            anchorStyle={agentPanelAnchorStyle(agentFabPos)}
             onOpenDocument={(docId) => {
               setView("docs");
               void guardNavigate(() => navigate(`/doc/${docId}`));
               setAgentPanelOpen(false);
             }}
+            onTreeChanged={() => void refreshTree()}
           />
         </>
       )}
@@ -1053,6 +1077,7 @@ export function App() {
               }}
               // 右键菜单回调
               onContextMenu={setMenu}
+              onMoveDocument={handleMoveDocument}
               // 点击空白处取消选中，返回首页
               onDeselect={() => {
                 guardNavigate(() => {

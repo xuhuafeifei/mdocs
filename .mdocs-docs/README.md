@@ -37,6 +37,7 @@
 | 需求夹 | 说明 |
 |--------|------|
 | `onboarding-ai` | **已同意**：上手 Agent — [需求分析](./requirements/onboarding-ai/需求分析.md) · [设计契约](./requirements/onboarding-ai/设计契约.md) · [后端设计](./requirements/onboarding-ai/后端设计.md) |
+| `document-move` | **已同意**：同域拖拽移动文档 — [需求分析](./requirements/document-move/需求分析.md) · [设计契约](./requirements/document-move/设计契约.md) · [代码索引](./requirements/document-move/代码索引.md) |
 | `bookmarks` | 文档收藏 |
 | `auto-save-draft` | 自动保存草稿 |
 | `recovery-code` | 恢复码 |

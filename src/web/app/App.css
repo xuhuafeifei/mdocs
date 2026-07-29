@@ -232,6 +232,27 @@
   border-color: var(--mdocs-border);
 }
 
+.mdocs-tree-dragging {
+  /* 不用 opacity：结束后偶发残留会导致选中行发灰 */
+  color: var(--mdocs-text-muted);
+}
+
+.mdocs-tree-row.active.mdocs-tree-dragging {
+  color: var(--mdocs-text);
+}
+
+.mdocs-tree-drop-target {
+  background: var(--mdocs-accent-soft);
+  border-color: var(--mdocs-accent);
+  outline: 1px dashed var(--mdocs-accent);
+}
+
+.mdocs-sidebar-list.mdocs-tree-drop-root {
+  outline: 1px dashed var(--mdocs-accent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--mdocs-accent-soft) 40%, transparent);
+}
+
 .mdocs-tree-caret {
   width: 20px;
   height: 20px;
@@ -310,12 +331,19 @@
   color: var(--mdocs-text);
 }
 
-/* === Agent 固定悬浮入口 === */
-.mdocs-agent-fab {
+/* === Agent 可拖动悬浮入口 === */
+.mdocs-agent-fab-wrap {
   position: fixed;
-  left: 12px;
-  bottom: 64px;
   z-index: 200;
+  width: 36px;
+  height: 36px;
+}
+
+.mdocs-agent-fab-wrap.dragging {
+  z-index: 220;
+}
+
+.mdocs-agent-fab {
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -325,8 +353,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: grab;
   padding: 0;
+  touch-action: none;
+  user-select: none;
+}
+
+.mdocs-agent-fab.dragging {
+  cursor: grabbing;
+  border-color: var(--mdocs-accent, #4d6bfe);
+  box-shadow: 0 4px 16px rgba(77, 107, 254, 0.3);
 }
 
 .mdocs-agent-fab:hover,
@@ -339,13 +375,34 @@
   width: 20px;
   height: 20px;
   display: block;
+  pointer-events: none;
 }
 
-/* === Agent 对话框（贴入口右侧上方） === */
+.mdocs-agent-fab-reset {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  background: var(--mdocs-surface, #fff);
+  color: var(--mdocs-text-muted, #666);
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+}
+
+.mdocs-agent-fab-reset:hover {
+  color: var(--mdocs-text);
+  border-color: var(--mdocs-accent, #4d6bfe);
+}
+
+/* === Agent 对话框（贴入口旁，具体 left/bottom 由 JS 写入） === */
 .mdocs-agent-panel {
   position: fixed;
-  left: 56px;
-  bottom: 56px;
   z-index: 201;
   width: min(480px, calc(100vw - 72px));
   height: min(680px, calc(100vh - 80px));

@@ -342,6 +342,77 @@ export async function mockUpdateDocument(
 }
 
 /**
+ * 同域移动文档（Demo）
+ */
+export async function mockMoveDocument(
+  documentId: string,
+  parentId: string | null,
+): Promise<DocumentDetail> {
+  const existing = await mockGetDocument(documentId);
+  if (existing.ownerVisitorId !== DEMO_VISITOR_ID) {
+    throw new ApiRequestError(403, "FORBIDDEN", "仅创建者可移动此文档");
+  }
+  if (existing.fileType !== "md") {
+    throw new ApiRequestError(400, "INVALID_TYPE", "只能移动文档，不能移动文件夹");
+  }
+
+  const currentParent = existing.parentId ?? null;
+  if (currentParent === parentId) return existing;
+
+  const slash = existing.relativePath.lastIndexOf("/");
+  const baseName = slash === -1 ? existing.relativePath : existing.relativePath.slice(slash + 1);
+
+  let newParentId: string | null;
+  let newRelativePath: string;
+
+  if (parentId == null) {
+    newParentId = null;
+    newRelativePath = baseName;
+  } else {
+    const synPath = syntheticFolderPathFromId(parentId);
+    let parent: DocumentDetail | undefined;
+    if (synPath != null) {
+      throw new ApiRequestError(400, "INVALID_PARENT", "无效的父节点或父节点不是文件夹");
+    }
+    parent = await mockGetDocument(parentId);
+    if (parent.fileType !== "dir") {
+      throw new ApiRequestError(400, "INVALID_PARENT", "无效的父节点或父节点不是文件夹");
+    }
+    if (parent.domainId !== existing.domainId) {
+      throw new ApiRequestError(400, "CROSS_DOMAIN", "不能跨域移动文档");
+    }
+    newParentId = parentId;
+    const parentPath = parent.relativePath.endsWith("/")
+      ? parent.relativePath.slice(0, -1)
+      : parent.relativePath;
+    newRelativePath = `${parentPath}/${baseName}`;
+  }
+
+  const clash = await findDocumentByPath(existing.domainId, newRelativePath);
+  if (clash && clash.documentId !== documentId) {
+    throw new ApiRequestError(409, "DOC_EXISTS", "目标位置已存在同名文档");
+  }
+
+  const updated: DocumentDetail = {
+    ...existing,
+    parentId: newParentId,
+    relativePath: newRelativePath,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const db = await getDB();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_DOCUMENTS, "readwrite");
+    const store = tx.objectStore(STORE_DOCUMENTS);
+    const req = store.put(updated);
+    req.onsuccess = resolve;
+    req.onerror = () => reject(req.error);
+  });
+
+  return updated;
+}
+
+/**
  * 删除文档
  */
 export async function mockDeleteDocument(documentId: string): Promise<void> {

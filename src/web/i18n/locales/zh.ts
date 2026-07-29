@@ -358,7 +358,7 @@ export const zh: Record<TranslationKey, string> = {
   myDocumentsColCreated: "创建时间",
   myDocumentsNoMatch: "暂无匹配的文章",
   agentConfig: "AI",
-  agentConfigDesc: "配置 DeepSeek 用于 mdocs 智能 AI。仅本人可用，不会分享给其他访客。",
+  agentConfigDesc: "配置 DeepSeek 用于 mdocs 智能助手。仅本人可用，不会分享给其他访客。",
   agentConfigName: "配置名称",
   agentConfigNameDefault: "不填则：{{name}}的 ds 配置",
   agentConfigModel: "模型",
@@ -370,5 +370,7 @@ export const zh: Record<TranslationKey, string> = {
   agentConfigId: "配置 ID",
   agentConfigShowKey: "显示 API Key",
   agentConfigHideKey: "隐藏 API Key",
+  agentFabOpen: "打开 mdocs 智能助手",
+  agentFabReset: "重置位置",
   logout: "退出登录",
 };

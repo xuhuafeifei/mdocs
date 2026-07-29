@@ -32,6 +32,8 @@ export type AgentStreamEvent =
   | { type: "sources"; items: ManualSourceRef[] }
   | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
   | { type: "context_usage"; percent: number; used: number; limit: number }
+  /** 账号工具改了文档树结构，前端应 re-fetch tree */
+  | { type: "tree_changed"; reason: string }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -270,6 +272,15 @@ function bindAgentEvents(opts: {
     }
 
     if (event.type === "tool_execution_end" && !event.isError) {
+      const TREE_MUTATING_TOOLS = new Set([
+        "create_document",
+        "create_folder",
+        "move_document",
+      ]);
+      if (TREE_MUTATING_TOOLS.has(event.toolName)) {
+        onEvent({ type: "tree_changed", reason: event.toolName });
+      }
+
       if (event.toolName === "search_documents") {
         const results =
           (

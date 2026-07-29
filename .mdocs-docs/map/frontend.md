@@ -10,8 +10,9 @@
   |------|------|
   | `src/web/main.tsx` | 挂载 |
   | `src/web/app/App.tsx` | 主壳 / `openDocument` |
-  | `src/web/app/DocumentTree.tsx` | 文档树 |
+  | `src/web/app/DocumentTree.tsx` | 文档树（拟增 DnD move） |
   | `src/web/app/DocumentEditor.tsx` | 编辑器容器 |
+- **需求**：同域拖拽移动见 [`../requirements/document-move/`](../requirements/document-move/)（已同意）
 
 ### API 客户端
 

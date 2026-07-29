@@ -14,6 +14,7 @@ import {
   mockGetDocument,
   mockCreateDocument,
   mockUpdateDocument,
+  mockMoveDocument,
   mockDeleteDocument,
   mockRecoverVisitor,
   mockRegisterVisitor,
@@ -223,6 +224,12 @@ async function demoApi<T>(
   if (path.match(/^\/api\/documents\/[^/]+$/) && method === "PUT") {
     const documentId = path.split("/").pop()!;
     return mockUpdateDocument(documentId, body) as unknown as T;
+  }
+
+  // 移动文档
+  if (path.match(/^\/api\/documents\/[^/]+\/move$/) && method === "POST") {
+    const documentId = path.split("/")[3]!;
+    return mockMoveDocument(documentId, body?.parentId ?? null) as unknown as T;
   }
 
   // 递归删除目录（与正式环境路径一致）

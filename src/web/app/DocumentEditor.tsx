@@ -75,6 +75,26 @@ function safeLexicalJsonString(editor: IEditor): string | null {
   }
 }
 
+/** Lexical 禁止 root.children 为空；空文档至少保留一个空段落 */
+const EMPTY_PARAGRAPH_LEXICAL =
+  '{"root":{"direction":"ltr","format":"","indent":0,"version":1,"type":"root","children":[{"direction":"ltr","format":"","indent":0,"version":1,"textFormat":0,"textStyle":"","children":[],"type":"paragraph"}]}}';
+
+function ensureNonEmptyEditorContent(content: string, contentType: "json" | "markdown"): string {
+  if (!content) {
+    return contentType === "json" ? EMPTY_PARAGRAPH_LEXICAL : content;
+  }
+  if (contentType !== "json") return content;
+  try {
+    const parsed = JSON.parse(content) as { root?: { children?: unknown[] } };
+    if (parsed?.root && Array.isArray(parsed.root.children) && parsed.root.children.length === 0) {
+      return EMPTY_PARAGRAPH_LEXICAL;
+    }
+  } catch {
+    /* 非 JSON，原样交给编辑器 */
+  }
+  return content;
+}
+
 /**
  * 大纲侧边栏：根据大纲可见性动态控制宽度，带动画过渡效果。
  */
@@ -224,27 +244,26 @@ export function DocumentEditor(props: DocumentEditorProps) {
     return () => cancelAnimationFrame(id);
   }, [props.meta.documentId]);
 
-  const contentRef = useRef(props.initialContent);
-  useEffect(() => {
-    contentRef.current = props.initialContent;
-  }, [props.initialContent, props.contentRevision]);
-
   /**
    * 检测传入内容是 Lexical JSON 还是原始 Markdown。
    * 草稿现在存储 JSON；从 API 获取的文档包含 Markdown。
    */
   const contentType = useMemo<"json" | "markdown">(() => {
-    // 如果内容为空，按 JSON 处理（编辑器会创建空文档）
     if (!props.initialContent) return "json";
     try {
       const p = JSON.parse(props.initialContent);
-      // 如果有 root.children，说明是 Lexical JSON 格式
-      return p?.root?.children ? "json" : "markdown";
+      // 有 root 且 children 为数组即视为 Lexical（含空 children[]）
+      return Array.isArray(p?.root?.children) ? "json" : "markdown";
     } catch {
-      // 解析失败说明是原始 Markdown 字符串
       return "markdown";
     }
   }, [props.initialContent, props.contentRevision]);
+
+  /** 喂给编辑器的正文：空 root 先补成空段落，避免 Lexical 直接白屏 */
+  const editorSafeContent = useMemo(
+    () => ensureNonEmptyEditorContent(props.initialContent || "", contentType),
+    [props.initialContent, contentType, props.contentRevision],
+  );
 
   /**
    * 自动保存仅持久化正文与 displayName；localBaseCommitId 仅在首次生成草稿时写入。
@@ -261,7 +280,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
     enabled: props.canEdit,
     localBaseCommitIdAtEditStart: props.meta.headCommitId ?? null,
     snapshotMeta: {
-      relativePath: props.meta.relativePath,
       permission: props.meta.permission,
       ownerVisitorId: props.meta.ownerVisitorId,
       domainId: props.meta.domainId,
@@ -279,11 +297,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
   useEffect(() => {
     if (!editor) return;
     try {
-      editor.setDocument(contentType, props.initialContent || "");
+      editor.setDocument(contentType, editorSafeContent);
     } catch {
       /* 编辑器暂不可写 */
     }
-  }, [editor, props.meta.documentId, props.contentRevision, props.initialContent, contentType]);
+  }, [editor, props.meta.documentId, props.contentRevision, editorSafeContent, contentType]);
 
   /**
    * 同步编辑器语言与 mdocs 全局语言设置。
@@ -384,7 +402,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     setEditor(e);
     // Bypass buggy content prop — re-set content programmatically via editor API。
     // 双微任务 + 失败后 rAF 重试一次：等 DataSource 注册完成后再 setDocument。
-    const initContent = contentRef.current;
+    const initContent = editorSafeContent;
     if (!initContent) return;
 
     const applyContent = (): void => {
@@ -405,7 +423,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       queueMicrotask(applyContent);
     });
 
-  }, [contentType]);
+  }, [contentType, editorSafeContent]);
 
   // 注意：编辑器实例的销毁已由上游 ReactEditor 的 useEffect cleanup 负责，
   // 此处不再重复 destroy，避免 React StrictMode 下重复销毁导致实例不可用。
@@ -550,7 +568,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
         displayName,
         localBaseCommitIdAtEditStart: props.meta.headCommitId ?? null,
         snapshotMeta: {
-          relativePath: props.meta.relativePath,
           permission: props.meta.permission,
           ownerVisitorId: props.meta.ownerVisitorId,
           domainId: props.meta.domainId,
@@ -1084,7 +1101,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                   {editorSurfaceReady ? (
                     <Editor
                       key={props.meta.documentId}
-                      content={props.initialContent}
+                      content={editorSafeContent}
                       type={contentType}
                       confirmPasteMarkdown
                       // 编辑模式下可编辑，只读模式下不可编辑

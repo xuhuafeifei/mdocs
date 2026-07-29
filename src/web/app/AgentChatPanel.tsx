@@ -105,16 +105,20 @@ function ContextUsageRing(props: { percent: number; used: number; limit: number 
 }
 
 /**
- * mdocs 智能 AI 浮层：入口旁弹出；接 /api/agent/chat SSE。
+ * mdocs 智能助手 浮层：入口旁弹出；接 /api/agent/chat SSE。
  * 「+」新建 session；历史图标列出并切换 lastOpened。
  */
 export function AgentChatPanel(props: {
   open: boolean;
   onClose: () => void;
   visitorName?: string;
+  /** 跟随 FAB 的定位（left / bottom） */
+  anchorStyle?: React.CSSProperties;
   onOpenDocument?: (documentId: string) => void | Promise<void>;
+  /** Agent 建文/建文件夹/移动等改树后回调，用于刷新侧栏 */
+  onTreeChanged?: () => void | Promise<void>;
 }) {
-  const { open, onClose, visitorName, onOpenDocument } = props;
+  const { open, onClose, visitorName, anchorStyle, onOpenDocument, onTreeChanged } = props;
   const userInitial = (visitorName?.trim().charAt(0) || "我").toUpperCase();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [status, setStatus] = useState<AgentStatus | null>(null);
@@ -307,6 +311,8 @@ export function AgentChatPanel(props: {
                   : m,
               ),
             );
+          } else if (event.type === "tree_changed") {
+            void onTreeChanged?.();
           } else if (event.type === "context_usage") {
             setContextUsage({
               percent: event.percent,
@@ -385,11 +391,17 @@ export function AgentChatPanel(props: {
       : null);
 
   return (
-    <div ref={panelRef} className="mdocs-agent-panel" role="dialog" aria-label="mdocs 智能 AI">
+    <div
+      ref={panelRef}
+      className="mdocs-agent-panel"
+      role="dialog"
+      aria-label="mdocs 智能助手"
+      style={anchorStyle}
+    >
       <header className="mdocs-agent-panel-header">
         <div className="mdocs-agent-panel-title">
           <img src={deepseekLogoUrl} alt="" className="mdocs-agent-panel-title-logo" />
-          <span>mdocs 智能 AI</span>
+          <span>mdocs 智能助手</span>
         </div>
         <div className="mdocs-agent-panel-actions">
           <button
@@ -474,7 +486,7 @@ export function AgentChatPanel(props: {
           >
             {messages.length === 0 ? (
               <>
-                <p className="mdocs-agent-panel-hello">你好，我是 mdocs 智能 AI</p>
+                <p className="mdocs-agent-panel-hello">你好，我是 mdocs 智能助手</p>
                 <p className="mdocs-agent-panel-desc">
                   可以问我域、草稿、发布、权限等怎么用。本期不协助写作。
                 </p>

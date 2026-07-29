@@ -64,6 +64,28 @@ export function deleteDocumentFile(domainId: string, relativePath: string): void
 }
 
 /**
+ * 将文档文件从旧相对路径改到新相对路径（同域内）。
+ * 目标父目录不存在时会创建；源不存在或目标已存在则抛错。
+ */
+export function renameDocumentFile(
+  domainId: string,
+  fromRelativePath: string,
+  toRelativePath: string,
+): void {
+  if (fromRelativePath === toRelativePath) return;
+  const fromAbs = resolveDocAbsolutePath(domainId, fromRelativePath);
+  const toAbs = resolveDocAbsolutePath(domainId, toRelativePath);
+  if (!fs.existsSync(fromAbs)) {
+    throw new StoragePathError("source document file missing");
+  }
+  if (fs.existsSync(toAbs)) {
+    throw new StoragePathError("target document file already exists");
+  }
+  fs.mkdirSync(path.dirname(toAbs), { recursive: true, mode: 0o700 });
+  fs.renameSync(fromAbs, toAbs);
+}
+
+/**
  * 将一次 publish 的正文写入历史快照区（与「当前工作区 .md」分开存放）。
  *
  * - 路径由 contentHash 决定，见 resolveCommitBlobAbsolutePath。

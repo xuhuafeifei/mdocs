@@ -46,7 +46,9 @@ describe("markdownToLexicalJson", () => {
     expect(Object.keys(doc)).toEqual(["root"]);
     expect(doc.root.type).toBe("root");
     expect(Array.isArray(doc.root.children)).toBe(true);
-    expect(doc.root.children).toEqual([]);
+    // 空 markdown → 至少一个空段落（Lexical 禁止 root.children 为空）
+    expect(doc.root.children).toHaveLength(1);
+    expect(doc.root.children[0]).toMatchObject({ type: "paragraph", children: [] });
   });
 
   it("标题：depth → h1…h6", () => {

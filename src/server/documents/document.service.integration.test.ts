@@ -35,11 +35,12 @@ vi.mock("../storage/file-store.js", () => ({
   }),
   writeCommitBlob: () => ({ blobRef: "ab/mock", bytes: 0 }),
   deleteDocumentFile: () => {},
+  renameDocumentFile: () => {},
   sha256: () => "mock-hash",
 }));
 
 import { DocumentError, Permission } from "../access/access-control.js";
-import { createDocument, addDocumentInvite, updateDocument } from "./document.service.js";
+import { createDocument, addDocumentInvite, updateDocument, moveDocument } from "./document.service.js";
 import { findDocumentById } from "../db/repositories/document.repo.js";
 import { findDomainById } from "../db/repositories/domain.repo.js";
 
@@ -374,5 +375,109 @@ describe("createDocument / updateDocument contentFormat", () => {
     };
     expect(parsed.root.children[0]?.type).toBe("heading");
     expect(parsed.root.children[0]?.tag).toBe("h1");
+  });
+});
+
+describe("moveDocument", () => {
+  it("moves doc into folder: parent_id + relative_path", () => {
+    const folderId = createFolderInDb("public-domain", "guide");
+    const doc = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "a.md",
+      content: "{}",
+      domainId: "public-domain",
+    });
+    expect(doc.parentId).toBeNull();
+    expect(doc.relativePath).toBe("a.md");
+
+    const moved = moveDocument({
+      actorVisitorId: OWNER,
+      documentId: doc.documentId,
+      parentId: folderId,
+    });
+    expect(moved.parentId).toBe(folderId);
+    expect(moved.relativePath).toBe("guide/a.md");
+
+    const row = findDocumentById(testDbRef.db!, doc.documentId);
+    expect(row?.parent_id).toBe(folderId);
+    expect(row?.relative_path).toBe("guide/a.md");
+  });
+
+  it("moves doc to domain root", () => {
+    const folderId = createFolderInDb("public-domain", "nested");
+    const doc = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "b.md",
+      content: "{}",
+      domainId: "public-domain",
+      parentId: folderId,
+    });
+    expect(doc.relativePath).toBe("nested/b.md");
+
+    const moved = moveDocument({
+      actorVisitorId: OWNER,
+      documentId: doc.documentId,
+      parentId: null,
+    });
+    expect(moved.parentId).toBeNull();
+    expect(moved.relativePath).toBe("b.md");
+  });
+
+  it("rejects non-owner", () => {
+    const doc = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "priv.md",
+      content: "{}",
+      domainId: "public-domain",
+    });
+    expect(() =>
+      moveDocument({
+        actorVisitorId: OUTSIDER,
+        documentId: doc.documentId,
+        parentId: null,
+      }),
+    ).toThrow(DocumentError);
+  });
+
+  it("rejects name conflict", () => {
+    const folderId = createFolderInDb("public-domain", "box");
+    createDocument({
+      actorVisitorId: OWNER,
+      fileName: "same.md",
+      content: "{}",
+      domainId: "public-domain",
+      parentId: folderId,
+    });
+    const other = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "same.md",
+      content: "{}",
+      domainId: "public-domain",
+    });
+    expect(() =>
+      moveDocument({
+        actorVisitorId: OWNER,
+        documentId: other.documentId,
+        parentId: folderId,
+      }),
+    ).toThrow(DocumentError);
+  });
+
+  it("idempotent when parent unchanged", () => {
+    const folderId = createFolderInDb("public-domain", "keep");
+    const doc = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "c.md",
+      content: "{}",
+      domainId: "public-domain",
+      parentId: folderId,
+    });
+    const again = moveDocument({
+      actorVisitorId: OWNER,
+      documentId: doc.documentId,
+      parentId: folderId,
+    });
+    expect(again.parentId).toBe(folderId);
+    expect(again.relativePath).toBe("keep/c.md");
   });
 });

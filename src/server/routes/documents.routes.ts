@@ -10,6 +10,7 @@ import {
   getDocumentSyncStatus,
   listDocuments,
   listFolderChildren,
+  moveDocument,
   removeDocument,
   removeFolder,
   removeDocumentInvite,
@@ -229,6 +230,42 @@ export function buildDocumentsRouter(): Router {
       res.json({ data: doc });
     } catch (err) {
       respondError(res, err, "documents-route.get");
+    }
+  });
+
+  /**
+   * POST /:documentId/move
+   * 同域移动文档（改 parent_id + relative_path + 磁盘）。仅创建者（service 内校验）。
+   * Body: { parentId: string | null } — null 表示移到域根。
+   */
+  router.post("/:documentId/move", (req: Request, res: Response) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+      return;
+    }
+    const body = (req.body ?? {}) as { parentId?: unknown };
+    if (!("parentId" in body)) {
+      res.status(400).json({
+        error: { code: "BAD_REQUEST", message: "parentId is required (string or null)" },
+      });
+      return;
+    }
+    if (body.parentId !== null && typeof body.parentId !== "string") {
+      res.status(400).json({
+        error: { code: "BAD_REQUEST", message: "parentId must be string or null" },
+      });
+      return;
+    }
+    const documentId = req.params.documentId!;
+    try {
+      const doc = moveDocument({
+        actorVisitorId: req.visitor.visitor_id,
+        documentId,
+        parentId: body.parentId,
+      });
+      res.json({ data: doc });
+    } catch (err) {
+      respondError(res, err, "documents-route.move");
     }
   });
 
