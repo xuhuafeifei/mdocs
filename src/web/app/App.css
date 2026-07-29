@@ -754,6 +754,54 @@
   text-decoration: underline;
 }
 
+.mdocs-agent-panel-doc-table-wrap {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #e8eaed;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.mdocs-agent-panel-doc-table-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2329;
+}
+
+.mdocs-agent-panel-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.mdocs-agent-panel-doc-table th,
+.mdocs-agent-panel-doc-table td {
+  border: 1px solid #e8eaed;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.mdocs-agent-panel-doc-table th {
+  background: #f5f6f8;
+  font-weight: 600;
+}
+
+.mdocs-agent-panel-doc-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: #3370ff;
+  text-decoration: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mdocs-agent-panel-doc-link:hover {
+  text-decoration: underline;
+}
+
 .mdocs-agent-panel-input-wrap {
   position: relative;
   margin-top: 8px;

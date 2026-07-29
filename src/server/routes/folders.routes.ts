@@ -88,7 +88,7 @@ export function buildFoldersRouter(): Router {
 //  服务函数
 // ============================================================
 
-function createFolder(params: {
+export function createFolder(params: {
   actorVisitorId: string;
   name: string;
   parentId?: string;

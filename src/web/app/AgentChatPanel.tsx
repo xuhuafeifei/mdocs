@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import deepseekLogoUrl from "../assets/deepseek.svg";
 import {
+  type AgentDocumentTableRow,
   createAgentSessionApi,
   fetchAgentSessionApi,
   fetchAgentSessionsApi,
@@ -20,6 +21,10 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   sources?: AgentSourceRef[];
+  documentTable?: {
+    title: string;
+    rows: AgentDocumentTableRow[];
+  };
 };
 
 const SUGGESTIONS = ["如何发布文档？", "草稿是什么？", "如何创建域？"];
@@ -54,8 +59,9 @@ export function AgentChatPanel(props: {
   open: boolean;
   onClose: () => void;
   visitorName?: string;
+  onOpenDocument?: (documentId: string) => void | Promise<void>;
 }) {
-  const { open, onClose, visitorName } = props;
+  const { open, onClose, visitorName, onOpenDocument } = props;
   const userInitial = (visitorName?.trim().charAt(0) || "我").toUpperCase();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [status, setStatus] = useState<AgentStatus | null>(null);
@@ -223,6 +229,20 @@ export function AgentChatPanel(props: {
                 m.id === assistantId ? { ...m, sources: event.items } : m,
               ),
             );
+          } else if (event.type === "document_table") {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      documentTable: {
+                        title: event.title,
+                        rows: event.rows,
+                      },
+                    }
+                  : m,
+              ),
+            );
           } else if (event.type === "error") {
             setStreamError(event.message);
           }
@@ -273,6 +293,11 @@ export function AgentChatPanel(props: {
     } catch (err) {
       setStreamError(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  function openDocumentFromTable(documentId: string) {
+    if (!documentId || !onOpenDocument) return;
+    void onOpenDocument(documentId);
   }
 
   if (!open) return null;
@@ -430,6 +455,35 @@ export function AgentChatPanel(props: {
                             ))}
                           </ol>
                         </details>
+                      ) : null}
+                      {m.role === "assistant" && m.documentTable && m.documentTable.rows.length > 0 ? (
+                        <div className="mdocs-agent-panel-doc-table-wrap">
+                          <p className="mdocs-agent-panel-doc-table-title">{m.documentTable.title}</p>
+                          <table className="mdocs-agent-panel-doc-table">
+                            <thead>
+                              <tr>
+                                <th>文章名字</th>
+                                <th>文章内容</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {m.documentTable.rows.map((row) => (
+                                <tr key={row.documentId}>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="mdocs-agent-panel-doc-link"
+                                      onClick={() => openDocumentFromTable(row.documentId)}
+                                    >
+                                      {row.title}
+                                    </button>
+                                  </td>
+                                  <td>{row.summary || "-"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       ) : null}
                       {m.role === "assistant" ? (
                         m.content ? (

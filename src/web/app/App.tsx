@@ -973,6 +973,11 @@ export function App() {
             open={agentPanelOpen}
             onClose={() => setAgentPanelOpen(false)}
             visitorName={visitor?.visitorName}
+            onOpenDocument={(docId) => {
+              setView("docs");
+              void guardNavigate(() => navigate(`/doc/${docId}`));
+              setAgentPanelOpen(false);
+            }}
           />
         </>
       )}

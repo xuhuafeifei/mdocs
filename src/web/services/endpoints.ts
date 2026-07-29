@@ -617,6 +617,7 @@ export interface AgentStatus {
 export type AgentStreamEvent =
   | { type: "text_delta"; text: string }
   | { type: "sources"; items: AgentSourceRef[] }
+  | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -624,6 +625,12 @@ export interface AgentSourceRef {
   id: string;
   name: string;
   url: string;
+}
+
+export interface AgentDocumentTableRow {
+  documentId: string;
+  title: string;
+  summary: string;
 }
 
 export function fetchAgentStatusApi(): Promise<AgentStatus> {

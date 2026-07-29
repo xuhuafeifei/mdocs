@@ -12,6 +12,7 @@ import {
 import { getSkillLoader } from "../Skill/skill-loader.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { createSkillTools, type ManualSourceRef } from "./tools.js";
+import { createAccountTools } from "./tools-account.js";
 import {
   AgentSessionManager,
   type AgentSessionMessage,
@@ -21,8 +22,15 @@ import {
 export type AgentStreamEvent =
   | { type: "text_delta"; text: string }
   | { type: "sources"; items: ManualSourceRef[] }
+  | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
   | { type: "done" }
   | { type: "error"; message: string };
+
+export interface AgentDocumentTableRow {
+  documentId: string;
+  title: string;
+  summary: string;
+}
 
 export function getAgentStatus(visitorId: string) {
   const cfg = getVisitorAgentConfig(visitorId);
@@ -60,7 +68,7 @@ export async function runOnboardingChat(params: {
   if (!skills.isReady()) throw new Error("skills_missing");
 
   const { models, model } = createDeepSeekModel(cfg);
-  const tools = createSkillTools(skills);
+  const tools = [...createSkillTools(skills), ...createAccountTools(visitorId)];
   const systemPrompt = buildSystemPrompt();
 
   const sessionManager = new AgentSessionManager(visitorId);
@@ -235,6 +243,56 @@ function bindAgentEvents(opts: {
       if (source?.url && !sourcesById.has(source.id)) {
         sourcesById.set(source.id, source);
         onEvent({ type: "sources", items: [...sourcesById.values()] });
+      }
+      return;
+    }
+
+    if (event.type === "tool_execution_end" && !event.isError) {
+      if (event.toolName === "search_documents") {
+        const results =
+          (
+            event.result as {
+              details?: { results?: Array<{ documentId?: string; displayName?: string; snippet?: string }> };
+            } | null
+          )?.details?.results ?? [];
+        const rows = results
+          .map((r) => ({
+            documentId: String(r.documentId ?? "").trim(),
+            title: String(r.displayName ?? "").trim() || "未命名文档",
+            summary: String(r.snippet ?? "").trim(),
+          }))
+          .filter((r) => r.documentId);
+        if (rows.length > 0) {
+          onEvent({
+            type: "document_table",
+            title: `搜索结果（${rows.length}）`,
+            rows,
+          });
+        }
+        return;
+      }
+
+      if (event.toolName === "list_my_documents") {
+        const documents =
+          (
+            event.result as {
+              details?: { documents?: Array<{ documentId?: string; displayName?: string; relativePath?: string }> };
+            } | null
+          )?.details?.documents ?? [];
+        const rows = documents
+          .map((d) => ({
+            documentId: String(d.documentId ?? "").trim(),
+            title: String(d.displayName ?? "").trim() || "未命名文档",
+            summary: String(d.relativePath ?? "").trim(),
+          }))
+          .filter((r) => r.documentId);
+        if (rows.length > 0) {
+          onEvent({
+            type: "document_table",
+            title: `我的文档（${rows.length}）`,
+            rows,
+          });
+        }
       }
     }
   };
