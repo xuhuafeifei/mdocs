@@ -232,6 +232,7 @@ export function createDocumentApi(input: {
   domainId?: string;
   permission?: number;
   parentId?: string;
+  contentFormat?: "markdown" | "lexical";
 }): Promise<DocumentDetail> {
   return api<DocumentDetail>("/api/documents", {
     method: "POST",
@@ -639,6 +640,7 @@ export type AgentStreamEvent =
       preview: string;
     }
   | { type: "tool_notice"; toolName: string; text: string }
+  | { type: "markdown_set"; markdown: string }
   | { type: "context_usage"; percent: number; used: number; limit: number }
   | { type: "tree_changed"; reason: string }
   | { type: "done" }
@@ -714,14 +716,28 @@ export function openAgentSessionApi(sessionId: string): Promise<AgentSessionResp
 export async function streamAgentChatApi(
   message: string,
   opts: {
+    mode?: "normal" | "coding";
+    /** coding：帮写工作台当前稿 / 进场快照（放 body，不放 header） */
+    documentId?: string | null;
+    workingMarkdown?: string;
+    baseMarkdown?: string;
     signal?: AbortSignal;
     onEvent: (event: AgentStreamEvent) => void;
   },
 ): Promise<void> {
+  const body: Record<string, unknown> = {
+    message,
+    mode: opts.mode === "coding" ? "coding" : "normal",
+  };
+  if (opts.mode === "coding") {
+    if (opts.documentId !== undefined) body.documentId = opts.documentId;
+    if (typeof opts.workingMarkdown === "string") body.workingMarkdown = opts.workingMarkdown;
+    if (typeof opts.baseMarkdown === "string") body.baseMarkdown = opts.baseMarkdown;
+  }
   const res = await fetch("/api/agent/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify(body),
     signal: opts.signal,
   });
 

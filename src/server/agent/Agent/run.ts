@@ -10,9 +10,10 @@ import {
   type VisitorAgentConfig,
 } from "../Config/config.js";
 import { getSkillLoader } from "../Skill/skill-loader.js";
-import { buildSystemPrompt } from "./system-prompt.js";
+import { buildSystemPrompt, type AgentMode } from "./system-prompt.js";
 import { createSkillTools, type ManualSourceRef } from "./tools.js";
 import { createAccountTools } from "./tools-account.js";
+import { createCodingTools } from "./tools-coding.js";
 import {
   AgentSessionManager,
   type AgentSessionMessage,
@@ -23,7 +24,7 @@ import {
   type AgentContextUsage,
 } from "./context-usage.js";
 
-export type { AgentContextUsage };
+export type { AgentContextUsage, AgentMode };
 export { getAgentContextUsageForApi } from "./context-usage.js";
 
 /** 推给路由 / 前端的流式片段（路由只负责写出 SSE） */
@@ -39,6 +40,7 @@ export type AgentStreamEvent =
       preview: string;
     }
   | { type: "tool_notice"; toolName: string; text: string }
+  | { type: "markdown_set"; markdown: string }
   | { type: "context_usage"; percent: number; used: number; limit: number }
   /** 账号工具改了文档树结构，前端应 re-fetch tree */
   | { type: "tree_changed"; reason: string }
@@ -75,10 +77,16 @@ export function getAgentStatus(visitorId: string) {
 export async function runOnboardingChat(params: {
   visitorId: string;
   message: string;
+  mode?: AgentMode;
+  /** coding：本轮前端工作稿（请求体携带） */
+  documentId?: string | null;
+  workingMarkdown?: string;
+  baseMarkdown?: string;
   onEvent: (event: AgentStreamEvent) => void;
   signal?: AbortSignal;
 }): Promise<void> {
   const { visitorId, message, onEvent, signal } = params;
+  const mode: AgentMode = params.mode === "coding" ? "coding" : "normal";
 
   const cfg = getVisitorAgentConfig(visitorId);
   if (!cfg?.apiKey) throw new Error("missing_api_key");
@@ -87,10 +95,20 @@ export async function runOnboardingChat(params: {
   if (!skills.isReady()) throw new Error("skills_missing");
 
   const { models, model } = createDeepSeekModel(cfg);
-  const tools = [...createSkillTools(skills), ...createAccountTools(visitorId)];
-  const systemPrompt = buildSystemPrompt();
+  const accountOrCoding =
+    mode === "coding"
+      ? createCodingTools(visitorId, {
+          documentId: params.documentId ?? null,
+          workingMarkdown: params.workingMarkdown ?? "",
+          baseMarkdown: params.baseMarkdown ?? "",
+        })
+      : createAccountTools(visitorId);
+  const tools = [...createSkillTools(skills), ...accountOrCoding];
+  const systemPrompt = buildSystemPrompt(mode);
 
-  const sessionManager = new AgentSessionManager(visitorId);
+  const sessionManager = new AgentSessionManager(visitorId, {
+    kind: mode === "coding" ? "coding" : "normal",
+  });
   const { sessionId, messages: history } =
     await sessionManager.loadLastOpenedMessages();
 
@@ -408,6 +426,17 @@ function bindAgentEvents(opts: {
           type: "tool_notice",
           toolName: event.toolName,
           text: path ? `已移动「${name}」→ ${path}` : `已移动「${name}」`,
+        });
+        return;
+      }
+
+      if (event.toolName === "set_markdown_document") {
+        const markdown = String(details?.markdown ?? "");
+        onEvent({ type: "markdown_set", markdown });
+        onEvent({
+          type: "tool_notice",
+          toolName: event.toolName,
+          text: "已更新帮写提案正文",
         });
       }
     }

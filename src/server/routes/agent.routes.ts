@@ -184,6 +184,21 @@ export function buildAgentRouter(): Router {
       return;
     }
 
+    const modeRaw = typeof req.body?.mode === "string" ? req.body.mode.trim() : "";
+    const mode = modeRaw === "coding" ? "coding" : "normal";
+    const workingMarkdown =
+      mode === "coding" && typeof req.body?.workingMarkdown === "string"
+        ? req.body.workingMarkdown
+        : undefined;
+    const baseMarkdown =
+      mode === "coding" && typeof req.body?.baseMarkdown === "string"
+        ? req.body.baseMarkdown
+        : undefined;
+    const documentId =
+      mode === "coding" && typeof req.body?.documentId === "string"
+        ? req.body.documentId.trim() || null
+        : undefined;
+
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -199,6 +214,10 @@ export function buildAgentRouter(): Router {
       await runOnboardingChat({
         visitorId: req.visitor.visitor_id,
         message,
+        mode,
+        documentId,
+        workingMarkdown,
+        baseMarkdown,
         signal: ac.signal,
         onEvent: (event) => writeSse(res, event),
       });

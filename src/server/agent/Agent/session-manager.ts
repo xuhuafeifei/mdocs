@@ -56,9 +56,13 @@ export class AgentSessionManager {
 
   private cachedSessionId: string | null = null;
 
-  constructor(private readonly visitorId: string) {
+  constructor(
+    private readonly visitorId: string,
+    opts?: { kind?: "normal" | "coding" },
+  ) {
     const { dataDir } = getConfig();
-    this.sessionDir = path.join(dataDir, "tenant", visitorId, "agent", "session");
+    const kindDir = opts?.kind === "coding" ? "coding-session" : "session";
+    this.sessionDir = path.join(dataDir, "tenant", visitorId, "agent", kindDir);
     this.metaPath = path.join(this.sessionDir, "session.json");
   }
 

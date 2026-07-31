@@ -137,6 +137,8 @@ interface DocumentEditorProps {
   /** 域下拉刷新后回写 App 的 domains 状态 */
   onDomainsChange?: (domains: DomainSummary[]) => void;
   onPublish: (content: string, displayName: string, documentId: string, permission?: number) => Promise<void>;
+  /** 打开帮写全屏层 */
+  onAiWrite?: () => void;
   syncBehind?: boolean;
   onSyncClick?: () => void;
   onDraftExistsChange?: (exists: boolean) => void;
@@ -146,6 +148,8 @@ interface DocumentEditorProps {
   onDelete: () => Promise<void>;
   /** Called by App.tsx before navigation to flush pending changes */
   saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
+  /** 帮写进场：导出官方 Markdown（非 convert 纯文本近似） */
+  exportMarkdownRef?: React.MutableRefObject<(() => string) | undefined>;
   /** Toast message callback */
   onShowToast?: (message: string) => void;
   /** 评论面板切换 */
@@ -377,6 +381,25 @@ export function DocumentEditor(props: DocumentEditorProps) {
     return () => {
       if (props.saveBeforeNavRef) {
         props.saveBeforeNavRef.current = undefined;
+      }
+    };
+  });
+
+  useEffect(() => {
+    if (!props.exportMarkdownRef) return;
+    props.exportMarkdownRef.current = () => {
+      const ed = editorRef.current;
+      if (!ed) return "";
+      try {
+        const md = ed.getDocument("markdown");
+        return typeof md === "string" ? md : String(md ?? "");
+      } catch {
+        return "";
+      }
+    };
+    return () => {
+      if (props.exportMarkdownRef) {
+        props.exportMarkdownRef.current = undefined;
       }
     };
   });
@@ -783,7 +806,16 @@ export function DocumentEditor(props: DocumentEditorProps) {
           ariaLabel={t("currentDomainAria")}
           localizeName={(name: string) => localizeDomainName(name, lang, t)}
         />
-        {/* 收藏按钮 */}
+        {props.onAiWrite ? (
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => props.onAiWrite?.()}
+            style={{ padding: "4px 10px", whiteSpace: "nowrap" }}
+          >
+            帮写
+          </button>
+        ) : null}
         <button
           type="button"
           className="secondary mdocs-tooltip mdocs-tooltip-bottom"

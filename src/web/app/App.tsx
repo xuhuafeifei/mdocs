@@ -38,6 +38,8 @@ import {
   updateDocumentApi,
   fetchBookmarksApi,
   removeBookmarkApi,
+  convertContentApi,
+  createDocumentApi,
   type Bookmark,
 } from "../services/endpoints";
 import { VisitorRegisterDialog } from "./VisitorRegisterDialog";
@@ -49,6 +51,7 @@ import { DomainSelect } from "./DomainSelect";
 import { SettingsPage } from "./SettingsPage";
 import { AgentChatPanel } from "./AgentChatPanel";
 import { AgentFab, agentPanelAnchorStyle, useAgentFabPosition } from "./AgentFab";
+import { AiWriteWorkbench } from "./ai-write/AiWriteWorkbench";
 import { MessageDialog } from "./MessageDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
@@ -63,6 +66,7 @@ import {
   DRAFT_PUBLISH_ERROR,
   saveDraftConflict,
   clearDraftConflict,
+  upsertContentDraft,
   type DraftConflictRecord,
   type DraftRecord,
 } from "../storage/drafts";
@@ -285,9 +289,18 @@ export function App() {
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const [agentFabPos, setAgentFabPos] = useAgentFabPosition();
 
+  // ---- 帮写全屏层 ----
+  const [aiWriteOpen, setAiWriteOpen] = useState(false);
+  const [aiWriteBoot, setAiWriteBoot] = useState<{
+    markdown: string;
+    documentId: string | null;
+    displayName: string;
+  } | null>(null);
+
   // ---- 导航前保存草稿的引用 ----
   // DocumentEditor 会通过这个 ref 暴露 saveDraft 方法
   const saveBeforeNavRef = useRef<(() => Promise<void>) | undefined>(undefined);
+  const exportMarkdownRef = useRef<(() => string) | undefined>(undefined);
 
   // ---- 自动发布：每 10 秒扫描一次本地草稿，闲置超过 30 秒的自动推送到服务器 ----
   // 仅在用户开启「自动同步至云端」时启用
@@ -301,6 +314,107 @@ export function App() {
     await saveBeforeNavRef.current?.();
     // 保存完成后再执行真正的导航操作
     onProceed();
+  }
+
+  function fileNameFromTitle(title: string): string {
+    const raw = title.trim() || "untitled";
+    const safe = raw.replace(/[\\/:*?"<>|]/g, "-").slice(0, 80);
+    return safe.endsWith(".md") ? safe : `${safe}.md`;
+  }
+
+  async function openAiWriteForCurrentDoc(): Promise<void> {
+    if (!activeDocMeta || !editorContent) return;
+    await saveBeforeNavRef.current?.();
+    // 必须用 lobe 官方 markdown 导出；convert lexical→md 只是纯文本近似，会丢掉 MD 结构
+    let markdown = exportMarkdownRef.current?.() ?? "";
+    if (!markdown.trim()) {
+      try {
+        const converted = await convertContentApi({
+          content: editorContent.content,
+          from: "lexical",
+          to: "markdown",
+        });
+        markdown = converted.content;
+      } catch {
+        markdown = "";
+      }
+    }
+    setAiWriteBoot({
+      markdown,
+      documentId: activeDocMeta.documentId,
+      displayName: editorContent.displayName || activeDocMeta.displayName || "未命名",
+    });
+    setAiWriteOpen(true);
+    setAgentPanelOpen(false);
+  }
+
+  function openAiWriteBlank(): void {
+    setAiWriteBoot({
+      markdown: "",
+      documentId: null,
+      displayName: "未命名",
+    });
+    setAiWriteOpen(true);
+    setAgentPanelOpen(false);
+  }
+
+  async function completeAiWrite(result: {
+    markdown: string;
+    documentId: string | null;
+    displayName: string;
+  }): Promise<void> {
+    if (result.documentId) {
+      const ok = window.confirm("将把帮写结果写入当前文档的本地草稿（不会自动发布）。继续？");
+      if (!ok) {
+        const err = new Error("cancelled");
+        (err as Error & { silent?: boolean }).silent = true;
+        throw err;
+      }
+      const converted = await convertContentApi({
+        content: result.markdown,
+        from: "markdown",
+        to: "lexical",
+      });
+      const meta = activeDocMeta?.documentId === result.documentId ? activeDocMeta : null;
+      await upsertContentDraft({
+        documentId: result.documentId,
+        content: converted.content,
+        displayName: result.displayName,
+        localBaseCommitIdAtEditStart: meta?.headCommitId ?? null,
+        snapshotMeta: meta
+          ? {
+              permission: meta.permission,
+              ownerVisitorId: meta.ownerVisitorId,
+              domainId: meta.domainId,
+            }
+          : undefined,
+      });
+      if (activeDocMeta?.documentId === result.documentId) {
+        setEditorContent({
+          documentId: result.documentId,
+          content: converted.content,
+          displayName: result.displayName,
+        });
+        setContentRevision((r) => r + 1);
+        setEditorDraftExists(true);
+      } else {
+        await openDocument(result.documentId);
+      }
+      setMessage("帮写已写入草稿，可在编辑器中继续修改后发布");
+      return;
+    }
+
+    const created = await createDocumentApi({
+      fileName: fileNameFromTitle(result.displayName),
+      displayName: result.displayName,
+      content: result.markdown,
+      contentFormat: "markdown",
+      domainId: currentDomainId || undefined,
+      parentId: undefined,
+    });
+    await refreshTree();
+    await openDocument(created.documentId);
+    setMessage("已创建文档");
   }
 
   /**
@@ -1006,6 +1120,20 @@ export function App() {
         </>
       )}
 
+      {!isDemoMode() && aiWriteBoot ? (
+        <AiWriteWorkbench
+          open={aiWriteOpen}
+          initialMarkdown={aiWriteBoot.markdown}
+          documentId={aiWriteBoot.documentId}
+          displayName={aiWriteBoot.displayName}
+          onClose={() => {
+            setAiWriteOpen(false);
+            setAiWriteBoot(null);
+          }}
+          onComplete={completeAiWrite}
+        />
+      ) : null}
+
       {/* 根据当前视图渲染设置页或文档页 */}
       {view === "settings" ? (
         <SettingsPage
@@ -1187,10 +1315,12 @@ export function App() {
                       }
                     }}
                     saveBeforeNavRef={saveBeforeNavRef}
+                    exportMarkdownRef={exportMarkdownRef}
                     onShowToast={setMessage}
                     onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
                     commentPanelOpen={commentPanelOpen}
                     commentCount={commentCount}
+                    onAiWrite={() => void openAiWriteForCurrentDoc()}
                   />
                 </div>
 
@@ -1245,6 +1375,11 @@ export function App() {
                     <Folder size={16} strokeWidth={1.5} />
                     {t("newFolder")}
                   </button>
+                  {!isDemoMode() ? (
+                    <button type="button" className="secondary" onClick={() => openAiWriteBlank()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      AI 帮写
+                    </button>
+                  ) : null}
                 </div>
               </div>
             )}
