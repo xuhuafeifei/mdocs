@@ -1,5 +1,5 @@
-import { History, Plus, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Check, Copy, History, Plus, X } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import deepseekLogoUrl from "../assets/deepseek.svg";
@@ -17,6 +17,70 @@ import {
   type AgentSourceRef,
   type AgentStatus,
 } from "../services/endpoints";
+
+function nodeText(node: ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeText).join("");
+  if (typeof node === "object" && "props" in node) {
+    return nodeText((node as { props?: { children?: ReactNode } }).props?.children);
+  }
+  return "";
+}
+
+function MarkdownPreWithCopy(props: { children?: ReactNode }) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  const text = nodeText(props.children).replace(/\n$/, "");
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current != null) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  async function onCopy() {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      if (timerRef.current != null) window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return (
+    <div className="mdocs-agent-panel-md-pre-wrap">
+      <button
+        type="button"
+        className="mdocs-agent-panel-md-copy"
+        onClick={() => void onCopy()}
+        aria-label={copied ? "已复制" : "复制代码"}
+        title={copied ? "已复制" : "复制"}
+      >
+        {copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />}
+      </button>
+      <pre>{props.children}</pre>
+    </div>
+  );
+}
+
+function AgentMarkdown(props: { children: string }) {
+  return (
+    <div className="mdocs-agent-panel-md">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          pre: ({ children }) => <MarkdownPreWithCopy>{children}</MarkdownPreWithCopy>,
+        }}
+      >
+        {props.children}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 /** 当轮流式时间线；不落盘，历史重开无 blocks 则只显示 content */
 type AssistantBlock =
@@ -612,11 +676,7 @@ export function AgentChatPanel(props: {
                                 if (!block.text) return null;
                                 return (
                                   <div key={`${m.id}-t-${bi}`} className="mdocs-agent-panel-block">
-                                    <div className="mdocs-agent-panel-md">
-                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                        {block.text}
-                                      </ReactMarkdown>
-                                    </div>
+                                    <AgentMarkdown>{block.text}</AgentMarkdown>
                                   </div>
                                 );
                               }
@@ -732,9 +792,7 @@ export function AgentChatPanel(props: {
                             ) : null}
                           </div>
                         ) : m.content ? (
-                          <div className="mdocs-agent-panel-md">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
-                          </div>
+                          <AgentMarkdown>{m.content}</AgentMarkdown>
                         ) : sending ? (
                           <span className="mdocs-agent-panel-thinking" aria-label="思考中">
                             <span />

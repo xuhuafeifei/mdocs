@@ -801,11 +801,43 @@
 }
 
 .mdocs-agent-panel-md pre {
-  margin: 0.65em 0;
+  margin: 0;
   padding: 10px 12px;
   border-radius: 8px;
   background: #f5f6f8;
   overflow-x: auto;
+}
+
+.mdocs-agent-panel-md-pre-wrap {
+  position: relative;
+  margin: 0.65em 0;
+}
+
+.mdocs-agent-panel-md-pre-wrap pre {
+  padding-right: 36px;
+}
+
+.mdocs-agent-panel-md-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #e8eaed;
+  border-radius: 6px;
+  background: #fff;
+  color: #646a73;
+  cursor: pointer;
+}
+
+.mdocs-agent-panel-md-copy:hover {
+  color: #1f2329;
+  background: #f2f4f7;
 }
 
 .mdocs-agent-panel-md pre code {
