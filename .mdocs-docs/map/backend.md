@@ -44,13 +44,15 @@
 
 ### 上手 Agent / Model 配置
 
-- **关键词**：`agent` `DeepSeek` `agent_model_configs` `onboarding` `session`
+- **关键词**：`agent` `DeepSeek` `agent_model_configs` `onboarding` `session` `get_document`
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `src/server/agent/Config/config.ts` | `getVisitorAgentConfig` `upsertVisitorAgentConfig` |
   | `src/server/agent/Agent/run.ts` | `getAgentStatus` `runOnboardingChat` |
   | `src/server/agent/Agent/session-manager.ts` | `listSessions` `createSession` `openSession` |
+  | `src/server/agent/Agent/tools-documents.ts` | `createDocumentTools`（含 `get_document`：先 `assertDocumentAccess` 再 `getDocument`） |
+  | `src/server/agent/Agent/system-prompt.ts` | `buildSystemPrompt` |
   | `src/server/routes/agent.routes.ts` | `buildAgentRouter`（含 `/sessions` `/session/open`） |
   | `src/server/db/repositories/agent-model-config.repo.ts` | `findAgentModelConfigByOwner` |
   | `src/web/app/AgentConfigPanel.tsx` | `AgentConfigPanel` |

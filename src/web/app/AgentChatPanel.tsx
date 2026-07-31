@@ -18,15 +18,26 @@ import {
   type AgentStatus,
 } from "../services/endpoints";
 
+/** 当轮流式时间线；不落盘，历史重开无 blocks 则只显示 content */
+type AssistantBlock =
+  | { type: "text"; text: string }
+  | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
+  | {
+      type: "document_card";
+      documentId: string;
+      title: string;
+      path: string;
+      preview: string;
+    }
+  | { type: "tool_notice"; toolName: string; text: string }
+  | { type: "sources"; items: AgentSourceRef[] };
+
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  sources?: AgentSourceRef[];
-  documentTable?: {
-    title: string;
-    rows: AgentDocumentTableRow[];
-  };
+  /** 仅当轮 SSE；历史会话不恢复 */
+  blocks?: AssistantBlock[];
 };
 
 const SUGGESTIONS = ["如何发布文档？", "草稿是什么？", "如何创建域？"];
@@ -37,6 +48,25 @@ function toChatMessages(sessionId: string, messages: { role: "user" | "assistant
     role: m.role,
     content: m.content,
   }));
+}
+
+function appendTextDelta(blocks: AssistantBlock[], text: string): AssistantBlock[] {
+  const next = blocks.slice();
+  const last = next[next.length - 1];
+  if (last?.type === "text") {
+    next[next.length - 1] = { type: "text", text: last.text + text };
+  } else {
+    next.push({ type: "text", text });
+  }
+  return next;
+}
+
+function textFromBlocks(blocks: AssistantBlock[] | undefined): string {
+  if (!blocks?.length) return "";
+  return blocks
+    .filter((b): b is Extract<AssistantBlock, { type: "text" }> => b.type === "text")
+    .map((b) => b.text)
+    .join("");
 }
 
 function formatSessionTime(iso: string): string {
@@ -286,31 +316,79 @@ export function AgentChatPanel(props: {
         onEvent: (event) => {
           if (event.type === "text_delta") {
             setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId ? { ...m, content: m.content + event.text } : m,
-              ),
+              prev.map((m) => {
+                if (m.id !== assistantId) return m;
+                const blocks = appendTextDelta(m.blocks ?? [], event.text);
+                return { ...m, blocks, content: textFromBlocks(blocks) };
+              }),
             );
             requestAnimationFrame(() => scrollToBottomIfStuck());
           } else if (event.type === "sources") {
             setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId ? { ...m, sources: event.items } : m,
-              ),
+              prev.map((m) => {
+                if (m.id !== assistantId) return m;
+                const blocks = (m.blocks ?? []).slice();
+                const last = blocks[blocks.length - 1];
+                // 连续 sources 更新合并为同一块，避免手册多章时堆多份
+                if (last?.type === "sources") {
+                  blocks[blocks.length - 1] = { type: "sources", items: event.items };
+                } else {
+                  blocks.push({ type: "sources", items: event.items });
+                }
+                return { ...m, blocks };
+              }),
             );
+            requestAnimationFrame(() => scrollToBottomIfStuck());
           } else if (event.type === "document_table") {
             setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? {
-                      ...m,
-                      documentTable: {
-                        title: event.title,
-                        rows: event.rows,
-                      },
-                    }
-                  : m,
-              ),
+              prev.map((m) => {
+                if (m.id !== assistantId) return m;
+                const blocks = [
+                  ...(m.blocks ?? []),
+                  {
+                    type: "document_table" as const,
+                    title: event.title,
+                    rows: event.rows,
+                  },
+                ];
+                return { ...m, blocks };
+              }),
             );
+            requestAnimationFrame(() => scrollToBottomIfStuck());
+          } else if (event.type === "document_card") {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== assistantId) return m;
+                const blocks = [
+                  ...(m.blocks ?? []),
+                  {
+                    type: "document_card" as const,
+                    documentId: event.documentId,
+                    title: event.title,
+                    path: event.path,
+                    preview: event.preview,
+                  },
+                ];
+                return { ...m, blocks };
+              }),
+            );
+            requestAnimationFrame(() => scrollToBottomIfStuck());
+          } else if (event.type === "tool_notice") {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== assistantId) return m;
+                const blocks = [
+                  ...(m.blocks ?? []),
+                  {
+                    type: "tool_notice" as const,
+                    toolName: event.toolName,
+                    text: event.text,
+                  },
+                ];
+                return { ...m, blocks };
+              }),
+            );
+            requestAnimationFrame(() => scrollToBottomIfStuck());
           } else if (event.type === "tree_changed") {
             void onTreeChanged?.();
           } else if (event.type === "context_usage") {
@@ -526,51 +604,134 @@ export function AgentChatPanel(props: {
                       </div>
                     ) : null}
                     <div className="mdocs-agent-panel-msg-bubble">
-                      {m.role === "assistant" && m.sources && m.sources.length > 0 ? (
-                        <details className="mdocs-agent-panel-sources" open>
-                          <summary>已阅读 {m.sources.length} 个页面</summary>
-                          <ol>
-                            {m.sources.map((s) => (
-                              <li key={s.id}>
-                                <a href={s.url} target="_blank" rel="noreferrer">
-                                  {s.name}
-                                </a>
-                              </li>
-                            ))}
-                          </ol>
-                        </details>
-                      ) : null}
-                      {m.role === "assistant" && m.documentTable && m.documentTable.rows.length > 0 ? (
-                        <div className="mdocs-agent-panel-doc-table-wrap">
-                          <p className="mdocs-agent-panel-doc-table-title">{m.documentTable.title}</p>
-                          <table className="mdocs-agent-panel-doc-table">
-                            <thead>
-                              <tr>
-                                <th>文章名字</th>
-                                <th>文章内容</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {m.documentTable.rows.map((row) => (
-                                <tr key={row.documentId}>
-                                  <td>
-                                    <button
-                                      type="button"
-                                      className="mdocs-agent-panel-doc-link"
-                                      onClick={() => openDocumentFromTable(row.documentId)}
-                                    >
-                                      {row.title}
-                                    </button>
-                                  </td>
-                                  <td>{row.summary || "-"}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : null}
                       {m.role === "assistant" ? (
-                        m.content ? (
+                        m.blocks && m.blocks.length > 0 ? (
+                          <div className="mdocs-agent-panel-timeline">
+                            {m.blocks.map((block, bi) => {
+                              if (block.type === "text") {
+                                if (!block.text) return null;
+                                return (
+                                  <div key={`${m.id}-t-${bi}`} className="mdocs-agent-panel-block">
+                                    <div className="mdocs-agent-panel-md">
+                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        {block.text}
+                                      </ReactMarkdown>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              if (block.type === "sources") {
+                                if (block.items.length === 0) return null;
+                                return (
+                                  <div key={`${m.id}-s-${bi}`} className="mdocs-agent-panel-block">
+                                    <details className="mdocs-agent-panel-tool-fold">
+                                      <summary>已阅读 {block.items.length} 个页面</summary>
+                                      <ol className="mdocs-agent-panel-sources-list">
+                                        {block.items.map((s) => (
+                                          <li key={s.id}>
+                                            <a href={s.url} target="_blank" rel="noreferrer">
+                                              {s.name}
+                                            </a>
+                                          </li>
+                                        ))}
+                                      </ol>
+                                    </details>
+                                  </div>
+                                );
+                              }
+                              if (block.type === "tool_notice") {
+                                return (
+                                  <div key={`${m.id}-n-${bi}`} className="mdocs-agent-panel-block">
+                                    <p className="mdocs-agent-panel-tool-notice">{block.text}</p>
+                                  </div>
+                                );
+                              }
+                              if (block.type === "document_card") {
+                                return (
+                                  <div key={`${m.id}-c-${bi}`} className="mdocs-agent-panel-block">
+                                    <details className="mdocs-agent-panel-tool-fold">
+                                      <summary>
+                                        <button
+                                          type="button"
+                                          className="mdocs-agent-panel-doc-link"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            void openDocumentFromTable(block.documentId);
+                                          }}
+                                        >
+                                          {block.title}
+                                        </button>
+                                        <span className="mdocs-agent-panel-tool-fold-hint">文档预览</span>
+                                      </summary>
+                                      <div className="mdocs-agent-panel-doc-card-body">
+                                        {block.path ? (
+                                          <p className="mdocs-agent-panel-doc-card-path">{block.path}</p>
+                                        ) : null}
+                                        {block.preview ? (
+                                          <p className="mdocs-agent-panel-doc-card-preview">{block.preview}</p>
+                                        ) : (
+                                          <p className="mdocs-agent-panel-doc-card-preview muted">（无正文预览）</p>
+                                        )}
+                                      </div>
+                                    </details>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div key={`${m.id}-d-${bi}`} className="mdocs-agent-panel-block">
+                                  <details className="mdocs-agent-panel-tool-fold">
+                                    <summary>
+                                      {block.title}
+                                      <span className="mdocs-agent-panel-tool-fold-hint">
+                                        {block.rows.length === 0 ? "无结果" : `${block.rows.length} 条`}
+                                      </span>
+                                    </summary>
+                                    <div className="mdocs-agent-panel-doc-table-wrap">
+                                      {block.rows.length === 0 ? (
+                                        <p className="mdocs-agent-panel-doc-table-empty">无结果</p>
+                                      ) : (
+                                        <table className="mdocs-agent-panel-doc-table">
+                                          <thead>
+                                            <tr>
+                                              <th>文章名字</th>
+                                              <th>文章内容</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {block.rows.map((row) => (
+                                              <tr key={row.documentId}>
+                                                <td>
+                                                  <button
+                                                    type="button"
+                                                    className="mdocs-agent-panel-doc-link"
+                                                    onClick={() => openDocumentFromTable(row.documentId)}
+                                                  >
+                                                    {row.title}
+                                                  </button>
+                                                </td>
+                                                <td>{row.summary || "-"}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      )}
+                                    </div>
+                                  </details>
+                                </div>
+                              );
+                            })}
+                            {sending &&
+                            m.id === messages[messages.length - 1]?.id &&
+                            !textFromBlocks(m.blocks) ? (
+                              <span className="mdocs-agent-panel-thinking" aria-label="思考中">
+                                <span />
+                                <span />
+                                <span />
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : m.content ? (
                           <div className="mdocs-agent-panel-md">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                           </div>

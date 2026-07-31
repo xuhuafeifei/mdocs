@@ -3,11 +3,14 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { TreeNode } from "../../../shared/types/tree.js";
 import { getDb } from "../../db/connection.js";
 import { listDocumentsByVisitor } from "../../db/repositories/document.repo.js";
-import { createDocument, moveDocument } from "../../documents/document.service.js";
+import { assertDocumentAccess, DocumentError } from "../../access/access-control.js";
+import { createDocument, getDocument, moveDocument } from "../../documents/document.service.js";
 import { buildDocumentTree } from "../../documents/tree.service.js";
 import { createFolder } from "../../routes/folders.routes.js";
 import { searchDocuments } from "../../search/search.service.js";
-import { DocumentError } from "../../access/access-control.js";
+
+/** Agent 上下文体积上限；超长正文截断并标注 */
+const GET_DOCUMENT_MAX_CHARS = 50_000;
 
 function asToolResult(payload: unknown) {
   return {
@@ -112,6 +115,55 @@ export function createDocumentTools(visitorId: string): AgentTool[] {
           truncated: all.length > 50,
           documents,
         });
+      },
+    },
+    {
+      name: "get_document",
+      label: "读取文档内容",
+      description:
+        "按 documentId 读取当前访客有权阅读的文档正文。默认纯文本（从 Lexical 抽取）；format=json 返回 Lexical JSON。与 HTTP GET /api/documents/:id 同一套读权限，无额外特权。",
+      parameters: Type.Object({
+        documentId: Type.String({ description: "文档 documentId" }),
+        format: Type.Optional(
+          Type.Union([Type.Literal("text"), Type.Literal("json")], {
+            description: "text（默认，纯文本）或 json（Lexical）",
+          }),
+        ),
+      }),
+      execute: async (_id, params) => {
+        const { documentId: rawId, format: rawFormat } = params as {
+          documentId: string;
+          format?: "text" | "json";
+        };
+        const documentId = rawId?.trim();
+        if (!documentId) throw new Error("documentId is required");
+        const format = rawFormat === "json" ? "json" : "text";
+        try {
+          assertDocumentAccess(documentId, visitorId, "read");
+          const doc = getDocument(documentId, visitorId, format);
+          let content = doc.content ?? "";
+          let contentTruncated = false;
+          if (content.length > GET_DOCUMENT_MAX_CHARS) {
+            content = content.slice(0, GET_DOCUMENT_MAX_CHARS);
+            contentTruncated = true;
+          }
+          return asToolResult({
+            documentId: doc.documentId,
+            displayName: doc.displayName,
+            domainId: doc.domainId,
+            relativePath: doc.relativePath,
+            permission: doc.permission,
+            format,
+            contentTruncated,
+            ...(contentTruncated ? { contentMaxChars: GET_DOCUMENT_MAX_CHARS } : {}),
+            content,
+          });
+        } catch (err) {
+          if (err instanceof DocumentError) {
+            throw new Error(`${err.code}: ${err.message}`);
+          }
+          throw err;
+        }
       },
     },
     {

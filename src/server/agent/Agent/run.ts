@@ -31,6 +31,14 @@ export type AgentStreamEvent =
   | { type: "text_delta"; text: string }
   | { type: "sources"; items: ManualSourceRef[] }
   | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
+  | {
+      type: "document_card";
+      documentId: string;
+      title: string;
+      path: string;
+      preview: string;
+    }
+  | { type: "tool_notice"; toolName: string; text: string }
   | { type: "context_usage"; percent: number; used: number; limit: number }
   /** 账号工具改了文档树结构，前端应 re-fetch tree */
   | { type: "tree_changed"; reason: string }
@@ -281,13 +289,14 @@ function bindAgentEvents(opts: {
         onEvent({ type: "tree_changed", reason: event.toolName });
       }
 
+      const details = (event.result as { details?: Record<string, unknown> } | null)?.details;
+
       if (event.toolName === "search_documents") {
-        const results =
-          (
-            event.result as {
-              details?: { results?: Array<{ documentId?: string; displayName?: string; snippet?: string }> };
-            } | null
-          )?.details?.results ?? [];
+        const results = (details?.results as Array<{
+          documentId?: string;
+          displayName?: string;
+          snippet?: string;
+        }> | undefined) ?? [];
         const rows = results
           .map((r) => ({
             documentId: String(r.documentId ?? "").trim(),
@@ -295,23 +304,20 @@ function bindAgentEvents(opts: {
             summary: String(r.snippet ?? "").trim(),
           }))
           .filter((r) => r.documentId);
-        if (rows.length > 0) {
-          onEvent({
-            type: "document_table",
-            title: `搜索结果（${rows.length}）`,
-            rows,
-          });
-        }
+        onEvent({
+          type: "document_table",
+          title: `搜索结果（${rows.length}）`,
+          rows,
+        });
         return;
       }
 
       if (event.toolName === "list_my_documents") {
-        const documents =
-          (
-            event.result as {
-              details?: { documents?: Array<{ documentId?: string; displayName?: string; relativePath?: string }> };
-            } | null
-          )?.details?.documents ?? [];
+        const documents = (details?.documents as Array<{
+          documentId?: string;
+          displayName?: string;
+          relativePath?: string;
+        }> | undefined) ?? [];
         const rows = documents
           .map((d) => ({
             documentId: String(d.documentId ?? "").trim(),
@@ -319,13 +325,90 @@ function bindAgentEvents(opts: {
             summary: String(d.relativePath ?? "").trim(),
           }))
           .filter((r) => r.documentId);
-        if (rows.length > 0) {
-          onEvent({
-            type: "document_table",
-            title: `我的文档（${rows.length}）`,
-            rows,
-          });
-        }
+        onEvent({
+          type: "document_table",
+          title: `我的文档（${rows.length}）`,
+          rows,
+        });
+        return;
+      }
+
+      if (event.toolName === "list_tree") {
+        const items = (details?.items as Array<{
+          type?: string;
+          documentId?: string;
+          displayName?: string;
+          name?: string;
+          path?: string;
+        }> | undefined) ?? [];
+        const rows = items
+          .map((it) => {
+            const documentId = String(it.documentId ?? "").trim();
+            const title =
+              String(it.displayName ?? "").trim() ||
+              String(it.name ?? "").trim() ||
+              "未命名";
+            const kind = it.type === "folder" ? "文件夹" : "文档";
+            const path = String(it.path ?? "").trim();
+            return {
+              documentId,
+              title: it.type === "folder" ? `[目录] ${title}` : title,
+              summary: path ? `${kind} · ${path}` : kind,
+            };
+          })
+          .filter((r) => r.documentId);
+        onEvent({
+          type: "document_table",
+          title: `域树（${rows.length}${details?.truncated ? "+" : ""}）`,
+          rows,
+        });
+        return;
+      }
+
+      if (event.toolName === "get_document") {
+        const documentId = String(details?.documentId ?? "").trim();
+        if (!documentId) return;
+        const content = String(details?.content ?? "");
+        const preview =
+          content.length > 280 ? `${content.slice(0, 280)}…` : content;
+        onEvent({
+          type: "document_card",
+          documentId,
+          title: String(details?.displayName ?? "").trim() || "未命名文档",
+          path: String(details?.relativePath ?? "").trim(),
+          preview,
+        });
+        return;
+      }
+
+      if (event.toolName === "create_document") {
+        const name = String(details?.displayName ?? "").trim() || "未命名文档";
+        onEvent({
+          type: "tool_notice",
+          toolName: event.toolName,
+          text: `已创建空文档「${name}」`,
+        });
+        return;
+      }
+
+      if (event.toolName === "create_folder") {
+        const path = String(details?.path ?? "").trim();
+        onEvent({
+          type: "tool_notice",
+          toolName: event.toolName,
+          text: path ? `已创建文件夹「${path}」` : "已创建文件夹",
+        });
+        return;
+      }
+
+      if (event.toolName === "move_document") {
+        const name = String(details?.displayName ?? "").trim() || "文档";
+        const path = String(details?.relativePath ?? "").trim();
+        onEvent({
+          type: "tool_notice",
+          toolName: event.toolName,
+          text: path ? `已移动「${name}」→ ${path}` : `已移动「${name}」`,
+        });
       }
     }
   };

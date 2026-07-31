@@ -718,6 +718,17 @@
   color: #1f2329;
 }
 
+.mdocs-agent-panel-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mdocs-agent-panel-block {
+  min-width: 0;
+}
+
 .mdocs-agent-panel-md > :first-child {
   margin-top: 0;
 }
@@ -874,12 +885,110 @@
   text-decoration: underline;
 }
 
-.mdocs-agent-panel-doc-table-wrap {
-  margin: 0 0 12px;
-  padding: 10px 12px;
+.mdocs-agent-panel-tool-fold {
+  margin: 0;
+  padding: 8px 12px;
   border: 1px solid #e8eaed;
   border-radius: 10px;
-  background: #fff;
+  background: #f8f9fb;
+  font-size: 13px;
+}
+
+.mdocs-agent-panel-tool-fold > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-weight: 500;
+  color: #4e5969;
+}
+
+.mdocs-agent-panel-tool-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mdocs-agent-panel-tool-fold > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-left: 5px solid #8a919f;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  flex-shrink: 0;
+}
+
+.mdocs-agent-panel-tool-fold[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.mdocs-agent-panel-tool-fold-hint {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: #8a919f;
+}
+
+.mdocs-agent-panel-sources-list {
+  margin: 8px 0 0;
+  padding-left: 1.25em;
+}
+
+.mdocs-agent-panel-sources-list a {
+  color: #3370ff;
+  text-decoration: none;
+}
+
+.mdocs-agent-panel-sources-list a:hover {
+  text-decoration: underline;
+}
+
+.mdocs-agent-panel-doc-table-wrap {
+  margin: 8px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.mdocs-agent-panel-doc-table-empty {
+  margin: 0;
+  font-size: 13px;
+  color: #8a919f;
+}
+
+.mdocs-agent-panel-doc-card-body {
+  margin-top: 8px;
+}
+
+.mdocs-agent-panel-doc-card-path {
+  margin: 0;
+  font-size: 12px;
+  color: #8a919f;
+  word-break: break-all;
+}
+
+.mdocs-agent-panel-doc-card-preview {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #4e5969;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mdocs-agent-panel-doc-card-preview.muted {
+  color: #8a919f;
+}
+
+.mdocs-agent-panel-tool-notice {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #f5f6f8;
+  font-size: 13px;
+  color: #4e5969;
 }
 
 .mdocs-agent-panel-doc-table-title {

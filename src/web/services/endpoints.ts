@@ -631,6 +631,14 @@ export type AgentStreamEvent =
   | { type: "text_delta"; text: string }
   | { type: "sources"; items: AgentSourceRef[] }
   | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
+  | {
+      type: "document_card";
+      documentId: string;
+      title: string;
+      path: string;
+      preview: string;
+    }
+  | { type: "tool_notice"; toolName: string; text: string }
   | { type: "context_usage"; percent: number; used: number; limit: number }
   | { type: "tree_changed"; reason: string }
   | { type: "done" }
