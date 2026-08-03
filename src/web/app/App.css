@@ -1023,6 +1023,126 @@
   color: #4e5969;
 }
 
+.mdocs-agent-choice-card {
+  padding: 12px;
+  border: 1px solid #e8eaed;
+  border-radius: 10px;
+  background: #fafbfc;
+}
+
+.mdocs-agent-choice-card-done {
+  opacity: 0.85;
+}
+
+.mdocs-agent-choice-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.mdocs-agent-choice-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2329;
+}
+
+.mdocs-agent-choice-timer {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #8a919f;
+}
+
+.mdocs-agent-choice-progress {
+  height: 3px;
+  border-radius: 2px;
+  background: #e8eaed;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.mdocs-agent-choice-progress-bar {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  background: #3370ff;
+  transition: transform 0.1s linear;
+}
+
+.mdocs-agent-choice-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mdocs-agent-choice-option {
+  text-align: left;
+  border: 1px solid #d0d3d9;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: #1f2329;
+  cursor: pointer;
+}
+
+.mdocs-agent-choice-option:hover:not(:disabled) {
+  border-color: #3370ff;
+  color: #3370ff;
+}
+
+.mdocs-agent-choice-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.mdocs-agent-choice-custom {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mdocs-agent-choice-custom input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #e8eaed;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.mdocs-agent-choice-custom button {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #3370ff;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mdocs-agent-choice-custom button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mdocs-agent-choice-result {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #4e5969;
+}
+
+.mdocs-agent-choice-result.muted {
+  color: #8a919f;
+}
+
 .mdocs-agent-panel-doc-table-title {
   margin: 0 0 8px;
   font-size: 13px;

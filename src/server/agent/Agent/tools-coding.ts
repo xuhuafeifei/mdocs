@@ -1,6 +1,7 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { createAccountTools } from "./tools-account.js";
+import type { ChoiceToolHooks } from "./tools-choice.js";
 
 /** 本轮请求里前端带来的帮写 buffer（不在磁盘） */
 export type CodingDocContext = {
@@ -89,6 +90,7 @@ export function createCodingWriteTools(ctx: CodingDocContext): AgentTool[] {
 export function createCodingTools(
   visitorId: string,
   ctx: CodingDocContext,
+  choiceHooks?: ChoiceToolHooks,
 ): AgentTool[] {
-  return [...createAccountTools(visitorId), ...createCodingWriteTools(ctx)];
+  return [...createAccountTools(visitorId, choiceHooks), ...createCodingWriteTools(ctx)];
 }

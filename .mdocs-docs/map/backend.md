@@ -51,11 +51,13 @@
   | `src/server/agent/Config/config.ts` | `getVisitorAgentConfig` `upsertVisitorAgentConfig` |
   | `src/server/agent/Agent/run.ts` | `getAgentStatus` `runOnboardingChat` |
   | `src/server/agent/Agent/session-manager.ts` | `listSessions` `createSession` `openSession` |
-  | `src/server/agent/Agent/tools-account.ts` | `createAccountTools`（域/文档/访客 tools 聚合） |
+  | `src/server/agent/Agent/tools-account.ts` | `createAccountTools`（域/文档/访客 + 可选 choice tools） |
+  | `src/server/agent/Agent/tools-choice.ts` | `createChoiceTools`（`ask_user_choice`） |
+  | `src/server/agent/Agent/choice-pending.ts` | `waitForUserChoice` `resolveUserChoice` |
   | `src/server/agent/Agent/tools-documents.ts` | `createDocumentTools`（含 `search_documents` `list_tree` `list_my_documents` `create_document` `create_folder` `get_document`） |
   | `src/server/agent/Agent/tools-domains.ts` | `createDomainTools`（含 `list_domains` `create_domain`） |
   | `src/server/agent/Agent/system-prompt.ts` | `buildSystemPrompt` |
-  | `src/server/routes/agent.routes.ts` | `buildAgentRouter`（含 `/sessions` `/session/open`） |
+  | `src/server/routes/agent.routes.ts` | `buildAgentRouter`（含 `/choice` `/sessions` `/session/open`） |
   | `src/server/db/repositories/agent-model-config.repo.ts` | `findAgentModelConfigByOwner` |
   | `src/web/app/AgentConfigPanel.tsx` | `AgentConfigPanel` |
   | `src/web/app/AgentChatPanel.tsx` | 历史列表 / 「+」新建 |

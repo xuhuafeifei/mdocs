@@ -6,6 +6,7 @@ import {
   type AgentStreamEvent,
 } from "../agent/Agent/run.js";
 import { getAgentSessionForApi, createAgentSessionForApi, listAgentSessionsForApi, openAgentSessionForApi, bindCodingSessionDocumentForApi } from "../agent/Agent/session-manager.js";
+import { resolveUserChoice, expireUserChoice } from "../agent/Agent/choice-pending.js";
 import {
   getVisitorAgentConfig,
   isAgentModelId,
@@ -239,6 +240,61 @@ export function buildAgentRouter(): Router {
         msg === "document_id_required" ||
         msg === "bind_only_coding"
       ) {
+        res.status(400).json({ error: { code: "BAD_REQUEST", message: msg } });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.post("/choice", (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const requestId =
+      typeof req.body?.requestId === "string" ? req.body.requestId.trim() : "";
+    if (!requestId) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "requestId is required" } });
+      return;
+    }
+
+    // 前端倒计时结束：显式取消 pending（与服务端 timer 双保险）
+    if (req.body?.expire === true || req.body?.cancel === true) {
+      try {
+        expireUserChoice(req.visitor.visitor_id, requestId);
+        res.json({ data: { status: "timeout" } });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg === "choice_not_found") {
+          // 可能后端 timer 已先解冻
+          res.json({ data: { status: "timeout" } });
+          return;
+        }
+        if (msg === "choice_forbidden") {
+          res.status(403).json({ error: { code: "FORBIDDEN", message: msg } });
+          return;
+        }
+        throw err;
+      }
+      return;
+    }
+
+    const choice = typeof req.body?.choice === "string" ? req.body.choice : "";
+    try {
+      const data = resolveUserChoice(req.visitor.visitor_id, requestId, choice);
+      res.json({ data });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "choice_not_found") {
+        res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
+        return;
+      }
+      if (msg === "choice_forbidden") {
+        res.status(403).json({ error: { code: "FORBIDDEN", message: msg } });
+        return;
+      }
+      if (msg === "choice_empty") {
         res.status(400).json({ error: { code: "BAD_REQUEST", message: msg } });
         return;
       }

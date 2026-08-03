@@ -646,6 +646,14 @@ export type AgentStreamEvent =
     }
   | { type: "tool_notice"; toolName: string; text: string }
   | { type: "markdown_set"; markdown: string }
+  | {
+      type: "choice_card";
+      requestId: string;
+      title: string;
+      options: string[];
+      expiresAt: string;
+    }
+  | { type: "choice_expired"; requestId: string }
   | { type: "context_usage"; percent: number; used: number; limit: number }
   | { type: "tree_changed"; reason: string }
   | { type: "done" }
@@ -760,6 +768,27 @@ export function bindCodingSessionDocumentApi(
   return api("/api/agent/session/bind-document", {
     method: "POST",
     body: JSON.stringify({ sessionId, documentId }),
+  });
+}
+
+/** 解冻 ask_user_choice：choice 为用户点选或输入的内容字符串 */
+export function submitAgentChoiceApi(
+  requestId: string,
+  choice: string,
+): Promise<{ status: string; choice?: string }> {
+  return api("/api/agent/choice", {
+    method: "POST",
+    body: JSON.stringify({ requestId, choice }),
+  });
+}
+
+/** 前端倒计时结束：通知后端结束 pending（timeout） */
+export function expireAgentChoiceApi(
+  requestId: string,
+): Promise<{ status: string }> {
+  return api("/api/agent/choice", {
+    method: "POST",
+    body: JSON.stringify({ requestId, expire: true }),
   });
 }
 

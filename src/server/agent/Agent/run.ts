@@ -23,6 +23,7 @@ import {
   mergeContextUsage,
   type AgentContextUsage,
 } from "./context-usage.js";
+import { cancelVisitorChoices } from "./choice-pending.js";
 
 export type { AgentContextUsage, AgentMode };
 export { getAgentContextUsageForApi } from "./context-usage.js";
@@ -41,6 +42,14 @@ export type AgentStreamEvent =
     }
   | { type: "tool_notice"; toolName: string; text: string }
   | { type: "markdown_set"; markdown: string }
+  | {
+      type: "choice_card";
+      requestId: string;
+      title: string;
+      options: string[];
+      expiresAt: string;
+    }
+  | { type: "choice_expired"; requestId: string }
   | { type: "context_usage"; percent: number; used: number; limit: number }
   /** 账号工具改了文档树结构，前端应 re-fetch tree */
   | { type: "tree_changed"; reason: string }
@@ -95,14 +104,32 @@ export async function runOnboardingChat(params: {
   if (!skills.isReady()) throw new Error("skills_missing");
 
   const { models, model } = createDeepSeekModel(cfg);
+  const choiceHooks = {
+    onChoiceCard: (card: {
+      requestId: string;
+      title: string;
+      options: string[];
+      expiresAt: string;
+    }) => {
+      onEvent({ type: "choice_card", ...card });
+    },
+    onChoiceExpired: (requestId: string) => {
+      onEvent({ type: "choice_expired", requestId });
+    },
+    signal,
+  };
   const accountOrCoding =
     mode === "coding"
-      ? createCodingTools(visitorId, {
-          documentId: params.documentId ?? null,
-          workingMarkdown: params.workingMarkdown ?? "",
-          baseMarkdown: params.baseMarkdown ?? "",
-        })
-      : createAccountTools(visitorId);
+      ? createCodingTools(
+          visitorId,
+          {
+            documentId: params.documentId ?? null,
+            workingMarkdown: params.workingMarkdown ?? "",
+            baseMarkdown: params.baseMarkdown ?? "",
+          },
+          choiceHooks,
+        )
+      : createAccountTools(visitorId, choiceHooks);
   const tools = [...createSkillTools(skills), ...accountOrCoding];
   const systemPrompt = buildSystemPrompt(mode);
 
@@ -134,7 +161,10 @@ export async function runOnboardingChat(params: {
     }),
   );
 
-  const onAbort = () => agent.abort();
+  const onAbort = () => {
+    cancelVisitorChoices(visitorId);
+    agent.abort();
+  };
   signal?.addEventListener("abort", onAbort);
 
   try {
@@ -160,6 +190,7 @@ export async function runOnboardingChat(params: {
     throw err;
   } finally {
     signal?.removeEventListener("abort", onAbort);
+    cancelVisitorChoices(visitorId);
     unsub();
   }
 }
