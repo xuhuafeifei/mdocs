@@ -46,17 +46,12 @@ import { VisitorRegisterDialog } from "./VisitorRegisterDialog";
 import { VisitorIdNotice } from "./VisitorIdNotice";
 import { DocumentTree, type TreeContextMenu as TreeContextMenuPayload } from "./DocumentTree";
 import { TreeContextMenu } from "./TreeContextMenu";
-import { DocumentEditor } from "./DocumentEditor";
 import { DomainSelect } from "./DomainSelect";
-import { SettingsPage } from "./SettingsPage";
-import { AgentChatPanel } from "./AgentChatPanel";
 import { AgentFab, agentPanelAnchorStyle, useAgentFabPosition } from "./AgentFab";
-import { AiWriteWorkbench } from "./ai-write/AiWriteWorkbench";
 import { MessageDialog } from "./MessageDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
 import { ConflictModal } from "./ConflictModal";
-const MergeView = lazy(() => import("./MergeView").then((m) => ({ default: m.MergeView })));
 import { CommentsPanel } from "./CommentsPanel";
 import {
   getDraft,
@@ -84,6 +79,21 @@ import "./App.css";
 import "./merge.css";
 import "./domain.css";
 import "./comments.css";
+
+/** 重依赖按需加载：首屏只拉壳，编辑器/助手/设置进独立 chunk */
+const DocumentEditor = lazy(() =>
+  import("./DocumentEditor").then((m) => ({ default: m.DocumentEditor })),
+);
+const SettingsPage = lazy(() =>
+  import("./SettingsPage").then((m) => ({ default: m.SettingsPage })),
+);
+const AgentChatPanel = lazy(() =>
+  import("./AgentChatPanel").then((m) => ({ default: m.AgentChatPanel })),
+);
+const AiWriteWorkbench = lazy(() =>
+  import("./ai-write/AiWriteWorkbench").then((m) => ({ default: m.AiWriteWorkbench })),
+);
+const MergeView = lazy(() => import("./MergeView").then((m) => ({ default: m.MergeView })));
 
 type Phase = "loading" | "needsRegister" | "ready";
 
@@ -1149,45 +1159,53 @@ export function App() {
             position={agentFabPos}
             onPositionChange={setAgentFabPos}
           />
-          <AgentChatPanel
-            open={agentPanelOpen}
-            onClose={() => setAgentPanelOpen(false)}
-            visitorName={visitor?.visitorName}
-            anchorStyle={agentPanelAnchorStyle(agentFabPos)}
-            onOpenDocument={(docId) => {
-              setView("docs");
-              void guardNavigate(() => navigate(`/doc/${docId}`));
-              setAgentPanelOpen(false);
-            }}
-            onTreeChanged={() => void refreshTree()}
-            onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
-            onOpenCoding={(payload) => void openAiWriteForDocument(payload)}
-          />
+          {agentPanelOpen ? (
+            <Suspense fallback={null}>
+              <AgentChatPanel
+                open={agentPanelOpen}
+                onClose={() => setAgentPanelOpen(false)}
+                visitorName={visitor?.visitorName}
+                anchorStyle={agentPanelAnchorStyle(agentFabPos)}
+                onOpenDocument={(docId) => {
+                  setView("docs");
+                  void guardNavigate(() => navigate(`/doc/${docId}`));
+                  setAgentPanelOpen(false);
+                }}
+                onTreeChanged={() => void refreshTree()}
+                onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
+                onOpenCoding={(payload) => void openAiWriteForDocument(payload)}
+              />
+            </Suspense>
+          ) : null}
         </>
       )}
 
       {!isDemoMode() && aiWriteBoot ? (
-        <AiWriteWorkbench
-          open={aiWriteOpen}
-          initialMarkdown={aiWriteBoot.markdown}
-          documentId={aiWriteBoot.documentId}
-          displayName={aiWriteBoot.displayName}
-          onClose={() => {
-            setAiWriteOpen(false);
-            setAiWriteBoot(null);
-          }}
-          onComplete={completeAiWrite}
-        />
+        <Suspense fallback={null}>
+          <AiWriteWorkbench
+            open={aiWriteOpen}
+            initialMarkdown={aiWriteBoot.markdown}
+            documentId={aiWriteBoot.documentId}
+            displayName={aiWriteBoot.displayName}
+            onClose={() => {
+              setAiWriteOpen(false);
+              setAiWriteBoot(null);
+            }}
+            onComplete={completeAiWrite}
+          />
+        </Suspense>
       ) : null}
 
       {/* 根据当前视图渲染设置页或文档页 */}
       {view === "settings" ? (
-        <SettingsPage
-          onBack={() => setView("docs")}
-          onPublishDraft={publishDraftFromList}
-          onOpenDocument={openDocument}
-          onRecoverDraft={() => void refreshTree()}
-        />
+        <Suspense fallback={<div className="mdocs-main muted" style={{ padding: 24 }}>加载设置…</div>}>
+          <SettingsPage
+            onBack={() => setView("docs")}
+            onPublishDraft={publishDraftFromList}
+            onOpenDocument={openDocument}
+            onRecoverDraft={() => void refreshTree()}
+          />
+        </Suspense>
       ) : (
         <div className="mdocs-layout">
           {/* ========== 左侧边栏 ========== */}
@@ -1324,51 +1342,59 @@ export function App() {
               <div className="mdocs-editor-with-comments">
                 {/* 编辑器区域 */}
                 <div className="mdocs-editor-container">
-                  <DocumentEditor
-                    key={activeDocMeta.documentId}
-                    meta={activeDocMeta}
-                    initialContent={editorContent.content}
-                    initialDisplayName={editorContent.displayName}
-                    contentRevision={contentRevision}
-                    canEdit={Boolean(visitor && (activeDocMeta.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDocMeta.permission) || activeDocMeta.invitedEdit === true))}
-                    domains={domains}
-                    currentDomainId={currentDomainId}
-                    onDomainChange={(domainId) => {
-                      guardNavigate(() => {
-                        localStorage.setItem("mdocs.currentDomainId", domainId);
-                        setCurrentDomainId(domainId);
-                        setActiveDocMeta(null);
-                        setEditorContent(null);
-                        setSelectedCreateParentPath("");
-                        navigate("/");
-                        void refreshTree(domainId);
-                      });
-                    }}
-                    onDomainsChange={setDomains}
-                    onPublish={publishDocument}
-                    syncBehind={syncBehind}
-                    onSyncClick={() => void handleSyncClick()}
-                    onDraftExistsChange={setEditorDraftExists}
-                    onConflictModalRequest={() => setConflictModalOpen(true)}
-                    onMergeRequest={() => setMergeViewOpen(true)}
-                    canManageInvites={Boolean(visitor && visitor.visitorId === activeDocMeta.ownerVisitorId)}
-                    onDelete={async () => {
-                      if (activeDocMeta.relativePath.endsWith("/___desc___.md")) {
-                        const folderPath = activeDocMeta.relativePath.replace(/\/___desc___\.md$/, "");
-                        requestDeleteFolder(activeDocMeta.documentId, folderPath);
-                      } else {
-                        requestDeleteDocument(activeDocMeta.documentId, activeDocMeta.relativePath);
-                      }
-                    }}
-                    saveBeforeNavRef={saveBeforeNavRef}
-                    exportMarkdownRef={exportMarkdownRef}
-                    onShowToast={setMessage}
-                    onShowError={setAlertMessage}
-                    onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
-                    commentPanelOpen={commentPanelOpen}
-                    commentCount={commentCount}
-                    onAiWrite={() => void openAiWriteForCurrentDoc()}
-                  />
+                  <Suspense
+                    fallback={
+                      <div className="muted" style={{ padding: 24 }}>
+                        加载编辑器…
+                      </div>
+                    }
+                  >
+                    <DocumentEditor
+                      key={activeDocMeta.documentId}
+                      meta={activeDocMeta}
+                      initialContent={editorContent.content}
+                      initialDisplayName={editorContent.displayName}
+                      contentRevision={contentRevision}
+                      canEdit={Boolean(visitor && (activeDocMeta.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDocMeta.permission) || activeDocMeta.invitedEdit === true))}
+                      domains={domains}
+                      currentDomainId={currentDomainId}
+                      onDomainChange={(domainId) => {
+                        guardNavigate(() => {
+                          localStorage.setItem("mdocs.currentDomainId", domainId);
+                          setCurrentDomainId(domainId);
+                          setActiveDocMeta(null);
+                          setEditorContent(null);
+                          setSelectedCreateParentPath("");
+                          navigate("/");
+                          void refreshTree(domainId);
+                        });
+                      }}
+                      onDomainsChange={setDomains}
+                      onPublish={publishDocument}
+                      syncBehind={syncBehind}
+                      onSyncClick={() => void handleSyncClick()}
+                      onDraftExistsChange={setEditorDraftExists}
+                      onConflictModalRequest={() => setConflictModalOpen(true)}
+                      onMergeRequest={() => setMergeViewOpen(true)}
+                      canManageInvites={Boolean(visitor && visitor.visitorId === activeDocMeta.ownerVisitorId)}
+                      onDelete={async () => {
+                        if (activeDocMeta.relativePath.endsWith("/___desc___.md")) {
+                          const folderPath = activeDocMeta.relativePath.replace(/\/___desc___\.md$/, "");
+                          requestDeleteFolder(activeDocMeta.documentId, folderPath);
+                        } else {
+                          requestDeleteDocument(activeDocMeta.documentId, activeDocMeta.relativePath);
+                        }
+                      }}
+                      saveBeforeNavRef={saveBeforeNavRef}
+                      exportMarkdownRef={exportMarkdownRef}
+                      onShowToast={setMessage}
+                      onShowError={setAlertMessage}
+                      onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
+                      commentPanelOpen={commentPanelOpen}
+                      commentCount={commentCount}
+                      onAiWrite={() => void openAiWriteForCurrentDoc()}
+                    />
+                  </Suspense>
                 </div>
 
                 {commentPanelOpen && (

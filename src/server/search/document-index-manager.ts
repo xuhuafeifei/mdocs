@@ -39,12 +39,20 @@ export function startIndexTimer(): void {
   if (started) return;
   started = true;
 
-  // 首次启动时立即执行一次全量扫描
-  rebuildAllDirty()
-    .then((n) => {
-      if (n > 0) log.info("initial index rebuild done, %d documents indexed", n);
-    })
-    .catch((err) => log.error("initial index rebuild failed: %s", err instanceof Error ? err.message : String(err)));
+  // 延迟首轮全量扫描，避免启动瞬间占满 CPU，拖慢 HTML/静态资源 TTFB
+  const initialDelayMs = Number(process.env.MDOCS_INDEX_INITIAL_DELAY_MS) || 15_000;
+  setTimeout(() => {
+    rebuildAllDirty()
+      .then((n) => {
+        if (n > 0) log.info("initial index rebuild done, %d documents indexed", n);
+      })
+      .catch((err) =>
+        log.error(
+          "initial index rebuild failed: %s",
+          err instanceof Error ? err.message : String(err),
+        ),
+      );
+  }, initialDelayMs);
 
   // 定时扫描
   setInterval(() => {
@@ -52,10 +60,19 @@ export function startIndexTimer(): void {
       .then((n) => {
         if (n > 0) log.debug("periodic index rebuild done, %d documents indexed", n);
       })
-      .catch((err) => log.error("periodic index rebuild failed: %s", err instanceof Error ? err.message : String(err)));
+      .catch((err) =>
+        log.error(
+          "periodic index rebuild failed: %s",
+          err instanceof Error ? err.message : String(err),
+        ),
+      );
   }, INDEX_INTERVAL_MS);
 
-  log.info("index timer started, interval=%dms", INDEX_INTERVAL_MS);
+  log.info(
+    "index timer started, interval=%dms initialDelay=%dms",
+    INDEX_INTERVAL_MS,
+    initialDelayMs,
+  );
 }
 
 /**

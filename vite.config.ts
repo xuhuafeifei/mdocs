@@ -22,6 +22,33 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "dist/web"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("@lobehub/editor") || id.includes("lexical")) {
+            return "editor";
+          }
+          if (id.includes("@lobehub/ui") || id.includes("antd") || id.includes("antd-style")) {
+            return "ui";
+          }
+          if (id.includes("mermaid") || id.includes("cytoscape") || id.includes("@braintree")) {
+            return "diagram";
+          }
+          if (id.includes("motion") || id.includes("framer-motion")) {
+            return "motion";
+          }
+          if (
+            id.includes("/react/") ||
+            id.includes("/react-dom/") ||
+            id.includes("react-router") ||
+            id.includes("scheduler")
+          ) {
+            return "react-vendor";
+          }
+        },
+      },
+    },
   },
   resolve: {
     alias: [
