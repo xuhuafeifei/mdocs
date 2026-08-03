@@ -79,6 +79,7 @@ import {
 import { useAutoPublish } from "./hooks/useAutoPublish";
 import { useDocumentVersion } from "./hooks/useDocumentVersion";
 import mdocsLogo from "../assets/mdocs-logo.svg";
+import deepseekLogoUrl from "../assets/deepseek.svg";
 import "./App.css";
 import "./merge.css";
 import "./domain.css";
@@ -362,7 +363,7 @@ export function App() {
     markdown: string;
     documentId: string | null;
     displayName: string;
-  }): Promise<void> {
+  }): Promise<{ documentId: string }> {
     if (result.documentId) {
       const ok = window.confirm("将把帮写结果写入当前文档的本地草稿（不会自动发布）。继续？");
       if (!ok) {
@@ -401,7 +402,7 @@ export function App() {
         await openDocument(result.documentId);
       }
       setMessage("帮写已写入草稿，可在编辑器中继续修改后发布");
-      return;
+      return { documentId: result.documentId };
     }
 
     const created = await createDocumentApi({
@@ -415,6 +416,7 @@ export function App() {
     await refreshTree();
     await openDocument(created.documentId);
     setMessage("已创建文档");
+    return { documentId: created.documentId };
   }
 
   /**
@@ -1317,6 +1319,7 @@ export function App() {
                     saveBeforeNavRef={saveBeforeNavRef}
                     exportMarkdownRef={exportMarkdownRef}
                     onShowToast={setMessage}
+                    onShowError={setAlertMessage}
                     onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
                     commentPanelOpen={commentPanelOpen}
                     commentCount={commentCount}
@@ -1377,6 +1380,7 @@ export function App() {
                   </button>
                   {!isDemoMode() ? (
                     <button type="button" className="secondary" onClick={() => openAiWriteBlank()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <img src={deepseekLogoUrl} alt="" width={16} height={16} style={{ display: "block" }} />
                       AI 帮写
                     </button>
                   ) : null}

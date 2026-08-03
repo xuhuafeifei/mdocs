@@ -10,10 +10,11 @@ import { useLogger } from "../logger/logger.js";
 
 const log = useLogger("assets-route");
 
-// 单文件最大 12 MB
-const MAX_BYTES = 12 * 1024 * 1024;
-// 允许上传的图片扩展名白名单
-const ALLOWED_EXT = new Set([
+// 单文件最大 55 MB（附件：zip / 音频等）
+const MAX_BYTES = 55 * 1024 * 1024;
+
+/** Images only — used by link-to-img remote fetch. */
+const IMAGE_EXT = new Set([
   ".png",
   ".jpg",
   ".jpeg",
@@ -26,7 +27,20 @@ const ALLOWED_EXT = new Set([
   ".pjpeg",
 ]);
 
-// MIME 类型到扩展名的映射表
+/** Editor attachments: images + zip + common audio. */
+const ALLOWED_UPLOAD_EXT = new Set([
+  ...IMAGE_EXT,
+  ".zip",
+  ".mp3",
+  ".wav",
+  ".m4a",
+  ".ogg",
+  ".flac",
+  ".aac",
+  ".oga",
+]);
+
+// MIME 类型到扩展名的映射表（远程图片转存）
 const MIME_TO_EXT: Record<string, string> = {
   "image/png": ".png",
   "image/jpeg": ".jpg",
@@ -102,7 +116,7 @@ function assertDocumentOwner(req: Request, documentId: unknown): string {
  */
 function extFromUrl(u: URL): string {
   const ext = path.extname(u.pathname).toLowerCase();
-  if (ALLOWED_EXT.has(ext)) return ext;
+  if (IMAGE_EXT.has(ext)) return ext;
   return ".png";
 }
 
@@ -150,12 +164,29 @@ function createUploader() {
     limits: { fileSize: MAX_BYTES, files: 24 },
     fileFilter: (_req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
-      if (!ALLOWED_EXT.has(ext)) {
+      if (!ALLOWED_UPLOAD_EXT.has(ext)) {
         cb(new Error("unsupported file type"));
         return;
       }
-      if (file.mimetype && !file.mimetype.startsWith("image/")) {
-        cb(new Error("not an image"));
+      const mime = (file.mimetype || "").toLowerCase();
+      if (IMAGE_EXT.has(ext)) {
+        if (mime && !mime.startsWith("image/")) {
+          cb(new Error("not an image"));
+          return;
+        }
+      } else if (ext === ".zip") {
+        if (
+          mime &&
+          mime !== "application/zip" &&
+          mime !== "application/x-zip-compressed" &&
+          mime !== "application/octet-stream" &&
+          mime !== "multipart/x-zip"
+        ) {
+          cb(new Error("unsupported file type"));
+          return;
+        }
+      } else if (mime && !mime.startsWith("audio/") && mime !== "application/octet-stream") {
+        cb(new Error("unsupported file type"));
         return;
       }
       cb(null, true);
@@ -206,7 +237,25 @@ export function serveAssetFile(req: Request, res: Response): void {
                 ? "image/x-icon"
                 : ext === ".bmp"
                   ? "image/bmp"
-                  : "application/octet-stream";
+                  : ext === ".zip"
+                    ? "application/zip"
+                    : ext === ".mp3"
+                      ? "audio/mpeg"
+                      : ext === ".wav"
+                        ? "audio/wav"
+                        : ext === ".m4a"
+                          ? "audio/mp4"
+                          : ext === ".ogg" || ext === ".oga"
+                            ? "audio/ogg"
+                            : ext === ".flac"
+                              ? "audio/flac"
+                              : ext === ".aac"
+                                ? "audio/aac"
+                                : "application/octet-stream";
+  // Attachment downloads: suggest filename for non-images
+  if (!IMAGE_EXT.has(ext)) {
+    res.setHeader("Content-Disposition", `attachment; filename="${path.basename(abs)}"`);
+  }
   res.setHeader("Content-Type", ct);
   res.setHeader("Cache-Control", "public, max-age=86400, immutable");
   fs.createReadStream(abs).pipe(res);
@@ -339,7 +388,7 @@ export function buildAssetsUploadRouter(): ReturnType<typeof Router> {
       }
       // 根据 Content-Type 或 URL 推断扩展名，并校验是否在白名单中
       const ext = MIME_TO_EXT[ct] ?? extFromUrl(u);
-      if (!ALLOWED_EXT.has(ext)) {
+      if (!IMAGE_EXT.has(ext)) {
         res.status(400).json(vditorError("unsupported image type").body);
         return;
       }

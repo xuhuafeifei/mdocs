@@ -5,7 +5,7 @@ import {
   runOnboardingChat,
   type AgentStreamEvent,
 } from "../agent/Agent/run.js";
-import { getAgentSessionForApi, createAgentSessionForApi, listAgentSessionsForApi, openAgentSessionForApi } from "../agent/Agent/session-manager.js";
+import { getAgentSessionForApi, createAgentSessionForApi, listAgentSessionsForApi, openAgentSessionForApi, bindCodingSessionDocumentForApi } from "../agent/Agent/session-manager.js";
 import {
   getVisitorAgentConfig,
   isAgentModelId,
@@ -19,6 +19,18 @@ const log = useLogger("agent-route");
 
 function writeSse(res: Response, event: AgentStreamEvent) {
   if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
+}
+
+function parseAgentMode(raw: unknown): "normal" | "coding" {
+  return typeof raw === "string" && raw.trim() === "coding" ? "coding" : "normal";
+}
+
+/** query/body 的 documentId；空串视为 null（空白帮写） */
+function parseDocumentId(raw: unknown): string | null | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim();
+  return t || null;
 }
 
 /** 薄封装：校验入参 → 调 agent 层 → 把 onEvent 写成 SSE */
@@ -107,7 +119,14 @@ export function buildAgentRouter(): Router {
       return;
     }
 
-    const data = await getAgentSessionForApi(req.visitor.visitor_id);
+    const mode = parseAgentMode(req.query?.mode);
+    const documentId =
+      mode === "coding" ? parseDocumentId(req.query?.documentId) : undefined;
+    const data = await getAgentSessionForApi(
+      req.visitor.visitor_id,
+      mode,
+      documentId ?? null,
+    );
     res.json({ data });
   });
 
@@ -125,7 +144,14 @@ export function buildAgentRouter(): Router {
       res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
       return;
     }
-    const data = await listAgentSessionsForApi(req.visitor.visitor_id);
+    const mode = parseAgentMode(req.query?.mode);
+    const documentId =
+      mode === "coding" ? parseDocumentId(req.query?.documentId) : undefined;
+    const data = await listAgentSessionsForApi(
+      req.visitor.visitor_id,
+      mode,
+      documentId ?? null,
+    );
     res.json({ data });
   });
 
@@ -134,7 +160,16 @@ export function buildAgentRouter(): Router {
       res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
       return;
     }
-    const data = await createAgentSessionForApi(req.visitor.visitor_id);
+    const mode = parseAgentMode(req.body?.mode ?? req.query?.mode);
+    const documentId =
+      mode === "coding"
+        ? parseDocumentId(req.body?.documentId ?? req.query?.documentId)
+        : undefined;
+    const data = await createAgentSessionForApi(
+      req.visitor.visitor_id,
+      mode,
+      documentId ?? null,
+    );
     res.json({ data });
   });
 
@@ -149,12 +184,62 @@ export function buildAgentRouter(): Router {
       return;
     }
     try {
-      const data = await openAgentSessionForApi(req.visitor.visitor_id, sessionId);
+      const mode = parseAgentMode(req.body?.mode ?? req.query?.mode);
+      const documentId =
+        mode === "coding"
+          ? parseDocumentId(req.body?.documentId ?? req.query?.documentId)
+          : undefined;
+      const data = await openAgentSessionForApi(
+        req.visitor.visitor_id,
+        sessionId,
+        mode,
+        documentId ?? null,
+      );
       res.json({ data });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg === "invalid_session_id" || msg === "session_not_found") {
+      if (
+        msg === "invalid_session_id" ||
+        msg === "session_not_found" ||
+        msg === "session_document_mismatch"
+      ) {
         res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.post("/session/bind-document", async (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : "";
+    const documentId =
+      typeof req.body?.documentId === "string" ? req.body.documentId.trim() : "";
+    if (!sessionId || !documentId) {
+      res.status(400).json({
+        error: { code: "BAD_REQUEST", message: "sessionId and documentId are required" },
+      });
+      return;
+    }
+    try {
+      const data = await bindCodingSessionDocumentForApi(
+        req.visitor.visitor_id,
+        sessionId,
+        documentId,
+      );
+      res.json({ data });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        msg === "invalid_session_id" ||
+        msg === "session_not_found" ||
+        msg === "document_id_required" ||
+        msg === "bind_only_coding"
+      ) {
+        res.status(400).json({ error: { code: "BAD_REQUEST", message: msg } });
         return;
       }
       throw err;

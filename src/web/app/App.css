@@ -2759,6 +2759,13 @@ strong.label {
   gap: 12px;
   min-width: 0;
 }
+
+.mdocs-ai-write-title-logo {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
 .mdocs-ai-write-title {
   border: 1px solid #e8eaed;
   border-radius: 8px;
@@ -2792,6 +2799,36 @@ strong.label {
   min-width: 0;
   min-height: 0;
 }
+
+.mdocs-ai-write-chat-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e8eaed;
+  flex-shrink: 0;
+}
+
+.mdocs-ai-write-chat-toolbar-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4e5969;
+}
+
+.mdocs-ai-write-chat-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mdocs-ai-write-history {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  border-bottom: none;
+}
+
 .mdocs-ai-write-chat-messages {
   flex: 1;
   overflow: auto;
@@ -2803,6 +2840,16 @@ strong.label {
   font-size: 13px;
   line-height: 1.55;
 }
+.mdocs-ai-write-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mdocs-ai-write-timeline .mdocs-agent-panel-tool-notice {
+  align-self: flex-start;
+}
+
 .mdocs-ai-write-msg {
   margin-bottom: 12px;
   font-size: 14px;

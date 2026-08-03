@@ -47,6 +47,7 @@ import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
 import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, Network, RefreshCw, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star, Workflow } from "lucide-react";
 
+import deepseekLogoUrl from "../assets/deepseek.svg";
 import type { ActiveDocumentMeta } from "../../shared/types/document";
 import { getDocumentTaskQueue } from "./documentTaskQueue";
 import type { DomainSummary } from "../../shared/types/domain";
@@ -78,6 +79,15 @@ function safeLexicalJsonString(editor: IEditor): string | null {
 /** Lexical 禁止 root.children 为空；空文档至少保留一个空段落 */
 const EMPTY_PARAGRAPH_LEXICAL =
   '{"root":{"direction":"ltr","format":"","indent":0,"version":1,"type":"root","children":[{"direction":"ltr","format":"","indent":0,"version":1,"textFormat":0,"textStyle":"","children":[],"type":"paragraph"}]}}';
+
+function formatUploadError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const msg = raw.trim();
+  if (/^File too large$/i.test(msg)) return "文件过大（单文件上限 55MB）";
+  if (/^unsupported file type$/i.test(msg)) return "不支持的文件类型";
+  if (/^not an image$/i.test(msg)) return "不是有效的图片文件";
+  return msg || "上传失败";
+}
 
 function ensureNonEmptyEditorContent(content: string, contentType: "json" | "markdown"): string {
   if (!content) {
@@ -152,6 +162,8 @@ interface DocumentEditorProps {
   exportMarkdownRef?: React.MutableRefObject<(() => string) | undefined>;
   /** Toast message callback */
   onShowToast?: (message: string) => void;
+  /** Error dialog callback (upload failures etc.) */
+  onShowError?: (message: string) => void;
   /** 评论面板切换 */
   onToggleComments: () => void;
   /** 评论面板是否展开 */
@@ -758,8 +770,13 @@ export function DocumentEditor(props: DocumentEditorProps) {
       // 文件上传插件：将文件上传到服务器资源存储
       withProps(ReactFilePlugin, {
         handleUpload: async (file: File) => {
-          const url = await uploadAssetApi(file, props.meta.documentId);
-          return { url };
+          try {
+            const url = await uploadAssetApi(file, props.meta.documentId);
+            return { url };
+          } catch (e) {
+            props.onShowError?.(formatUploadError(e));
+            throw e;
+          }
         },
       }),
       // 图片插件：支持 blob URL 转存到服务器
@@ -769,15 +786,20 @@ export function DocumentEditor(props: DocumentEditorProps) {
         needRehost: (url: string) => url.startsWith("blob:"),
         // 转存逻辑：下载 blob → 转为 File → 上传 → 返回服务器 URL
         handleRehost: async (url: string) => {
-          const res = await fetch(url);
-          const blob = await res.blob();
-          const file = new File([blob], "image.png", { type: blob.type });
-          const serverUrl = await uploadAssetApi(file, props.meta.documentId);
-          return { url: serverUrl };
+          try {
+            const res = await fetch(url);
+            const blob = await res.blob();
+            const file = new File([blob], "image.png", { type: blob.type });
+            const serverUrl = await uploadAssetApi(file, props.meta.documentId);
+            return { url: serverUrl };
+          } catch (e) {
+            props.onShowError?.(formatUploadError(e));
+            throw e;
+          }
         },
       }),
     ],
-    [editor, t],
+    [editor, t, props.meta.documentId, props.onShowError],
   );
 
   return (
@@ -811,8 +833,15 @@ export function DocumentEditor(props: DocumentEditorProps) {
             type="button"
             className="secondary"
             onClick={() => props.onAiWrite?.()}
-            style={{ padding: "4px 10px", whiteSpace: "nowrap" }}
+            style={{
+              padding: "4px 10px",
+              whiteSpace: "nowrap",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
           >
+            <img src={deepseekLogoUrl} alt="" width={16} height={16} style={{ display: "block" }} />
             帮写
           </button>
         ) : null}

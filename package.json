@@ -1,6 +1,6 @@
 {
   "name": "@fgbg/mdocs",
-  "version": "0.8.15",
+  "version": "0.8.16",
   "description": "A Markdown knowledge base for small teams",
   "license": "MIT",
   "type": "module",
@@ -42,7 +42,7 @@
     "@earendil-works/pi-agent-core": "^0.82.1",
     "@earendil-works/pi-ai": "^0.82.1",
     "@lexical/rich-text": "0.42.0",
-    "@lobehub/editor": "npm:@fgbg/lobe-editor@1.0.0-fork.16",
+    "@lobehub/editor": "npm:@fgbg/lobe-editor@1.0.0-fork.17",
     "@lobehub/ui": "^5.0.0",
     "@node-rs/jieba": "^2.0.1",
     "@shikijs/langs": "4.0.2",

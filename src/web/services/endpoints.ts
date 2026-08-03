@@ -377,15 +377,20 @@ export async function uploadAssetApi(file: File, documentId: string): Promise<st
   });
 
   const body: unknown = await res.json();
-  if (!res.ok) {
+  const vditor = body as { code?: number; msg?: string; data?: { succMap?: Record<string, string> } };
+  if (!res.ok || vditor.code === 1) {
     const err = (body as { error?: { code: string; message: string } } | null)?.error;
-    throw new ApiRequestError(res.status, err?.code ?? "UNKNOWN", err?.message ?? "upload failed");
+    throw new ApiRequestError(
+      res.status,
+      err?.code ?? "UPLOAD_FAILED",
+      err?.message ?? vditor.msg ?? "upload failed",
+    );
   }
 
   /**
    * 提取上传成功后的文件 URL 并返回。
    */
-  const succMap = (body as { data: { succMap: Record<string, string> } }).data.succMap;
+  const succMap = vditor.data?.succMap ?? {};
   const urls = Object.values(succMap);
   if (urls.length === 0) throw new Error("upload succeeded but no URL returned");
   return urls[0]!;
@@ -693,22 +698,68 @@ export interface AgentSessionListResponse {
   sessions: AgentSessionSummary[];
 }
 
-export function fetchAgentSessionApi(): Promise<AgentSessionResponse> {
-  return api<AgentSessionResponse>("/api/agent/session");
+export function fetchAgentSessionApi(
+  mode: "normal" | "coding" = "normal",
+  documentId?: string | null,
+): Promise<AgentSessionResponse> {
+  const params = new URLSearchParams();
+  if (mode === "coding") {
+    params.set("mode", "coding");
+    if (documentId) params.set("documentId", documentId);
+  }
+  const q = params.toString();
+  return api<AgentSessionResponse>(`/api/agent/session${q ? `?${q}` : ""}`);
 }
 
-export function fetchAgentSessionsApi(): Promise<AgentSessionListResponse> {
-  return api<AgentSessionListResponse>("/api/agent/sessions");
+export function fetchAgentSessionsApi(
+  mode: "normal" | "coding" = "normal",
+  documentId?: string | null,
+): Promise<AgentSessionListResponse> {
+  const params = new URLSearchParams();
+  if (mode === "coding") {
+    params.set("mode", "coding");
+    if (documentId) params.set("documentId", documentId);
+  }
+  const q = params.toString();
+  return api<AgentSessionListResponse>(`/api/agent/sessions${q ? `?${q}` : ""}`);
 }
 
-export function createAgentSessionApi(): Promise<AgentSessionResponse> {
-  return api<AgentSessionResponse>("/api/agent/sessions", { method: "POST" });
+export function createAgentSessionApi(
+  mode: "normal" | "coding" = "normal",
+  documentId?: string | null,
+): Promise<AgentSessionResponse> {
+  return api<AgentSessionResponse>("/api/agent/sessions", {
+    method: "POST",
+    body: JSON.stringify({
+      mode,
+      ...(mode === "coding" ? { documentId: documentId ?? null } : {}),
+    }),
+  });
 }
 
-export function openAgentSessionApi(sessionId: string): Promise<AgentSessionResponse> {
+export function openAgentSessionApi(
+  sessionId: string,
+  mode: "normal" | "coding" = "normal",
+  documentId?: string | null,
+): Promise<AgentSessionResponse> {
   return api<AgentSessionResponse>("/api/agent/session/open", {
     method: "POST",
-    body: JSON.stringify({ sessionId }),
+    body: JSON.stringify({
+      sessionId,
+      mode,
+      ...(mode === "coding" ? { documentId: documentId ?? null } : {}),
+    }),
+  });
+}
+
+/** 空白帮写写回成文后，把 coding session 绑到新 documentId */
+export function bindCodingSessionDocumentApi(
+  sessionId: string,
+  documentId: string,
+): Promise<{ sessionId: string; documentId: string }> {
+  return api("/api/agent/session/bind-document", {
+    method: "POST",
+    body: JSON.stringify({ sessionId, documentId }),
   });
 }
 

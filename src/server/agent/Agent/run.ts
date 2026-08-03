@@ -110,7 +110,9 @@ export async function runOnboardingChat(params: {
     kind: mode === "coding" ? "coding" : "normal",
   });
   const { sessionId, messages: history } =
-    await sessionManager.loadLastOpenedMessages();
+    await sessionManager.loadLastOpenedMessages(
+      mode === "coding" ? params.documentId ?? null : undefined,
+    );
 
   const agent = new Agent({
     initialState: {
@@ -430,13 +432,22 @@ function bindAgentEvents(opts: {
         return;
       }
 
+      if (event.toolName === "get_working_document") {
+        onEvent({
+          type: "tool_notice",
+          toolName: event.toolName,
+          text: "读取帮写工作稿",
+        });
+        return;
+      }
+
       if (event.toolName === "set_markdown_document") {
         const markdown = String(details?.markdown ?? "");
         onEvent({ type: "markdown_set", markdown });
         onEvent({
           type: "tool_notice",
           toolName: event.toolName,
-          text: "已更新帮写提案正文",
+          text: "设置帮写正文",
         });
       }
     }
