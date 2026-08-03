@@ -13,7 +13,8 @@ type PendingEntry = {
 
 const pending = new Map<string, PendingEntry>();
 
-export const DEFAULT_CHOICE_TIMEOUT_MS = 15_000;
+/** 默认 2 分钟，给用户留思考时间 */
+export const DEFAULT_CHOICE_TIMEOUT_MS = 120_000;
 
 /** 登记一次 choice 等待；超时 / abort 会自动解冻 */
 export function waitForUserChoice(params: {

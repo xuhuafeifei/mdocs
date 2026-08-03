@@ -51,8 +51,10 @@
   | `src/server/agent/Config/config.ts` | `getVisitorAgentConfig` `upsertVisitorAgentConfig` |
   | `src/server/agent/Agent/run.ts` | `getAgentStatus` `runOnboardingChat` |
   | `src/server/agent/Agent/session-manager.ts` | `listSessions` `createSession` `openSession` |
-  | `src/server/agent/Agent/tools-account.ts` | `createAccountTools`（域/文档/访客 + 可选 choice tools） |
+  | `src/server/agent/Agent/tools-account.ts` | `createAccountTools`（域/文档/访客 + 可选 choice / overwrite） |
   | `src/server/agent/Agent/tools-choice.ts` | `createChoiceTools`（`ask_user_choice`） |
+  | `src/server/agent/Agent/tools-overwrite.ts` | `createOverwriteTools`（`overwrite_document`） |
+  | `src/server/agent/Agent/almost-empty.ts` | `isAlmostEmptyDocumentText` |
   | `src/server/agent/Agent/choice-pending.ts` | `waitForUserChoice` `resolveUserChoice` |
   | `src/server/agent/Agent/tools-documents.ts` | `createDocumentTools`（含 `search_documents` `list_tree` `list_my_documents` `create_document` `create_folder` `get_document`） |
   | `src/server/agent/Agent/tools-domains.ts` | `createDomainTools`（含 `list_domains` `create_domain`） |

@@ -54,7 +54,7 @@ export function createChoiceTools(
           minItems: 2,
         }),
         timeoutMs: Type.Optional(
-          Type.Number({ description: "超时毫秒，默认 15000" }),
+          Type.Number({ description: "超时毫秒，默认 120000（2 分钟）" }),
         ),
       }),
       execute: async (_id, params) => {

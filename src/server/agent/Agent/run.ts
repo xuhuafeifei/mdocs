@@ -50,9 +50,20 @@ export type AgentStreamEvent =
       expiresAt: string;
     }
   | { type: "choice_expired"; requestId: string }
+  | {
+      type: "open_coding";
+      documentId: string;
+      displayName: string;
+    }
   | { type: "context_usage"; percent: number; used: number; limit: number }
   /** 账号工具改了文档树结构，前端应 re-fetch tree */
   | { type: "tree_changed"; reason: string }
+  /** AI 覆写文档成功，前端若打开该文档应拉取最新内容 */
+  | {
+      type: "document_overwritten";
+      documentId: string;
+      headCommitId: string;
+    }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -116,6 +127,16 @@ export async function runOnboardingChat(params: {
     onChoiceExpired: (requestId: string) => {
       onEvent({ type: "choice_expired", requestId });
     },
+    ...(mode === "normal"
+      ? {
+          onOpenCoding: (payload: {
+            documentId: string;
+            displayName: string;
+          }) => {
+            onEvent({ type: "open_coding", ...payload });
+          },
+        }
+      : {}),
     signal,
   };
   const accountOrCoding =
@@ -460,6 +481,31 @@ function bindAgentEvents(opts: {
           toolName: event.toolName,
           text: path ? `已移动「${name}」→ ${path}` : `已移动「${name}」`,
         });
+        return;
+      }
+
+      if (event.toolName === "overwrite_document") {
+        const status = String(details?.status ?? "");
+        const name = String(details?.displayName ?? "").trim() || "文档";
+        if (status === "overwritten") {
+          onEvent({
+            type: "tool_notice",
+            toolName: event.toolName,
+            text: `已覆写「${name}」`,
+          });
+          const documentId = String(details?.documentId ?? "");
+          const headCommitId = String(details?.headCommitId ?? "");
+          if (documentId && headCommitId) {
+            onEvent({ type: "document_overwritten", documentId, headCommitId });
+          }
+          onEvent({ type: "tree_changed", reason: "overwrite_document" });
+        } else if (status === "redirected_to_coding") {
+          onEvent({
+            type: "tool_notice",
+            toolName: event.toolName,
+            text: `「${name}」已打开帮写`,
+          });
+        }
         return;
       }
 

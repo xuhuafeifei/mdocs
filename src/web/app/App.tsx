@@ -359,6 +359,48 @@ export function App() {
     setAgentPanelOpen(false);
   }
 
+  /** Ask：用户选「打开帮写审阅」后按 documentId 打开工作台 */
+  async function openAiWriteForDocument(payload: {
+    documentId: string;
+    displayName: string;
+  }): Promise<void> {
+    const documentId = payload.documentId.trim();
+    if (!documentId) return;
+    await saveBeforeNavRef.current?.();
+    let markdown = "";
+    let displayName = payload.displayName.trim() || "未命名";
+    try {
+      const doc = await getDocumentApi(documentId);
+      displayName = doc.displayName?.trim() || displayName;
+      try {
+        const converted = await convertContentApi({
+          content: doc.content,
+          from: "lexical",
+          to: "markdown",
+        });
+        markdown = converted.content;
+      } catch {
+        markdown = "";
+      }
+    } catch {
+      /* 读失败仍打开空稿 */
+    }
+    setAiWriteBoot({ markdown, documentId, displayName });
+    setAiWriteOpen(true);
+    setAgentPanelOpen(false);
+    setView("docs");
+    void guardNavigate(() => navigate(`/doc/${documentId}`));
+  }
+
+  /** AI 覆写文档成功：直接触发拉取更新逻辑 */
+  async function handleDocumentOverwritten(payload: {
+    documentId: string;
+    headCommitId: string;
+  }): Promise<void> {
+    if (activeDocMeta?.documentId !== payload.documentId) return;
+    await handleSyncClick();
+  }
+
   async function completeAiWrite(result: {
     markdown: string;
     documentId: string | null;
@@ -1118,6 +1160,8 @@ export function App() {
               setAgentPanelOpen(false);
             }}
             onTreeChanged={() => void refreshTree()}
+            onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
+            onOpenCoding={(payload) => void openAiWriteForDocument(payload)}
           />
         </>
       )}

@@ -362,8 +362,27 @@ export function AgentChatPanel(props: {
   onOpenDocument?: (documentId: string) => void | Promise<void>;
   /** Agent 建文/建文件夹/移动等改树后回调，用于刷新侧栏 */
   onTreeChanged?: () => void | Promise<void>;
+  /** AI 覆写文档成功回调，刷新当前打开文档的内容 */
+  onDocumentOverwritten?: (payload: {
+    documentId: string;
+    headCommitId: string;
+  }) => void | Promise<void>;
+  /** 有正文时用户选「打开帮写」→ 打开帮写全屏层 */
+  onOpenCoding?: (payload: {
+    documentId: string;
+    displayName: string;
+  }) => void | Promise<void>;
 }) {
-  const { open, onClose, visitorName, anchorStyle, onOpenDocument, onTreeChanged } = props;
+  const {
+    open,
+    onClose,
+    visitorName,
+    anchorStyle,
+    onOpenDocument,
+    onTreeChanged,
+    onDocumentOverwritten,
+    onOpenCoding,
+  } = props;
   const userInitial = (visitorName?.trim().charAt(0) || "我").toUpperCase();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [status, setStatus] = useState<AgentStatus | null>(null);
@@ -641,6 +660,16 @@ export function AgentChatPanel(props: {
             );
           } else if (event.type === "tree_changed") {
             void onTreeChanged?.();
+          } else if (event.type === "document_overwritten") {
+            void onDocumentOverwritten?.({
+              documentId: event.documentId,
+              headCommitId: event.headCommitId,
+            });
+          } else if (event.type === "open_coding") {
+            void onOpenCoding?.({
+              documentId: event.documentId,
+              displayName: event.displayName,
+            });
           } else if (event.type === "context_usage") {
             setContextUsage({
               percent: event.percent,
@@ -936,7 +965,7 @@ export function AgentChatPanel(props: {
                                             void openDocumentFromTable(block.documentId);
                                           }}
                                         >
-                                          {block.title}
+                                          《{block.title}》
                                         </button>
                                         <span className="mdocs-agent-panel-tool-fold-hint">文档预览</span>
                                       </summary>

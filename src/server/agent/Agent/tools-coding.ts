@@ -86,11 +86,14 @@ export function createCodingWriteTools(ctx: CodingDocContext): AgentTool[] {
   ];
 }
 
-/** coding：账号结构 tools + 读写 buffer tools（手册 tools 在 run 里另挂） */
+/** coding：账号结构 tools + 读写 buffer tools（手册 tools 在 run 里另挂；不含服务端覆写） */
 export function createCodingTools(
   visitorId: string,
   ctx: CodingDocContext,
   choiceHooks?: ChoiceToolHooks,
 ): AgentTool[] {
-  return [...createAccountTools(visitorId, choiceHooks), ...createCodingWriteTools(ctx)];
+  return [
+    ...createAccountTools(visitorId, choiceHooks, { withOverwrite: false }),
+    ...createCodingWriteTools(ctx),
+  ];
 }

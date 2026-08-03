@@ -1,6 +1,6 @@
-# Ask：用户选择 Card + 空文覆写
+# Ask：用户选择 Card + 文档覆写
 
-> 一句话：`ask_user_choice` 的 pending/解冻时序，以及有正文时如何接到帮写、空文如何直写服务端。
+> 一句话：`ask_user_choice` 的 pending/解冻时序，以及有正文时 `overwrite_document` 如何让用户选「直接覆写 / 帮写 / 取消」。
 
 ## 选择 Card 时序（主图）
 
@@ -31,7 +31,7 @@ sequenceDiagram
     T-->>Ag: tool result<br/>selected + choice 内容
     Ag-->>API: 继续推理 / 后续 tool
     API-->>UI: text_delta / 其它 SSE
-  else 超时
+  else 超时（默认 2 分钟）
     Pend-->>T: timeout
     T-->>Ag: tool result timeout
     Ag-->>UI: 说明未收到选择
@@ -42,17 +42,17 @@ sequenceDiagram
   end
 ```
 
-## 写作意图总览（空文覆写 vs 帮写）
+## 写作意图总览（空文直写 / 有正文选路径）
 
 ```mermaid
 flowchart TD
-  A[用户要求写/改某篇] --> B[get_document]
+  A[用户要求写/改某篇] --> B[overwrite_document]
   B --> C{服务端正文<br/>几乎空?}
-  C -->|是| D[overwrite_document<br/>localBase = 读时 head]
-  D --> E[updateDocument 线性发布]
-  E --> F[服务端生成新 headCommitId]
-  C -->|否| G[ask_user_choice<br/>模型自填 List]
-  G --> H{用户选择}
-  H -->|打开帮写| I[前端打开 AiWriteWorkbench]
-  H -->|取消 / 超时| J[不覆写、不打开帮写]
+  C -->|是| D[直写 updateDocument<br/>localBase = 读时 head]
+  D --> E[服务端生成新 headCommitId]
+  C -->|否| G[选择卡<br/>直接覆写 / 打开帮写 / 取消]
+  G -->|直接覆写| D2[再读 head 后 updateDocument]
+  D2 --> E
+  G -->|打开帮写| I[SSE open_coding<br/>打开 AiWriteWorkbench]
+  G -->|取消 / 超时| J[不覆写、不打开帮写]
 ```

@@ -654,8 +654,19 @@ export type AgentStreamEvent =
       expiresAt: string;
     }
   | { type: "choice_expired"; requestId: string }
+  | {
+      type: "open_coding";
+      documentId: string;
+      displayName: string;
+    }
   | { type: "context_usage"; percent: number; used: number; limit: number }
   | { type: "tree_changed"; reason: string }
+  /** AI 覆写文档成功，前端若打开该文档应拉取最新内容 */
+  | {
+      type: "document_overwritten";
+      documentId: string;
+      headCommitId: string;
+    }
   | { type: "done" }
   | { type: "error"; message: string };
 
