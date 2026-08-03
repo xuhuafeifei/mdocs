@@ -845,7 +845,7 @@ export function AgentChatPanel(props: {
               <>
                 <p className="mdocs-agent-panel-hello">你好，我是 mdocs 智能助手</p>
                 <p className="mdocs-agent-panel-desc">
-                  可以问我域、草稿、发布、权限等怎么用。本期不协助写作。
+                  我能答疑、搜文档、整理结构，也能帮你写全文；需要精细改稿请点文档顶栏「帮写」。
                 </p>
                 {unavailableHint ? (
                   <p className="mdocs-agent-panel-status-warn">{unavailableHint}</p>
