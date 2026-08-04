@@ -32,6 +32,9 @@ export default defineConfig({
           if (id.includes("@lobehub/ui") || id.includes("antd") || id.includes("antd-style")) {
             return "ui";
           }
+          if (id.includes("@meta2d") || id.includes("canvas2svg")) {
+            return "meta2d";
+          }
           if (id.includes("mermaid") || id.includes("cytoscape") || id.includes("@braintree")) {
             return "diagram";
           }
