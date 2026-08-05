@@ -35,14 +35,13 @@ vi.mock("../../storage/file-store.js", () => ({
 
 import { Permission } from "../../access/access-control.js";
 import { createDocument } from "../../documents/document.service.js";
-import { createDocumentTools } from "./tools-documents.js";
+import { getDocumentTool } from "./tools-documents.js";
 
 const OWNER = "owner-1";
 const OUTSIDER = "outsider-1";
 
 async function runGetDocument(visitorId: string, params: Record<string, unknown>) {
-  const tool = createDocumentTools(visitorId).find((t) => t.name === "get_document");
-  if (!tool) throw new Error("get_document tool missing");
+  const tool = getDocumentTool({ visitorId, onEvent: () => {} });
   return tool.execute("call-1", params as never, undefined as never, undefined as never);
 }
 

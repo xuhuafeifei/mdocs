@@ -1,4 +1,4 @@
-import { Agent, type AgentEvent } from "@earendil-works/pi-agent-core";
+import { Agent } from "@earendil-works/pi-agent-core";
 import {
   createModels,
   createProvider,
@@ -11,9 +11,7 @@ import {
 } from "../Config/config.js";
 import { getSkillLoader } from "../Skill/skill-loader.js";
 import { buildSystemPrompt, type AgentMode } from "./system-prompt.js";
-import { createSkillTools, type ManualSourceRef } from "./tools.js";
-import { createAccountTools } from "./tools-account.js";
-import { createCodingTools } from "./tools-coding.js";
+import { createToolsForMode } from "./tools-registry.js";
 import {
   AgentSessionManager,
   type AgentSessionMessage,
@@ -23,55 +21,15 @@ import {
   mergeContextUsage,
   type AgentContextUsage,
 } from "./context-usage.js";
-import { cancelVisitorChoices } from "./choice-pending.js";
+import {
+  type AgentDocumentTableRow,
+  type AgentStreamEvent,
+} from "./stream-events.js";
+import { runPiAgent } from "./run-pi-agent.js";
 
 export type { AgentContextUsage, AgentMode };
+export type { AgentDocumentTableRow, AgentStreamEvent };
 export { getAgentContextUsageForApi } from "./context-usage.js";
-
-/** 推给路由 / 前端的流式片段（路由只负责写出 SSE） */
-export type AgentStreamEvent =
-  | { type: "text_delta"; text: string }
-  | { type: "sources"; items: ManualSourceRef[] }
-  | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
-  | {
-      type: "document_card";
-      documentId: string;
-      title: string;
-      path: string;
-      preview: string;
-    }
-  | { type: "tool_notice"; toolName: string; text: string }
-  | { type: "markdown_set"; markdown: string }
-  | {
-      type: "choice_card";
-      requestId: string;
-      title: string;
-      options: string[];
-      expiresAt: string;
-    }
-  | { type: "choice_expired"; requestId: string }
-  | {
-      type: "open_coding";
-      documentId: string;
-      displayName: string;
-    }
-  | { type: "context_usage"; percent: number; used: number; limit: number }
-  /** 账号工具改了文档树结构，前端应 re-fetch tree */
-  | { type: "tree_changed"; reason: string }
-  /** AI 覆写文档成功，前端若打开该文档应拉取最新内容 */
-  | {
-      type: "document_overwritten";
-      documentId: string;
-      headCommitId: string;
-    }
-  | { type: "done" }
-  | { type: "error"; message: string };
-
-export interface AgentDocumentTableRow {
-  documentId: string;
-  title: string;
-  summary: string;
-}
 
 export function getAgentStatus(visitorId: string) {
   const cfg = getVisitorAgentConfig(visitorId);
@@ -91,8 +49,8 @@ export function getAgentStatus(visitorId: string) {
 }
 
 /**
- * 上手 Agent 主流程：config → session hydrate → agent → subscribe → prompt。
- * 流式进度经 onEvent 上抛，路由不感知 Pi / skill 细节。
+ * 上手 Agent 主流程：config → tools → session → Agent → pi-run。
+ * 流式进度经 onEvent 上抛；context_usage / done 在跑完后由本函数发出。
  */
 export async function runOnboardingChat(params: {
   visitorId: string;
@@ -115,43 +73,21 @@ export async function runOnboardingChat(params: {
   if (!skills.isReady()) throw new Error("skills_missing");
 
   const { models, model } = createDeepSeekModel(cfg);
-  const choiceHooks = {
-    onChoiceCard: (card: {
-      requestId: string;
-      title: string;
-      options: string[];
-      expiresAt: string;
-    }) => {
-      onEvent({ type: "choice_card", ...card });
-    },
-    onChoiceExpired: (requestId: string) => {
-      onEvent({ type: "choice_expired", requestId });
-    },
-    ...(mode === "normal"
-      ? {
-          onOpenCoding: (payload: {
-            documentId: string;
-            displayName: string;
-          }) => {
-            onEvent({ type: "open_coding", ...payload });
-          },
-        }
-      : {}),
+  const tools = createToolsForMode(mode, {
+    visitorId,
+    onEvent,
     signal,
-  };
-  const accountOrCoding =
-    mode === "coding"
-      ? createCodingTools(
-          visitorId,
-          {
+    skills,
+    ...(mode === "coding"
+      ? {
+          coding: {
             documentId: params.documentId ?? null,
             workingMarkdown: params.workingMarkdown ?? "",
             baseMarkdown: params.baseMarkdown ?? "",
           },
-          choiceHooks,
-        )
-      : createAccountTools(visitorId, choiceHooks);
-  const tools = [...createSkillTools(skills), ...accountOrCoding];
+        }
+      : {}),
+  });
   const systemPrompt = buildSystemPrompt(mode);
 
   const sessionManager = new AgentSessionManager(visitorId, {
@@ -172,51 +108,30 @@ export async function runOnboardingChat(params: {
     streamFn: models.streamSimple.bind(models),
   });
 
-  const track = { emittedError: false, lastUsageInput: 0 };
-  const unsub = agent.subscribe(
-    bindAgentEvents({
-      sessionId,
-      sessionManager,
-      onEvent,
-      track,
-    }),
-  );
+  const track = await runPiAgent({
+    agent,
+    message,
+    visitorId,
+    sessionId,
+    sessionManager,
+    onEvent,
+    signal,
+  });
 
-  const onAbort = () => {
-    cancelVisitorChoices(visitorId);
-    agent.abort();
-  };
-  signal?.addEventListener("abort", onAbort);
+  if (signal?.aborted) return;
 
-  try {
-    await agent.prompt(message);
-    const leftover = agent.state.errorMessage;
-    // prompt 在模型鉴权失败时仍可能 resolve，再兜底一次
-    if (leftover && !track.emittedError) {
-      onEvent({ type: "error", message: leftover });
-    }
-    const estimated = await getAgentContextUsageForApi(visitorId);
-    const usage = mergeContextUsage(estimated, track.lastUsageInput);
-    onEvent({
-      type: "context_usage",
-      percent: usage.percent,
-      used: usage.used,
-      limit: usage.limit,
-    });
-    onEvent({ type: "done" });
-  } catch (err) {
-    if (signal?.aborted) return;
-    const msg = err instanceof Error ? err.message : String(err);
-    onEvent({ type: "error", message: msg });
-    throw err;
-  } finally {
-    signal?.removeEventListener("abort", onAbort);
-    cancelVisitorChoices(visitorId);
-    unsub();
-  }
+  const estimated = await getAgentContextUsageForApi(visitorId);
+  const usage = mergeContextUsage(estimated, track.lastUsageInput);
+  onEvent({
+    type: "context_usage",
+    percent: usage.percent,
+    used: usage.used,
+    limit: usage.limit,
+  });
+  onEvent({ type: "done" });
 }
 
-// —— helpers（主流程外）——
+// —— 装配 helpers ——
 
 const EMPTY_USAGE = {
   input: 0,
@@ -245,290 +160,6 @@ function toPiMessages(history: AgentSessionMessage[], model: Model<any>) {
       timestamp: ts,
     };
   });
-}
-
-function extractUserContent(userMsg: { content?: unknown }): string {
-  const c = userMsg.content;
-  if (typeof c === "string") return c;
-  if (Array.isArray(c)) {
-    return c
-      .filter((x): x is { type: string; text: string } => x?.type === "text")
-      .map((x) => x.text)
-      .join("");
-  }
-  return "";
-}
-
-function extractAssistantVisibleText(assistantMsg: {
-  content?: unknown;
-}): string {
-  const content = assistantMsg.content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((x): x is { type: string; text: string } => x?.type === "text")
-    .map((x) => x.text)
-    .join("");
-}
-
-/** SSE + session 落盘：只写 user / 最终 assistant 文本，忽略 thinking / tool */
-function bindAgentEvents(opts: {
-  sessionId: string;
-  sessionManager: AgentSessionManager;
-  onEvent: (event: AgentStreamEvent) => void;
-  track: { emittedError: boolean; lastUsageInput: number };
-}): (event: AgentEvent) => Promise<void> {
-  const { sessionId, sessionManager, onEvent, track } = opts;
-  const sourcesById = new Map<string, ManualSourceRef>();
-  let appendedUser = false;
-  let appendedAssistant = false;
-
-  return async (event) => {
-    if (
-      event.type === "message_update" &&
-      event.assistantMessageEvent.type === "text_delta"
-    ) {
-      onEvent({ type: "text_delta", text: event.assistantMessageEvent.delta });
-      return;
-    }
-
-    if (event.type === "message_end") {
-      if (event.message.role === "user") {
-        if (!appendedUser) {
-          appendedUser = true;
-          const content = extractUserContent(event.message);
-          if (content) await sessionManager.appendUser(sessionId, content);
-        }
-        return;
-      }
-
-      if (event.message.role === "assistant") {
-        const msg = event.message as {
-          stopReason?: string;
-          errorMessage?: string;
-          usage?: { input?: number };
-        };
-
-        if (typeof msg.usage?.input === "number" && msg.usage.input > 0) {
-          track.lastUsageInput = Math.max(track.lastUsageInput, msg.usage.input);
-        }
-
-        if (
-          (msg.stopReason === "error" || msg.stopReason === "aborted") &&
-          msg.errorMessage
-        ) {
-          track.emittedError = true;
-          onEvent({ type: "error", message: msg.errorMessage });
-          return;
-        }
-
-        // toolUse = 准备调工具，不是最终可见回答
-        if (
-          !appendedAssistant &&
-          (msg.stopReason === "stop" || msg.stopReason === "length")
-        ) {
-          appendedAssistant = true;
-          const visibleText = extractAssistantVisibleText(event.message);
-          if (visibleText) {
-            await sessionManager.appendAssistant(sessionId, visibleText);
-          }
-        }
-        return;
-      }
-    }
-
-    if (
-      event.type === "tool_execution_end" &&
-      event.toolName === "mdocs_manual_content" &&
-      !event.isError
-    ) {
-      const source = (
-        event.result as { details?: { source?: ManualSourceRef | null } } | null
-      )?.details?.source;
-      if (source?.url && !sourcesById.has(source.id)) {
-        sourcesById.set(source.id, source);
-        onEvent({ type: "sources", items: [...sourcesById.values()] });
-      }
-      return;
-    }
-
-    if (event.type === "tool_execution_end" && !event.isError) {
-      const TREE_MUTATING_TOOLS = new Set([
-        "create_document",
-        "create_folder",
-        "move_document",
-      ]);
-      if (TREE_MUTATING_TOOLS.has(event.toolName)) {
-        onEvent({ type: "tree_changed", reason: event.toolName });
-      }
-
-      const details = (event.result as { details?: Record<string, unknown> } | null)?.details;
-
-      if (event.toolName === "search_documents") {
-        const results = (details?.results as Array<{
-          documentId?: string;
-          displayName?: string;
-          snippet?: string;
-        }> | undefined) ?? [];
-        const rows = results
-          .map((r) => ({
-            documentId: String(r.documentId ?? "").trim(),
-            title: String(r.displayName ?? "").trim() || "未命名文档",
-            summary: String(r.snippet ?? "").trim(),
-          }))
-          .filter((r) => r.documentId);
-        onEvent({
-          type: "document_table",
-          title: `搜索结果（${rows.length}）`,
-          rows,
-        });
-        return;
-      }
-
-      if (event.toolName === "list_my_documents") {
-        const documents = (details?.documents as Array<{
-          documentId?: string;
-          displayName?: string;
-          relativePath?: string;
-        }> | undefined) ?? [];
-        const rows = documents
-          .map((d) => ({
-            documentId: String(d.documentId ?? "").trim(),
-            title: String(d.displayName ?? "").trim() || "未命名文档",
-            summary: String(d.relativePath ?? "").trim(),
-          }))
-          .filter((r) => r.documentId);
-        onEvent({
-          type: "document_table",
-          title: `我的文档（${rows.length}）`,
-          rows,
-        });
-        return;
-      }
-
-      if (event.toolName === "list_tree") {
-        const items = (details?.items as Array<{
-          type?: string;
-          documentId?: string;
-          displayName?: string;
-          name?: string;
-          path?: string;
-        }> | undefined) ?? [];
-        const rows = items
-          .map((it) => {
-            const documentId = String(it.documentId ?? "").trim();
-            const title =
-              String(it.displayName ?? "").trim() ||
-              String(it.name ?? "").trim() ||
-              "未命名";
-            const kind = it.type === "folder" ? "文件夹" : "文档";
-            const path = String(it.path ?? "").trim();
-            return {
-              documentId,
-              title: it.type === "folder" ? `[目录] ${title}` : title,
-              summary: path ? `${kind} · ${path}` : kind,
-            };
-          })
-          .filter((r) => r.documentId);
-        onEvent({
-          type: "document_table",
-          title: `域树（${rows.length}${details?.truncated ? "+" : ""}）`,
-          rows,
-        });
-        return;
-      }
-
-      if (event.toolName === "get_document") {
-        const documentId = String(details?.documentId ?? "").trim();
-        if (!documentId) return;
-        const content = String(details?.content ?? "");
-        const preview =
-          content.length > 280 ? `${content.slice(0, 280)}…` : content;
-        onEvent({
-          type: "document_card",
-          documentId,
-          title: String(details?.displayName ?? "").trim() || "未命名文档",
-          path: String(details?.relativePath ?? "").trim(),
-          preview,
-        });
-        return;
-      }
-
-      if (event.toolName === "create_document") {
-        const name = String(details?.displayName ?? "").trim() || "未命名文档";
-        onEvent({
-          type: "tool_notice",
-          toolName: event.toolName,
-          text: `已创建空文档「${name}」`,
-        });
-        return;
-      }
-
-      if (event.toolName === "create_folder") {
-        const path = String(details?.path ?? "").trim();
-        onEvent({
-          type: "tool_notice",
-          toolName: event.toolName,
-          text: path ? `已创建文件夹「${path}」` : "已创建文件夹",
-        });
-        return;
-      }
-
-      if (event.toolName === "move_document") {
-        const name = String(details?.displayName ?? "").trim() || "文档";
-        const path = String(details?.relativePath ?? "").trim();
-        onEvent({
-          type: "tool_notice",
-          toolName: event.toolName,
-          text: path ? `已移动「${name}」→ ${path}` : `已移动「${name}」`,
-        });
-        return;
-      }
-
-      if (event.toolName === "overwrite_document") {
-        const status = String(details?.status ?? "");
-        const name = String(details?.displayName ?? "").trim() || "文档";
-        if (status === "overwritten") {
-          onEvent({
-            type: "tool_notice",
-            toolName: event.toolName,
-            text: `已覆写「${name}」`,
-          });
-          const documentId = String(details?.documentId ?? "");
-          const headCommitId = String(details?.headCommitId ?? "");
-          if (documentId && headCommitId) {
-            onEvent({ type: "document_overwritten", documentId, headCommitId });
-          }
-          onEvent({ type: "tree_changed", reason: "overwrite_document" });
-        } else if (status === "redirected_to_coding") {
-          onEvent({
-            type: "tool_notice",
-            toolName: event.toolName,
-            text: `「${name}」已打开帮写`,
-          });
-        }
-        return;
-      }
-
-      if (event.toolName === "get_working_document") {
-        onEvent({
-          type: "tool_notice",
-          toolName: event.toolName,
-          text: "读取帮写工作稿",
-        });
-        return;
-      }
-
-      if (event.toolName === "set_markdown_document") {
-        const markdown = String(details?.markdown ?? "");
-        onEvent({ type: "markdown_set", markdown });
-        onEvent({
-          type: "tool_notice",
-          toolName: event.toolName,
-          text: "设置帮写正文",
-        });
-      }
-    }
-  };
 }
 
 function createDeepSeekModel(cfg: VisitorAgentConfig) {

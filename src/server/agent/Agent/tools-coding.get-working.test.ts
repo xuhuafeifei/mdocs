@@ -1,13 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { createCodingWriteTools } from "./tools-coding.js";
+import { getWorkingDocumentTool } from "./tools-coding.js";
 
 async function runGetWorking(params: Record<string, unknown> = {}) {
-  const tool = createCodingWriteTools({
-    documentId: "doc-1",
-    workingMarkdown: "# working\nhello",
-    baseMarkdown: "# base\nold",
-  }).find((t) => t.name === "get_working_document");
-  if (!tool) throw new Error("get_working_document missing");
+  const tool = getWorkingDocumentTool({
+    visitorId: "v1",
+    onEvent: () => {},
+    coding: {
+      documentId: "doc-1",
+      workingMarkdown: "# working\nhello",
+      baseMarkdown: "# base\nold",
+    },
+  });
   return tool.execute("call-1", params as never, undefined as never, undefined as never);
 }
 

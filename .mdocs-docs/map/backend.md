@@ -50,14 +50,19 @@
   |------|------|
   | `src/server/agent/Config/config.ts` | `getVisitorAgentConfig` `upsertVisitorAgentConfig` |
   | `src/server/agent/Agent/run.ts` | `getAgentStatus` `runOnboardingChat` |
+  | `src/server/agent/Agent/run-pi-agent.ts` | `runPiAgent`（subscribe / prompt / bindAgentEvents） |
+  | `src/server/agent/Agent/stream-events.ts` | `AgentStreamEvent` |
+  | `src/server/agent/Agent/tool-ui-effects.ts` | `createToolUiEffectsHandler`（tool→SSE） |
+  | `src/server/agent/Agent/tool-deps.ts` | `ToolDeps` |
   | `src/server/agent/Agent/session-manager.ts` | `listSessions` `createSession` `openSession` |
-  | `src/server/agent/Agent/tools-account.ts` | `createAccountTools`（域/文档/访客 + 可选 choice / overwrite） |
-  | `src/server/agent/Agent/tools-choice.ts` | `createChoiceTools`（`ask_user_choice`） |
-  | `src/server/agent/Agent/tools-overwrite.ts` | `createOverwriteTools`（`overwrite_document`） |
+  | `src/server/agent/Agent/tools-template.ts` | `manualTools` `accountTools` `choiceTools` `overwriteTools` `codingWriteTools` |
+  | `src/server/agent/Agent/tools-registry.ts` | `createToolsForMode(mode, deps)` |
+  | `src/server/agent/Agent/tools-choice.ts` | `askUserChoiceTool` |
+  | `src/server/agent/Agent/tools-overwrite.ts` | `overwriteDocumentTool` |
   | `src/server/agent/Agent/almost-empty.ts` | `isAlmostEmptyDocumentText` |
   | `src/server/agent/Agent/choice-pending.ts` | `waitForUserChoice` `resolveUserChoice` |
-  | `src/server/agent/Agent/tools-documents.ts` | `createDocumentTools`（含 `search_documents` `list_tree` `list_my_documents` `create_document` `create_folder` `get_document`） |
-  | `src/server/agent/Agent/tools-domains.ts` | `createDomainTools`（含 `list_domains` `create_domain`） |
+  | `src/server/agent/Agent/tools-documents.ts` | `searchDocumentsTool` `getDocumentTool` 等单个 tool |
+  | `src/server/agent/Agent/tools-domains.ts` | `listDomainsTool` `createDomainTool` 等 |
   | `src/server/agent/Agent/system-prompt.ts` | `buildSystemPrompt` |
   | `src/server/routes/agent.routes.ts` | `buildAgentRouter`（含 `/choice` `/sessions` `/session/open`） |
   | `src/server/db/repositories/agent-model-config.repo.ts` | `findAgentModelConfigByOwner` |

@@ -1,8 +1,7 @@
 import { getVisitorAgentConfig, DEFAULT_AGENT_CONTEXT_WINDOW } from "../Config/config.js";
 import { getSkillLoader } from "../Skill/skill-loader.js";
 import { buildSystemPrompt } from "./system-prompt.js";
-import { createSkillTools } from "./tools.js";
-import { createAccountTools } from "./tools-account.js";
+import { createToolsForMode } from "./tools-registry.js";
 import { AgentSessionManager } from "./session-manager.js";
 
 export type AgentContextUsage = {
@@ -33,9 +32,11 @@ export function estimateTokens(text: string): number {
 
 function estimateToolsTokens(visitorId: string): number {
   const skills = getSkillLoader();
-  const tools = skills.isReady()
-    ? [...createSkillTools(skills), ...createAccountTools(visitorId)]
-    : createAccountTools(visitorId);
+  const tools = createToolsForMode("normal", {
+    visitorId,
+    onEvent: () => {},
+    skills: skills.isReady() ? skills : null,
+  });
   let total = 0;
   for (const t of tools) {
     total += estimateTokens(t.name);

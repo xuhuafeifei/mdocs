@@ -36,7 +36,8 @@
 
 | 需求夹 | 说明 |
 |--------|------|
-| `agent-normal-coding-modes` | **草案**：Agent normal / coding（帮写）模式 — [需求分析](./requirements/agent-normal-coding-modes/需求分析.md) · [设计契约](./requirements/agent-normal-coding-modes/设计契约.md) |
+| `agent-run-refactor` | Phase 1–3 已落地：SSE / tools template·registry / pi-run — [需求分析](./requirements/agent-run-refactor/需求分析.md) · [设计契约](./requirements/agent-run-refactor/设计契约.md) · [代码索引](./requirements/agent-run-refactor/代码索引.md) |
+| `agent-normal-coding-modes` | **已同意（历史）**：Agent normal / coding（帮写）模式 — [需求分析](./requirements/agent-normal-coding-modes/需求分析.md) · [设计契约](./requirements/agent-normal-coding-modes/设计契约.md) |
 | `onboarding-ai` | **已同意**：上手 Agent — [需求分析](./requirements/onboarding-ai/需求分析.md) · [设计契约](./requirements/onboarding-ai/设计契约.md) · [后端设计](./requirements/onboarding-ai/后端设计.md) |
 | `document-move` | **已同意**：同域拖拽移动文档 — [需求分析](./requirements/document-move/需求分析.md) · [设计契约](./requirements/document-move/设计契约.md) · [代码索引](./requirements/document-move/代码索引.md) |
 | `bookmarks` | 文档收藏 |
