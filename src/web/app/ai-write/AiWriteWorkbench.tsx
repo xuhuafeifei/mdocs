@@ -14,16 +14,22 @@ import {
   type AgentSessionSummary,
   type AgentStatus,
 } from "../../services/endpoints";
+import { AgentSkillRefPicker } from "../AgentSkillRefPicker";
+import {
+  SkillFormCardBlock,
+  type SkillFormCardState,
+} from "../AgentSkillFormCard";
 import { AiWriteMarkdownPane } from "./AiWriteMarkdownPane";
 import { computeLineHunks } from "./markdown-hunks";
 
 /** 助手时间线：正文 + 工具用途说明（不展示英文 tool name） */
 type AssistantBlock =
   | { type: "text"; text: string }
-  | { type: "tool"; text: string };
+  | { type: "tool"; text: string }
+  | SkillFormCardState;
 
 type ChatLine =
-  | { id: string; role: "user"; content: string }
+  | { id: string; role: "user"; content: string; skillNames?: string[] }
   | { id: string; role: "assistant"; blocks: AssistantBlock[] };
 
 let seq = 0;
@@ -70,11 +76,24 @@ function formatSessionTime(iso: string): string {
 /** 历史只恢复文本；tool UI 块不落盘 */
 function toChatLines(
   sessionId: string,
-  messages: { role: "user" | "assistant"; content: string }[],
+  messages: {
+    role: "user" | "assistant";
+    content: string;
+    skillNames?: string[];
+    skillIds?: string[];
+  }[],
 ): ChatLine[] {
   return messages.map((m, i) => {
     const id = `h-${sessionId}-${i}-${m.role}`;
-    if (m.role === "user") return { id, role: "user", content: m.content };
+    if (m.role === "user") {
+      const skillNames =
+        m.skillNames && m.skillNames.length > 0
+          ? m.skillNames
+          : m.skillIds && m.skillIds.length > 0
+            ? m.skillIds
+            : undefined;
+      return { id, role: "user", content: m.content, skillNames };
+    }
     return {
       id,
       role: "assistant",
@@ -110,6 +129,7 @@ export function AiWriteWorkbench(props: {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [selectedSkillNames, setSelectedSkillNames] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -232,7 +252,12 @@ export function AiWriteWorkbench(props: {
     const asstId = nextId("a");
     setMessages((prev) => [
       ...prev,
-      { id: userId, role: "user", content: text },
+      {
+        id: userId,
+        role: "user",
+        content: text,
+        skillNames: selectedSkillNames.length > 0 ? [...selectedSkillNames] : undefined,
+      },
       { id: asstId, role: "assistant", blocks: [] },
     ]);
     setInput("");
@@ -248,8 +273,10 @@ export function AiWriteWorkbench(props: {
     };
 
     try {
+      let hadError = false;
       await streamAgentChatApi(text, {
         mode: "coding",
+        skillNames: selectedSkillNames.length > 0 ? selectedSkillNames : undefined,
         documentId: props.documentId,
         workingMarkdown: currentMd,
         baseMarkdown: baseMd,
@@ -273,11 +300,41 @@ export function AiWriteWorkbench(props: {
                 appendTool(blocks, `已阅读 ${event.items.length} 个手册页面`),
               );
             }
+          } else if (event.type === "skill_form_card") {
+            patchAssistant((blocks) => [
+              ...blocks,
+              {
+                type: "skill_form_card" as const,
+                requestId: event.requestId,
+                mode: event.mode,
+                title: event.title,
+                currentName: event.currentName,
+                initialName: event.initialName,
+                initialDescription: event.initialDescription,
+                initialBody: event.initialBody,
+                expiresAt: event.expiresAt,
+                status: "open" as const,
+              },
+            ]);
+          } else if (event.type === "skill_form_expired") {
+            patchAssistant((blocks) =>
+              blocks.map((b) =>
+                b.type === "skill_form_card" &&
+                b.requestId === event.requestId &&
+                b.status === "open"
+                  ? { ...b, status: "expired" as const }
+                  : b,
+              ),
+            );
           } else if (event.type === "error") {
+            hadError = true;
             setError(event.message);
           }
         },
       });
+      if (!ac.signal.aborted && !hadError) {
+        setSelectedSkillNames([]);
+      }
       void refreshSessions();
     } catch (err) {
       if (!ac.signal.aborted) {
@@ -453,7 +510,12 @@ export function AiWriteWorkbench(props: {
                       }
                     >
                       {m.role === "user" ? (
-                        m.content
+                        <>
+                          {m.skillNames && m.skillNames.length > 0 ? (
+                            <div className="mdocs-agent-msg-skills">Skill ×{m.skillNames.length}</div>
+                          ) : null}
+                          {m.content}
+                        </>
                       ) : hasVisibleAssistant(m.blocks) ? (
                         <div className="mdocs-ai-write-timeline">
                           {m.blocks.map((block, bi) =>
@@ -464,6 +526,34 @@ export function AiWriteWorkbench(props: {
                               >
                                 {block.text}
                               </p>
+                            ) : block.type === "skill_form_card" ? (
+                              <SkillFormCardBlock
+                                key={`${m.id}-sf-${bi}`}
+                                block={block}
+                                onResolved={(requestId, status, submittedName) => {
+                                  setMessages((prev) =>
+                                    prev.map((msg) => {
+                                      if (msg.id !== m.id || msg.role !== "assistant") return msg;
+                                      return {
+                                        ...msg,
+                                        blocks: msg.blocks.map((b) =>
+                                          b.type === "skill_form_card" &&
+                                          b.requestId === requestId
+                                            ? {
+                                                ...b,
+                                                status,
+                                                submittedName:
+                                                  status === "submitted"
+                                                    ? submittedName
+                                                    : b.submittedName,
+                                              }
+                                            : b,
+                                        ),
+                                      };
+                                    }),
+                                  );
+                                }}
+                              />
                             ) : block.text ? (
                               <div
                                 key={`${m.id}-text-${bi}`}
@@ -489,19 +579,26 @@ export function AiWriteWorkbench(props: {
               </div>
               {error ? <p className="mdocs-ai-write-error">{error}</p> : null}
               <div className="mdocs-ai-write-input-row">
-                <textarea
-                  rows={2}
-                  value={input}
-                  disabled={sending || !status?.enabled}
-                  placeholder={status?.enabled ? "说说要写什么…" : "请先配置 API Key"}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      void send();
-                    }
-                  }}
-                />
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <AgentSkillRefPicker
+                    selectedNames={selectedSkillNames}
+                    onChange={setSelectedSkillNames}
+                    disabled={sending || !status?.enabled}
+                  />
+                  <textarea
+                    rows={2}
+                    value={input}
+                    disabled={sending || !status?.enabled}
+                    placeholder={status?.enabled ? "说说要写什么…" : "请先配置 API Key"}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        void send();
+                      }
+                    }}
+                  />
+                </div>
                 <button
                   type="button"
                   disabled={sending || !status?.enabled}

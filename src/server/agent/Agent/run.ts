@@ -14,7 +14,6 @@ import { buildSystemPrompt, type AgentMode } from "./system-prompt.js";
 import { createToolsForMode } from "./tools-registry.js";
 import {
   AgentSessionManager,
-  type AgentSessionMessage,
 } from "./session-manager.js";
 import {
   getAgentContextUsageForApi,
@@ -26,6 +25,12 @@ import {
   type AgentStreamEvent,
 } from "./stream-events.js";
 import { runPiAgent } from "./run-pi-agent.js";
+import {
+  expandCurrentTurnSkillPairs,
+  hydrateSessionMessagesToPi,
+  markSkillExpandPoints,
+} from "./hydrate-messages.js";
+import { normalizeSkillRefs } from "./user-skills.js";
 
 export type { AgentContextUsage, AgentMode };
 export type { AgentDocumentTableRow, AgentStreamEvent };
@@ -56,6 +61,10 @@ export async function runOnboardingChat(params: {
   visitorId: string;
   message: string;
   mode?: AgentMode;
+  /** 本轮引用的私人 skill 名称（对本访客唯一） */
+  skillNames?: string[];
+  /** @deprecated 兼容旧客户端 skillIds */
+  skillIds?: string[];
   /** coding：本轮前端工作稿（请求体携带） */
   documentId?: string | null;
   workingMarkdown?: string;
@@ -65,6 +74,9 @@ export async function runOnboardingChat(params: {
 }): Promise<void> {
   const { visitorId, message, onEvent, signal } = params;
   const mode: AgentMode = params.mode === "coding" ? "coding" : "normal";
+  const skillNames = normalizeSkillRefs(
+    params.skillNames?.length ? params.skillNames : params.skillIds,
+  );
 
   const cfg = getVisitorAgentConfig(visitorId);
   if (!cfg?.apiKey) throw new Error("missing_api_key");
@@ -98,12 +110,32 @@ export async function runOnboardingChat(params: {
       mode === "coding" ? params.documentId ?? null : undefined,
     );
 
+  // 含本轮标定展开点（越新越先 → 本轮优先）；历史 hydrate；本轮假 tool；原文 prompt
+  const expandAt = markSkillExpandPoints([
+    ...history,
+    { role: "user", content: message, skillNames },
+  ]);
+  const { messages: historyPi } = hydrateSessionMessagesToPi(
+    visitorId,
+    history,
+    model,
+    expandAt,
+  );
+  const currentIndex = history.length;
+  const currentRefs = skillNames.filter((ref) => expandAt.get(ref) === currentIndex);
+  const currentSkillPairs = expandCurrentTurnSkillPairs(
+    visitorId,
+    currentRefs,
+    model,
+    new Set(),
+  );
+
   const agent = new Agent({
     initialState: {
       systemPrompt,
       model,
       tools,
-      messages: toPiMessages(history, model),
+      messages: [...historyPi, ...currentSkillPairs],
     },
     streamFn: models.streamSimple.bind(models),
   });
@@ -111,6 +143,7 @@ export async function runOnboardingChat(params: {
   const track = await runPiAgent({
     agent,
     message,
+    skillNames,
     visitorId,
     sessionId,
     sessionManager,
@@ -132,35 +165,6 @@ export async function runOnboardingChat(params: {
 }
 
 // —— 装配 helpers ——
-
-const EMPTY_USAGE = {
-  input: 0,
-  output: 0,
-  cacheRead: 0,
-  cacheWrite: 0,
-  totalTokens: 0,
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-};
-
-/** jsonl 历史 → Pi Agent.messages（请求内内存副本） */
-function toPiMessages(history: AgentSessionMessage[], model: Model<any>) {
-  const ts = Date.now();
-  return history.map((m) => {
-    if (m.role === "user") {
-      return { role: "user" as const, content: m.content, timestamp: ts };
-    }
-    return {
-      role: "assistant" as const,
-      content: [{ type: "text" as const, text: m.content }],
-      api: model.api,
-      provider: model.provider,
-      model: model.id,
-      usage: EMPTY_USAGE,
-      stopReason: "stop" as const,
-      timestamp: ts,
-    };
-  });
-}
 
 function createDeepSeekModel(cfg: VisitorAgentConfig) {
   const model: Model<"openai-completions"> = {

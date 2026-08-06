@@ -4,7 +4,7 @@
 
 面向个人开发者与小团队：产品内 **智能助手 + 帮写**，外部 **CLI / Skills** 接入 Cursor / Claude；SQLite + 本地文件，**无账户**即可协作。
 
-[文档站点](https://xuhuafeifei.github.io/mdocs-site/) · [GitHub](https://github.com/xuhuafeifei/mdocs) · [npm `@fgbg/mdocs`](https://www.npmjs.com/package/@fgbg/mdocs) · 当前版本 **0.8.19**
+[文档站点](https://xuhuafeifei.github.io/mdocs-site/) · [GitHub](https://github.com/xuhuafeifei/mdocs) · [npm `@fgbg/mdocs`](https://www.npmjs.com/package/@fgbg/mdocs) · 当前版本 **0.8.20**
 
 <p align="center">
   <img src="image/site主页.png" alt="mdocs 文档站点首页" width="860" />
@@ -102,6 +102,12 @@ pnpm build && pnpm start   # 生产：同端口提供静态资源与 API
 pnpm test
 pnpm typecheck
 pnpm mdocs visitor list    # 管理 CLI（开发用 tsx 入口）
+```
+
+全局安装后原地升级（淘宝 npmmirror，保留 `node_modules`，依赖走 `--prefer-offline`）：
+
+```bash
+mdocs update
 ```
 
 仓库布局：

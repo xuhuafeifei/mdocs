@@ -180,6 +180,17 @@ const SCHEMA_STATEMENTS: string[] = [
     updated_at TEXT NOT NULL,
     FOREIGN KEY (owner_visitor_id) REFERENCES visitors(visitor_id) ON DELETE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS agent_user_skills (
+    id TEXT PRIMARY KEY,
+    owner_visitor_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    body TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (owner_visitor_id) REFERENCES visitors(visitor_id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_user_skills_owner ON agent_user_skills (owner_visitor_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_user_skills_owner_name ON agent_user_skills (owner_visitor_id, name)`,
 ];
 
 

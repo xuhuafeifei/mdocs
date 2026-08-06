@@ -10,13 +10,14 @@ import {
   codingWriteTools,
   manualTools,
   overwriteTools,
+  userSkillManageTools,
 } from "./tools-template.js";
 
 export type { ToolDeps };
 
 /**
- * normal → manual + account + choice + overwrite  
- * coding → manual + account + choice + coding_write
+ * normal → manual + account + choice + overwrite + user_skills
+ * coding → manual + account + choice + coding_write + user_skills
  */
 export function createToolsForMode(
   mode: AgentMode,
@@ -29,6 +30,7 @@ export function createToolsForMode(
       ...accountTools(deps),
       ...choiceTools(deps),
       ...codingWriteTools(deps),
+      ...userSkillManageTools(deps),
     ];
   }
 
@@ -37,5 +39,6 @@ export function createToolsForMode(
     ...accountTools(deps),
     ...choiceTools(deps),
     ...overwriteTools(deps),
+    ...userSkillManageTools(deps),
   ];
 }

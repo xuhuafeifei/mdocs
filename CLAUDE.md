@@ -18,7 +18,7 @@ pnpm start            # node dist/server/main.js (serves web + API on one port)
 pnpm test             # vitest run (single run)
 pnpm test:watch       # vitest (watch mode)
 pnpm typecheck        # type-check both server and web tsconfig
-pnpm mdocs            # CLI tool (e.g., pnpm mdocs visitor list / migrate)
+pnpm mdocs            # CLI tool (e.g., pnpm mdocs visitor list / migrate / update)
 ```
 
 Run a single test file: `pnpm vitest run src/server/documents/document.service.test.ts`
@@ -124,7 +124,7 @@ Rendering pipeline: `useFlowRenderer` hook + `registerPens` — both in the loca
 
 ## CLI
 
-`src/server/cli/main.ts` — `pnpm mdocs visitor list` and `pnpm mdocs visitor migrate --from X --to Y --dry-run|--confirm`. Migration merges all ownership from old visitor into new one inside a transaction, with a SQLite backup.
+`src/server/cli/main.ts` — `pnpm mdocs visitor list`、`pnpm mdocs visitor migrate --from X --to Y --dry-run|--confirm`、全局安装后的 `mdocs update`（淘宝 npmmirror 原地升级，保留 `node_modules` + `--prefer-offline`）。Migration merges all ownership from old visitor into new one inside a transaction, with a SQLite backup.
 
 The migration script: backs up the SQLite file, runs inside a transaction, updates ownership of documents/domains, disables the old visitor, appends entries to `visitor_migrations` and `audit_logs`. Markdown files on disk are never moved.
 

@@ -7,6 +7,7 @@ import type { AgentSessionManager } from "./session-manager.js";
 import type { AgentStreamEvent } from "./stream-events.js";
 import { createToolUiEffectsHandler } from "./tool-ui-effects.js";
 import { cancelVisitorChoices } from "./choice-pending.js";
+import { cancelVisitorSkillForms } from "./skill-form-pending.js";
 
 export type PiRunTrack = {
   emittedError: boolean;
@@ -16,6 +17,8 @@ export type PiRunTrack = {
 export type RunPiAgentParams = {
   agent: Agent;
   message: string;
+  /** 本轮引用；落盘到 user 行，不写入展开正文 */
+  skillNames?: string[];
   visitorId: string;
   sessionId: string;
   sessionManager: AgentSessionManager;
@@ -27,6 +30,7 @@ export async function runPiAgent(params: RunPiAgentParams): Promise<PiRunTrack> 
   const {
     agent,
     message,
+    skillNames,
     visitorId,
     sessionId,
     sessionManager,
@@ -36,11 +40,12 @@ export async function runPiAgent(params: RunPiAgentParams): Promise<PiRunTrack> 
 
   const track: PiRunTrack = { emittedError: false, lastUsageInput: 0 };
   const unsub = agent.subscribe(
-    bindAgentEvents({ sessionId, sessionManager, onEvent, track }),
+    bindAgentEvents({ sessionId, sessionManager, skillNames, onEvent, track }),
   );
 
   const onAbort = () => {
     cancelVisitorChoices(visitorId);
+    cancelVisitorSkillForms(visitorId);
     agent.abort();
   };
   signal?.addEventListener("abort", onAbort);
@@ -62,6 +67,7 @@ export async function runPiAgent(params: RunPiAgentParams): Promise<PiRunTrack> 
   } finally {
     signal?.removeEventListener("abort", onAbort);
     cancelVisitorChoices(visitorId);
+    cancelVisitorSkillForms(visitorId);
     unsub();
   }
 }
@@ -93,10 +99,11 @@ function extractAssistantVisibleText(assistantMsg: {
 function bindAgentEvents(opts: {
   sessionId: string;
   sessionManager: AgentSessionManager;
+  skillNames?: string[];
   onEvent: (event: AgentStreamEvent) => void;
   track: PiRunTrack;
 }): (event: AgentEvent) => Promise<void> {
-  const { sessionId, sessionManager, onEvent, track } = opts;
+  const { sessionId, sessionManager, skillNames, onEvent, track } = opts;
   const onToolUi = createToolUiEffectsHandler(onEvent);
   let appendedUser = false;
   let appendedAssistant = false;
@@ -115,7 +122,7 @@ function bindAgentEvents(opts: {
         if (!appendedUser) {
           appendedUser = true;
           const content = extractUserContent(event.message);
-          if (content) await sessionManager.appendUser(sessionId, content);
+          if (content) await sessionManager.appendUser(sessionId, content, skillNames);
         }
         return;
       }

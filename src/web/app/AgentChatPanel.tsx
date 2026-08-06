@@ -19,6 +19,11 @@ import {
   type AgentSourceRef,
   type AgentStatus,
 } from "../services/endpoints";
+import { AgentSkillRefPicker } from "./AgentSkillRefPicker";
+import {
+  SkillFormCardBlock,
+  type SkillFormCardState,
+} from "./AgentSkillFormCard";
 
 function nodeText(node: ReactNode): string {
   if (node == null || typeof node === "boolean") return "";
@@ -105,24 +110,43 @@ type AssistantBlock =
       status: "open" | "selected" | "expired" | "failed";
       selected?: string;
     }
+  | SkillFormCardState
   | { type: "sources"; items: AgentSourceRef[] };
 
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  skillNames?: string[];
   /** 仅当轮 SSE；历史会话不恢复 */
   blocks?: AssistantBlock[];
 };
 
 const SUGGESTIONS = ["如何发布文档？", "草稿是什么？", "如何创建域？"];
 
-function toChatMessages(sessionId: string, messages: { role: "user" | "assistant"; content: string }[]): ChatMessage[] {
-  return messages.map((m, i) => ({
-    id: `h-${sessionId}-${i}-${m.role}`,
-    role: m.role,
-    content: m.content,
-  }));
+function toChatMessages(
+  sessionId: string,
+  messages: {
+    role: "user" | "assistant";
+    content: string;
+    skillNames?: string[];
+    skillIds?: string[];
+  }[],
+): ChatMessage[] {
+  return messages.map((m, i) => {
+    const skillNames =
+      m.skillNames && m.skillNames.length > 0
+        ? m.skillNames
+        : m.skillIds && m.skillIds.length > 0
+          ? m.skillIds
+          : undefined;
+    return {
+      id: `h-${sessionId}-${i}-${m.role}`,
+      role: m.role,
+      content: m.content,
+      skillNames,
+    };
+  });
 }
 
 function appendTextDelta(blocks: AssistantBlock[], text: string): AssistantBlock[] {
@@ -392,6 +416,7 @@ export function AgentChatPanel(props: {
   const [sessions, setSessions] = useState<AgentSessionSummary[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [input, setInput] = useState("");
+  const [selectedSkillNames, setSelectedSkillNames] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [contextUsage, setContextUsage] = useState<AgentContextUsage | null>(null);
@@ -534,7 +559,12 @@ export function AgentChatPanel(props: {
     const ac = new AbortController();
     abortRef.current = ac;
 
-    const userMsg: ChatMessage = { id: nextId("u"), role: "user", content: text };
+    const userMsg: ChatMessage = {
+      id: nextId("u"),
+      role: "user",
+      content: text,
+      skillNames: selectedSkillNames.length > 0 ? [...selectedSkillNames] : undefined,
+    };
     const assistantId = nextId("a");
     stickToBottomRef.current = true;
     setMessages((prev) => [...prev, userMsg, { id: assistantId, role: "assistant", content: "" }]);
@@ -545,7 +575,9 @@ export function AgentChatPanel(props: {
     requestAnimationFrame(() => scrollToBottomIfStuck());
 
     try {
+      let hadError = false;
       await streamAgentChatApi(text, {
+        skillNames: selectedSkillNames.length > 0 ? selectedSkillNames : undefined,
         signal: ac.signal,
         onEvent: (event) => {
           if (event.type === "text_delta") {
@@ -658,6 +690,45 @@ export function AgentChatPanel(props: {
                 };
               }),
             );
+          } else if (event.type === "skill_form_card") {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== assistantId) return m;
+                const blocks = [
+                  ...(m.blocks ?? []),
+                  {
+                    type: "skill_form_card" as const,
+                    requestId: event.requestId,
+                    mode: event.mode,
+                    title: event.title,
+                    currentName: event.currentName,
+                    initialName: event.initialName,
+                    initialDescription: event.initialDescription,
+                    initialBody: event.initialBody,
+                    expiresAt: event.expiresAt,
+                    status: "open" as const,
+                  },
+                ];
+                return { ...m, blocks };
+              }),
+            );
+            requestAnimationFrame(() => scrollToBottomIfStuck());
+          } else if (event.type === "skill_form_expired") {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== assistantId || !m.blocks) return m;
+                return {
+                  ...m,
+                  blocks: m.blocks.map((b) =>
+                    b.type === "skill_form_card" &&
+                    b.requestId === event.requestId &&
+                    b.status === "open"
+                      ? { ...b, status: "expired" as const }
+                      : b,
+                  ),
+                };
+              }),
+            );
           } else if (event.type === "tree_changed") {
             void onTreeChanged?.();
           } else if (event.type === "document_overwritten") {
@@ -677,10 +748,14 @@ export function AgentChatPanel(props: {
               limit: event.limit,
             });
           } else if (event.type === "error") {
+            hadError = true;
             setStreamError(event.message);
           }
         },
       });
+      if (!ac.signal.aborted && !hadError) {
+        setSelectedSkillNames([]);
+      }
     } catch (err) {
       if (ac.signal.aborted) return;
       setStreamError(err instanceof Error ? err.message : String(err));
@@ -883,6 +958,9 @@ export function AgentChatPanel(props: {
                       </div>
                     ) : null}
                     <div className="mdocs-agent-panel-msg-bubble">
+                      {m.role === "user" && m.skillNames && m.skillNames.length > 0 ? (
+                        <div className="mdocs-agent-msg-skills">Skill ×{m.skillNames.length}</div>
+                      ) : null}
                       {m.role === "assistant" ? (
                         m.blocks && m.blocks.length > 0 ? (
                           <div className="mdocs-agent-panel-timeline">
@@ -940,6 +1018,38 @@ export function AgentChatPanel(props: {
                                                       status,
                                                       selected:
                                                         status === "selected" ? choice : b.selected,
+                                                    }
+                                                  : b,
+                                              ),
+                                            };
+                                          }),
+                                        );
+                                      }}
+                                    />
+                                  </div>
+                                );
+                              }
+                              if (block.type === "skill_form_card") {
+                                return (
+                                  <div key={`${m.id}-sf-${bi}`} className="mdocs-agent-panel-block">
+                                    <SkillFormCardBlock
+                                      block={block}
+                                      onResolved={(requestId, status, submittedName) => {
+                                        setMessages((prev) =>
+                                          prev.map((msg) => {
+                                            if (msg.id !== m.id || !msg.blocks) return msg;
+                                            return {
+                                              ...msg,
+                                              blocks: msg.blocks.map((b) =>
+                                                b.type === "skill_form_card" &&
+                                                b.requestId === requestId
+                                                  ? {
+                                                      ...b,
+                                                      status,
+                                                      submittedName:
+                                                        status === "submitted"
+                                                          ? submittedName
+                                                          : b.submittedName,
                                                     }
                                                   : b,
                                               ),
@@ -1062,6 +1172,11 @@ export function AgentChatPanel(props: {
           {streamError ? (
             <p className="mdocs-agent-panel-status-warn">{streamError}</p>
           ) : null}
+          <AgentSkillRefPicker
+            selectedNames={selectedSkillNames}
+            onChange={setSelectedSkillNames}
+            disabled={sending || !status?.enabled}
+          />
           <div className="mdocs-agent-panel-input-wrap">
             <textarea
               className="mdocs-agent-panel-input"

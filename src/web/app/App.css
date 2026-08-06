@@ -1143,6 +1143,67 @@
   color: #8a919f;
 }
 
+.mdocs-agent-skill-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.mdocs-agent-skill-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #646a73;
+}
+
+.mdocs-agent-skill-form-field input,
+.mdocs-agent-skill-form-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  color: #1f2329;
+  background: #fff;
+}
+
+.mdocs-agent-skill-form-field textarea {
+  resize: vertical;
+  min-height: 120px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mdocs-agent-skill-form-error {
+  margin: 0;
+  font-size: 12px;
+  color: #c00;
+}
+
+.mdocs-agent-skill-form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mdocs-agent-skill-form-actions button {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: #3370ff;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mdocs-agent-skill-form-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .mdocs-agent-panel-doc-table-title {
   margin: 0 0 8px;
   font-size: 13px;
@@ -1191,6 +1252,358 @@
   border: 1px solid #e8eaed;
   border-radius: 14px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.mdocs-agent-skill-ref {
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+
+.mdocs-agent-skill-ref-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.mdocs-agent-skill-ref-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.mdocs-agent-skill-ref-toggle {
+  border: 1px solid #d0d5dd;
+  background: #f8fafc;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #344054;
+}
+
+.mdocs-agent-skill-ref-toggle:hover:not(:disabled),
+.mdocs-agent-skill-ref-toggle-open {
+  border-color: #98a2b3;
+  background: #fff;
+}
+
+.mdocs-agent-skill-ref-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mdocs-agent-skill-popover {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 40;
+  min-width: 260px;
+  max-width: min(360px, 85vw);
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+
+.mdocs-agent-skill-popover-hint {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  color: #98a2b3;
+  flex-shrink: 0;
+}
+
+.mdocs-agent-skill-popover-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+}
+
+.mdocs-agent-skill-popover-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  color: #1f2329;
+}
+
+.mdocs-agent-skill-popover-item:hover:not(:disabled),
+.mdocs-agent-skill-popover-item:focus-visible {
+  background: #f2f4f7;
+  outline: none;
+}
+
+.mdocs-agent-skill-popover-item-on {
+  background: #eff8ff;
+}
+
+.mdocs-agent-skill-popover-item-on:hover:not(:disabled) {
+  background: #e0f2fe;
+}
+
+.mdocs-agent-skill-popover-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mdocs-agent-skill-popover-check {
+  width: 14px;
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #175cd3;
+}
+
+.mdocs-agent-skill-popover-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mdocs-agent-skill-popover-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #101828;
+  line-height: 1.3;
+}
+
+.mdocs-agent-skill-popover-desc {
+  font-size: 12px;
+  color: #667085;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mdocs-agent-skill-popover-desc-muted {
+  color: #98a2b3;
+}
+
+.mdocs-agent-skill-chip {
+  border: 1px solid #e4e7ec;
+  background: #fff;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #475467;
+}
+
+.mdocs-agent-skill-chip-on {
+  border-color: #84caff;
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.mdocs-agent-msg-skills {
+  font-size: 11px;
+  color: #667085;
+  margin-bottom: 4px;
+}
+
+.mdocs-agent-skills-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.mdocs-agent-skills-panel {
+  margin-top: 8px;
+}
+
+.mdocs-agent-skills-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 10px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.mdocs-agent-skills-lead {
+  margin: 0 0 16px;
+}
+
+.mdocs-agent-skills-error {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fef3f2;
+  color: #b42318;
+  font-size: 13px;
+}
+
+.mdocs-agent-skills-form {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+
+.mdocs-agent-skills-form-head {
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #1f2329;
+}
+
+.mdocs-agent-skills-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #344054;
+}
+
+.mdocs-agent-skills-field input,
+.mdocs-agent-skills-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  background: #fff;
+  color: #1f2329;
+}
+
+.mdocs-agent-skills-field textarea {
+  resize: vertical;
+  min-height: 140px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mdocs-agent-skills-input-invalid {
+  border-color: #f97066 !important;
+  background: #fffbfa !important;
+}
+
+.mdocs-agent-skills-hint {
+  font-size: 12px;
+  color: #98a2b3;
+}
+
+.mdocs-agent-skills-hint-bad {
+  font-size: 12px;
+  color: #b42318;
+}
+
+.mdocs-agent-skills-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0 4px;
+}
+
+.mdocs-agent-skills-empty p {
+  margin: 0;
+  color: #667085;
+  font-size: 13px;
+}
+
+.mdocs-agent-skills-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 4px;
+  border-top: 1px solid #eef2f6;
+}
+
+.mdocs-agent-skills-item:first-child {
+  border-top: none;
+  padding-top: 4px;
+}
+
+.mdocs-agent-skills-item-active {
+  background: #f8fafc;
+  margin: 0 -8px;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-radius: 8px;
+}
+
+.mdocs-agent-skills-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.mdocs-agent-skills-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mdocs-agent-skills-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: #175cd3;
+  background: #eff8ff;
+  border-radius: 6px;
+  padding: 2px 8px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mdocs-agent-skills-badge-warn {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #b54708;
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.mdocs-agent-skills-desc {
+  font-size: 13px;
+  color: #667085;
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.mdocs-agent-skills-item-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .mdocs-agent-panel-input {

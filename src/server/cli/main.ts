@@ -11,6 +11,7 @@ import {
   MigrationError,
   type MigrationResult,
 } from "../migrations/visitor-migration.service.js";
+import { runSelfUpdate } from "./self-update.js";
 
 type Flags = Record<string, string | boolean>;
 
@@ -40,10 +41,15 @@ function printUsage(): void {
       "mdocs CLI",
       "",
       "Usage:",
+      "  mdocs                          Start server",
+      "  mdocs start                    Start server",
+      "  mdocs update                   Upgrade in-place from npmmirror (keep node_modules)",
       "  mdocs visitor list [--active|--disabled|--all]",
       "  mdocs visitor migrate --from OLD --to NEW [--dry-run] [--confirm]",
       "",
       "Notes:",
+      "  update uses https://registry.npmmirror.com for @fgbg/mdocs only;",
+      "  keeps existing node_modules and runs npm install --prefer-offline.",
       "  visitor list defaults to --active (only enabled visitors).",
       "  For migrate, OLD/NEW can be either visitor ID (UUID) or visitor name.",
       "  Either --dry-run or --confirm must be supplied.",
@@ -62,6 +68,10 @@ async function main(): Promise<void> {
   }
   if (command === "start") {
     startServer();
+    return;
+  }
+  if (command === "update") {
+    runSelfUpdate();
     return;
   }
   if (command === "visitor" && sub === "list") {

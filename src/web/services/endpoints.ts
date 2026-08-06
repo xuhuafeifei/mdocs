@@ -625,6 +625,45 @@ export function saveAgentConfigApi(input: {
   });
 }
 
+export interface AgentUserSkill {
+  id: string;
+  name: string;
+  description: string;
+  body: string;
+  updatedAt: string;
+}
+
+export function fetchAgentUserSkillsApi(): Promise<AgentUserSkill[]> {
+  return api<AgentUserSkill[]>("/api/agent/skills");
+}
+
+export function createAgentUserSkillApi(input: {
+  name: string;
+  description?: string;
+  body: string;
+}): Promise<AgentUserSkill> {
+  return api<AgentUserSkill>("/api/agent/skills", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateAgentUserSkillApi(
+  id: string,
+  input: { name: string; description?: string; body: string },
+): Promise<AgentUserSkill> {
+  return api<AgentUserSkill>(`/api/agent/skills/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteAgentUserSkillApi(id: string): Promise<{ ok: boolean }> {
+  return api<{ ok: boolean }>(`/api/agent/skills/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 export interface AgentStatus {
   enabled: boolean;
   skillsReady: boolean;
@@ -654,6 +693,18 @@ export type AgentStreamEvent =
       expiresAt: string;
     }
   | { type: "choice_expired"; requestId: string }
+  | {
+      type: "skill_form_card";
+      requestId: string;
+      mode: "create" | "update";
+      title: string;
+      currentName?: string;
+      initialName: string;
+      initialDescription: string;
+      initialBody: string;
+      expiresAt: string;
+    }
+  | { type: "skill_form_expired"; requestId: string }
   | {
       type: "open_coding";
       documentId: string;
@@ -699,6 +750,9 @@ export function fetchAgentContextUsageApi(): Promise<AgentContextUsage> {
 export interface AgentSessionMessage {
   role: "user" | "assistant";
   content: string;
+  skillNames?: string[];
+  /** @deprecated */
+  skillIds?: string[];
 }
 
 export interface AgentSessionResponse {
@@ -803,11 +857,36 @@ export function expireAgentChoiceApi(
   });
 }
 
+/** 解冻 create/update skill 表单 */
+export function submitAgentSkillFormApi(
+  requestId: string,
+  fields: { name: string; description: string; body: string },
+): Promise<{ status: string }> {
+  return api("/api/agent/skill-form", {
+    method: "POST",
+    body: JSON.stringify({ requestId, ...fields }),
+  });
+}
+
+/** 前端倒计时结束：通知后端结束 skill 表单 pending */
+export function expireAgentSkillFormApi(
+  requestId: string,
+): Promise<{ status: string }> {
+  return api("/api/agent/skill-form", {
+    method: "POST",
+    body: JSON.stringify({ requestId, expire: true }),
+  });
+}
+
 /** POST /api/agent/chat，解析 SSE `data: {...}` 行 */
 export async function streamAgentChatApi(
   message: string,
   opts: {
     mode?: "normal" | "coding";
+    /** 本轮引用的私人 skill 名称 */
+    skillNames?: string[];
+    /** @deprecated */
+    skillIds?: string[];
     /** coding：帮写工作台当前稿 / 进场快照（放 body，不放 header） */
     documentId?: string | null;
     workingMarkdown?: string;
@@ -820,6 +899,13 @@ export async function streamAgentChatApi(
     message,
     mode: opts.mode === "coding" ? "coding" : "normal",
   };
+  const names =
+    opts.skillNames && opts.skillNames.length > 0
+      ? opts.skillNames
+      : opts.skillIds && opts.skillIds.length > 0
+        ? opts.skillIds
+        : undefined;
+  if (names) body.skillNames = names;
   if (opts.mode === "coding") {
     if (opts.documentId !== undefined) body.documentId = opts.documentId;
     if (typeof opts.workingMarkdown === "string") body.workingMarkdown = opts.workingMarkdown;

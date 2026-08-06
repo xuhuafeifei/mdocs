@@ -29,6 +29,7 @@ import {
   getWorkingDocumentTool,
   setMarkdownDocumentTool,
 } from "./tools-coding.js";
+import { userSkillTools } from "./tools-user-skills.js";
 
 /** 手册（skills 缺省时为空） */
 export function manualTools(deps: ToolDeps): AgentTool[] {
@@ -64,4 +65,9 @@ export function overwriteTools(deps: ToolDeps): AgentTool[] {
 
 export function codingWriteTools(deps: ToolDeps): AgentTool[] {
   return [getWorkingDocumentTool(deps), setMarkdownDocumentTool(deps)];
+}
+
+/** 私人用户 skill CRUD（list/create/update/delete；create/update 出表单卡） */
+export function userSkillManageTools(deps: ToolDeps): AgentTool[] {
+  return userSkillTools(deps);
 }

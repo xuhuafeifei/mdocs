@@ -8,6 +8,10 @@ export type AgentSessionRole = "user" | "assistant";
 export interface AgentSessionMessage {
   role: AgentSessionRole;
   content: string;
+  /** user 轮引用的私人 skill 名称（唯一键）；assistant 无此字段 */
+  skillNames?: string[];
+  /** @deprecated 旧 jsonl；读取时并入 skillNames */
+  skillIds?: string[];
 }
 
 export interface AgentSessionSummary {
@@ -56,6 +60,29 @@ function titleFromUserContent(content: string): string {
   const oneLine = content.replace(/\s+/g, " ").trim();
   if (!oneLine) return "新会话";
   return oneLine.length > 36 ? `${oneLine.slice(0, 36)}…` : oneLine;
+}
+
+function parseSkillRefsField(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const id = item.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+/** 新字段 skillNames；兼容旧 skillIds */
+export function skillRefsOfMessage(m: {
+  skillNames?: string[];
+  skillIds?: string[];
+}): string[] {
+  if (m.skillNames && m.skillNames.length > 0) return m.skillNames;
+  return m.skillIds ?? [];
 }
 
 /** null/空 → 空白桶；有 id → 该文档 */
@@ -194,11 +221,24 @@ export class AgentSessionManager {
       const messages: AgentSessionMessage[] = [];
       for (const line of lines) {
         try {
-          const row = JSON.parse(line) as { role?: unknown; content?: unknown };
+          const row = JSON.parse(line) as {
+            role?: unknown;
+            content?: unknown;
+            skillNames?: unknown;
+            skillIds?: unknown;
+          };
           const role = row.role === "user" ? "user" : row.role === "assistant" ? "assistant" : null;
           const content = typeof row.content === "string" ? row.content : null;
           if (!role || content === null) continue;
-          messages.push({ role, content });
+          const fromNames = parseSkillRefsField(row.skillNames);
+          const fromIds = parseSkillRefsField(row.skillIds);
+          const skillNames =
+            fromNames.length > 0 ? fromNames : fromIds.length > 0 ? fromIds : [];
+          messages.push(
+            role === "user" && skillNames.length > 0
+              ? { role, content, skillNames }
+              : { role, content },
+          );
         } catch {
           /* ignore invalid line */
         }
@@ -429,11 +469,22 @@ export class AgentSessionManager {
     this.cachedSessionId = sessionId;
   }
 
-  async appendUser(sessionId: string, content: string): Promise<void> {
+  async appendUser(
+    sessionId: string,
+    content: string,
+    skillNames?: string[],
+  ): Promise<void> {
     if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
+    const names = Array.isArray(skillNames)
+      ? skillNames
+          .filter((n) => typeof n === "string" && n.trim())
+          .map((n) => n.trim())
+      : [];
+    const row: Record<string, unknown> = { role: "user", content, ts: nowIso() };
+    if (names.length > 0) row.skillNames = names;
     await fs.promises.appendFile(
       this.jsonlPath(sessionId),
-      JSON.stringify({ role: "user", content, ts: nowIso() }) + "\n",
+      JSON.stringify(row) + "\n",
       "utf8",
     );
     await this.touchLastOpened(sessionId, { titleIfEmpty: titleFromUserContent(content) });

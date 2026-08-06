@@ -23,6 +23,18 @@ export type AgentStreamEvent =
     }
   | { type: "choice_expired"; requestId: string }
   | {
+      type: "skill_form_card";
+      requestId: string;
+      mode: "create" | "update";
+      title: string;
+      currentName?: string;
+      initialName: string;
+      initialDescription: string;
+      initialBody: string;
+      expiresAt: string;
+    }
+  | { type: "skill_form_expired"; requestId: string }
+  | {
       type: "open_coding";
       documentId: string;
       displayName: string;

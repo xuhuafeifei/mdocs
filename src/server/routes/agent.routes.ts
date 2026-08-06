@@ -8,12 +8,24 @@ import {
 import { getAgentSessionForApi, createAgentSessionForApi, listAgentSessionsForApi, openAgentSessionForApi, bindCodingSessionDocumentForApi } from "../agent/Agent/session-manager.js";
 import { resolveUserChoice, expireUserChoice } from "../agent/Agent/choice-pending.js";
 import {
+  resolveSkillForm,
+  expireSkillForm,
+} from "../agent/Agent/skill-form-pending.js";
+import {
   getVisitorAgentConfig,
   isAgentModelId,
   normalizeContextWindow,
   toPublicAgentConfig,
   upsertVisitorAgentConfig,
 } from "../agent/Config/config.js";
+import {
+  createUserSkill,
+  listUserSkills,
+  normalizeSkillRefs,
+  removeUserSkill,
+  updateUserSkill,
+  USER_SKILL_BODY_MAX_CHARS,
+} from "../agent/Agent/user-skills.js";
 import { useLogger } from "../logger/logger.js";
 
 const log = useLogger("agent-route");
@@ -108,6 +120,133 @@ export function buildAgentRouter(): Router {
         res.status(400).json({
           error: { code: "BAD_REQUEST", message: "apiKey is required on first save" },
         });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.get("/skills", (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    res.json({ data: listUserSkills(req.visitor.visitor_id) });
+  });
+
+  router.post("/skills", (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    try {
+      const data = createUserSkill({
+        ownerVisitorId: req.visitor.visitor_id,
+        name: typeof req.body?.name === "string" ? req.body.name : "",
+        description: typeof req.body?.description === "string" ? req.body.description : undefined,
+        body: typeof req.body?.body === "string" ? req.body.body : "",
+      });
+      res.status(201).json({ data });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        msg === "skill_name_required" ||
+        msg === "skill_name_invalid" ||
+        msg === "skill_name_too_long" ||
+        msg === "skill_description_too_long" ||
+        msg === "skill_body_required" ||
+        msg === "skill_body_too_long"
+      ) {
+        res.status(400).json({
+          error: {
+            code: "BAD_REQUEST",
+            message:
+              msg === "skill_body_too_long"
+                ? `body must be <= ${USER_SKILL_BODY_MAX_CHARS} chars`
+                : msg === "skill_name_invalid"
+                  ? "name must be English letters, digits, and underscore only"
+                  : msg,
+          },
+        });
+        return;
+      }
+      if (msg === "skill_name_taken") {
+        res.status(409).json({ error: { code: "CONFLICT", message: msg } });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.patch("/skills/:id", (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
+    if (!id) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "id is required" } });
+      return;
+    }
+    try {
+      const data = updateUserSkill({
+        ownerVisitorId: req.visitor.visitor_id,
+        id,
+        name: typeof req.body?.name === "string" ? req.body.name : "",
+        description: typeof req.body?.description === "string" ? req.body.description : undefined,
+        body: typeof req.body?.body === "string" ? req.body.body : "",
+      });
+      res.json({ data });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "skill_not_found") {
+        res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
+        return;
+      }
+      if (
+        msg === "skill_name_required" ||
+        msg === "skill_name_invalid" ||
+        msg === "skill_name_too_long" ||
+        msg === "skill_description_too_long" ||
+        msg === "skill_body_required" ||
+        msg === "skill_body_too_long"
+      ) {
+        res.status(400).json({
+          error: {
+            code: "BAD_REQUEST",
+            message:
+              msg === "skill_name_invalid"
+                ? "name must be English letters, digits, and underscore only"
+                : msg,
+          },
+        });
+        return;
+      }
+      if (msg === "skill_name_taken") {
+        res.status(409).json({ error: { code: "CONFLICT", message: msg } });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.delete("/skills/:id", (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
+    if (!id) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "id is required" } });
+      return;
+    }
+    try {
+      removeUserSkill(req.visitor.visitor_id, id);
+      res.json({ data: { ok: true } });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "skill_not_found") {
+        res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
         return;
       }
       throw err;
@@ -302,6 +441,62 @@ export function buildAgentRouter(): Router {
     }
   });
 
+  router.post("/skill-form", (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const requestId =
+      typeof req.body?.requestId === "string" ? req.body.requestId.trim() : "";
+    if (!requestId) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "requestId is required" } });
+      return;
+    }
+
+    if (req.body?.expire === true || req.body?.cancel === true) {
+      try {
+        expireSkillForm(req.visitor.visitor_id, requestId);
+        res.json({ data: { status: "timeout" } });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg === "skill_form_not_found") {
+          res.json({ data: { status: "timeout" } });
+          return;
+        }
+        if (msg === "skill_form_forbidden") {
+          res.status(403).json({ error: { code: "FORBIDDEN", message: msg } });
+          return;
+        }
+        throw err;
+      }
+      return;
+    }
+
+    const name = typeof req.body?.name === "string" ? req.body.name : "";
+    const description =
+      typeof req.body?.description === "string" ? req.body.description : "";
+    const body = typeof req.body?.body === "string" ? req.body.body : "";
+    try {
+      const data = resolveSkillForm(req.visitor.visitor_id, requestId, {
+        name,
+        description,
+        body,
+      });
+      res.json({ data });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "skill_form_not_found") {
+        res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
+        return;
+      }
+      if (msg === "skill_form_forbidden") {
+        res.status(403).json({ error: { code: "FORBIDDEN", message: msg } });
+        return;
+      }
+      throw err;
+    }
+  });
+
   router.post("/chat", async (req: Request, res: Response) => {
     if (!req.visitor) {
       res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
@@ -339,6 +534,9 @@ export function buildAgentRouter(): Router {
       mode === "coding" && typeof req.body?.documentId === "string"
         ? req.body.documentId.trim() || null
         : undefined;
+    const skillNames = normalizeSkillRefs(
+      req.body?.skillNames ?? req.body?.skillIds,
+    );
 
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache");
@@ -356,6 +554,7 @@ export function buildAgentRouter(): Router {
         visitorId: req.visitor.visitor_id,
         message,
         mode,
+        skillNames,
         documentId,
         workingMarkdown,
         baseMarkdown,

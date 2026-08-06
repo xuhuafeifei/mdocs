@@ -67,7 +67,13 @@
   | `src/server/routes/agent.routes.ts` | `buildAgentRouter`（含 `/choice` `/sessions` `/session/open`） |
   | `src/server/db/repositories/agent-model-config.repo.ts` | `findAgentModelConfigByOwner` |
   | `src/web/app/AgentConfigPanel.tsx` | `AgentConfigPanel` |
+  | `src/web/app/AgentUserSkillsPanel.tsx` | 私人 skill CRUD |
+  | `src/web/app/AgentSkillRefPicker.tsx` | 对话引用 skill |
   | `src/web/app/AgentChatPanel.tsx` | 历史列表 / 「+」新建 |
+  | `src/server/db/repositories/agent-user-skill.repo.ts` | `listAgentUserSkillsByOwner` |
+  | `src/server/agent/Agent/user-skills.ts` | `resolveSkillExpandBlocks` `formatSkillExpandBlock` |
+  | `src/server/agent/Agent/hydrate-messages.ts` | `hydrateSessionMessagesToPi` |
+- **需求**：[`../requirements/user-agent-skills/`](../requirements/user-agent-skills/)（已同意）
 
 ### 搜索
 
@@ -80,10 +86,11 @@
 
 ### 域 / CLI / 迁移
 
-- **关键词**：`domain` `personal` `visitor migrate` `cli`
+- **关键词**：`domain` `personal` `visitor migrate` `cli` `mdocs update`
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `src/server/domains/personal-domain.service.ts` | 个人域 |
   | `src/server/cli/main.ts` | CLI 入口 |
+  | `src/server/cli/self-update.ts` | `runSelfUpdate`（npmmirror 原地升级，保留 node_modules） |
   | `src/server/migrations/visitor-migration.service.ts` | 访客迁移 |

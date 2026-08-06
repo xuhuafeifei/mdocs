@@ -15,6 +15,7 @@ import { listAllDrafts } from "../storage/drafts";
 import { DomainManagementPanel } from "./DomainManagementPanel";
 import { MemberTemplatesPanel } from "./MemberTemplatesPanel";
 import { AgentConfigPanel } from "./AgentConfigPanel";
+import { AgentUserSkillsPanel } from "./AgentUserSkillsPanel";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 import {
   createCliTokenApi,
@@ -813,7 +814,10 @@ export function SettingsPage(props: {
           // ---- 成员模板 Tab ----
           <MemberTemplatesPanel />
         ) : tab === "agentConfig" ? (
-          <AgentConfigPanel />
+          <>
+            <AgentConfigPanel />
+            <AgentUserSkillsPanel />
+          </>
         ) : (
           // ---- 保存与发布 Tab ----
           <div className="mdocs-settings">
