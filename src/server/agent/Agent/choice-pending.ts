@@ -73,12 +73,20 @@ export function resolveUserChoice(
   return result;
 }
 
-/** 前端倒计时结束或用户放弃时解冻为 timeout */
+/** 前端倒计时结束解冻为 timeout */
 export function expireUserChoice(visitorId: string, requestId: string): void {
   const entry = pending.get(requestId);
   if (!entry) throw new Error("choice_not_found");
   if (entry.visitorId !== visitorId) throw new Error("choice_forbidden");
   entry.resolve({ status: "timeout" });
+}
+
+/** 用户主动取消选择卡 */
+export function cancelUserChoice(visitorId: string, requestId: string): void {
+  const entry = pending.get(requestId);
+  if (!entry) throw new Error("choice_not_found");
+  if (entry.visitorId !== visitorId) throw new Error("choice_forbidden");
+  entry.resolve({ status: "cancelled" });
 }
 
 /** chat 断开时清掉该访客未完成的 choice */

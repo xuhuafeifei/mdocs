@@ -109,12 +109,16 @@ function bindAgentEvents(opts: {
   let appendedAssistant = false;
 
   return async (event) => {
-    if (
-      event.type === "message_update" &&
-      event.assistantMessageEvent.type === "text_delta"
-    ) {
-      onEvent({ type: "text_delta", text: event.assistantMessageEvent.delta });
-      return;
+    if (event.type === "message_update") {
+      const ame = event.assistantMessageEvent;
+      if (ame.type === "text_delta") {
+        onEvent({ type: "text_delta", text: ame.delta });
+        return;
+      }
+      if (ame.type === "thinking_delta") {
+        onEvent({ type: "thinking_delta", text: ame.delta });
+        return;
+      }
     }
 
     if (event.type === "message_end") {

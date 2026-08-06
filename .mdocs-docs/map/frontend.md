@@ -50,3 +50,14 @@
   |------|------|
   | `src/web/i18n/` | `en.ts` / `zh.ts` |
   | `src/web/app/SettingsPage.tsx` | 设置页 |
+
+### AI 帮写（coding）
+
+- **关键词**：`AiWrite` `帮写` `currentMd` `proposedMd` `hunk` `sending` `纯编辑`
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/web/app/ai-write/AiWriteWorkbench.tsx` | `AiWriteWorkbench` |
+  | `src/web/app/ai-write/AiWriteMarkdownPane.tsx` | `AiWriteMarkdownPane` |
+  | `src/web/app/ai-write/markdown-hunks.ts` | `computeLineHunks` |
+- **需求**：[`../requirements/agent-normal-coding-modes/`](../requirements/agent-normal-coding-modes/)

@@ -136,6 +136,8 @@ export async function runOnboardingChat(params: {
       model,
       tools,
       messages: [...historyPi, ...currentSkillPairs],
+      /** Ask / 帮写均开思考流，避免长时间无输出像掉线 */
+      thinkingLevel: "medium",
     },
     streamFn: models.streamSimple.bind(models),
   });
@@ -173,7 +175,7 @@ function createDeepSeekModel(cfg: VisitorAgentConfig) {
     api: "openai-completions",
     provider: "deepseek",
     baseUrl: cfg.endpoint,
-    reasoning: false,
+    reasoning: true,
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: cfg.contextWindow,

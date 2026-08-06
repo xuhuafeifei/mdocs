@@ -677,6 +677,47 @@
   color: #1f2329;
 }
 
+.mdocs-agent-panel-think-fold {
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mdocs-border, #e5e7eb) 45%, transparent);
+  font-size: 0.8rem;
+  color: var(--mdocs-muted, #6b7280);
+}
+
+.mdocs-agent-panel-think-fold > summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.mdocs-agent-panel-think-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mdocs-agent-panel-think-fold > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 0.12s ease;
+}
+
+.mdocs-agent-panel-think-fold[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.mdocs-agent-panel-think-body {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  max-height: 12rem;
+  overflow: auto;
+}
+
 .mdocs-agent-panel-thinking {
   display: inline-flex;
   align-items: center;
@@ -1133,6 +1174,32 @@
   cursor: not-allowed;
 }
 
+.mdocs-agent-choice-footer {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mdocs-agent-choice-cancel {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 6px 12px;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mdocs-agent-choice-cancel:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.mdocs-agent-choice-cancel:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .mdocs-agent-choice-result {
   margin: 0 0 8px;
   font-size: 13px;
@@ -1187,6 +1254,7 @@
 .mdocs-agent-skill-form-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .mdocs-agent-skill-form-actions button {
@@ -1197,6 +1265,16 @@
   color: #fff;
   font: inherit;
   cursor: pointer;
+}
+
+.mdocs-agent-skill-form-actions button.mdocs-agent-skill-form-cancel {
+  background: #fff;
+  color: #344054;
+  border: 1px solid #d0d5dd;
+}
+
+.mdocs-agent-skill-form-actions button.mdocs-agent-skill-form-cancel:hover:not(:disabled) {
+  background: #f9fafb;
 }
 
 .mdocs-agent-skill-form-actions button:disabled {
@@ -2919,6 +2997,29 @@ strong.label {
   justify-content: flex-end;
 }
 
+.mdocs-agent-close-confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.35);
+  border-radius: inherit;
+}
+
+.mdocs-agent-close-confirm {
+  width: min(320px, 100%);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+}
+
+.mdocs-agent-close-confirm-actions {
+  gap: 8px;
+}
+
 /* === Notice bar === */
 .mdocs-notice {
   position: absolute;
@@ -3373,6 +3474,47 @@ strong.label {
   font-size: 13px;
   line-height: 1.55;
 }
+.mdocs-ai-write-thinking {
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mdocs-border, #e5e7eb) 45%, transparent);
+  font-size: 0.8rem;
+  color: var(--mdocs-muted, #6b7280);
+}
+
+.mdocs-ai-write-thinking > summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.mdocs-ai-write-thinking > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mdocs-ai-write-thinking > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 0.12s ease;
+}
+
+.mdocs-ai-write-thinking[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.mdocs-ai-write-thinking-body {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  max-height: 12rem;
+  overflow: auto;
+}
+
 .mdocs-ai-write-timeline {
   display: flex;
   flex-direction: column;

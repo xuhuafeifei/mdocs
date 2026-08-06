@@ -86,6 +86,14 @@ export function expireSkillForm(visitorId: string, requestId: string): void {
   entry.resolve({ status: "timeout" });
 }
 
+/** 用户主动取消表单（与超时区分） */
+export function cancelSkillForm(visitorId: string, requestId: string): void {
+  const entry = pending.get(requestId);
+  if (!entry) throw new Error("skill_form_not_found");
+  if (entry.visitorId !== visitorId) throw new Error("skill_form_forbidden");
+  entry.resolve({ status: "cancelled" });
+}
+
 export function cancelVisitorSkillForms(visitorId: string): void {
   for (const [id, entry] of pending) {
     if (entry.visitorId === visitorId) {

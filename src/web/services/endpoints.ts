@@ -674,6 +674,7 @@ export interface AgentStatus {
 
 export type AgentStreamEvent =
   | { type: "text_delta"; text: string }
+  | { type: "thinking_delta"; text: string }
   | { type: "sources"; items: AgentSourceRef[] }
   | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
   | {
@@ -857,6 +858,16 @@ export function expireAgentChoiceApi(
   });
 }
 
+/** 用户主动取消选择卡 */
+export function cancelAgentChoiceApi(
+  requestId: string,
+): Promise<{ status: string }> {
+  return api("/api/agent/choice", {
+    method: "POST",
+    body: JSON.stringify({ requestId, cancel: true }),
+  });
+}
+
 /** 解冻 create/update skill 表单 */
 export function submitAgentSkillFormApi(
   requestId: string,
@@ -875,6 +886,16 @@ export function expireAgentSkillFormApi(
   return api("/api/agent/skill-form", {
     method: "POST",
     body: JSON.stringify({ requestId, expire: true }),
+  });
+}
+
+/** 用户主动取消 skill 表单 */
+export function cancelAgentSkillFormApi(
+  requestId: string,
+): Promise<{ status: string }> {
+  return api("/api/agent/skill-form", {
+    method: "POST",
+    body: JSON.stringify({ requestId, cancel: true }),
   });
 }
 

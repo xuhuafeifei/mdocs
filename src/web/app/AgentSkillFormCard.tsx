@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  cancelAgentSkillFormApi,
   expireAgentSkillFormApi,
   submitAgentSkillFormApi,
 } from "../services/endpoints";
 
 const NAME_RE = /^[A-Za-z0-9_]+$/;
+
+export type SkillFormCardStatus =
+  | "open"
+  | "submitted"
+  | "cancelled"
+  | "expired"
+  | "failed";
 
 export type SkillFormCardState = {
   type: "skill_form_card";
@@ -16,18 +24,18 @@ export type SkillFormCardState = {
   initialDescription: string;
   initialBody: string;
   expiresAt: string;
-  status: "open" | "submitted" | "expired" | "failed";
+  status: SkillFormCardStatus;
   submittedName?: string;
 };
 
 /**
- * Agent create/update skill 表单卡：名称 / 简介 / 正文 + 倒计时。
+ * Agent create/update skill 表单卡：名称 / 简介 / 正文 + 倒计时 + 取消。
  */
 export function SkillFormCardBlock(props: {
   block: SkillFormCardState;
   onResolved: (
     requestId: string,
-    status: "submitted" | "expired" | "failed",
+    status: Exclude<SkillFormCardStatus, "open">,
     submittedName?: string,
   ) => void;
 }) {
@@ -102,6 +110,21 @@ export function SkillFormCardBlock(props: {
     }
   }
 
+  async function cancel() {
+    if (busy || !open) return;
+    setBusy(true);
+    setLocalError(null);
+    expiredOnceRef.current = true;
+    try {
+      await cancelAgentSkillFormApi(block.requestId);
+      onResolved(block.requestId, "cancelled");
+    } catch {
+      onResolved(block.requestId, "failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const remainSec = Math.max(0, Math.ceil((remainRatio * totalMs.current) / 1000));
 
   return (
@@ -137,6 +160,9 @@ export function SkillFormCardBlock(props: {
         <p className="mdocs-agent-choice-result">
           已提交{block.submittedName ? `：${block.submittedName}` : ""}
         </p>
+      ) : null}
+      {block.status === "cancelled" ? (
+        <p className="mdocs-agent-choice-result muted">已取消</p>
       ) : null}
       {block.status === "expired" ? (
         <p className="mdocs-agent-choice-result muted">已超时，表单已失效</p>
@@ -181,6 +207,14 @@ export function SkillFormCardBlock(props: {
             <p className="mdocs-agent-skill-form-error">{localError}</p>
           ) : null}
           <div className="mdocs-agent-skill-form-actions">
+            <button
+              type="button"
+              className="mdocs-agent-skill-form-cancel"
+              disabled={busy}
+              onClick={() => void cancel()}
+            >
+              取消
+            </button>
             <button type="button" disabled={busy} onClick={() => void submit()}>
               {busy ? "提交中…" : block.mode === "create" ? "创建" : "保存"}
             </button>

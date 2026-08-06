@@ -1,5 +1,12 @@
 import { Check, Copy, History, Plus, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import deepseekLogoUrl from "../assets/deepseek.svg";
@@ -14,6 +21,8 @@ import {
   streamAgentChatApi,
   submitAgentChoiceApi,
   expireAgentChoiceApi,
+  cancelAgentChoiceApi,
+  cancelAgentSkillFormApi,
   type AgentContextUsage,
   type AgentSessionSummary,
   type AgentSourceRef,
@@ -91,6 +100,7 @@ function AgentMarkdown(props: { children: string }) {
 
 /** 当轮流式时间线；不落盘，历史重开无 blocks 则只显示 content */
 type AssistantBlock =
+  | { type: "thinking"; text: string }
   | { type: "text"; text: string }
   | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
   | {
@@ -107,7 +117,7 @@ type AssistantBlock =
       title: string;
       options: string[];
       expiresAt: string;
-      status: "open" | "selected" | "expired" | "failed";
+      status: "open" | "selected" | "cancelled" | "expired" | "failed";
       selected?: string;
     }
   | SkillFormCardState
@@ -160,12 +170,27 @@ function appendTextDelta(blocks: AssistantBlock[], text: string): AssistantBlock
   return next;
 }
 
+function appendThinkingDelta(blocks: AssistantBlock[], text: string): AssistantBlock[] {
+  const next = blocks.slice();
+  const last = next[next.length - 1];
+  if (last?.type === "thinking") {
+    next[next.length - 1] = { type: "thinking", text: last.text + text };
+  } else {
+    next.push({ type: "thinking", text });
+  }
+  return next;
+}
+
 function textFromBlocks(blocks: AssistantBlock[] | undefined): string {
   if (!blocks?.length) return "";
   return blocks
     .filter((b): b is Extract<AssistantBlock, { type: "text" }> => b.type === "text")
     .map((b) => b.text)
     .join("");
+}
+
+function hasThinkingText(blocks: AssistantBlock[] | undefined): boolean {
+  return Boolean(blocks?.some((b) => b.type === "thinking" && b.text.length > 0));
 }
 
 function formatSessionTime(iso: string): string {
@@ -195,7 +220,7 @@ function ChoiceCardBlock(props: {
   onResolved: (
     requestId: string,
     choice: string,
-    status: "selected" | "expired" | "failed",
+    status: "selected" | "cancelled" | "expired" | "failed",
   ) => void;
 }) {
   const { block, onResolved } = props;
@@ -249,6 +274,20 @@ function ChoiceCardBlock(props: {
     }
   }
 
+  async function cancel() {
+    if (busy || !open) return;
+    setBusy(true);
+    expiredOnceRef.current = true;
+    try {
+      await cancelAgentChoiceApi(block.requestId);
+      onResolved(block.requestId, "", "cancelled");
+    } catch {
+      onResolved(block.requestId, "", "failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const remainSec = Math.max(0, Math.ceil((remainRatio * totalMs.current) / 1000));
 
   return (
@@ -281,6 +320,9 @@ function ChoiceCardBlock(props: {
       ) : null}
       {block.status === "selected" && block.selected ? (
         <p className="mdocs-agent-choice-result">已选择：{block.selected}</p>
+      ) : null}
+      {block.status === "cancelled" ? (
+        <p className="mdocs-agent-choice-result muted">已取消</p>
       ) : null}
       {block.status === "expired" ? (
         <p className="mdocs-agent-choice-result muted">已超时，选择已失效</p>
@@ -322,6 +364,16 @@ function ChoiceCardBlock(props: {
               onClick={() => void submit(custom)}
             >
               提交
+            </button>
+          </div>
+          <div className="mdocs-agent-choice-footer">
+            <button
+              type="button"
+              className="mdocs-agent-choice-cancel"
+              disabled={busy}
+              onClick={() => void cancel()}
+            >
+              取消
             </button>
           </div>
         </>
@@ -376,27 +428,50 @@ function ContextUsageRing(props: { percent: number; used: number; limit: number 
 /**
  * mdocs 智能助手 浮层：入口旁弹出；接 /api/agent/chat SSE。
  * 「+」新建 session；历史图标列出并切换 lastOpened。
+ * 关闭时若有倒计时卡（选择 / skill 表单），先确认是否强制退出。
  */
-export function AgentChatPanel(props: {
-  open: boolean;
-  onClose: () => void;
-  visitorName?: string;
-  /** 跟随 FAB 的定位（left / bottom） */
-  anchorStyle?: React.CSSProperties;
-  onOpenDocument?: (documentId: string) => void | Promise<void>;
-  /** Agent 建文/建文件夹/移动等改树后回调，用于刷新侧栏 */
-  onTreeChanged?: () => void | Promise<void>;
-  /** AI 覆写文档成功回调，刷新当前打开文档的内容 */
-  onDocumentOverwritten?: (payload: {
-    documentId: string;
-    headCommitId: string;
-  }) => void | Promise<void>;
-  /** 有正文时用户选「打开帮写」→ 打开帮写全屏层 */
-  onOpenCoding?: (payload: {
-    documentId: string;
-    displayName: string;
-  }) => void | Promise<void>;
-}) {
+export type AgentChatPanelHandle = {
+  requestClose: () => void;
+};
+
+function hasOpenCountdown(messages: ChatMessage[]): boolean {
+  for (const m of messages) {
+    if (m.role !== "assistant" || !m.blocks?.length) continue;
+    for (const b of m.blocks) {
+      if (
+        (b.type === "choice_card" || b.type === "skill_form_card") &&
+        b.status === "open"
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+export const AgentChatPanel = forwardRef<
+  AgentChatPanelHandle,
+  {
+    open: boolean;
+    onClose: () => void;
+    visitorName?: string;
+    /** 跟随 FAB 的定位（left / bottom） */
+    anchorStyle?: React.CSSProperties;
+    onOpenDocument?: (documentId: string) => void | Promise<void>;
+    /** Agent 建文/建文件夹/移动等改树后回调，用于刷新侧栏 */
+    onTreeChanged?: () => void | Promise<void>;
+    /** AI 覆写文档成功回调，刷新当前打开文档的内容 */
+    onDocumentOverwritten?: (payload: {
+      documentId: string;
+      headCommitId: string;
+    }) => void | Promise<void>;
+    /** 有正文时用户选「打开帮写」→ 打开帮写全屏层 */
+    onOpenCoding?: (payload: {
+      documentId: string;
+      displayName: string;
+    }) => void | Promise<void>;
+  }
+>(function AgentChatPanel(props, ref) {
   const {
     open,
     onClose,
@@ -420,12 +495,16 @@ export function AgentChatPanel(props: {
   const [sending, setSending] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [contextUsage, setContextUsage] = useState<AgentContextUsage | null>(null);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const [forceClosing, setForceClosing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const idRef = useRef(0);
   /** 用户是否贴在底部；上滑阅读时为 false，不再强制滚 */
   const stickToBottomRef = useRef(true);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   function nextId(prefix: string) {
     idRef.current += 1;
@@ -526,20 +605,87 @@ export function AgentChatPanel(props: {
     void refreshSessions();
   }, [open, historyOpen]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (historyOpen) {
-          setHistoryOpen(false);
-          return;
+  function requestClose() {
+    if (forceClosing) return;
+    if (hasOpenCountdown(messagesRef.current)) {
+      setCloseConfirmOpen(true);
+      return;
+    }
+    setCloseConfirmOpen(false);
+    onClose();
+  }
+
+  async function forceCloseAndExit() {
+    if (forceClosing) return;
+    setForceClosing(true);
+    const snapshot = messagesRef.current;
+    const tasks: Promise<unknown>[] = [];
+    for (const m of snapshot) {
+      if (m.role !== "assistant" || !m.blocks) continue;
+      for (const b of m.blocks) {
+        if (b.type === "choice_card" && b.status === "open") {
+          tasks.push(cancelAgentChoiceApi(b.requestId).catch(() => undefined));
         }
-        onClose();
+        if (b.type === "skill_form_card" && b.status === "open") {
+          tasks.push(cancelAgentSkillFormApi(b.requestId).catch(() => undefined));
+        }
       }
+    }
+    await Promise.all(tasks);
+    abortRef.current?.abort();
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.role !== "assistant" || !m.blocks) return m;
+        return {
+          ...m,
+          blocks: m.blocks.map((b) => {
+            if (b.type === "choice_card" && b.status === "open") {
+              return { ...b, status: "cancelled" as const };
+            }
+            if (b.type === "skill_form_card" && b.status === "open") {
+              return { ...b, status: "cancelled" as const };
+            }
+            return b;
+          }),
+        };
+      }),
+    );
+    setCloseConfirmOpen(false);
+    setForceClosing(false);
+    onClose();
+  }
+
+  const requestCloseRef = useRef(requestClose);
+  requestCloseRef.current = requestClose;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      requestClose: () => requestCloseRef.current(),
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      setCloseConfirmOpen(false);
+      return;
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (closeConfirmOpen) {
+        if (!forceClosing) setCloseConfirmOpen(false);
+        return;
+      }
+      if (historyOpen) {
+        setHistoryOpen(false);
+        return;
+      }
+      requestCloseRef.current();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose, historyOpen]);
+  }, [open, historyOpen, closeConfirmOpen, forceClosing]);
 
   async function sendMessage(raw: string) {
     const text = raw.trim();
@@ -586,6 +732,15 @@ export function AgentChatPanel(props: {
                 if (m.id !== assistantId) return m;
                 const blocks = appendTextDelta(m.blocks ?? [], event.text);
                 return { ...m, blocks, content: textFromBlocks(blocks) };
+              }),
+            );
+            requestAnimationFrame(() => scrollToBottomIfStuck());
+          } else if (event.type === "thinking_delta") {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== assistantId) return m;
+                const blocks = appendThinkingDelta(m.blocks ?? [], event.text);
+                return { ...m, blocks };
               }),
             );
             requestAnimationFrame(() => scrollToBottomIfStuck());
@@ -860,7 +1015,7 @@ export function AgentChatPanel(props: {
             className="mdocs-agent-panel-icon-btn"
             title="关闭"
             aria-label="关闭"
-            onClick={onClose}
+            onClick={requestClose}
           >
             <X size={16} strokeWidth={1.8} />
           </button>
@@ -965,6 +1120,21 @@ export function AgentChatPanel(props: {
                         m.blocks && m.blocks.length > 0 ? (
                           <div className="mdocs-agent-panel-timeline">
                             {m.blocks.map((block, bi) => {
+                              if (block.type === "thinking") {
+                                if (!block.text) return null;
+                                return (
+                                  <details
+                                    key={`${m.id}-th-${bi}`}
+                                    className="mdocs-agent-panel-think-fold"
+                                    open={
+                                      sending && m.id === messages[messages.length - 1]?.id
+                                    }
+                                  >
+                                    <summary>思考中</summary>
+                                    <pre className="mdocs-agent-panel-think-body">{block.text}</pre>
+                                  </details>
+                                );
+                              }
                               if (block.type === "text") {
                                 if (!block.text) return null;
                                 return (
@@ -1138,7 +1308,8 @@ export function AgentChatPanel(props: {
                             })}
                             {sending &&
                             m.id === messages[messages.length - 1]?.id &&
-                            !textFromBlocks(m.blocks) ? (
+                            !textFromBlocks(m.blocks) &&
+                            !hasThinkingText(m.blocks) ? (
                               <span className="mdocs-agent-panel-thinking" aria-label="思考中">
                                 <span />
                                 <span />
@@ -1212,6 +1383,48 @@ export function AgentChatPanel(props: {
           <p className="mdocs-agent-panel-footnote">内容由 AI 生成，仅供参考</p>
         </div>
       )}
+
+      {closeConfirmOpen ? (
+        <div
+          className="mdocs-agent-close-confirm-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (!forceClosing) setCloseConfirmOpen(false);
+          }}
+        >
+          <div
+            className="mdocs-message-dialog mdocs-agent-close-confirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mdocs-agent-close-confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="mdocs-agent-close-confirm-title" className="mdocs-message-dialog-title">
+              有待处理的倒计时
+            </h3>
+            <p className="mdocs-message-dialog-body">
+              当前还有选择卡或 Skill 表单在倒计时。强制关闭会取消这些操作并退出助手；也可以继续等待完成后再关。
+            </p>
+            <div className="mdocs-message-dialog-actions mdocs-agent-close-confirm-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={forceClosing}
+                onClick={() => setCloseConfirmOpen(false)}
+              >
+                继续等待
+              </button>
+              <button
+                type="button"
+                disabled={forceClosing}
+                onClick={() => void forceCloseAndExit()}
+              >
+                {forceClosing ? "关闭中…" : "强制关闭并退出"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
-}
+});

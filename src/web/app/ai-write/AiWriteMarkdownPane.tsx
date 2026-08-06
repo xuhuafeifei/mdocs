@@ -39,14 +39,21 @@ function hunkTone(h: MdHunk): "add" | "del" | "mod" {
   return "mod";
 }
 
-/** 右侧：inline diff 连续排版；接受/拒绝仅悬停浮层 + 右下角导航，不打断正文 */
+/**
+ * 右侧：有 hunk 时默认源码可编；「查看 diff」进入只读审阅。
+ * diff 内直接编辑：本期不做。
+ */
 export function AiWriteMarkdownPane(props: {
   currentMd: string;
   proposedMd: string | null;
+  /** 流式中强制源码编辑 */
+  sending?: boolean;
   onCurrentChange: (md: string) => void;
   onProposedChange: (md: string | null) => void;
 }) {
-  const [forceEdit, setForceEdit] = useState(false);
+  const sending = Boolean(props.sending);
+  /** false = 源码编辑；true = 只读 diff（有 hunk 时） */
+  const [reviewDiff, setReviewDiff] = useState(false);
   const [activeHunk, setActiveHunk] = useState(0);
   const [hoveredHunk, setHoveredHunk] = useState<number | null>(null);
 
@@ -63,12 +70,17 @@ export function AiWriteMarkdownPane(props: {
   useEffect(() => {
     if (hunks.length === 0) {
       setActiveHunk(0);
+      setReviewDiff(false);
       return;
     }
     setActiveHunk((i) => Math.min(i, hunks.length - 1));
   }, [hunks.length]);
 
-  const showInlineDiff = !forceEdit && hunks.length > 0;
+  useEffect(() => {
+    if (sending) setReviewDiff(false);
+  }, [sending]);
+
+  const showInlineDiff = !sending && reviewDiff && hunks.length > 0;
   const focusIndex = hoveredHunk ?? activeHunk;
 
   function onAccept(h: MdHunk) {
@@ -113,13 +125,17 @@ export function AiWriteMarkdownPane(props: {
     <div className="mdocs-ai-write-md-pane">
       <div className="mdocs-ai-write-diff-toolbar">
         <span className="mdocs-ai-write-diff-count">
-          {hunks.length === 0
-            ? forceEdit || !props.proposedMd
-              ? "Markdown 源码（可编辑）"
-              : "与提案一致"
-            : `${hunks.length} 处变更`}
+          {sending
+            ? "接收中·编辑我的稿"
+            : hunks.length === 0
+              ? props.proposedMd
+                ? "与提案一致（可编辑）"
+                : "Markdown 源码（可编辑）"
+              : reviewDiff
+                ? `${hunks.length} 处变更`
+                : `${hunks.length} 处变更（编辑中）`}
         </span>
-        {hunks.length > 0 ? (
+        {!sending && hunks.length > 0 ? (
           <>
             <button type="button" onClick={acceptAll}>
               全部接受
@@ -127,15 +143,15 @@ export function AiWriteMarkdownPane(props: {
             <button type="button" onClick={rejectAll}>
               全部拒绝
             </button>
+            <button
+              type="button"
+              className={reviewDiff ? "active" : ""}
+              onClick={() => setReviewDiff((v) => !v)}
+            >
+              {reviewDiff ? "编辑我的稿" : "查看 diff"}
+            </button>
           </>
         ) : null}
-        <button
-          type="button"
-          className={forceEdit ? "active" : ""}
-          onClick={() => setForceEdit((v) => !v)}
-        >
-          {forceEdit ? "回到 diff" : "纯编辑"}
-        </button>
       </div>
 
       {showInlineDiff ? (

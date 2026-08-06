@@ -90,6 +90,7 @@ const SettingsPage = lazy(() =>
 const AgentChatPanel = lazy(() =>
   import("./AgentChatPanel").then((m) => ({ default: m.AgentChatPanel })),
 );
+type AgentChatPanelHandle = import("./AgentChatPanel").AgentChatPanelHandle;
 const AiWriteWorkbench = lazy(() =>
   import("./ai-write/AiWriteWorkbench").then((m) => ({ default: m.AiWriteWorkbench })),
 );
@@ -299,6 +300,7 @@ export function App() {
   // ---- 上手助手浮层 ----
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const [agentFabPos, setAgentFabPos] = useAgentFabPosition();
+  const agentPanelRef = useRef<AgentChatPanelHandle | null>(null);
 
   // ---- 帮写全屏层 ----
   const [aiWriteOpen, setAiWriteOpen] = useState(false);
@@ -1155,13 +1157,20 @@ export function App() {
         <>
           <AgentFab
             open={agentPanelOpen}
-            onToggle={() => setAgentPanelOpen((v) => !v)}
+            onToggle={() => {
+              if (agentPanelOpen) {
+                agentPanelRef.current?.requestClose();
+              } else {
+                setAgentPanelOpen(true);
+              }
+            }}
             position={agentFabPos}
             onPositionChange={setAgentFabPos}
           />
           {agentPanelOpen ? (
             <Suspense fallback={null}>
               <AgentChatPanel
+                ref={agentPanelRef}
                 open={agentPanelOpen}
                 onClose={() => setAgentPanelOpen(false)}
                 visitorName={visitor?.visitorName}

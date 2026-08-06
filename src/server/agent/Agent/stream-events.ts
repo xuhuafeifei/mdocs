@@ -3,6 +3,7 @@ import type { ManualSourceRef } from "./tools.js";
 /** 推给路由 / 前端的流式片段（路由只负责写出 SSE） */
 export type AgentStreamEvent =
   | { type: "text_delta"; text: string }
+  | { type: "thinking_delta"; text: string }
   | { type: "sources"; items: ManualSourceRef[] }
   | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
   | {

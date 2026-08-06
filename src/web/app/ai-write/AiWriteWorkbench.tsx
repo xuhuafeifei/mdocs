@@ -22,8 +22,9 @@ import {
 import { AiWriteMarkdownPane } from "./AiWriteMarkdownPane";
 import { computeLineHunks } from "./markdown-hunks";
 
-/** 助手时间线：正文 + 工具用途说明（不展示英文 tool name） */
+/** 助手时间线：思考流 + 正文 + 工具用途说明（不展示英文 tool name） */
 type AssistantBlock =
+  | { type: "thinking"; text: string }
   | { type: "text"; text: string }
   | { type: "tool"; text: string }
   | SkillFormCardState;
@@ -49,6 +50,17 @@ function appendTextDelta(blocks: AssistantBlock[], text: string): AssistantBlock
   return next;
 }
 
+function appendThinkingDelta(blocks: AssistantBlock[], text: string): AssistantBlock[] {
+  const next = blocks.slice();
+  const last = next[next.length - 1];
+  if (last?.type === "thinking") {
+    next[next.length - 1] = { type: "thinking", text: last.text + text };
+  } else {
+    next.push({ type: "thinking", text });
+  }
+  return next;
+}
+
 function appendTool(blocks: AssistantBlock[], text: string): AssistantBlock[] {
   const trimmed = text.trim();
   if (!trimmed) return blocks;
@@ -56,7 +68,9 @@ function appendTool(blocks: AssistantBlock[], text: string): AssistantBlock[] {
 }
 
 function hasVisibleAssistant(blocks: AssistantBlock[]): boolean {
-  return blocks.some((b) => (b.type === "text" ? b.text.length > 0 : true));
+  return blocks.some((b) =>
+    b.type === "text" || b.type === "thinking" ? b.text.length > 0 : true,
+  );
 }
 
 function formatSessionTime(iso: string): string {
@@ -284,6 +298,8 @@ export function AiWriteWorkbench(props: {
         onEvent: (event) => {
           if (event.type === "text_delta") {
             patchAssistant((blocks) => appendTextDelta(blocks, event.text));
+          } else if (event.type === "thinking_delta") {
+            patchAssistant((blocks) => appendThinkingDelta(blocks, event.text));
           } else if (event.type === "markdown_set") {
             setProposedMd(event.markdown);
           } else if (event.type === "tool_notice") {
@@ -519,7 +535,18 @@ export function AiWriteWorkbench(props: {
                       ) : hasVisibleAssistant(m.blocks) ? (
                         <div className="mdocs-ai-write-timeline">
                           {m.blocks.map((block, bi) =>
-                            block.type === "tool" ? (
+                            block.type === "thinking" ? (
+                              block.text ? (
+                                <details
+                                  key={`${m.id}-think-${bi}`}
+                                  className="mdocs-ai-write-thinking"
+                                  open={sending}
+                                >
+                                  <summary>思考中</summary>
+                                  <pre className="mdocs-ai-write-thinking-body">{block.text}</pre>
+                                </details>
+                              ) : null
+                            ) : block.type === "tool" ? (
                               <p
                                 key={`${m.id}-tool-${bi}`}
                                 className="mdocs-agent-panel-tool-notice"
@@ -613,6 +640,7 @@ export function AiWriteWorkbench(props: {
         <AiWriteMarkdownPane
           currentMd={currentMd}
           proposedMd={proposedMd}
+          sending={sending}
           onCurrentChange={setCurrentMd}
           onProposedChange={setProposedMd}
         />

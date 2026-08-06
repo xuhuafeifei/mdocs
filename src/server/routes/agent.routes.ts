@@ -6,10 +6,11 @@ import {
   type AgentStreamEvent,
 } from "../agent/Agent/run.js";
 import { getAgentSessionForApi, createAgentSessionForApi, listAgentSessionsForApi, openAgentSessionForApi, bindCodingSessionDocumentForApi } from "../agent/Agent/session-manager.js";
-import { resolveUserChoice, expireUserChoice } from "../agent/Agent/choice-pending.js";
+import { resolveUserChoice, expireUserChoice, cancelUserChoice } from "../agent/Agent/choice-pending.js";
 import {
   resolveSkillForm,
   expireSkillForm,
+  cancelSkillForm,
 } from "../agent/Agent/skill-form-pending.js";
 import {
   getVisitorAgentConfig,
@@ -398,16 +399,23 @@ export function buildAgentRouter(): Router {
       return;
     }
 
-    // 前端倒计时结束：显式取消 pending（与服务端 timer 双保险）
+    // 前端倒计时结束 / 用户取消：显式解冻 pending（与服务端 timer 双保险）
     if (req.body?.expire === true || req.body?.cancel === true) {
       try {
-        expireUserChoice(req.visitor.visitor_id, requestId);
-        res.json({ data: { status: "timeout" } });
+        if (req.body?.cancel === true) {
+          cancelUserChoice(req.visitor.visitor_id, requestId);
+          res.json({ data: { status: "cancelled" } });
+        } else {
+          expireUserChoice(req.visitor.visitor_id, requestId);
+          res.json({ data: { status: "timeout" } });
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg === "choice_not_found") {
           // 可能后端 timer 已先解冻
-          res.json({ data: { status: "timeout" } });
+          res.json({
+            data: { status: req.body?.cancel === true ? "cancelled" : "timeout" },
+          });
           return;
         }
         if (msg === "choice_forbidden") {
@@ -455,12 +463,19 @@ export function buildAgentRouter(): Router {
 
     if (req.body?.expire === true || req.body?.cancel === true) {
       try {
-        expireSkillForm(req.visitor.visitor_id, requestId);
-        res.json({ data: { status: "timeout" } });
+        if (req.body?.cancel === true) {
+          cancelSkillForm(req.visitor.visitor_id, requestId);
+          res.json({ data: { status: "cancelled" } });
+        } else {
+          expireSkillForm(req.visitor.visitor_id, requestId);
+          res.json({ data: { status: "timeout" } });
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg === "skill_form_not_found") {
-          res.json({ data: { status: "timeout" } });
+          res.json({
+            data: { status: req.body?.cancel === true ? "cancelled" : "timeout" },
+          });
           return;
         }
         if (msg === "skill_form_forbidden") {
