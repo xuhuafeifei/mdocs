@@ -139,7 +139,7 @@ export function AgentConfigPanel() {
   );
 
   return (
-    <div className="mdocs-settings">
+    <div className="mdocs-agent-config-panel">
       <div className="mdocs-settings-header">
         <h2 className="mdocs-settings-title mdocs-agent-config-title">
           <img src={deepseekLogo} alt="DeepSeek" className="mdocs-agent-config-logo" />

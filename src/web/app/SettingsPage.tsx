@@ -814,10 +814,10 @@ export function SettingsPage(props: {
           // ---- 成员模板 Tab ----
           <MemberTemplatesPanel />
         ) : tab === "agentConfig" ? (
-          <>
+          <div className="mdocs-settings">
             <AgentConfigPanel />
             <AgentUserSkillsPanel />
-          </>
+          </div>
         ) : (
           // ---- 保存与发布 Tab ----
           <div className="mdocs-settings">

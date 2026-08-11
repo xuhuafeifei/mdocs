@@ -53,7 +53,7 @@
 
 ### AI 帮写（coding）
 
-- **关键词**：`AiWrite` `帮写` `currentMd` `proposedMd` `hunk` `sending` `纯编辑`
+- **关键词**：`AiWrite` `帮写` `currentMd` `proposedMd` `hunk` `sending` `纯编辑` `inline diff` `红行只读` `diff 编提案`
 - **定位**：
   | 路径 | 符号 |
   |------|------|

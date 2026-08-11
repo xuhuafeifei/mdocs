@@ -1502,7 +1502,7 @@
 }
 
 .mdocs-agent-skills-panel {
-  margin-top: 8px;
+  flex-shrink: 0;
 }
 
 .mdocs-agent-skills-count {
@@ -1919,6 +1919,14 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
+}
+
+.mdocs-agent-config-panel {
+  flex-shrink: 0;
+}
+
+.mdocs-agent-config-panel + .mdocs-agent-skills-panel {
+  margin-top: 28px;
 }
 
 .mdocs-agent-config-logo {
@@ -3748,6 +3756,35 @@ strong.label {
   min-width: 0;
   white-space: pre-wrap;
   word-break: break-word;
+}
+.mdocs-ai-write-line-readonly {
+  user-select: text;
+  cursor: default;
+}
+.mdocs-ai-write-inline-edit {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  resize: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  field-sizing: content;
+}
+.mdocs-ai-write-inline-edit:focus {
+  outline: 1px solid rgba(51, 112, 255, 0.35);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+.mdocs-ai-write-line.add .mdocs-ai-write-inline-edit {
+  background: rgba(46, 160, 67, 0.06);
 }
 .mdocs-ai-write-hunk-hover {
   position: absolute;

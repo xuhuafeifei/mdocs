@@ -38,7 +38,7 @@
 |--------|------|
 | `user-agent-skills` | **已同意**：私人 skill；展开=合成 tool 往返+去重新优先；本轮结束清空标签 — [需求分析](./requirements/user-agent-skills/需求分析.md) · [设计契约](./requirements/user-agent-skills/设计契约.md) · [代码索引](./requirements/user-agent-skills/代码索引.md) |
 | `agent-run-refactor` | Phase 1–3 已落地：SSE / tools template·registry / pi-run — [需求分析](./requirements/agent-run-refactor/需求分析.md) · [设计契约](./requirements/agent-run-refactor/设计契约.md) · [代码索引](./requirements/agent-run-refactor/代码索引.md) |
-| `agent-normal-coding-modes` | **已同意**：含增量「流式自动纯编辑」— [需求分析](./requirements/agent-normal-coding-modes/需求分析.md) · [设计契约](./requirements/agent-normal-coding-modes/设计契约.md) |
+| `agent-normal-coding-modes` | **已同意**：含增量「inline diff 可编辑提案」— [需求分析](./requirements/agent-normal-coding-modes/需求分析.md) · [设计契约](./requirements/agent-normal-coding-modes/设计契约.md) |
 | `onboarding-ai` | **已同意**：上手 Agent — [需求分析](./requirements/onboarding-ai/需求分析.md) · [设计契约](./requirements/onboarding-ai/设计契约.md) · [后端设计](./requirements/onboarding-ai/后端设计.md) |
 | `document-move` | **已同意**：同域拖拽移动文档 — [需求分析](./requirements/document-move/需求分析.md) · [设计契约](./requirements/document-move/设计契约.md) · [代码索引](./requirements/document-move/代码索引.md) |
 | `folder-subtree` | **已同意**：按 `folderId` 取精简子树 — [需求分析](./requirements/folder-subtree/需求分析.md) · [设计契约](./requirements/folder-subtree/设计契约.md) · [代码索引](./requirements/folder-subtree/代码索引.md) |

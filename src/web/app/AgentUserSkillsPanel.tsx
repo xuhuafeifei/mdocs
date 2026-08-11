@@ -131,7 +131,7 @@ export function AgentUserSkillsPanel() {
   const nameOk = !name.trim() || isValidSkillName(name);
 
   return (
-    <div className="mdocs-settings mdocs-agent-skills-panel">
+    <div className="mdocs-agent-skills-panel">
       <div className="mdocs-settings-header">
         <h2 className="mdocs-settings-title">
           Agent Skills
