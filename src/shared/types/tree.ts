@@ -21,3 +21,17 @@ export interface TreeDocumentNode {
   ownerVisitorId: string;
   updatedAt: string;
 }
+
+/** 按目录取子树的精简节点（GET /folder/:folderId/tree） */
+export type FolderSubtreeNode =
+  | {
+      type: "folder";
+      id: string;
+      title: string;
+      children: FolderSubtreeNode[];
+    }
+  | {
+      type: "document";
+      id: string;
+      title: string;
+    };

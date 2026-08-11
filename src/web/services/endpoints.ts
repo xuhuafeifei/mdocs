@@ -22,7 +22,7 @@ import type {
   VisitorRecoverResponse,
   VisitorRegisterResponse,
 } from "../../shared/types/visitor";
-import type { TreeNode } from "../../shared/types/tree";
+import type { TreeNode, FolderSubtreeNode } from "../../shared/types/tree";
 import type { DomainSummary, DomainMemberListEntry } from "../../shared/types/domain";
 import type { DomainMemberTemplate } from "../../shared/types/domainMemberTemplate";
 
@@ -213,6 +213,15 @@ export function deleteDomainMemberTemplateApi(id: number): Promise<void> {
 export function fetchTreeApi(domainId?: string): Promise<TreeNode[]> {
   const q = domainId?.trim() ? `?domainId=${encodeURIComponent(domainId.trim())}` : "";
   return api<TreeNode[]>(`/api/tree${q}`);
+}
+
+/**
+ * 获取指定目录下的精简嵌套子树（type + id + title）。
+ */
+export function fetchFolderSubtreeApi(folderId: string): Promise<FolderSubtreeNode[]> {
+  return api<FolderSubtreeNode[]>(
+    `/api/documents/folder/${encodeURIComponent(folderId)}/tree`,
+  );
 }
 
 /**

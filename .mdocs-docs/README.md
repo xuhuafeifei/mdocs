@@ -41,6 +41,7 @@
 | `agent-normal-coding-modes` | **已同意**：含增量「流式自动纯编辑」— [需求分析](./requirements/agent-normal-coding-modes/需求分析.md) · [设计契约](./requirements/agent-normal-coding-modes/设计契约.md) |
 | `onboarding-ai` | **已同意**：上手 Agent — [需求分析](./requirements/onboarding-ai/需求分析.md) · [设计契约](./requirements/onboarding-ai/设计契约.md) · [后端设计](./requirements/onboarding-ai/后端设计.md) |
 | `document-move` | **已同意**：同域拖拽移动文档 — [需求分析](./requirements/document-move/需求分析.md) · [设计契约](./requirements/document-move/设计契约.md) · [代码索引](./requirements/document-move/代码索引.md) |
+| `folder-subtree` | **已同意**：按 `folderId` 取精简子树 — [需求分析](./requirements/folder-subtree/需求分析.md) · [设计契约](./requirements/folder-subtree/设计契约.md) · [代码索引](./requirements/folder-subtree/代码索引.md) |
 | `bookmarks` | 文档收藏 |
 | `auto-save-draft` | 自动保存草稿 |
 | `recovery-code` | 恢复码 |

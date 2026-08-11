@@ -1725,6 +1725,15 @@
   cursor: not-allowed;
 }
 
+.mdocs-agent-panel-send-stop {
+  background: #5c6570;
+  font-size: 11px;
+}
+
+.mdocs-agent-panel-send-stop:hover {
+  background: #3d4450;
+}
+
 .mdocs-agent-panel-footnote {
   margin: 10px 0 0;
   font-size: 12px;
@@ -3554,6 +3563,16 @@ strong.label {
   border-radius: 10px;
   padding: 10px 12px;
   font: inherit;
+}
+.mdocs-ai-write-stop {
+  background: #5c6570;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  align-self: flex-end;
+  margin-bottom: 2px;
 }
 .mdocs-ai-write-md-pane {
   display: flex;

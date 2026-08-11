@@ -23,6 +23,7 @@ import { requireDocumentAccess, requireDocumentOwner } from "../middleware/docum
 import { StoragePathError } from "../storage/paths.js";
 import type { PublishVersionContext } from "../../shared/types/document.js";
 import { useLogger } from "../logger/logger.js";
+import { buildFolderSubtree } from "../documents/tree.service.js";
 
 const log = useLogger("documents-route");
 
@@ -380,6 +381,21 @@ export function buildDocumentsRouter(): Router {
     const visitorId = req.visitor?.visitor_id ?? null;
     const children = listFolderChildren(folderId, visitorId);
     res.json({ data: children });
+  });
+
+  /**
+   * GET /folder/:folderId/tree
+   * 列出指定目录下的精简嵌套子树（type + id + title；不含自身）。
+   */
+  router.get("/folder/:folderId/tree", (req: Request, res: Response) => {
+    const folderId = req.params.folderId!;
+    const visitorId = req.visitor?.visitor_id ?? null;
+    try {
+      const tree = buildFolderSubtree(folderId, visitorId);
+      res.json({ data: tree });
+    } catch (err) {
+      respondError(res, err, "documents-route.folder-tree");
+    }
   });
 
   /**

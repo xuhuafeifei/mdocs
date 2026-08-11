@@ -51,9 +51,11 @@
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/tree?domainId=` | 获取某域的文档树 |
+| GET | `/api/documents/folder/:folderId/children` | 目录下一层子节点 |
+| GET | `/api/documents/folder/:folderId/tree` | 目录精简嵌套子树（type + id + title） |
 
-- 返回 `TreeNode[]`，树结构由 `parent_id` 递归构建。
-- `type='dir'` → 目录节点；`type='md'` → 文档节点；`desc.md` 内容作为目录的默认展示内容。
+- `/api/tree` 返回 `TreeNode[]`，由 `parent_id` 递归构建。
+- `/folder/:folderId/tree` 返回 `FolderSubtreeNode[]`（不含目录自身；非目录 → 400）。
 
 ### 全文检索
 

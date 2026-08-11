@@ -628,10 +628,17 @@ export function AiWriteWorkbench(props: {
                 </div>
                 <button
                   type="button"
-                  disabled={sending || !status?.enabled}
-                  onClick={() => void send()}
+                  className={sending ? "mdocs-ai-write-stop" : undefined}
+                  disabled={sending ? false : !status?.enabled}
+                  onClick={() => {
+                    if (sending) {
+                      abortRef.current?.abort();
+                      return;
+                    }
+                    void send();
+                  }}
                 >
-                  发送
+                  {sending ? "停止" : "发送"}
                 </button>
               </div>
             </>

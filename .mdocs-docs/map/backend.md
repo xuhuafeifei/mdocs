@@ -24,15 +24,16 @@
 
 ### 文档 / 树 / 存储
 
-- **关键词**：`document` `tree` `file-store` `relativePath` `parent_id` `move`
+- **关键词**：`document` `tree` `file-store` `relativePath` `parent_id` `move` `folder subtree`
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `src/server/documents/document.service.ts` | 文档业务（拟增 `moveDocument`） |
-  | `src/server/documents/tree.service.ts` | 树构建 |
+  | `src/server/documents/tree.service.ts` | `buildDocumentTree` `buildFolderSubtree` |
   | `src/server/storage/file-store.ts` | `readDocument` / `writeDocument`（拟增 rename） |
   | `src/shared/docPath.ts` | 路径校验 |
-- **需求**：[`../requirements/document-move/`](../requirements/document-move/)（已同意）
+  | `src/shared/types/tree.ts` | `TreeNode` `FolderSubtreeNode` |
+- **需求**：[`../requirements/document-move/`](../requirements/document-move/)；[`../requirements/folder-subtree/`](../requirements/folder-subtree/)
 
 ### 路由
 

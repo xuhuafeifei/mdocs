@@ -1,14 +1,22 @@
 import { getDb } from "../db/connection.js";
-import { listDocumentsByDomain, type DocumentRow } from "../db/repositories/document.repo.js";
+import {
+  findChildrenByParent,
+  findDocumentById,
+  listDocumentsByDomain,
+  type DocumentRow,
+} from "../db/repositories/document.repo.js";
 import { findDomainById, isDomainMember } from "../db/repositories/domain.repo.js";
 import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access.js";
-import { canReadDocument, type DomainAccessInfo } from "../access/access-control.js";
+import { canReadDocument, DocumentError, type DomainAccessInfo } from "../access/access-control.js";
 import { getConfig } from "../config/index.js";
 import { FOLDER_DESC_FILENAME } from "../../shared/folderDesc.js";
 import type {
+  FolderSubtreeNode,
   TreeFolderNode,
   TreeNode,
 } from "../../shared/types/tree.js";
+
+export type { FolderSubtreeNode };
 
 /**
  * 构建指定域的文档目录树。
@@ -31,6 +39,80 @@ export function buildDocumentTree(domainId?: string, visitorId?: string | null):
   const rows = listDocumentsByDomain(db, effective);
   const filtered = rows.filter((r) => canReadDocument(r, visitorId ?? null, domainInfo));
   return buildTreeFromRows(filtered, visitorId ?? null);
+}
+
+/**
+ * 按目录 document_id 构建精简子树（不含自身）。
+ * - 不存在 → 404
+ * - 非目录 → 400
+ * - 域不可进 / 无读权限 → []
+ */
+export function buildFolderSubtree(
+  folderId: string,
+  visitorId?: string | null,
+): FolderSubtreeNode[] {
+  const db = getDb();
+  const folder = findDocumentById(db, folderId);
+  if (!folder) {
+    throw new DocumentError("DOC_NOT_FOUND", "目录不存在", 404);
+  }
+  if (folder.file_type !== "dir") {
+    throw new DocumentError("BAD_REQUEST", "不是目录", 400);
+  }
+
+  const domain = findDomainById(db, folder.domain_id);
+  const access = resolveDomainAccess(db, domain, folder.domain_id, visitorId);
+  if (!canEnterDomainTree(access)) return [];
+
+  const domainPermission = domain?.permission ?? "public";
+  const isMember = !!(
+    visitorId && domain && isDomainMember(db, domain.domain_id, visitorId)
+  );
+  const domainInfo: DomainAccessInfo = { domainPermission, isDomainMember: isMember };
+
+  if (!canReadDocument(folder, visitorId ?? null, domainInfo)) {
+    return [];
+  }
+
+  const descendantRows = collectDescendants(folderId);
+  const filtered = descendantRows.filter((r) =>
+    canReadDocument(r, visitorId ?? null, domainInfo),
+  );
+  const full = buildTreeFromRows(filtered, visitorId ?? null);
+  return projectSubtree(full);
+}
+
+function collectDescendants(folderId: string): DocumentRow[] {
+  const db = getDb();
+  const out: DocumentRow[] = [];
+  const queue = [...findChildrenByParent(db, folderId)];
+  while (queue.length > 0) {
+    const row = queue.shift()!;
+    out.push(row);
+    if (row.file_type === "dir") {
+      queue.push(...findChildrenByParent(db, row.document_id));
+    }
+  }
+  return out;
+}
+
+function projectSubtree(nodes: TreeNode[]): FolderSubtreeNode[] {
+  return nodes.map((n) => {
+    if (n.type === "folder") {
+      return {
+        type: "folder" as const,
+        id: n.documentId,
+        title: (n.folderDisplayName ?? n.name).trim() || n.name,
+        children: projectSubtree(n.children),
+      };
+    }
+    const title = n.displayName.trim() || n.name.replace(/\.md$/i, "") || n.name;
+    return {
+      type: "document" as const,
+      id: n.documentId,
+      title,
+    };
+  });
 }
 
 /**
@@ -61,7 +143,7 @@ function buildTreeFromRows(rows: DocumentRow[], visitorId: string | null): TreeN
 
   // 第一步：创建所有文件夹节点
   for (const row of rows) {
-    if (row.file_type === 'dir') {
+    if (row.file_type === "dir") {
       const node: TreeFolderNode = {
         type: "folder",
         name: deriveFolderName(row),
@@ -75,7 +157,7 @@ function buildTreeFromRows(rows: DocumentRow[], visitorId: string | null): TreeN
 
   // 第二步：将文件夹挂在父节点或根级
   for (const row of rows) {
-    if (row.file_type !== 'dir') continue;
+    if (row.file_type !== "dir") continue;
     const node = folderById.get(row.document_id)!;
     if (row.parent_id) {
       const parent = folderById.get(row.parent_id);
@@ -93,7 +175,7 @@ function buildTreeFromRows(rows: DocumentRow[], visitorId: string | null): TreeN
 
   // 第三步：处理 md 类型
   for (const row of rows) {
-    if (row.file_type !== 'md') continue;
+    if (row.file_type !== "md") continue;
     const leafName = row.relative_path.split("/").pop()!;
 
     if (leafName.toLowerCase() === FOLDER_DESC_FILENAME.toLowerCase()) {

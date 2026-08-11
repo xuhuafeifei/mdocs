@@ -1372,12 +1372,27 @@ export const AgentChatPanel = forwardRef<
             ) : null}
             <button
               type="button"
-              className="mdocs-agent-panel-send"
-              disabled={sending || !status?.enabled || !input.trim()}
-              onClick={() => void sendMessage(input)}
-              title="发送"
+              className={
+                sending
+                  ? "mdocs-agent-panel-send mdocs-agent-panel-send-stop"
+                  : "mdocs-agent-panel-send"
+              }
+              disabled={
+                sending
+                  ? false
+                  : !status?.enabled || !input.trim()
+              }
+              onClick={() => {
+                if (sending) {
+                  abortRef.current?.abort();
+                  return;
+                }
+                void sendMessage(input);
+              }}
+              title={sending ? "停止" : "发送"}
+              aria-label={sending ? "停止" : "发送"}
             >
-              ↑
+              {sending ? "■" : "↑"}
             </button>
           </div>
           <p className="mdocs-agent-panel-footnote">内容由 AI 生成，仅供参考</p>

@@ -61,15 +61,17 @@ vi.mock("../logger/logger.js", () => ({
   }),
 }));
 
-import { buildDocumentTree } from "./tree.service.js";
+import { buildDocumentTree, buildFolderSubtree } from "./tree.service.js";
 import { createDocument, removeFolder } from "./document.service.js";
+import { DocumentError } from "../access/access-control.js";
 import { findDocumentById, countChildrenByParent, listDocumentsByPathPrefix } from "../db/repositories/document.repo.js";
+import { FOLDER_DESC_FILENAME } from "../../shared/folderDesc.js";
+import type { FolderSubtreeNode } from "../../shared/types/tree.js";
+import type { Express } from "express";
+import express from "express";
 import { findCommitById } from "../db/repositories/commit.repo.js";
 import { getDb } from "../db/connection.js";
 import { buildFoldersRouter } from "../routes/folders.routes.js";
-import { FOLDER_DESC_FILENAME } from "../../shared/folderDesc.js";
-import type { Express } from "express";
-import express from "express";
 
 /* ── 测试辅助 ── */
 
@@ -218,8 +220,69 @@ describe("buildDocumentTree parent_id logic", () => {
     const tree = buildDocumentTree("default", OWNER);
     expect((tree[0] as any).descDocumentId).toBeTruthy();
     expect((tree[0] as any).folderDisplayName).toBe("Folder description");
+    // desc 文件本身不出现在 children 中
+    expect((tree[0] as any).children.every((c: any) => c.name !== FOLDER_DESC_FILENAME)).toBe(true);
+  });
+});
+
+describe("buildFolderSubtree", () => {
+  it("空目录 → []", () => {
+    const folderId = createFolder("empty");
+    expect(buildFolderSubtree(folderId, OWNER)).toEqual([]);
   });
 
+  it("嵌套子树：含 type / id / title，不含自身，desc 不当叶子", () => {
+    const aId = createFolder("a", "default", null, "Alpha folder");
+    const bId = createFolder("b", "default", aId);
+    const doc = createDoc("a/b/c.md", "# c", "default", bId);
+    const sibling = createDoc("a/note.md", "# n", "default", aId);
+
+    const subtree = buildFolderSubtree(aId, OWNER);
+    expect(subtree).toHaveLength(2);
+
+    const folderB = subtree.find((n) => n.type === "folder") as Extract<
+      FolderSubtreeNode,
+      { type: "folder" }
+    >;
+    const note = subtree.find((n) => n.type === "document") as Extract<
+      FolderSubtreeNode,
+      { type: "document" }
+    >;
+    expect(folderB).toMatchObject({ type: "folder", id: bId, title: "b" });
+    expect(folderB.children).toHaveLength(1);
+    expect(folderB.children[0]).toMatchObject({
+      type: "document",
+      id: doc.documentId,
+      title: expect.any(String),
+    });
+    expect(note).toMatchObject({ type: "document", id: sibling.documentId });
+
+    const flatTitles = JSON.stringify(subtree);
+    expect(flatTitles).not.toContain(FOLDER_DESC_FILENAME);
+    expect(subtree.every((n) => n.id !== aId)).toBe(true);
+  });
+
+  it("不存在 → 404", () => {
+    expect(() => buildFolderSubtree("missing-id", OWNER)).toThrow(DocumentError);
+    try {
+      buildFolderSubtree("missing-id", OWNER);
+    } catch (e) {
+      expect(e).toMatchObject({ code: "DOC_NOT_FOUND", status: 404 });
+    }
+  });
+
+  it("文章 id → 400", () => {
+    const doc = createDoc("alone.md");
+    try {
+      buildFolderSubtree(doc.documentId, OWNER);
+      expect.unreachable();
+    } catch (e) {
+      expect(e).toMatchObject({ code: "BAD_REQUEST", status: 400 });
+    }
+  });
+});
+
+describe("buildDocumentTree edge cases", () => {
   it("父文件夹被权限过滤掉后，子文档挂在根级", () => {
     // 测试子文档的 parent_id 指向一个不存在的文件夹
     // 注意：createDocument 现在会验证父节点是否存在，所以我们不能再这样做了

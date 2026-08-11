@@ -11,7 +11,9 @@ import {
   MigrationError,
   type MigrationResult,
 } from "../migrations/visitor-migration.service.js";
-import { runSelfUpdate } from "./self-update.js";
+import { resolveInstalledPackageRoot, runSelfUpdate } from "./self-update.js";
+import fs from "node:fs";
+import path from "node:path";
 
 type Flags = Record<string, string | boolean>;
 
@@ -43,11 +45,13 @@ function printUsage(): void {
       "Usage:",
       "  mdocs                          Start server",
       "  mdocs start                    Start server",
+      "  mdocs version                  Print installed version",
       "  mdocs update                   Upgrade in-place from npmmirror (keep node_modules)",
       "  mdocs visitor list [--active|--disabled|--all]",
       "  mdocs visitor migrate --from OLD --to NEW [--dry-run] [--confirm]",
       "",
       "Notes:",
+      "  version also accepts -v / --version.",
       "  update uses https://registry.npmmirror.com for @fgbg/mdocs only;",
       "  keeps existing node_modules and runs npm install --prefer-offline.",
       "  visitor list defaults to --active (only enabled visitors).",
@@ -70,6 +74,10 @@ async function main(): Promise<void> {
     startServer();
     return;
   }
+  if (command === "version" || command === "-v" || command === "--version") {
+    printVersion();
+    return;
+  }
   if (command === "update") {
     runSelfUpdate();
     return;
@@ -84,6 +92,23 @@ async function main(): Promise<void> {
   }
   printUsage();
   process.exit(1);
+}
+
+/** 打印当前安装的包版本（开发仓库与全局安装均可）。 */
+function printVersion(): void {
+  const root = resolveInstalledPackageRoot();
+  const pkgPath = path.join(root, "package.json");
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as {
+      version?: string;
+    };
+    process.stdout.write(`${pkg.version ?? "?"}\n`);
+  } catch (err) {
+    process.stderr.write(
+      `mdocs version: failed to read ${pkgPath}: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+    process.exit(1);
+  }
 }
 
 /** 启动 HTTP 服务器。 */
