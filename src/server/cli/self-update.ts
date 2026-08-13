@@ -77,6 +77,9 @@ function fetchLatestVersion(): string {
     MDOCS_UPDATE_PACKAGE,
     "version",
     `--registry=${MDOCS_UPDATE_REGISTRY}`,
+    // 避免本机 npm cache 把 latest 钉在旧版（镜像已同步仍报「已是最新」）
+    "--prefer-online",
+    "--fetch-retries=2",
   ]);
   if (r.status !== 0 || !r.stdout) {
     fail(`无法从 ${MDOCS_UPDATE_REGISTRY} 查询版本：${r.stderr || r.stdout || "empty"}`);
@@ -92,6 +95,7 @@ function packTo(destDir: string, version: string): string {
       `${MDOCS_UPDATE_PACKAGE}@${version}`,
       `--registry=${MDOCS_UPDATE_REGISTRY}`,
       `--pack-destination=${destDir}`,
+      "--prefer-online",
     ],
     destDir,
   );

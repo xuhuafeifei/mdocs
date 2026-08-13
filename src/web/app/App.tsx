@@ -51,6 +51,7 @@ import { AgentFab, agentPanelAnchorStyle, useAgentFabPosition } from "./AgentFab
 import { MessageDialog } from "./MessageDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useCreateModal } from "./hooks/useCreateModal";
+import { useIsNarrowViewport } from "./hooks/useIsNarrowViewport";
 import { ConflictModal } from "./ConflictModal";
 import { CommentsPanel } from "./CommentsPanel";
 import {
@@ -159,12 +160,23 @@ export function App() {
     const stored = localStorage.getItem("mdocs.sidebarCollapsed");
     return stored === "true";
   });
+  const isNarrow = useIsNarrowViewport();
+  /** 窄屏：目录抽屉开合（收起 = 完全不占位） */
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const toggleSidebar = () => {
+    if (isNarrow) {
+      setMobileNavOpen((v) => !v);
+      return;
+    }
     const newValue = !sidebarCollapsed;
     setSidebarCollapsed(newValue);
     localStorage.setItem("mdocs.sidebarCollapsed", String(newValue));
   };
+
+  useEffect(() => {
+    if (!isNarrow) setMobileNavOpen(false);
+  }, [isNarrow]);
 
   // ---- 评论区展开状态 ----
   const [commentPanelOpen, setCommentPanelOpen] = useState(false);
@@ -1216,9 +1228,28 @@ export function App() {
           />
         </Suspense>
       ) : (
-        <div className="mdocs-layout">
+        <div className={"mdocs-layout" + (isNarrow ? " mdocs-layout--reader" : "")}>
+          {isNarrow && mobileNavOpen ? (
+            <button
+              type="button"
+              className="mdocs-mobile-nav-scrim"
+              aria-label={t("collapseSidebar")}
+              onClick={() => setMobileNavOpen(false)}
+            />
+          ) : null}
           {/* ========== 左侧边栏 ========== */}
-          <aside className={`mdocs-sidebar ${sidebarCollapsed ? "mdocs-sidebar-collapsed" : ""}`}>
+          <aside
+            className={
+              "mdocs-sidebar" +
+              (isNarrow
+                ? mobileNavOpen
+                  ? " mdocs-sidebar--drawer-open"
+                  : " mdocs-sidebar--drawer"
+                : sidebarCollapsed
+                  ? " mdocs-sidebar-collapsed"
+                  : "")
+            }
+          >
             {/* 品牌 Logo 区域 */}
             <header className="mdocs-sidebar-header">
               <div className="mdocs-brand">
@@ -1229,7 +1260,15 @@ export function App() {
                 type="button"
                 className="mdocs-sidebar-toggle"
                 onClick={toggleSidebar}
-                aria-label={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
+                aria-label={
+                  isNarrow
+                    ? mobileNavOpen
+                      ? t("collapseSidebar")
+                      : t("expandSidebar")
+                    : sidebarCollapsed
+                      ? t("expandSidebar")
+                      : t("collapseSidebar")
+                }
                 style={{
                   background: "none",
                   border: "none",
@@ -1244,7 +1283,13 @@ export function App() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f0f0f0)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
               >
-                {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+                {isNarrow ? (
+                  <PanelLeftClose size={18} />
+                ) : sidebarCollapsed ? (
+                  <PanelLeftOpen size={18} />
+                ) : (
+                  <PanelLeftClose size={18} />
+                )}
               </button>
             </header>
 
@@ -1265,6 +1310,7 @@ export function App() {
               selectedParentPath={selectedCreateParentPath}
               // 点击文档节点：先保存草稿再导航到文档
               onOpen={(node) => {
+                if (isNarrow) setMobileNavOpen(false);
                 guardNavigate(() => navigate(`/doc/${node.documentId}`));
               }}
               // 点击文件夹：更新父路径，如果有描述文档则打开
@@ -1272,6 +1318,7 @@ export function App() {
                 guardNavigate(() => {
                   setSelectedCreateParentPath(folderPath);
                   if (descDocumentId) {
+                    if (isNarrow) setMobileNavOpen(false);
                     navigate(`/doc/${descDocumentId}`);
                   }
                 });
@@ -1402,6 +1449,8 @@ export function App() {
                       commentPanelOpen={commentPanelOpen}
                       commentCount={commentCount}
                       onAiWrite={() => void openAiWriteForCurrentDoc()}
+                      readerChrome={isNarrow}
+                      onOpenMobileNav={() => setMobileNavOpen(true)}
                     />
                   </Suspense>
                 </div>
@@ -1419,6 +1468,17 @@ export function App() {
             ) : (
               // ---- 没有文档打开：渲染欢迎页 ----
               <div className="mdocs-welcome">
+                {isNarrow ? (
+                  <button
+                    type="button"
+                    className="mdocs-reader-float-pill"
+                    onClick={() => setMobileNavOpen(true)}
+                    aria-label={t("expandSidebar")}
+                  >
+                    <PanelLeftOpen size={18} strokeWidth={1.75} />
+                    <span>{t("brand")}</span>
+                  </button>
+                ) : null}
                 <h1>{t("brand")}</h1>
                 <p className="muted mdocs-welcome-lead">
                   {/* 根据文档树是否为空显示不同提示 */}

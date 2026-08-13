@@ -3859,3 +3859,220 @@ strong.label {
   background: #f2f4f7;
   font-weight: 600;
 }
+
+/* === 窄屏阅读壳（≤768）：侧栏抽屉 + 浮条 header === */
+@media (max-width: 768px) {
+  .mdocs-layout--reader {
+    position: relative;
+  }
+
+  .mdocs-layout--reader .mdocs-mobile-nav-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    border: none;
+    padding: 0;
+    margin: 0;
+    background: rgba(15, 23, 42, 0.35);
+    cursor: pointer;
+  }
+
+  .mdocs-layout--reader .mdocs-sidebar--drawer,
+  .mdocs-layout--reader .mdocs-sidebar--drawer-open {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
+    width: min(86vw, 300px);
+    max-width: 300px;
+    flex-shrink: 0;
+    transition: transform 0.22s ease;
+    box-shadow: 8px 0 28px rgba(15, 23, 42, 0.14);
+  }
+
+  .mdocs-layout--reader .mdocs-sidebar--drawer {
+    transform: translateX(-105%);
+    pointer-events: none;
+  }
+
+  .mdocs-layout--reader .mdocs-sidebar--drawer-open {
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+
+  .mdocs-layout--reader .mdocs-main {
+    width: 100%;
+  }
+
+  /* 提纲默认不占位，避免关不掉 */
+  .mdocs-layout--reader .mdocs-outline-siderail {
+    display: none !important;
+  }
+
+  .mdocs-editor--reader {
+    position: relative;
+  }
+
+  /* 浮条：轻阴影，避免投出一条灰带 */
+  .mdocs-editor-toolbar--float {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    width: auto;
+    max-width: calc(100% - 20px);
+    padding: 6px 10px;
+    gap: 6px;
+    border: 1px solid color-mix(in srgb, var(--mdocs-border) 80%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--mdocs-surface) 96%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    touch-action: none;
+    cursor: grab;
+    user-select: none;
+  }
+
+  .mdocs-editor-toolbar--float:active {
+    cursor: grabbing;
+  }
+
+  /* 吸附顶栏：贴顶全宽，无大阴影 */
+  .mdocs-editor-toolbar--docked {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 30;
+    width: 100%;
+    max-width: none;
+    padding: 8px 12px;
+    gap: 6px;
+    border: none;
+    border-radius: 0;
+    border-bottom: 1px solid var(--mdocs-border);
+    background: var(--mdocs-surface);
+    box-shadow: none;
+    transform: none;
+  }
+
+  .mdocs-editor-toolbar--float .mdocs-editor-title-input,
+  .mdocs-editor-toolbar--docked .mdocs-editor-title-input {
+    width: auto;
+    max-width: min(42vw, 160px);
+    flex: 1 1 auto;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    padding: 4px 6px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .mdocs-editor-toolbar--float .mdocs-editor-toolbar-actions,
+  .mdocs-editor-toolbar--docked .mdocs-editor-toolbar-actions {
+    gap: 4px;
+  }
+
+  .mdocs-editor-toolbar--float .secondary,
+  .mdocs-editor-toolbar--float .mdocs-reader-nav-btn,
+  .mdocs-editor-toolbar--docked .secondary,
+  .mdocs-editor-toolbar--docked .mdocs-reader-nav-btn {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .mdocs-editor-toolbar--float .mdocs-reader-action-btn,
+  .mdocs-editor-toolbar--docked .mdocs-reader-action-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+    border-radius: 999px;
+    min-width: auto;
+  }
+
+  .mdocs-editor-toolbar--float .mdocs-editor-title-input {
+    max-width: min(28vw, 110px);
+  }
+
+  .mdocs-reader-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 8px;
+    color: var(--mdocs-text);
+    cursor: pointer;
+  }
+
+  .mdocs-reader-nav-btn:hover {
+    background: var(--mdocs-hover-bg, #f0f0f0);
+  }
+
+  /* 仅浮着时给正文一点顶距；吸附后不再留空 */
+  .mdocs-editor--reader:not(.mdocs-editor--reader-docked) .mdocs-editor-content-area {
+    padding-top: 52px;
+  }
+
+  .mdocs-editor--reader-docked .mdocs-editor-content-area {
+    padding-top: 0;
+  }
+
+  .mdocs-reader-float-pill {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border: 1px solid var(--mdocs-border);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--mdocs-surface) 96%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    color: var(--mdocs-text);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .mdocs-welcome {
+    position: relative;
+  }
+
+  /* 设置页：顶栏开目录，正文全宽 */
+  .mdocs-layout--settings .mdocs-settings-mobile-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--mdocs-border);
+    background: var(--mdocs-surface);
+  }
+
+  .mdocs-layout--settings .mdocs-settings-mobile-bar-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--mdocs-text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mdocs-layout--settings .mdocs-settings {
+    padding: 20px 16px;
+  }
+
+  .mdocs-layout--settings .mdocs-settings-header {
+    display: none;
+  }
+}

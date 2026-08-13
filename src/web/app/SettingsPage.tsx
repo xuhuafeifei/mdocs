@@ -7,6 +7,7 @@
  * 4. 保存与发布（自动同步开关、未发布草稿列表）
  */
 import { useEffect, useRef, useState } from "react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useI18n } from "../i18n";
 import { isDemoMode } from "../services/client";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -17,6 +18,7 @@ import { MemberTemplatesPanel } from "./MemberTemplatesPanel";
 import { AgentConfigPanel } from "./AgentConfigPanel";
 import { AgentUserSkillsPanel } from "./AgentUserSkillsPanel";
 import { VisitorPickerModal } from "./VisitorPickerModal";
+import { useIsNarrowViewport } from "./hooks/useIsNarrowViewport";
 import {
   createCliTokenApi,
   generateRecoveryCodeApi,
@@ -55,6 +57,8 @@ export function SettingsPage(props: {
 }) {
   const { t, lang, setLang } = useI18n();
   const { onBack, onPublishDraft } = props;
+  const isNarrow = useIsNarrowViewport();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // 组件挂载状态跟踪，防止卸载后 async setState 导致内存泄漏
   const mountedRef = useRef(true);
@@ -62,6 +66,10 @@ export function SettingsPage(props: {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+
+  useEffect(() => {
+    if (!isNarrow) setMobileNavOpen(false);
+  }, [isNarrow]);
 
   // ---- 自动同步开关（推送到服务器） ----
   const [autoPublish, setAutoPublish] = useState(() => getBool("mdocs.autoPublish", false));
@@ -74,6 +82,26 @@ export function SettingsPage(props: {
 
   // ---- 当前激活的 Tab ----
   const [tab, setTab] = useState<SettingsTab>("general");
+
+  function selectTab(next: SettingsTab) {
+    setTab(next);
+    if (isNarrow) setMobileNavOpen(false);
+  }
+
+  const tabTitle =
+    tab === "general"
+      ? t("general")
+      : tab === "bookmarks"
+        ? t("bookmarkTitle")
+        : tab === "myDocuments"
+          ? t("myDocuments")
+          : tab === "domainManagement"
+            ? t("domainManagement")
+            : tab === "memberTemplates"
+              ? t("memberTemplates")
+              : tab === "agentConfig"
+                ? t("agentConfig")
+                : t("saveAndPublish");
 
   // ---- CLI Token 相关状态 ----
   // CLI Token 列表
@@ -364,62 +392,100 @@ export function SettingsPage(props: {
   });
 
   return (
-    <>
+    <div className={"mdocs-layout" + (isNarrow ? " mdocs-layout--reader mdocs-layout--settings" : "")}>
+      {isNarrow && mobileNavOpen ? (
+        <button
+          type="button"
+          className="mdocs-mobile-nav-scrim"
+          aria-label={t("collapseSidebar")}
+          onClick={() => setMobileNavOpen(false)}
+        />
+      ) : null}
       {/* ========== 左侧设置导航栏 ========== */}
-      <aside className="mdocs-sidebar">
+      <aside
+        className={
+          "mdocs-sidebar" +
+          (isNarrow
+            ? mobileNavOpen
+              ? " mdocs-sidebar--drawer-open"
+              : " mdocs-sidebar--drawer"
+            : "")
+        }
+      >
         <header className="mdocs-sidebar-header">
           <div className="mdocs-brand">
             <img src={mdocsLogo} alt={t("brand")} className="mdocs-brand-logo" />
             <span>{t("brand")}</span>
           </div>
+          {isNarrow ? (
+            <button
+              type="button"
+              className="mdocs-sidebar-toggle"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label={t("collapseSidebar")}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: "6px",
+                color: "var(--mdocs-text-muted, #999)",
+                borderRadius: 4,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <PanelLeftClose size={18} />
+            </button>
+          ) : null}
         </header>
         <nav className="mdocs-config-tree">
           {/* 通用设置 Tab */}
           <div
             className={"mdocs-config-item" + (tab === "general" ? " active" : "")}
-            onClick={() => setTab("general")}
+            onClick={() => selectTab("general")}
           >
             {t("general")}
           </div>
           {/* 我的收藏 Tab */}
           <div
             className={"mdocs-config-item" + (tab === "bookmarks" ? " active" : "")}
-            onClick={() => setTab("bookmarks")}
+            onClick={() => selectTab("bookmarks")}
           >
             {t("bookmarkTitle")}
           </div>
           {/* 我的文章 Tab */}
           <div
             className={"mdocs-config-item" + (tab === "myDocuments" ? " active" : "")}
-            onClick={() => setTab("myDocuments")}
+            onClick={() => selectTab("myDocuments")}
           >
             {t("myDocuments")}
           </div>
           {/* 域管理 Tab */}
           <div
             className={"mdocs-config-item" + (tab === "domainManagement" ? " active" : "")}
-            onClick={() => setTab("domainManagement")}
+            onClick={() => selectTab("domainManagement")}
           >
             {t("domainManagement")}
           </div>
           {/* 成员模板 Tab */}
           <div
             className={"mdocs-config-item" + (tab === "memberTemplates" ? " active" : "")}
-            onClick={() => setTab("memberTemplates")}
+            onClick={() => selectTab("memberTemplates")}
           >
             {t("memberTemplates")}
           </div>
           {/* AI / 上手助手配置 */}
           <div
             className={"mdocs-config-item" + (tab === "agentConfig" ? " active" : "")}
-            onClick={() => setTab("agentConfig")}
+            onClick={() => selectTab("agentConfig")}
           >
             {t("agentConfig")}
           </div>
           {/* 保存与发布 Tab */}
           <div
             className={"mdocs-config-item" + (tab === "savePublish" ? " active" : "")}
-            onClick={() => setTab("savePublish")}
+            onClick={() => selectTab("savePublish")}
           >
             {t("saveAndPublish")}
           </div>
@@ -432,6 +498,19 @@ export function SettingsPage(props: {
 
       {/* ========== 主内容区 ========== */}
       <main className="mdocs-main">
+        {isNarrow ? (
+          <div className="mdocs-settings-mobile-bar">
+            <button
+              type="button"
+              className="mdocs-reader-nav-btn"
+              onClick={() => setMobileNavOpen(true)}
+              aria-label={t("expandSidebar")}
+            >
+              <PanelLeftOpen size={18} strokeWidth={1.75} />
+            </button>
+            <span className="mdocs-settings-mobile-bar-title">{tabTitle}</span>
+          </div>
+        ) : null}
         {isDemoMode() && (
           <div style={{ padding: "8px 16px", background: "#fff3cd", borderBottom: "1px solid #ffc107", fontSize: "0.85rem", color: "#856404", flexShrink: 0 }}>
             Demo 模式下设置功能有限，数据不会同步到服务器。
@@ -931,6 +1010,6 @@ export function SettingsPage(props: {
           void handleSaveInvite(result as Array<{ visitorId: string; permission: string }>);
         }}
       />
-    </>
+    </div>
   );
 }

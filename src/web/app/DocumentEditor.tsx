@@ -45,7 +45,7 @@ import {
 } from "@lobehub/editor";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
-import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, Network, RefreshCw, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star, Workflow } from "lucide-react";
+import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, Network, PanelLeftOpen, RefreshCw, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star, Workflow } from "lucide-react";
 
 import deepseekLogoUrl from "../assets/deepseek.svg";
 import type { ActiveDocumentMeta } from "../../shared/types/document";
@@ -170,6 +170,10 @@ interface DocumentEditorProps {
   commentPanelOpen: boolean;
   /** 评论数量 */
   commentCount: number;
+  /** 窄屏阅读壳：浮条 header，隐藏域/帮写等编辑向控件 */
+  readerChrome?: boolean;
+  /** 打开左侧目录抽屉 */
+  onOpenMobileNav?: () => void;
 }
 
 export function DocumentEditor(props: DocumentEditorProps) {
@@ -802,10 +806,90 @@ export function DocumentEditor(props: DocumentEditorProps) {
     [editor, t, props.meta.documentId, props.onShowError],
   );
 
+  const readerChrome = Boolean(props.readerChrome);
+  /** 窄屏：浮条一段时间后 / 上拖 → 吸附顶栏 */
+  const [readerHeaderDocked, setReaderHeaderDocked] = useState(false);
+  const readerDragRef = useRef<{ startY: number; dragging: boolean } | null>(null);
+  const [readerDragOffset, setReaderDragOffset] = useState(0);
+
+  useEffect(() => {
+    if (!readerChrome) {
+      setReaderHeaderDocked(false);
+      setReaderDragOffset(0);
+      return;
+    }
+    if (readerHeaderDocked) return;
+    const timer = window.setTimeout(() => setReaderHeaderDocked(true), 2800);
+    return () => window.clearTimeout(timer);
+  }, [readerChrome, readerHeaderDocked, props.meta.documentId]);
+
+  function onReaderHeaderPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!readerChrome || readerHeaderDocked) return;
+    if ((e.target as HTMLElement).closest("button, a, input, textarea, select")) return;
+    readerDragRef.current = { startY: e.clientY, dragging: true };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onReaderHeaderPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = readerDragRef.current;
+    if (!drag?.dragging) return;
+    const dy = e.clientY - drag.startY;
+    // 只允许上拖（负向），有阻力上限
+    setReaderDragOffset(Math.max(-72, Math.min(0, dy)));
+  }
+
+  function onReaderHeaderPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = readerDragRef.current;
+    if (!drag?.dragging) return;
+    readerDragRef.current = null;
+    const dy = e.clientY - drag.startY;
+    setReaderDragOffset(0);
+    if (dy < -36) setReaderHeaderDocked(true);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  }
+
   return (
-    <div className="mdocs-editor">
+    <div
+      className={
+        "mdocs-editor" +
+        (readerChrome ? " mdocs-editor--reader" : "") +
+        (readerChrome && readerHeaderDocked ? " mdocs-editor--reader-docked" : "")
+      }
+    >
       {/* ========== 编辑器顶部工具栏 ========== */}
-      <div className="mdocs-editor-toolbar">
+      <div
+        className={
+          "mdocs-editor-toolbar" +
+          (readerChrome
+            ? readerHeaderDocked
+              ? " mdocs-editor-toolbar--docked"
+              : " mdocs-editor-toolbar--float"
+            : "")
+        }
+        style={
+          readerChrome && !readerHeaderDocked && readerDragOffset !== 0
+            ? { transform: `translate(-50%, ${readerDragOffset}px)` }
+            : undefined
+        }
+        onPointerDown={onReaderHeaderPointerDown}
+        onPointerMove={onReaderHeaderPointerMove}
+        onPointerUp={onReaderHeaderPointerUp}
+        onPointerCancel={onReaderHeaderPointerUp}
+      >
+        {readerChrome ? (
+          <button
+            type="button"
+            className="mdocs-reader-nav-btn"
+            onClick={() => props.onOpenMobileNav?.()}
+            aria-label={t("expandSidebar")}
+          >
+            <PanelLeftOpen size={18} strokeWidth={1.75} />
+          </button>
+        ) : null}
         {/* 文档标题输入框 */}
         <input
           className="mdocs-editor-title-input"
@@ -817,18 +901,21 @@ export function DocumentEditor(props: DocumentEditorProps) {
           placeholder={t("displayNamePlaceholder")}
           // 非编辑模式时禁用标题输入
           disabled={!editing}
+          readOnly={readerChrome && !editing}
         />
-        {/* 域选择下拉 */}
-        <DomainSelect
-          // 如果没有域数据，使用 fallback 默认域避免空白
-          domains={props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY]}
-          value={props.currentDomainId}
-          onChange={props.onDomainChange}
-          onDomainsChange={props.onDomainsChange}
-          ariaLabel={t("currentDomainAria")}
-          localizeName={(name: string) => localizeDomainName(name, lang, t)}
-        />
-        {props.onAiWrite ? (
+        {/* 域选择 / 帮写：阅读浮条不展示 */}
+        {!readerChrome ? (
+          <DomainSelect
+            // 如果没有域数据，使用 fallback 默认域避免空白
+            domains={props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY]}
+            value={props.currentDomainId}
+            onChange={props.onDomainChange}
+            onDomainsChange={props.onDomainsChange}
+            ariaLabel={t("currentDomainAria")}
+            localizeName={(name: string) => localizeDomainName(name, lang, t)}
+          />
+        ) : null}
+        {!readerChrome && props.onAiWrite ? (
           <button
             type="button"
             className="secondary"
@@ -869,12 +956,12 @@ export function DocumentEditor(props: DocumentEditorProps) {
               fill: isBookmarked ? "#faad14" : "none",
             }}
           />
-          {isBookmarked && <span>已收藏</span>}
+          {!readerChrome && isBookmarked ? <span>已收藏</span> : null}
         </button>
         {/* 弹性占位，将右侧按钮推到最右边 */}
-        <span className="mdocs-editor-toolbar-spacer" aria-hidden />
+        {!readerChrome ? <span className="mdocs-editor-toolbar-spacer" aria-hidden /> : null}
         <div className="mdocs-editor-toolbar-actions">
-          {props.onSyncClick && (
+          {!readerChrome && props.onSyncClick ? (
             <button
               type="button"
               className={"mdocs-sync-btn mdocs-tooltip mdocs-tooltip-bottom" + (props.syncBehind ? " behind" : "")}
@@ -885,8 +972,31 @@ export function DocumentEditor(props: DocumentEditorProps) {
               <RefreshCw size={16} strokeWidth={1.5} />
               <span>{t("syncPull")}</span>
             </button>
-          )}
-          {editing ? (
+          ) : null}
+          {readerChrome && props.canEdit ? (
+            <>
+              <button
+                type="button"
+                className="primary mdocs-reader-action-btn"
+                disabled={busy}
+                onClick={() => {
+                  if (!editing) setIsEditing(true);
+                  void publish().catch(() => {});
+                }}
+              >
+                {busy ? t("publishing") : t("publish")}
+              </button>
+              <button
+                type="button"
+                className="danger mdocs-reader-action-btn"
+                disabled={busy}
+                onClick={() => void props.onDelete()}
+              >
+                {t("delete")}
+              </button>
+            </>
+          ) : null}
+          {!readerChrome && editing ? (
             <>
               {/* 未开启自动同步时，显示保存状态指示器 */}
               {localStorage.getItem("mdocs.autoPublish") !== "true" && (
@@ -915,14 +1025,12 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 {t("delete")}
               </button>
             </>
-          ) : (
-            // 有编辑权限但当前是只读模式时，显示「编辑」按钮
-            props.canEdit && (
-              <button type="button" className="primary" onClick={() => setIsEditing(true)}>
-                {t("edit")}
-              </button>
-            )
-          )}
+          ) : null}
+          {!readerChrome && !editing && props.canEdit ? (
+            <button type="button" className="primary" onClick={() => setIsEditing(true)}>
+              {t("edit")}
+            </button>
+          ) : null}
           {/* 评论按钮（所有模式都显示） */}
           <button
             type="button"
@@ -940,7 +1048,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
             }}
           >
             <MessageSquare size={18} strokeWidth={1.5} style={{ color: "var(--mdocs-text-secondary, #6b7280)" }} />
-            {props.commentCount > 0 && <span style={{ fontSize: "0.85rem" }}>{props.commentCount}</span>}
+            {!readerChrome && props.commentCount > 0 ? (
+              <span style={{ fontSize: "0.85rem" }}>{props.commentCount}</span>
+            ) : null}
           </button>
           {/* 文档信息菜单按钮（所有模式都显示） */}
           <div ref={docInfoMenuRef} className="mdocs-tooltip mdocs-tooltip-bottom" data-tooltip={t("docInfo")} style={{ position: "relative" }}>
@@ -1143,15 +1253,15 @@ export function DocumentEditor(props: DocumentEditorProps) {
               minHeight: 0,
             }}
           >
-            {/* 编辑模式下显示顶部固定工具栏 */}
-            {editing && editor && (
+            {/* 编辑模式下显示顶部固定工具栏；窄屏阅读壳隐藏，避免灰条占位 */}
+            {editing && editor && !readerChrome ? (
               <Toolbar
                 editor={editor}
                 outlineCollapseTitle={t("outlineHide")}
                 outlineExpandTitle={t("outlineShow")}
                 outlineToggle
               />
-            )}
+            ) : null}
             <div className="mdocs-editor-content-area" style={{ flex: 1, display: "flex", minHeight: 0 }}>
               <Block
                 variant="outlined"
