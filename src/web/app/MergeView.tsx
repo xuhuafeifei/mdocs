@@ -1,11 +1,11 @@
 /**
- * IDEA 式三方 merge：左 local / 中 CodeMirror 结果（行内决议）/ 右 remote。
+ * 冲突 Merge：单栏 inline（红=我的 / 绿=别人的），与帮写审阅同构。
+ * 接收=remote，拒绝=local；全部决议后方可手改并发布。
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
 import { LexicalMarkdownBridge } from "./LexicalMarkdownBridge";
-import { MergeCodeMirrorPane } from "./merge/MergeCodeMirrorPane";
-import { MergeResultEditor } from "./merge/MergeResultEditor";
+import { MergeInlinePane } from "./merge/MergeInlinePane";
 import {
   assembleMergedMarkdown,
   buildThreeWayMergePlan,
@@ -13,7 +13,6 @@ import {
   countUnresolvedConflicts,
   stripConflictPlaceholders,
   updateConflictResolution,
-  type ConflictResolution,
   type MergeSegment,
 } from "./merge/merge-plan";
 import {
@@ -44,10 +43,9 @@ export function MergeView(props: MergeViewProps) {
   const [remoteLexical, setRemoteLexical] = useState<string | null>(null);
   const [remoteMd, setRemoteMd] = useState("");
   const [segments, setSegments] = useState<MergeSegment[] | null>(null);
-  const [manualEdit, setManualEdit] = useState(false);
+  const [editedMd, setEditedMd] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadingRemote, setLoadingRemote] = useState(true);
-  const resultEditorGetTextRef = useRef<(() => string) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +53,7 @@ export function MergeView(props: MergeViewProps) {
     setRemoteLexical(null);
     setRemoteMd("");
     setSegments(null);
-    setManualEdit(false);
+    setEditedMd(null);
     void (async () => {
       try {
         const doc = await getDocumentApi(props.documentId);
@@ -125,26 +123,36 @@ export function MergeView(props: MergeViewProps) {
   useEffect(() => {
     if (!localMd || !remoteMd || loadingRemote || !baseReady) return;
     setSegments(buildThreeWayMergePlan(localMd, baseMd, remoteMd));
-    setManualEdit(false);
+    setEditedMd(null);
   }, [localMd, remoteMd, baseMd, baseReady, loadingRemote, props.conflict.remoteCommitId]);
 
-  const publishMd = useMemo(() => {
+  const assembledMd = useMemo(() => {
     if (!segments) return "";
-    return assembleMergedMarkdown(segments);
+    return stripConflictPlaceholders(assembleMergedMarkdown(segments));
   }, [segments]);
 
   const conflictTotal = segments ? countConflicts(segments) : 0;
   const unresolvedCount = segments ? countUnresolvedConflicts(segments) : 0;
+  const publishBody = editedMd ?? assembledMd;
 
-  function handleResolve(
-    conflictId: string,
-    resolution: ConflictResolution,
-    manualLines?: string[],
-  ): void {
-    setSegments((prev) =>
-      prev ? updateConflictResolution(prev, conflictId, resolution, manualLines) : prev,
-    );
-    setManualEdit(false);
+  useEffect(() => {
+    if (unresolvedCount === 0 && segments && editedMd === null) {
+      setEditedMd(assembledMd);
+    }
+  }, [unresolvedCount, segments, assembledMd, editedMd]);
+
+  function resolveAll(resolution: "local" | "remote"): void {
+    setSegments((prev) => {
+      if (!prev) return prev;
+      let next = prev;
+      for (const seg of prev) {
+        if (seg.kind === "conflict") {
+          next = updateConflictResolution(next, seg.id, resolution);
+        }
+      }
+      return next;
+    });
+    setEditedMd(null);
   }
 
   async function completeMerge(): Promise<void> {
@@ -152,11 +160,7 @@ export function MergeView(props: MergeViewProps) {
       props.onError(t("mergeConflictsUnresolved", { count: String(unresolvedCount) }));
       return;
     }
-    const raw =
-      manualEdit && resultEditorGetTextRef.current
-        ? resultEditorGetTextRef.current()
-        : publishMd;
-    const body = stripConflictPlaceholders(raw);
+    const body = stripConflictPlaceholders(publishBody);
     setBusy(true);
     try {
       const { content: lexical } = await convertContentApi({
@@ -243,37 +247,27 @@ export function MergeView(props: MergeViewProps) {
           </button>
         </div>
       </header>
-      <div className="mdocs-merge-body">
-        <aside className="mdocs-merge-side">
-          <header className="mdocs-merge-pane-header mdocs-merge-pane-header-static">
-            {t("mergeLocal")}
-          </header>
-          <MergeCodeMirrorPane doc={localMd} readOnly className="mdocs-merge-cm-side" />
-        </aside>
-        <main className="mdocs-merge-center">
-          {!ready ? (
-            <p className="mdocs-merge-loading">{t("mergeLoadingRemote")}</p>
-          ) : (
-            <>
-              <header className="mdocs-merge-result-header">
-                <h3>{t("mergeResult")}</h3>
-                <span className="mdocs-merge-result-hint">{t("mergeResultInlineHint")}</span>
-              </header>
-              <MergeResultEditor
-                segments={segments!}
-                onResolve={handleResolve}
-                getTextRef={resultEditorGetTextRef}
-                onDocumentEdited={() => setManualEdit(true)}
-              />
-            </>
-          )}
-        </main>
-        <aside className="mdocs-merge-side">
-          <header className="mdocs-merge-pane-header mdocs-merge-pane-header-static">
-            {loadingRemote ? t("mergeLoadingRemote") : t("mergeRemote")}
-          </header>
-          <MergeCodeMirrorPane doc={remoteMd} readOnly className="mdocs-merge-cm-side" />
-        </aside>
+      <div className="mdocs-merge-body mdocs-merge-body--inline">
+        {!ready ? (
+          <p className="mdocs-merge-loading">{t("mergeLoadingRemote")}</p>
+        ) : (
+          <MergeInlinePane
+            segments={segments!}
+            unresolvedCount={unresolvedCount}
+            onReceive={(id) => {
+              setSegments((prev) => (prev ? updateConflictResolution(prev, id, "remote") : prev));
+              setEditedMd(null);
+            }}
+            onReject={(id) => {
+              setSegments((prev) => (prev ? updateConflictResolution(prev, id, "local") : prev));
+              setEditedMd(null);
+            }}
+            onUseAllMine={() => resolveAll("local")}
+            onUseAllTheirs={() => resolveAll("remote")}
+            editableMarkdown={publishBody}
+            onEditableChange={setEditedMd}
+          />
+        )}
       </div>
     </div>
   );

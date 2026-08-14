@@ -371,6 +371,11 @@
   box-shadow: 0 2px 12px rgba(77, 107, 254, 0.25);
 }
 
+.mdocs-agent-fab--nodrag {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 .mdocs-agent-fab img {
   width: 20px;
   height: 20px;
@@ -413,6 +418,21 @@
   border-radius: 14px;
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.16);
   overflow: hidden;
+}
+
+.mdocs-agent-panel--fullscreen {
+  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .mdocs-agent-panel-header {
@@ -2320,7 +2340,6 @@ button.small {
 /* Document editor body inset — same idea as .mdocs-playground-editor in global.css */
 .mdocs-document-editor-root {
   box-sizing: border-box;
-  /* padding: 80px 60px 60px; */
   padding-left: 50px;
   padding-right: 50px;
   padding-top: 20px;
@@ -3903,6 +3922,23 @@ strong.label {
 
   .mdocs-layout--reader .mdocs-main {
     width: 100%;
+  }
+
+  /* 手机：正文左右 5px；去掉 scroll-host 再叠一层 */
+  .mdocs-document-editor-root {
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+
+  .mdocs-editor-scroll-host {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .mdocs-layout--reader .mdocs-editor-content-area > div {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
   }
 
   /* 提纲默认不占位，避免关不掉 */

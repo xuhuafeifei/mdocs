@@ -455,8 +455,13 @@ export const AgentChatPanel = forwardRef<
     open: boolean;
     onClose: () => void;
     visitorName?: string;
-    /** 跟随 FAB 的定位（left / bottom） */
+    /** 跟随 FAB 的定位（left / bottom）；全屏时忽略 */
     anchorStyle?: React.CSSProperties;
+    /** 窄屏全屏铺满 */
+    fullscreen?: boolean;
+    /** 当前域 / 打开文，每轮 Ask 作为 references 发给后端 */
+    domainId?: string | null;
+    documentId?: string | null;
     onOpenDocument?: (documentId: string) => void | Promise<void>;
     /** Agent 建文/建文件夹/移动等改树后回调，用于刷新侧栏 */
     onTreeChanged?: () => void | Promise<void>;
@@ -477,6 +482,9 @@ export const AgentChatPanel = forwardRef<
     onClose,
     visitorName,
     anchorStyle,
+    fullscreen,
+    domainId,
+    documentId,
     onOpenDocument,
     onTreeChanged,
     onDocumentOverwritten,
@@ -724,6 +732,10 @@ export const AgentChatPanel = forwardRef<
       let hadError = false;
       await streamAgentChatApi(text, {
         skillNames: selectedSkillNames.length > 0 ? selectedSkillNames : undefined,
+        references: {
+          domainId: domainId?.trim() || undefined,
+          documentId: documentId?.trim() || undefined,
+        },
         signal: ac.signal,
         onEvent: (event) => {
           if (event.type === "text_delta") {
@@ -980,10 +992,13 @@ export const AgentChatPanel = forwardRef<
   return (
     <div
       ref={panelRef}
-      className="mdocs-agent-panel"
+      className={
+        "mdocs-agent-panel" + (fullscreen ? " mdocs-agent-panel--fullscreen" : "")
+      }
       role="dialog"
       aria-label="mdocs 智能助手"
-      style={anchorStyle}
+      aria-modal={fullscreen ? true : undefined}
+      style={fullscreen ? undefined : anchorStyle}
     >
       <header className="mdocs-agent-panel-header">
         <div className="mdocs-agent-panel-title">

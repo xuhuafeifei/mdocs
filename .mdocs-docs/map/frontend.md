@@ -61,3 +61,14 @@
   | `src/web/app/ai-write/AiWriteMarkdownPane.tsx` | `AiWriteMarkdownPane` |
   | `src/web/app/ai-write/markdown-hunks.ts` | `computeLineHunks` |
 - **需求**：[`../requirements/agent-normal-coding-modes/`](../requirements/agent-normal-coding-modes/)
+
+### 冲突 Merge（inline）
+
+- **关键词**：`MergeView` `MergeInlinePane` `接收` `拒绝` `全部用我的` `三路 diff`
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/web/app/MergeView.tsx` | `MergeView` |
+  | `src/web/app/merge/MergeInlinePane.tsx` | `MergeInlinePane` |
+  | `src/web/app/merge/merge-plan.ts` | `buildThreeWayMergePlan` |
+- **需求**：[`../requirements/merge-inline-ui/`](../requirements/merge-inline-ui/)

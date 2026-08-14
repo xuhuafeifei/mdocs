@@ -10,7 +10,10 @@ import {
   type VisitorAgentConfig,
 } from "../Config/config.js";
 import { getSkillLoader } from "../Skill/skill-loader.js";
-import { buildSystemPrompt, type AgentMode } from "./system-prompt.js";
+import {
+  buildSystemPrompt,
+  type AgentMode,
+} from "./system-prompt.js";
 import { createToolsForMode } from "./tools-registry.js";
 import {
   AgentSessionManager,
@@ -69,6 +72,8 @@ export async function runOnboardingChat(params: {
   documentId?: string | null;
   workingMarkdown?: string;
   baseMarkdown?: string;
+  /** normal：当前 UI 域/文 reference（不作权限校验） */
+  references?: { domainId?: string; documentId?: string } | null;
   onEvent: (event: AgentStreamEvent) => void;
   signal?: AbortSignal;
 }): Promise<void> {
@@ -100,7 +105,10 @@ export async function runOnboardingChat(params: {
         }
       : {}),
   });
-  const systemPrompt = buildSystemPrompt(mode);
+  const systemPrompt = buildSystemPrompt(
+    mode,
+    mode === "normal" ? params.references : null,
+  );
 
   const sessionManager = new AgentSessionManager(visitorId, {
     kind: mode === "coding" ? "coding" : "normal",

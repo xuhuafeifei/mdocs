@@ -1178,6 +1178,7 @@ export function App() {
             }}
             position={agentFabPos}
             onPositionChange={setAgentFabPos}
+            disableDrag={isNarrow}
           />
           {agentPanelOpen ? (
             <Suspense fallback={null}>
@@ -1186,7 +1187,10 @@ export function App() {
                 open={agentPanelOpen}
                 onClose={() => setAgentPanelOpen(false)}
                 visitorName={visitor?.visitorName}
-                anchorStyle={agentPanelAnchorStyle(agentFabPos)}
+                fullscreen={isNarrow}
+                domainId={currentDomainId || null}
+                documentId={activeDocMeta?.documentId ?? null}
+                anchorStyle={isNarrow ? undefined : agentPanelAnchorStyle(agentFabPos)}
                 onOpenDocument={(docId) => {
                   setView("docs");
                   void guardNavigate(() => navigate(`/doc/${docId}`));

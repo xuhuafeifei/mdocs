@@ -446,3 +446,116 @@
 .mdocs-merge-preview pre {
   white-space: pre-wrap;
 }
+
+/* === 单栏 inline（与帮写同构） === */
+.mdocs-merge-body--inline {
+  display: flex;
+  flex-direction: column;
+  grid-template-columns: none;
+  background: var(--mdocs-bg, #fff);
+  gap: 0;
+}
+
+.mdocs-merge-inline-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.mdocs-merge-inline-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--mdocs-border, #e5e5e5);
+  background: var(--mdocs-surface, #fff);
+}
+
+.mdocs-merge-inline-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--mdocs-text-muted, #888);
+}
+
+.mdocs-merge-inline-toolbar button {
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.mdocs-merge-inline {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+  padding: 8px 0 72px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.mdocs-merge-inline-same {
+  margin: 0;
+  padding: 0 16px 0 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mdocs-merge-inline-hunk {
+  position: relative;
+  margin: 0;
+  padding: 0 16px 0 12px;
+}
+
+.mdocs-merge-inline-hunk.is-active {
+  outline: 1px solid rgba(51, 112, 255, 0.35);
+  outline-offset: -1px;
+  background: rgba(51, 112, 255, 0.03);
+}
+
+.mdocs-merge-inline-hunk.is-resolved {
+  opacity: 0.72;
+}
+
+.mdocs-merge-hunk-actions {
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  gap: 6px;
+}
+
+.mdocs-merge-hunk-resolved-tag {
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  z-index: 2;
+  font-size: 11px;
+  color: var(--mdocs-text-muted, #888);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+}
+
+.mdocs-merge-inline-editor {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 16px 20px;
+  border: none;
+  resize: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  box-sizing: border-box;
+  background: var(--mdocs-bg, #fff);
+  color: var(--mdocs-text);
+}

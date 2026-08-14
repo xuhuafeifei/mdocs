@@ -921,6 +921,8 @@ export async function streamAgentChatApi(
     documentId?: string | null;
     workingMarkdown?: string;
     baseMarkdown?: string;
+    /** normal：当前 UI 域 / 打开文 */
+    references?: { domainId?: string; documentId?: string };
     signal?: AbortSignal;
     onEvent: (event: AgentStreamEvent) => void;
   },
@@ -940,6 +942,8 @@ export async function streamAgentChatApi(
     if (opts.documentId !== undefined) body.documentId = opts.documentId;
     if (typeof opts.workingMarkdown === "string") body.workingMarkdown = opts.workingMarkdown;
     if (typeof opts.baseMarkdown === "string") body.baseMarkdown = opts.baseMarkdown;
+  } else if (opts.references) {
+    body.references = opts.references;
   }
   const res = await fetch("/api/agent/chat", {
     method: "POST",

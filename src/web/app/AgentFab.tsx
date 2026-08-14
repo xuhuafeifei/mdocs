@@ -67,8 +67,11 @@ export function AgentFab(props: {
   onToggle: () => void;
   position: AgentFabPos;
   onPositionChange: (pos: AgentFabPos) => void;
+  /** 窄屏：固定左下角，禁止拖动 */
+  disableDrag?: boolean;
 }) {
   const { t } = useI18n();
+  const disableDrag = Boolean(props.disableDrag);
   const [dragging, setDragging] = useState(false);
   // 拖动跟手用本地坐标，避免每帧 setState 打到 App 导致整页卡顿
   const [livePos, setLivePos] = useState(props.position);
@@ -188,6 +191,11 @@ export function AgentFab(props: {
 
   function onPointerDown(e: React.PointerEvent<HTMLButtonElement>): void {
     if (e.button !== 0) return;
+    if (disableDrag) {
+      e.preventDefault();
+      props.onToggle();
+      return;
+    }
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
     dragRef.current = {
@@ -208,18 +216,24 @@ export function AgentFab(props: {
     localStorage.removeItem(STORAGE_KEY);
   }
 
-  const moved = !isDefaultPos(livePos);
+  const displayPos = disableDrag ? AGENT_FAB_DEFAULT : livePos;
+  const moved = !disableDrag && !isDefaultPos(livePos);
 
   return (
     <div
       ref={wrapRef}
       className={"mdocs-agent-fab-wrap" + (dragging ? " dragging" : "")}
-      style={{ left: livePos.left, bottom: livePos.bottom }}
+      style={{ left: displayPos.left, bottom: displayPos.bottom }}
     >
       <button
         ref={fabRef}
         type="button"
-        className={"mdocs-agent-fab" + (props.open ? " open" : "") + (dragging ? " dragging" : "")}
+        className={
+          "mdocs-agent-fab" +
+          (props.open ? " open" : "") +
+          (dragging ? " dragging" : "") +
+          (disableDrag ? " mdocs-agent-fab--nodrag" : "")
+        }
         aria-label={t("agentFabOpen")}
         aria-expanded={props.open}
         onPointerDown={onPointerDown}

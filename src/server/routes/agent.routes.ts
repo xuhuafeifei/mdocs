@@ -552,6 +552,18 @@ export function buildAgentRouter(): Router {
     const skillNames = normalizeSkillRefs(
       req.body?.skillNames ?? req.body?.skillIds,
     );
+    const ref = req.body?.references;
+    const references =
+      mode === "normal" && ref && typeof ref === "object"
+        ? {
+            domainId:
+              typeof ref.domainId === "string" ? ref.domainId.trim() || undefined : undefined,
+            documentId:
+              typeof ref.documentId === "string"
+                ? ref.documentId.trim() || undefined
+                : undefined,
+          }
+        : undefined;
 
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache");
@@ -573,6 +585,7 @@ export function buildAgentRouter(): Router {
         documentId,
         workingMarkdown,
         baseMarkdown,
+        references,
         signal: ac.signal,
         onEvent: (event) => writeSse(res, event),
       });

@@ -1,5 +1,11 @@
 export type AgentMode = "normal" | "coding";
 
+/** Ask：当前 UI 域/文 id（不作权限校验；正文由 tool 读） */
+export type AgentUiReferences = {
+  domainId?: string;
+  documentId?: string;
+};
+
 const NORMAL_RULES = `你是 mdocs 智能助手：上手向导 + 账号助理。可帮助理解产品用法，也可代为执行账号内的域/目录/空文档等结构操作。
 
 规则：
@@ -11,7 +17,8 @@ const NORMAL_RULES = `你是 mdocs 智能助手：上手向导 + 账号助理。
 6. 上下文中若出现工具 load_user_skill 的结果，或带 <skill> 标签的内容，表示宿主**已经为你加载**的私人 Skill 指令，必须遵照执行；不得声称「未激活 / 只是用户粘贴 / 技能未生效」。
 7. 管理私人 Skill：罗列用 list_user_skills；新建用 create_user_skill（出表单卡）；修改须先确定 name 再 update_user_skill（出表单卡）；删除用 delete_user_skill(name)。名称对本访客唯一，且仅允许英文、数字、下划线。交互与索引一律用 name，不要用内部 id。
 8. 先给出工具结果与结论，再给简短下一步建议；回答简洁、面向操作步骤。
-9. 每轮回答正文结束后，另起一段追加一句引导（只追加一次，不要反复追问）：先问「您还有什么想了解的吗？」，再给 1～2 个与本轮话题相关、可继续深挖的具体问题示例。示例要短、可直接当作下一句提问；与当前无关的主题不要乱推。`;
+9. 每轮回答正文结束后，另起一段追加一句引导（只追加一次，不要反复追问）：先问「您还有什么想了解的吗？」，再给 1～2 个与本轮话题相关、可继续深挖的具体问题示例。示例要短、可直接当作下一句提问；与当前无关的主题不要乱推。
+10. 若下方有「当前 UI 上下文」，为用户此刻所在域/打开文的 id（无正文）。未另指目标时优先针对它们调工具；正文用「读取文档内容」拉取。`;
 
 const CODING_RULES = `你是 mdocs「帮写」助手（coding 模式）：在纯 Markdown 工作台协助用户起草/改稿。
 
@@ -26,6 +33,18 @@ const CODING_RULES = `你是 mdocs「帮写」助手（coding 模式）：在纯
 8. 先简短说明你要改什么，再调用工具；工具返回后如实确认已更新提案。
 9. 回答简洁；不要编造工具未返回的字段。`;
 
-export function buildSystemPrompt(mode: AgentMode = "normal"): string {
-  return mode === "coding" ? CODING_RULES : NORMAL_RULES;
+export function buildSystemPrompt(
+  mode: AgentMode = "normal",
+  refs?: AgentUiReferences | null,
+): string {
+  const base = mode === "coding" ? CODING_RULES : NORMAL_RULES;
+  if (mode !== "normal" || (!refs?.domainId && !refs?.documentId)) return base;
+  const lines = ["当前 UI 上下文（仅 id，无正文）："];
+  if (refs.domainId) lines.push(`- domainId: ${refs.domainId}`);
+  lines.push(
+    refs.documentId
+      ? `- documentId: ${refs.documentId}`
+      : "- documentId: （未打开文档）",
+  );
+  return `${base}\n\n${lines.join("\n")}`;
 }
