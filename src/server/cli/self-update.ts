@@ -1,5 +1,8 @@
 /**
  * 全局安装原地升级：淘宝 npmmirror 拉最新包，保留 node_modules，npm --prefer-offline 补差量。
+ *
+ * 查版本 / pack 必须绕开本机 npm cache：`--prefer-online` 仍可能命中旧 packument，
+ * 因此这两步使用临时空 `--cache` 目录。
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -71,45 +74,60 @@ function npm(args: string[], cwd?: string): { status: number; stdout: string; st
   };
 }
 
-function fetchLatestVersion(): string {
-  const r = npm([
-    "view",
-    MDOCS_UPDATE_PACKAGE,
-    "version",
-    `--registry=${MDOCS_UPDATE_REGISTRY}`,
-    // 避免本机 npm cache 把 latest 钉在旧版（镜像已同步仍报「已是最新」）
-    "--prefer-online",
-    "--fetch-retries=2",
-  ]);
-  if (r.status !== 0 || !r.stdout) {
-    fail(`无法从 ${MDOCS_UPDATE_REGISTRY} 查询版本：${r.stderr || r.stdout || "empty"}`);
+/** 空 cache 目录：避免全局 ~/.npm 把 latest 钉在旧版 */
+function withFreshNpmCache<T>(fn: (cacheDir: string) => T): T {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "mdocs-npm-cache-"));
+  try {
+    return fn(cacheDir);
+  } finally {
+    fs.rmSync(cacheDir, { recursive: true, force: true });
   }
-  return r.stdout.split("\n").pop()!.trim();
+}
+
+function fetchLatestVersion(): string {
+  return withFreshNpmCache((cacheDir) => {
+    const r = npm([
+      "view",
+      MDOCS_UPDATE_PACKAGE,
+      "version",
+      `--registry=${MDOCS_UPDATE_REGISTRY}`,
+      `--cache=${cacheDir}`,
+      "--prefer-online",
+      "--fetch-retries=2",
+    ]);
+    if (r.status !== 0 || !r.stdout) {
+      fail(`无法从 ${MDOCS_UPDATE_REGISTRY} 查询版本：${r.stderr || r.stdout || "empty"}`);
+    }
+    return r.stdout.split("\n").pop()!.trim();
+  });
 }
 
 function packTo(destDir: string, version: string): string {
   fs.mkdirSync(destDir, { recursive: true });
-  const r = npm(
-    [
-      "pack",
-      `${MDOCS_UPDATE_PACKAGE}@${version}`,
-      `--registry=${MDOCS_UPDATE_REGISTRY}`,
-      `--pack-destination=${destDir}`,
-      "--prefer-online",
-    ],
-    destDir,
-  );
-  if (r.status !== 0) {
-    fail(`npm pack 失败：${r.stderr || r.stdout}`);
-  }
-  const lines = r.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
-  const tgzName = lines[lines.length - 1];
-  if (!tgzName?.endsWith(".tgz")) {
-    fail(`npm pack 未产出 tgz：${r.stdout}`);
-  }
-  const tgzPath = path.isAbsolute(tgzName) ? tgzName : path.join(destDir, tgzName);
-  if (!fs.existsSync(tgzPath)) fail(`找不到 pack 产物 ${tgzPath}`);
-  return tgzPath;
+  return withFreshNpmCache((cacheDir) => {
+    const r = npm(
+      [
+        "pack",
+        `${MDOCS_UPDATE_PACKAGE}@${version}`,
+        `--registry=${MDOCS_UPDATE_REGISTRY}`,
+        `--pack-destination=${destDir}`,
+        `--cache=${cacheDir}`,
+        "--prefer-online",
+      ],
+      destDir,
+    );
+    if (r.status !== 0) {
+      fail(`npm pack 失败：${r.stderr || r.stdout}`);
+    }
+    const lines = r.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+    const tgzName = lines[lines.length - 1];
+    if (!tgzName?.endsWith(".tgz")) {
+      fail(`npm pack 未产出 tgz：${r.stdout}`);
+    }
+    const tgzPath = path.isAbsolute(tgzName) ? tgzName : path.join(destDir, tgzName);
+    if (!fs.existsSync(tgzPath)) fail(`找不到 pack 产物 ${tgzPath}`);
+    return tgzPath;
+  });
 }
 
 /** 保留 node_modules，其余用新包覆盖 */
