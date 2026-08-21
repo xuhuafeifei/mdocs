@@ -27,18 +27,72 @@ const IMAGE_EXT = new Set([
   ".pjpeg",
 ]);
 
-/** Editor attachments: images + zip + common audio. */
+const AUDIO_EXT = new Set([".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".oga"]);
+
+const TEXT_EXT = new Set([".txt", ".md", ".csv"]);
+
+const HTML_EXT = new Set([".html", ".htm"]);
+
+/** Editor attachments: images + zip + audio + common documents. */
 const ALLOWED_UPLOAD_EXT = new Set([
   ...IMAGE_EXT,
+  ...AUDIO_EXT,
+  ...TEXT_EXT,
+  ...HTML_EXT,
   ".zip",
-  ".mp3",
-  ".wav",
-  ".m4a",
-  ".ogg",
-  ".flac",
-  ".aac",
-  ".oga",
+  ".pdf",
 ]);
+
+const ZIP_MIME = new Set([
+  "application/zip",
+  "application/x-zip-compressed",
+  "application/octet-stream",
+  "multipart/x-zip",
+]);
+
+const CONTENT_TYPE_BY_EXT: Record<string, string> = {
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".jfif": "image/jpeg",
+  ".pjpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+  ".bmp": "image/bmp",
+  ".zip": "application/zip",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".m4a": "audio/mp4",
+  ".ogg": "audio/ogg",
+  ".oga": "audio/ogg",
+  ".flac": "audio/flac",
+  ".aac": "audio/aac",
+  ".pdf": "application/pdf",
+  ".txt": "text/plain; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8",
+};
+
+/** Empty MIME / octet-stream always ok; otherwise must match the extension family. */
+export function isAllowedAssetUpload(originalname: string, mimetype: string): boolean {
+  const ext = path.extname(originalname).toLowerCase();
+  if (!ALLOWED_UPLOAD_EXT.has(ext)) return false;
+  const mime = (mimetype || "").toLowerCase();
+  if (!mime || mime === "application/octet-stream") return true;
+  if (IMAGE_EXT.has(ext)) return mime.startsWith("image/");
+  if (ext === ".zip") return ZIP_MIME.has(mime);
+  if (AUDIO_EXT.has(ext)) return mime.startsWith("audio/");
+  if (ext === ".pdf") return mime === "application/pdf";
+  if (HTML_EXT.has(ext)) {
+    return mime === "text/html" || mime === "application/xhtml+xml" || mime.startsWith("text/");
+  }
+  if (TEXT_EXT.has(ext)) {
+    return mime.startsWith("text/") || mime === "application/csv";
+  }
+  return false;
+}
 
 // MIME 类型到扩展名的映射表（远程图片转存）
 const MIME_TO_EXT: Record<string, string> = {
@@ -163,29 +217,7 @@ function createUploader() {
     }),
     limits: { fileSize: MAX_BYTES, files: 24 },
     fileFilter: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      if (!ALLOWED_UPLOAD_EXT.has(ext)) {
-        cb(new Error("unsupported file type"));
-        return;
-      }
-      const mime = (file.mimetype || "").toLowerCase();
-      if (IMAGE_EXT.has(ext)) {
-        if (mime && !mime.startsWith("image/")) {
-          cb(new Error("not an image"));
-          return;
-        }
-      } else if (ext === ".zip") {
-        if (
-          mime &&
-          mime !== "application/zip" &&
-          mime !== "application/x-zip-compressed" &&
-          mime !== "application/octet-stream" &&
-          mime !== "multipart/x-zip"
-        ) {
-          cb(new Error("unsupported file type"));
-          return;
-        }
-      } else if (mime && !mime.startsWith("audio/") && mime !== "application/octet-stream") {
+      if (!isAllowedAssetUpload(file.originalname, file.mimetype)) {
         cb(new Error("unsupported file type"));
         return;
       }
@@ -222,38 +254,11 @@ export function serveAssetFile(req: Request, res: Response): void {
   }
   // 根据扩展名推断 Content-Type
   const ext = path.extname(abs).toLowerCase();
-  const ct =
-    ext === ".svg"
-      ? "image/svg+xml"
-      : ext === ".png"
-        ? "image/png"
-        : ext === ".jpg" || ext === ".jpeg" || ext === ".jfif" || ext === ".pjpeg"
-          ? "image/jpeg"
-          : ext === ".gif"
-            ? "image/gif"
-            : ext === ".webp"
-              ? "image/webp"
-              : ext === ".ico"
-                ? "image/x-icon"
-                : ext === ".bmp"
-                  ? "image/bmp"
-                  : ext === ".zip"
-                    ? "application/zip"
-                    : ext === ".mp3"
-                      ? "audio/mpeg"
-                      : ext === ".wav"
-                        ? "audio/wav"
-                        : ext === ".m4a"
-                          ? "audio/mp4"
-                          : ext === ".ogg" || ext === ".oga"
-                            ? "audio/ogg"
-                            : ext === ".flac"
-                              ? "audio/flac"
-                              : ext === ".aac"
-                                ? "audio/aac"
-                                : "application/octet-stream";
-  // Attachment downloads: suggest filename for non-images
-  if (!IMAGE_EXT.has(ext)) {
+  const ct = HTML_EXT.has(ext)
+    ? "application/octet-stream"
+    : (CONTENT_TYPE_BY_EXT[ext] ?? "application/octet-stream");
+  // zip / 音频 / html 强制下载（html 不以 text/html 内联，避免 XSS）
+  if (AUDIO_EXT.has(ext) || HTML_EXT.has(ext) || ext === ".zip") {
     res.setHeader("Content-Disposition", `attachment; filename="${path.basename(abs)}"`);
   }
   res.setHeader("Content-Type", ct);

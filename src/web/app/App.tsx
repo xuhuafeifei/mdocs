@@ -1190,6 +1190,8 @@ export function App() {
                 fullscreen={isNarrow}
                 domainId={currentDomainId || null}
                 documentId={activeDocMeta?.documentId ?? null}
+                documentTitle={activeDocMeta?.displayName ?? null}
+                documentPath={activeDocMeta?.relativePath ?? null}
                 anchorStyle={isNarrow ? undefined : agentPanelAnchorStyle(agentFabPos)}
                 onOpenDocument={(docId) => {
                   setView("docs");

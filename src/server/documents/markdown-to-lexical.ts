@@ -6,6 +6,9 @@
  *
  * 覆盖 B 层节点：段落、标题、粗体、斜体、删除线、内联代码、代码块、
  *              链接、无序/有序列表、块引用、分隔线、表格。
+ * 内联 HTML（与 lobe CommonPlugin 对齐）：
+ *   `<span style="color|background-color">` → TextNode.style
+ *   `<ins>`/`<u>` 下划线，`<em>` 斜体，`<strong>` 粗体。
  */
 
 import { remark } from "remark";
@@ -33,16 +36,80 @@ interface LexicalNode {
 
 // ── 节点工厂 ──────────────────────────────────────────
 
-function textNode(text: string, format = 0): LexicalNode {
+function textNode(text: string, format = 0, style = ""): LexicalNode {
   return {
     ...BASE,
     detail: 0,
     format,
     mode: "normal",
-    style: "",
+    style,
     text,
     type: "text",
   };
+}
+
+/** remark 把 `<span>` 拆成开/闭两个 html 节点；栈上累积到夹在中间的 text。 */
+type InlineMark = { format: number; style: string; tag: string };
+
+const SPAN_STYLE_PROPS = ["color", "background-color"] as const;
+
+function isSafeCssColorValue(value: string): boolean {
+  const v = value.trim();
+  if (!v || v.length > 128) return false;
+  if (/["'<>\\]|url\s*\(|expression\s*\(|@import/i.test(v)) return false;
+  return /^(#[\dA-Fa-f]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\)|[A-Za-z]+)$/.test(v);
+}
+
+function spanStyleFromOpenTag(htmlOpenTag: string): string {
+  if (!/^<span\b/i.test(htmlOpenTag.trim())) return "";
+  const raw =
+    /\bstyle\s*=\s*"([^"]*)"/i.exec(htmlOpenTag)?.[1] ??
+    /\bstyle\s*=\s*'([^']*)'/i.exec(htmlOpenTag)?.[1];
+  if (!raw) return "";
+  const picked: string[] = [];
+  for (const part of raw.split(";")) {
+    const colon = part.indexOf(":");
+    if (colon < 0) continue;
+    const key = part.slice(0, colon).trim().toLowerCase();
+    const value = part.slice(colon + 1).trim();
+    if (!(SPAN_STYLE_PROPS as readonly string[]).includes(key)) continue;
+    if (!isSafeCssColorValue(value)) continue;
+    picked.push(`${key}: ${value}`);
+  }
+  return picked.join("; ");
+}
+
+function htmlTagName(htmlValue: string): string {
+  const inner = htmlValue.replace(/^<\/?/, "").replace(/\/?>$/, "").trim();
+  const match = /^([A-Za-z][\w-]*)/.exec(inner);
+  return match ? match[1].toLowerCase() : "";
+}
+
+function markFromHtmlOpen(htmlValue: string): InlineMark | null {
+  const tag = htmlTagName(htmlValue);
+  const lower = htmlValue.trim().toLowerCase();
+  if (lower === "<ins>" || lower === "<u>") {
+    return { format: TEXT_UNDERLINE, style: "", tag };
+  }
+  if (lower === "<em>") return { format: TEXT_ITALIC, style: "", tag };
+  if (lower === "<strong>") return { format: TEXT_BOLD, style: "", tag };
+  if (tag === "span") {
+    return { format: 0, style: spanStyleFromOpenTag(htmlValue), tag };
+  }
+  return null;
+}
+
+function applyMarks(node: LexicalNode, marks: InlineMark[]): void {
+  if (node.type !== "text") return;
+  let format = (node.format as number) ?? 0;
+  const styles: string[] = [];
+  if (typeof node.style === "string" && node.style) styles.push(node.style);
+  for (const mark of marks) {
+    format |= mark.format;
+    if (mark.style) styles.push(mark.style);
+  }
+  node.format = format;
+  node.style = styles.join("; ");
 }
 
 function elementNode(
@@ -145,19 +212,46 @@ function tableCellNode(children: LexicalNode[]): LexicalNode {
 /**
  * 处理内联节点列表（段落/标题/块引用内部的格式化内容）。
  * strong → format |= BOLD, emphasis → format |= ITALIC, 等。
+ * html 开/闭标签用 marks 栈，把 style/format 打到夹在中间的 text 上。
  */
-function flattenInline(nodes: unknown[]): LexicalNode[] {
+function flattenInline(
+  nodes: unknown[],
+  inheritedMarks: InlineMark[] = [],
+): LexicalNode[] {
   const result: LexicalNode[] = [];
+  const marks = inheritedMarks.slice();
 
   for (const node of nodes) {
     const n = node as Record<string, unknown>;
     switch (n.type) {
-      case "text":
-        result.push(textNode(n.value as string));
+      case "text": {
+        const t = textNode(n.value as string);
+        applyMarks(t, marks);
+        result.push(t);
         break;
+      }
+
+      case "html": {
+        const value = String(n.value ?? "");
+        if (value.startsWith("<!--")) break;
+        const isEnd = value.trim().startsWith("</");
+        if (isEnd) {
+          const tag = htmlTagName(value);
+          for (let i = marks.length - 1; i >= inheritedMarks.length; i--) {
+            if (marks[i]!.tag === tag) {
+              marks.splice(i, 1);
+              break;
+            }
+          }
+          break;
+        }
+        const mark = markFromHtmlOpen(value);
+        if (mark) marks.push(mark);
+        break;
+      }
 
       case "strong": {
-        const children = flattenInline(n.children as unknown[]);
+        const children = flattenInline(n.children as unknown[], marks);
         for (const child of children) {
           if (child.type === "text")
             child.format = ((child.format as number) ?? 0) | TEXT_BOLD;
@@ -167,7 +261,7 @@ function flattenInline(nodes: unknown[]): LexicalNode[] {
       }
 
       case "emphasis": {
-        const children = flattenInline(n.children as unknown[]);
+        const children = flattenInline(n.children as unknown[], marks);
         for (const child of children) {
           if (child.type === "text")
             child.format = ((child.format as number) ?? 0) | TEXT_ITALIC;
@@ -177,7 +271,7 @@ function flattenInline(nodes: unknown[]): LexicalNode[] {
       }
 
       case "delete": {
-        const children = flattenInline(n.children as unknown[]);
+        const children = flattenInline(n.children as unknown[], marks);
         for (const child of children) {
           if (child.type === "text")
             child.format = ((child.format as number) ?? 0) | TEXT_STRIKETHROUGH;
@@ -186,13 +280,16 @@ function flattenInline(nodes: unknown[]): LexicalNode[] {
         break;
       }
 
-      case "inlineCode":
-        result.push(textNode(n.value as string, TEXT_CODE));
+      case "inlineCode": {
+        const t = textNode(n.value as string, TEXT_CODE);
+        applyMarks(t, marks);
+        result.push(t);
         break;
+      }
 
       case "link":
         result.push(
-          linkNode(flattenInline(n.children as unknown[]), n.url as string),
+          linkNode(flattenInline(n.children as unknown[], marks), n.url as string),
         );
         break;
 
@@ -207,9 +304,8 @@ function flattenInline(nodes: unknown[]): LexicalNode[] {
         break;
 
       default:
-        // 未知内联节点：如果包含 children 则递归，否则跳过
         if (n.children && Array.isArray(n.children)) {
-          result.push(...flattenInline(n.children));
+          result.push(...flattenInline(n.children, marks));
         }
         break;
     }

@@ -267,4 +267,68 @@ import { Editor } from '@lobehub/editor';
     expect(code.children[0]!.text).toContain("@lobehub/editor");
     expect(markdownToLexicalJson(md)).toMatchSnapshot();
   });
+
+  it("span color → TextNode.style", () => {
+    const { root } = parseSerializedLexical(
+      '1<span style="color: #c62828">2</span>3',
+    );
+    const p = root.children[0] as {
+      children: { text: string; style: string; format: number }[];
+    };
+    const mid = p.children.find((c) => c.text === "2");
+    expect(mid?.style).toBe("color: #c62828");
+    expect(p.children.find((c) => c.text === "1")?.style).toBe("");
+    expect(p.children.find((c) => c.text === "3")?.style).toBe("");
+  });
+
+  it("span rgb + background-color；font-weight 忽略", () => {
+    const { root } = parseSerializedLexical(
+      '<span style="color: rgb(220,38,38); font-weight: 700; background-color: #ffe58f">x</span>',
+    );
+    const p = root.children[0] as {
+      children: { text: string; style: string; format: number }[];
+    };
+    const t = p.children.find((c) => c.text === "x");
+    expect(t?.style).toBe("color: rgb(220,38,38); background-color: #ffe58f");
+    expect((t?.format ?? 0) & TEXT_BOLD).toBe(0);
+  });
+
+  it("span 内 markdown 粗体：style + BOLD", () => {
+    const { root } = parseSerializedLexical(
+      '<span style="color: #c62828">**重点**</span>',
+    );
+    const p = root.children[0] as {
+      children: { text: string; style: string; format: number }[];
+    };
+    const t = p.children.find((c) => c.text === "重点");
+    expect(t?.style).toBe("color: #c62828");
+    expect((t?.format ?? 0) & TEXT_BOLD).toBe(TEXT_BOLD);
+  });
+
+  it("表格单元格内 span", () => {
+    const { root } = parseSerializedLexical(
+      '|a|\n|---|\n|<span style="color: red">b</span>|',
+    );
+    const table = root.children[0] as {
+      children: Array<{
+        children: Array<{ children?: { text: string; style: string }[] }>;
+      }>;
+    };
+    const cell = table.children[1]!.children[0]!;
+    const t = cell.children?.find((c) => c.text === "b");
+    expect(t?.style).toBe("color: red");
+  });
+
+  it("<ins> 下划线；不安全 color 丢 style、留正文", () => {
+    const { root } = parseSerializedLexical(
+      '<ins>u</ins> <span style="color: url(javascript:alert(1))">plain</span>',
+    );
+    const p = root.children[0] as {
+      children: { text: string; style: string; format: number }[];
+    };
+    const u = p.children.find((c) => c.text === "u");
+    expect((u?.format ?? 0) & 8).toBe(8);
+    const plain = p.children.find((c) => c.text === "plain");
+    expect(plain?.style).toBe("");
+  });
 });

@@ -1,4 +1,4 @@
-import { Check, Copy, History, Plus, X } from "lucide-react";
+import { Check, Copy, FileText, History, Plus, X } from "lucide-react";
 import {
   forwardRef,
   useEffect,
@@ -462,6 +462,8 @@ export const AgentChatPanel = forwardRef<
     /** 当前域 / 打开文，每轮 Ask 作为 references 发给后端 */
     domainId?: string | null;
     documentId?: string | null;
+    documentTitle?: string | null;
+    documentPath?: string | null;
     onOpenDocument?: (documentId: string) => void | Promise<void>;
     /** Agent 建文/建文件夹/移动等改树后回调，用于刷新侧栏 */
     onTreeChanged?: () => void | Promise<void>;
@@ -485,6 +487,8 @@ export const AgentChatPanel = forwardRef<
     fullscreen,
     domainId,
     documentId,
+    documentTitle,
+    documentPath,
     onOpenDocument,
     onTreeChanged,
     onDocumentOverwritten,
@@ -500,6 +504,8 @@ export const AgentChatPanel = forwardRef<
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [input, setInput] = useState("");
   const [selectedSkillNames, setSelectedSkillNames] = useState<string[]>([]);
+  /** 用户点右侧取消后，本轮不再带 documentId；换一篇文自动恢复 */
+  const [docRefDismissed, setDocRefDismissed] = useState(false);
   const [sending, setSending] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [contextUsage, setContextUsage] = useState<AgentContextUsage | null>(null);
@@ -513,6 +519,14 @@ export const AgentChatPanel = forwardRef<
   const stickToBottomRef = useRef(true);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+
+  const docRefActive = Boolean(documentId?.trim()) && !docRefDismissed;
+  const docRefTitle = documentTitle?.trim() || "当前文档";
+  const docRefPath = documentPath?.trim() || "";
+
+  useEffect(() => {
+    setDocRefDismissed(false);
+  }, [documentId]);
 
   function nextId(prefix: string) {
     idRef.current += 1;
@@ -734,7 +748,7 @@ export const AgentChatPanel = forwardRef<
         skillNames: selectedSkillNames.length > 0 ? selectedSkillNames : undefined,
         references: {
           domainId: domainId?.trim() || undefined,
-          documentId: documentId?.trim() || undefined,
+          documentId: docRefActive ? documentId!.trim() : undefined,
         },
         signal: ac.signal,
         onEvent: (event) => {
@@ -1364,6 +1378,28 @@ export const AgentChatPanel = forwardRef<
             disabled={sending || !status?.enabled}
           />
           <div className="mdocs-agent-panel-input-wrap">
+            {docRefActive ? (
+              <div className="mdocs-agent-doc-ref">
+                <FileText size={15} strokeWidth={1.75} className="mdocs-agent-doc-ref-icon" aria-hidden />
+                <div className="mdocs-agent-doc-ref-text">
+                  <span className="mdocs-agent-doc-ref-title">{docRefTitle}</span>
+                  {docRefPath ? (
+                    <span className="mdocs-agent-doc-ref-path">{docRefPath}</span>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className="mdocs-agent-doc-ref-unlink"
+                  title="取消引用"
+                  aria-label="取消引用当前文档"
+                  disabled={sending}
+                  onClick={() => setDocRefDismissed(true)}
+                >
+                  <X size={14} strokeWidth={2} aria-hidden />
+                </button>
+              </div>
+            ) : null}
+            <div className="mdocs-agent-panel-input-body">
             <textarea
               className="mdocs-agent-panel-input"
               rows={2}
@@ -1409,6 +1445,7 @@ export const AgentChatPanel = forwardRef<
             >
               {sending ? "■" : "↑"}
             </button>
+            </div>
           </div>
           <p className="mdocs-agent-panel-footnote">内容由 AI 生成，仅供参考</p>
         </div>
