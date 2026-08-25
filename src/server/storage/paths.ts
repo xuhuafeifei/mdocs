@@ -1,8 +1,6 @@
 import path from "node:path";
 import { getConfig } from "../config/index.js";
 import { DocPathError, normaliseDocRelativePath as sharedNormaliseDocRelativePath } from "../../shared/docPath.js";
-
-/** 存储路径相关错误，用于包装共享模块抛出的路径异常。 */
 export class StoragePathError extends Error {
   constructor(message: string) {
     super(message);
