@@ -66,11 +66,21 @@ export async function buildGraphByDocId(
     throw new Error(`文档不存在：${docId}`);
   }
 
+  console.log(`[Graph] 开始构建图谱，docId: ${docId}`);
+  console.log(`[Graph] 类型: ${doc.file_type}，路径: ${doc.relative_path}`);
+
   // 根据节点类型组装 TreeNode（graph 核心模块只认 TreeNode）
   const rootNode = buildTreeNodeForDoc(doc, visitorId);
+  console.log(`[Graph] 根节点类型: ${rootNode.type}，名称: ${rootNode.name}`);
+
   const deps = createGraphDeps(agentConfig, doc.domain_id, doc.owner_visitor_id);
 
-  return buildGraph(rootNode, deps);
+  const graph = await buildGraph(rootNode, deps);
+  console.log(`[Graph] 构建完成！节点: ${graph.nodes.length}，边: ${graph.edges.length}`);
+  console.log(`[Graph]   doc 节点: ${graph.nodes.filter(n => n.type === 'doc').length}`);
+  console.log(`[Graph]   concept 节点: ${graph.nodes.filter(n => n.type === 'concept').length}`);
+
+  return graph;
 }
 
 /* ── TreeNode 组装 ── */
@@ -173,13 +183,28 @@ function createGraphDeps(
     // —— AI 能力（基于 tool 方式，结构化输出） ——
 
     /** 从文章中提取 doc 节点 */
-    extractDocNodes: (markdown) => aiExtractDocNodes(markdown, agentConfig),
+    extractDocNodes: async (markdown) => {
+      console.log(`[Graph] AI 提取 doc 节点中...（文章长度: ${markdown.length}）`);
+      const result = await aiExtractDocNodes(markdown, agentConfig);
+      console.log(`[Graph]   → 提取到 ${result.length} 个 doc 节点`);
+      return result;
+    },
 
     /** 从 doc 节点归纳 concept 节点 */
-    induceConceptNodes: (docNodes) => aiInduceConceptNodes(docNodes, agentConfig),
+    induceConceptNodes: async (docNodes) => {
+      console.log(`[Graph] AI 归纳 concept 节点中...（输入 ${docNodes.length} 个顶层 doc 节点）`);
+      const result = await aiInduceConceptNodes(docNodes, agentConfig);
+      console.log(`[Graph]   → 归纳出 ${result.length} 个 concept 节点`);
+      return result;
+    },
 
     /** 生成 contains 关系 */
-    generateContains: (nodes) => aiGenerateContains(nodes, agentConfig),
+    generateContains: async (nodes) => {
+      console.log(`[Graph] AI 生成 contains 关系中...（输入 ${nodes.length} 个节点）`);
+      const result = await aiGenerateContains(nodes, agentConfig);
+      console.log(`[Graph]   → 生成 ${result.length} 条 contains 边`);
+      return result;
+    },
 
     // —— 文档操作 ——
 
