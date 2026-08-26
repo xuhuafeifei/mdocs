@@ -14,10 +14,11 @@ import {
 } from "../agent/Agent/skill-form-pending.js";
 import {
   getVisitorAgentConfig,
-  isAgentModelId,
-  normalizeContextWindow,
+  listVisitorAgentConfigs,
   toPublicAgentConfig,
   upsertVisitorAgentConfig,
+  setVisitorDefaultAgentConfig,
+  deleteVisitorAgentConfig,
 } from "../agent/Config/config.js";
 import {
   createUserSkill,
@@ -59,6 +60,14 @@ export function buildAgentRouter(): Router {
     res.json({ data: getAgentStatus(req.visitor.visitor_id) });
   });
 
+  router.get("/configs", (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    res.json({ data: listVisitorAgentConfigs(req.visitor.visitor_id) });
+  });
+
   router.get("/config", (req, res) => {
     if (!req.visitor) {
       res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
@@ -73,54 +82,77 @@ export function buildAgentRouter(): Router {
       res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
       return;
     }
-
-    const modelId = typeof req.body?.modelId === "string" ? req.body.modelId.trim() : "";
-    if (!isAgentModelId(modelId)) {
-      res.status(400).json({
-        error: {
-          code: "BAD_REQUEST",
-          message: "modelId must be deepseek-v4-flash or deepseek-v4-pro",
-        },
-      });
+    const body = req.body ?? {};
+    if (typeof body.apiKey === "string" && !body.apiKey.trim()) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "apiKey must not be empty" } });
       return;
     }
-
-    if ("apiKey" in (req.body ?? {}) && typeof req.body.apiKey === "string" && !req.body.apiKey.trim()) {
-      res.status(400).json({
-        error: { code: "BAD_REQUEST", message: "apiKey must not be empty" },
-      });
-      return;
-    }
-
-    const name =
-      "name" in (req.body ?? {}) && typeof req.body.name === "string"
-        ? req.body.name
-        : undefined;
-    const apiKey =
-      "apiKey" in (req.body ?? {}) && typeof req.body.apiKey === "string"
-        ? req.body.apiKey
-        : undefined;
-    const contextWindowRaw =
-      "contextWindow" in (req.body ?? {}) ? req.body.contextWindow : undefined;
-    const contextWindow =
-      contextWindowRaw === undefined ? undefined : normalizeContextWindow(contextWindowRaw);
-
     try {
       const saved = upsertVisitorAgentConfig({
         ownerVisitorId: req.visitor.visitor_id,
         visitorName: req.visitor.visitor_name,
-        modelId,
-        name,
-        apiKey,
-        contextWindow,
+        id: typeof body.id === "string" ? body.id : undefined,
+        isDefault: body.isDefault === true ? true : body.isDefault === false ? false : undefined,
+        kind: body.kind,
+        modelId: body.modelId,
+        apiKey: body.apiKey,
+        name: body.name,
+        contextWindow: body.contextWindow,
+        providerId: body.providerId,
+        baseUrl: body.baseUrl,
+        apiType: body.apiType,
       });
       res.json({ data: toPublicAgentConfig(saved) });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg === "api_key_required") {
-        res.status(400).json({
-          error: { code: "BAD_REQUEST", message: "apiKey is required on first save" },
-        });
+      if (msg.endsWith("_required") || msg.startsWith("invalid_") || msg === "config_not_found") {
+        res.status(400).json({ error: { code: "BAD_REQUEST", message: msg } });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.post("/config/:id/default", (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
+    if (!id) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "id is required" } });
+      return;
+    }
+    try {
+      const data = setVisitorDefaultAgentConfig(req.visitor.visitor_id, id);
+      res.json({ data });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "config_not_found") {
+        res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.delete("/config/:id", (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
+    if (!id) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "id is required" } });
+      return;
+    }
+    try {
+      deleteVisitorAgentConfig(req.visitor.visitor_id, id);
+      res.json({ data: { ok: true } });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "config_not_found") {
+        res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
         return;
       }
       throw err;

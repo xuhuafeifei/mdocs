@@ -608,14 +608,25 @@ export function deleteCommentApi(documentId: string, commentId: string): Promise
 // ========== Agent model config ==========
 
 export type AgentModelId = "deepseek-v4-flash" | "deepseek-v4-pro";
+export type AgentConfigKind = "deepseek" | "custom";
+export type AgentApiType = "openai-completions" | "anthropic-messages";
 
 export interface AgentModelConfigPublic {
   id: string;
+  kind: AgentConfigKind;
+  providerId: string | null;
   name: string;
-  modelId: AgentModelId;
+  modelId: string;
+  baseUrl: string;
+  apiType: AgentApiType;
   hasApiKey: boolean;
   apiKeyMasked: string | null;
   contextWindow: number;
+  isDefault: boolean;
+}
+
+export function fetchAgentConfigsApi(): Promise<AgentModelConfigPublic[]> {
+  return api<AgentModelConfigPublic[]>("/api/agent/configs");
 }
 
 export function fetchAgentConfigApi(): Promise<AgentModelConfigPublic | null> {
@@ -623,14 +634,32 @@ export function fetchAgentConfigApi(): Promise<AgentModelConfigPublic | null> {
 }
 
 export function saveAgentConfigApi(input: {
-  modelId: AgentModelId;
+  id?: string;
+  isDefault?: boolean;
+  kind?: AgentConfigKind;
+  modelId?: string;
   name?: string;
   apiKey?: string;
   contextWindow?: number;
+  providerId?: string;
+  baseUrl?: string;
+  apiType?: AgentApiType;
 }): Promise<AgentModelConfigPublic> {
   return api<AgentModelConfigPublic>("/api/agent/config", {
     method: "PUT",
     body: JSON.stringify(input),
+  });
+}
+
+export function setDefaultAgentConfigApi(configId: string): Promise<AgentModelConfigPublic> {
+  return api<AgentModelConfigPublic>(`/api/agent/config/${encodeURIComponent(configId)}/default`, {
+    method: "POST",
+  });
+}
+
+export function deleteAgentConfigApi(configId: string): Promise<{ ok: true }> {
+  return api<{ ok: true }>(`/api/agent/config/${encodeURIComponent(configId)}`, {
+    method: "DELETE",
   });
 }
 

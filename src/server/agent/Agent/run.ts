@@ -5,8 +5,10 @@ import {
   type Model,
 } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import {
   getVisitorAgentConfig,
+  agentProviderLabel,
   type VisitorAgentConfig,
 } from "../Config/config.js";
 import { getSkillLoader } from "../Skill/skill-loader.js";
@@ -48,6 +50,8 @@ export function getAgentStatus(visitorId: string) {
     skillsReady: skills.isReady(),
     model: hasKey ? cfg!.modelId : null,
     configId: hasKey ? cfg!.id : null,
+    kind: hasKey ? cfg!.kind : null,
+    providerId: hasKey ? cfg!.providerId : null,
     reason: !hasKey
       ? "missing_api_key"
       : !skills.isReady()
@@ -89,7 +93,7 @@ export async function runOnboardingChat(params: {
   const skills = getSkillLoader();
   if (!skills.isReady()) throw new Error("skills_missing");
 
-  const { models, model } = createDeepSeekModel(cfg);
+  const { models, model } = createAgentModel(cfg);
   const tools = createToolsForMode(mode, {
     visitorId,
     onEvent,
@@ -176,45 +180,69 @@ export async function runOnboardingChat(params: {
 
 // —— 装配 helpers ——
 
-function createDeepSeekModel(cfg: VisitorAgentConfig) {
-  const model: Model<"openai-completions"> = {
-    id: cfg.modelId,
-    name: cfg.modelId,
-    api: "openai-completions",
-    provider: "deepseek",
-    baseUrl: cfg.endpoint,
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: cfg.contextWindow,
-    maxTokens: 8192,
-    compat: {
-      supportsDeveloperRole: false,
-      supportsReasoningEffort: false,
+function createAgentModel(cfg: VisitorAgentConfig) {
+  const providerId = cfg.providerId ?? `mdocs-${cfg.id.slice(0, 8)}`;
+  const apiKey = cfg.apiKey;
+  const auth = {
+    apiKey: {
+      name: "LLM API key",
+      async resolve() {
+        return { auth: { apiKey }, source: "visitor_config" as const };
+      },
     },
   };
 
-  const apiKey = cfg.apiKey;
   const models = createModels();
-  models.setProvider(
-    createProvider({
-      id: "deepseek",
-      name: "DeepSeek",
-      baseUrl: cfg.endpoint,
-      auth: {
-        apiKey: {
-          name: "DeepSeek API key",
-          async resolve() {
-            return { auth: { apiKey }, source: "visitor_config" };
-          },
-        },
-      },
-      models: [model],
-      api: openAICompletionsApi(),
-    }),
-  );
+  if (cfg.apiType === "anthropic-messages") {
+    const model: Model<"anthropic-messages"> = {
+      id: cfg.modelId,
+      name: cfg.modelId,
+      api: "anthropic-messages",
+      provider: providerId,
+      baseUrl: cfg.baseUrl,
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: cfg.contextWindow,
+      maxTokens: 8192,
+    };
+    models.setProvider(
+      createProvider({
+        id: providerId,
+        name: agentProviderLabel(cfg),
+        baseUrl: cfg.baseUrl,
+        auth,
+        models: [model],
+        api: anthropicMessagesApi(),
+      }),
+    );
+  } else {
+    const model: Model<"openai-completions"> = {
+      id: cfg.modelId,
+      name: cfg.modelId,
+      api: "openai-completions",
+      provider: providerId,
+      baseUrl: cfg.baseUrl,
+      reasoning: true,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: cfg.contextWindow,
+      maxTokens: 8192,
+      compat: cfg.compat ?? undefined,
+    };
+    models.setProvider(
+      createProvider({
+        id: providerId,
+        name: agentProviderLabel(cfg),
+        baseUrl: cfg.baseUrl,
+        auth,
+        models: [model],
+        api: openAICompletionsApi(),
+      }),
+    );
+  }
 
-  const resolved = models.getModel("deepseek", cfg.modelId);
+  const resolved = models.getModel(providerId, cfg.modelId);
   if (!resolved) throw new Error("model_not_found");
   return { models, model: resolved };
 }

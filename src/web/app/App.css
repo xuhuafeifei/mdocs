@@ -622,6 +622,107 @@
   line-height: 1.45;
 }
 
+.mdocs-agent-apikey-inline {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+}
+
+.mdocs-agent-apikey-inline-lead {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #9a3412;
+}
+
+.mdocs-agent-apikey-inline-field {
+  margin-bottom: 10px;
+}
+
+.mdocs-agent-apikey-inline-tabs {
+  margin-bottom: 12px;
+}
+
+.mdocs-agent-apikey-inline-field.mdocs-agent-field span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #9a3412;
+  font-weight: 500;
+}
+
+.mdocs-agent-apikey-inline-field.mdocs-agent-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid #fdba74;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  color: #1f2937;
+}
+
+.mdocs-agent-apikey-inline-field.mdocs-agent-field input:focus {
+  outline: none;
+  border-color: #f97316;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.15);
+}
+
+.mdocs-agent-apikey-inline-protocol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 2px;
+  border-radius: 6px;
+  background: #ffedd5;
+  border: 1px solid #fdba74;
+}
+
+.mdocs-agent-apikey-inline-protocol button {
+  border: none;
+  background: transparent;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #9a3412;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mdocs-agent-apikey-inline-protocol button.active {
+  background: #fff;
+  color: #7c2d12;
+  box-shadow: 0 1px 2px rgba(124, 45, 18, 0.1);
+}
+
+.mdocs-agent-apikey-inline-error {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--mdocs-danger, #c00);
+}
+
+.mdocs-agent-apikey-inline-save {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: #6366f1;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mdocs-agent-apikey-inline-save:hover:not(:disabled) {
+  background: #4f46e5;
+}
+
+.mdocs-agent-apikey-inline-save:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .mdocs-agent-panel-messages {
   display: flex;
   flex-direction: column;
@@ -2013,7 +2114,198 @@
 }
 
 .mdocs-agent-config-panel {
+  width: 100%;
   flex-shrink: 0;
+}
+
+.mdocs-agent-config-card {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.mdocs-agent-config-lead {
+  margin: 0 0 20px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--mdocs-text-muted, #64748b);
+}
+
+.mdocs-agent-config-muted {
+  margin: 0;
+  font-size: 14px;
+  color: var(--mdocs-text-muted, #64748b);
+}
+
+.mdocs-agent-config-ok {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #16a34a;
+}
+
+.mdocs-agent-config-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--mdocs-danger, #dc2626);
+}
+
+.mdocs-agent-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mdocs-agent-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.mdocs-agent-field > span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mdocs-text, #0f172a);
+}
+
+.mdocs-agent-field input,
+.mdocs-agent-field select,
+.mdocs-agent-field .mdocs-mini-select,
+.mdocs-agent-field .mdocs-mini-select-trigger {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.mdocs-agent-field .mdocs-mini-select {
+  display: block;
+}
+
+.mdocs-agent-field .mdocs-mini-select-trigger {
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: inherit;
+  justify-content: space-between;
+  border-radius: var(--mdocs-radius, 6px);
+}
+
+.mdocs-agent-field .mdocs-mini-select-trigger:focus-visible {
+  border-color: var(--mdocs-accent, #3b82f6);
+  box-shadow: 0 0 0 3px var(--mdocs-accent-ring, rgba(59, 130, 246, 0.15));
+  outline: none;
+}
+
+.mdocs-agent-field-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--mdocs-text-muted, #64748b);
+  line-height: 1.45;
+}
+
+.mdocs-agent-kind-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 3px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.mdocs-agent-kind-tabs button {
+  border: none;
+  background: transparent;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.mdocs-agent-kind-tabs button.active {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.mdocs-agent-summary {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.mdocs-agent-summary-row {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+  align-items: baseline;
+}
+
+.mdocs-agent-summary-row:last-child {
+  border-bottom: none;
+}
+
+.mdocs-agent-summary dt {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.mdocs-agent-summary dd {
+  margin: 0;
+  font-size: 14px;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.mdocs-agent-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #6366f1;
+  background: #eef2ff;
+  vertical-align: middle;
+}
+
+.mdocs-agent-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+}
+
+.mdocs-agent-advanced {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 4px;
+}
+
+.mdocs-agent-advanced summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  padding: 8px 0;
+  list-style: none;
+  user-select: none;
+}
+
+.mdocs-agent-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.mdocs-agent-advanced[open] summary {
+  margin-bottom: 12px;
+  color: #0f172a;
+}
+
+.mdocs-agent-advanced .mdocs-agent-field + .mdocs-agent-field {
+  margin-top: 12px;
 }
 
 .mdocs-agent-config-panel + .mdocs-agent-skills-panel {
@@ -2057,29 +2349,30 @@
 
 .mdocs-agent-config-apikey {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
-  margin-top: 6px;
 }
 
 .mdocs-agent-config-apikey input {
   flex: 1;
   min-width: 0;
+  min-height: 38px;
 }
 
 .mdocs-agent-config-eye {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid var(--mdocs-border, #e5e5e5);
-  border-radius: var(--mdocs-radius, 6px);
-  background: var(--mdocs-surface, #fff);
-  color: var(--mdocs-text-muted, #6b7280);
-  cursor: pointer;
+  align-self: stretch;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--mdocs-border, #e2e8f0);
+  border-radius: var(--mdocs-radius, 6px);
+  background: var(--mdocs-surface, #fff);
+  color: var(--mdocs-text-muted, #64748b);
+  cursor: pointer;
+  font-size: 12px;
 }
 
 .mdocs-agent-config-eye:hover {
@@ -2090,6 +2383,81 @@
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.mdocs-agent-config-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mdocs-agent-config-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fafbfc;
+}
+
+.mdocs-agent-config-item-default {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #64748b;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.mdocs-agent-config-item-default input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.mdocs-agent-config-item-main {
+  min-width: 0;
+}
+
+.mdocs-agent-config-item-main strong {
+  display: inline;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.mdocs-agent-config-item-meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.mdocs-agent-config-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mdocs-agent-config-default-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+  user-select: none;
+}
+
+.mdocs-agent-config-default-check input {
+  margin: 0;
 }
 
 /* === Settings cards === */

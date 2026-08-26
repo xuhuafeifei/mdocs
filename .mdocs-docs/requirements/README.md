@@ -6,6 +6,8 @@
 
 | 夹 | 入口 |
 |----|------|
+| [graph-cache-dirty](./graph-cache-dirty/设计契约.md) | **已同意**：图谱 dirty / 缓存 |
+| [agent-provider-config](./agent-provider-config/设计契约.md) | **已同意**：LLM 两条配置线（DeepSeek / 自定义 + providerId） |
 | [user-agent-skills](./user-agent-skills/需求分析.md) | **已同意**：私人用户 skill + 引用展开 |
 | [onboarding-ai](./onboarding-ai/需求分析.md) | **进行中**：上手 Agent（无编写能力） |
 | [bookmarks](./bookmarks/设计契约.md) | 文档收藏 |

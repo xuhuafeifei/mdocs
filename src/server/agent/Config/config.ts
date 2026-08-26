@@ -4,13 +4,19 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { getDb } from "../../db/connection.js";
 import {
-  findAgentModelConfigByOwner,
-  upsertAgentModelConfig,
+  countAgentModelConfigsByOwner,
+  deleteAgentModelConfig,
+  findAgentModelConfigById,
+  findDefaultAgentModelConfigByOwner,
+  insertAgentModelConfig,
+  listAgentModelConfigsByOwner,
+  setDefaultAgentModelConfig,
+  updateAgentModelConfig,
+  type AgentModelConfigRow,
 } from "../../db/repositories/agent-model-config.repo.js";
 
 export const DEEPSEEK_ENDPOINT = "https://api.deepseek.com";
 
-/** 已部署 mdocs-site 文档根（写死）；skill source 去掉 .md 后拼 .html */
 export const MDOCS_SITE_DOCS_BASE =
   "https://xuhuafeifei.github.io/mdocs-site/docs";
 
@@ -27,144 +33,300 @@ export function skillSourceToUrl(source: string | undefined): string | null {
 
 export const AGENT_MODEL_IDS = ["deepseek-v4-flash", "deepseek-v4-pro"] as const;
 export type AgentModelId = (typeof AGENT_MODEL_IDS)[number];
+export type AgentConfigKind = "deepseek" | "custom";
+export type AgentApiType = "openai-completions" | "anthropic-messages";
 
-/** 默认 context window；可在设置页按访客覆盖 */
 export const DEFAULT_AGENT_CONTEXT_WINDOW = 128_000;
 
-export function isAgentModelId(value: string): value is AgentModelId {
-  return (AGENT_MODEL_IDS as readonly string[]).includes(value);
+const DEEPSEEK_PRESET = {
+  baseUrl: DEEPSEEK_ENDPOINT,
+  apiType: "openai-completions" as AgentApiType,
+  compatJson: JSON.stringify({
+    supportsDeveloperRole: false,
+    supportsReasoningEffort: false,
+  }),
+};
+
+export function agentProviderLabel(cfg: Pick<VisitorAgentConfig, "kind" | "providerId" | "name">): string {
+  if (cfg.kind === "deepseek") return "Deepseek";
+  return cfg.providerId ?? cfg.name;
 }
 
-export function normalizeContextWindow(value: unknown, fallback = DEFAULT_AGENT_CONTEXT_WINDOW): number {
+export type AgentCompat = {
+  supportsDeveloperRole?: boolean;
+  supportsReasoningEffort?: boolean;
+};
+
+export type VisitorAgentConfig = {
+  id: string;
+  ownerVisitorId: string;
+  kind: AgentConfigKind;
+  providerId: string | null;
+  name: string;
+  baseUrl: string;
+  apiType: AgentApiType;
+  modelId: string;
+  apiKey: string;
+  contextWindow: number;
+  compat: AgentCompat | null;
+  isDefault: boolean;
+};
+
+export type PublicAgentConfig = Omit<VisitorAgentConfig, "apiKey" | "ownerVisitorId"> & {
+  hasApiKey: boolean;
+  apiKeyMasked: string | null;
+};
+
+export function isAgentModelId(v: string): v is AgentModelId {
+  return (AGENT_MODEL_IDS as readonly string[]).includes(v);
+}
+
+export function normalizeContextWindow(
+  value: unknown,
+  fallback = DEFAULT_AGENT_CONTEXT_WINDOW,
+): number {
   const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   if (!Number.isFinite(n)) return fallback;
   const rounded = Math.floor(n);
   if (rounded < 1000) return fallback;
-  if (rounded > 2_000_000) return 2_000_000;
-  return rounded;
+  return Math.min(rounded, 2_000_000);
 }
 
-export interface VisitorAgentConfig {
-  id: string;
-  ownerVisitorId: string;
-  name: string;
-  provider: "deepseek";
-  modelId: AgentModelId;
-  apiKey: string;
-  endpoint: string;
-  contextWindow: number;
-}
-
-export interface PublicAgentConfig {
-  id: string;
-  name: string;
-  modelId: AgentModelId;
-  hasApiKey: boolean;
-  apiKeyMasked: string | null;
-  contextWindow: number;
-}
-
-/** 空白 name → `{visitorName}的 ds 配置` */
-export function resolveConfigName(name: string | undefined, visitorName: string): string {
-  const trimmed = name?.trim() ?? "";
-  if (trimmed) return trimmed;
-  return `${visitorName}的 ds 配置`;
+function resolveConfigName(name: string | undefined, visitorName: string, kind: AgentConfigKind): string {
+  const t = name?.trim();
+  if (t) return t;
+  return kind === "custom" ? `${visitorName}的自定义配置` : `${visitorName}的 ds 配置`;
 }
 
 export function maskApiKey(apiKey: string): string {
-  if (apiKey.length <= 4) return "…";
-  return `…${apiKey.slice(-4)}`;
+  return apiKey.length <= 4 ? "…" : `…${apiKey.slice(-4)}`;
+}
+
+function parseCompat(raw: string | null): AgentCompat | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AgentCompat;
+  } catch {
+    return null;
+  }
+}
+
+function rowToConfig(row: AgentModelConfigRow): VisitorAgentConfig | null {
+  if (!row.api_key || !row.base_url) return null;
+  return {
+    id: row.id,
+    ownerVisitorId: row.owner_visitor_id,
+    kind: row.kind === "custom" ? "custom" : "deepseek",
+    providerId: row.provider_id,
+    name: row.name,
+    baseUrl: row.base_url,
+    apiType: row.api_type === "anthropic-messages" ? "anthropic-messages" : "openai-completions",
+    modelId: row.model_id,
+    apiKey: row.api_key,
+    contextWindow: normalizeContextWindow(row.context_window),
+    compat: parseCompat(row.compat_json),
+    isDefault: row.is_default === 1,
+  };
 }
 
 export function getVisitorAgentConfig(visitorId: string): VisitorAgentConfig | null {
-  const row = findAgentModelConfigByOwner(getDb(), visitorId);
-  if (!row || !row.api_key || !isAgentModelId(row.model_id)) return null;
-  return {
-    id: row.id,
-    ownerVisitorId: row.owner_visitor_id,
-    name: row.name,
-    provider: "deepseek",
-    modelId: row.model_id,
-    apiKey: row.api_key,
-    endpoint: DEEPSEEK_ENDPOINT,
-    contextWindow: normalizeContextWindow(row.context_window),
-  };
+  const row = findDefaultAgentModelConfigByOwner(getDb(), visitorId);
+  return row ? rowToConfig(row) : null;
+}
+
+export function listVisitorAgentConfigs(visitorId: string): PublicAgentConfig[] {
+  return listAgentModelConfigsByOwner(getDb(), visitorId)
+    .map((row) => rowToConfig(row))
+    .filter((cfg): cfg is VisitorAgentConfig => cfg !== null)
+    .map(toPublicAgentConfig);
 }
 
 export function toPublicAgentConfig(cfg: VisitorAgentConfig): PublicAgentConfig {
+  const { apiKey, ownerVisitorId: _, ...rest } = cfg;
   return {
-    id: cfg.id,
-    name: cfg.name,
-    modelId: cfg.modelId,
-    hasApiKey: Boolean(cfg.apiKey),
-    apiKeyMasked: cfg.apiKey ? maskApiKey(cfg.apiKey) : null,
-    contextWindow: cfg.contextWindow,
+    ...rest,
+    hasApiKey: Boolean(apiKey),
+    apiKeyMasked: apiKey ? maskApiKey(apiKey) : null,
   };
 }
 
-export function upsertVisitorAgentConfig(input: {
+function buildConfigRow(input: {
   ownerVisitorId: string;
   visitorName: string;
-  modelId: AgentModelId;
-  name?: string;
+  id: string;
+  existing: AgentModelConfigRow | null;
+  kind?: string;
+  modelId?: string;
   apiKey?: string;
+  name?: string;
   contextWindow?: number;
-}): VisitorAgentConfig {
-  const existing = findAgentModelConfigByOwner(getDb(), input.ownerVisitorId);
-  const apiKey =
-    input.apiKey !== undefined ? input.apiKey.trim() : (existing?.api_key ?? "");
-  if (!apiKey) {
-    throw new Error("api_key_required");
+  providerId?: string;
+  baseUrl?: string;
+  apiType?: string;
+  isDefault: boolean;
+}): AgentModelConfigRow {
+  const existing = input.existing;
+  let apiKey: string;
+  if (existing) {
+    apiKey =
+      input.apiKey !== undefined && input.apiKey.trim()
+        ? input.apiKey.trim()
+        : existing.api_key;
+  } else {
+    apiKey = input.apiKey?.trim() ?? "";
+    if (!apiKey) throw new Error("api_key_required");
   }
 
-  const nameProvided = input.name !== undefined;
-  const name = nameProvided
-    ? resolveConfigName(input.name, input.visitorName)
-    : existing?.name
-      ? existing.name
-      : resolveConfigName(undefined, input.visitorName);
+  const kind: AgentConfigKind = input.kind === "custom" ? "custom" : "deepseek";
+  const name =
+    input.name !== undefined
+      ? resolveConfigName(input.name, input.visitorName, kind)
+      : existing?.name ?? resolveConfigName(undefined, input.visitorName, kind);
+  const contextWindow = normalizeContextWindow(input.contextWindow ?? existing?.context_window);
+  const updated_at = new Date().toISOString();
 
-  const contextWindow = normalizeContextWindow(
-    input.contextWindow !== undefined
-      ? input.contextWindow
-      : existing?.context_window ?? DEFAULT_AGENT_CONTEXT_WINDOW,
-  );
+  if (kind === "custom") {
+    const baseUrlRaw = (input.baseUrl ?? existing?.base_url ?? "").trim().replace(/\/+$/, "");
+    if (!baseUrlRaw.startsWith("https://")) throw new Error("invalid_base_url");
+    let hostname = "";
+    try {
+      hostname = new URL(baseUrlRaw).hostname;
+    } catch {
+      throw new Error("invalid_base_url");
+    }
+    const providerIdRaw = input.providerId?.trim() ?? existing?.provider_id ?? hostname;
+    const providerId = providerIdRaw || null;
+    if (providerId && !/^[a-z0-9][a-z0-9._-]*$/.test(providerId)) {
+      throw new Error("invalid_provider_id");
+    }
+    const apiType =
+      (input.apiType ?? existing?.api_type) === "anthropic-messages"
+        ? "anthropic-messages"
+        : "openai-completions";
+    const modelId = (input.modelId ?? existing?.model_id ?? "").trim();
+    if (!modelId) throw new Error("model_id_required");
 
-  const row = {
-    id: existing?.id ?? randomUUID(),
+    return {
+      id: input.id,
+      owner_visitor_id: input.ownerVisitorId,
+      name,
+      provider: "custom",
+      kind: "custom",
+      provider_id: providerId,
+      base_url: baseUrlRaw,
+      api_type: apiType,
+      compat_json: null,
+      model_id: modelId,
+      api_key: apiKey,
+      context_window: contextWindow,
+      is_default: input.isDefault ? 1 : 0,
+      updated_at,
+    };
+  }
+
+  const modelId = isAgentModelId(input.modelId ?? existing?.model_id ?? "")
+    ? (input.modelId ?? existing?.model_id)!
+    : "deepseek-v4-flash";
+
+  return {
+    id: input.id,
     owner_visitor_id: input.ownerVisitorId,
     name,
     provider: "deepseek",
-    model_id: input.modelId,
+    kind: "deepseek",
+    provider_id: null,
+    base_url: DEEPSEEK_PRESET.baseUrl,
+    api_type: DEEPSEEK_PRESET.apiType,
+    compat_json: DEEPSEEK_PRESET.compatJson,
+    model_id: modelId,
     api_key: apiKey,
     context_window: contextWindow,
-    updated_at: new Date().toISOString(),
-  };
-  upsertAgentModelConfig(getDb(), row);
-
-  return {
-    id: row.id,
-    ownerVisitorId: row.owner_visitor_id,
-    name: row.name,
-    provider: "deepseek",
-    modelId: input.modelId,
-    apiKey: row.api_key,
-    endpoint: DEEPSEEK_ENDPOINT,
-    contextWindow,
+    is_default: input.isDefault ? 1 : 0,
+    updated_at,
   };
 }
 
-/** 包根下的 agent-skills/，或 MDOCS_AGENT_SKILLS_DIR */
+/** 新建或更新配置；无 id 为新建，有 id 为更新 */
+export function upsertVisitorAgentConfig(input: {
+  ownerVisitorId: string;
+  visitorName: string;
+  id?: string;
+  isDefault?: boolean;
+  kind?: string;
+  modelId?: string;
+  apiKey?: string;
+  name?: string;
+  contextWindow?: number;
+  providerId?: string;
+  baseUrl?: string;
+  apiType?: string;
+}): VisitorAgentConfig {
+  const db = getDb();
+  const existing = input.id
+    ? findAgentModelConfigById(db, input.id, input.ownerVisitorId)
+    : null;
+  if (input.id && !existing) throw new Error("config_not_found");
+
+  const total = countAgentModelConfigsByOwner(db, input.ownerVisitorId);
+  const makeDefault =
+    input.isDefault === true ||
+    (!input.id && total === 0) ||
+    (existing?.is_default === 1 && input.isDefault !== false);
+
+  const row = buildConfigRow({
+    ...input,
+    id: input.id ?? randomUUID(),
+    existing,
+    isDefault: false,
+  });
+
+  if (existing) {
+    row.is_default = makeDefault ? 1 : 0;
+    updateAgentModelConfig(db, row);
+  } else {
+    insertAgentModelConfig(db, row);
+  }
+
+  if (makeDefault) {
+    setDefaultAgentModelConfig(db, input.ownerVisitorId, row.id);
+  }
+
+  return rowToConfig(findAgentModelConfigById(db, row.id, input.ownerVisitorId)!)!;
+}
+
+export function setVisitorDefaultAgentConfig(ownerVisitorId: string, configId: string): PublicAgentConfig {
+  const db = getDb();
+  setDefaultAgentModelConfig(db, ownerVisitorId, configId);
+  const cfg = findAgentModelConfigById(db, configId, ownerVisitorId);
+  if (!cfg) throw new Error("config_not_found");
+  const parsed = rowToConfig(cfg);
+  if (!parsed) throw new Error("config_not_found");
+  return toPublicAgentConfig(parsed);
+}
+
+export function deleteVisitorAgentConfig(ownerVisitorId: string, configId: string): void {
+  const db = getDb();
+  const existing = findAgentModelConfigById(db, configId, ownerVisitorId);
+  if (!existing) throw new Error("config_not_found");
+
+  const wasDefault = existing.is_default === 1;
+  deleteAgentModelConfig(db, configId, ownerVisitorId);
+
+  if (!wasDefault) return;
+
+  const next = listAgentModelConfigsByOwner(db, ownerVisitorId)[0];
+  if (next) {
+    setDefaultAgentModelConfig(db, ownerVisitorId, next.id);
+  }
+}
+
 export function resolveSkillsRoot(): string | null {
   const override = process.env.MDOCS_AGENT_SKILLS_DIR?.trim();
-  if (override) {
-    return fs.existsSync(override) ? path.resolve(override) : null;
-  }
+  if (override) return fs.existsSync(override) ? path.resolve(override) : null;
   let dir = path.dirname(fileURLToPath(import.meta.url));
   for (let i = 0; i < 6; i++) {
-    const pkg = path.join(dir, "package.json");
     const skills = path.join(dir, "agent-skills");
-    if (fs.existsSync(pkg) && fs.existsSync(path.join(skills, "index.json"))) {
+    if (fs.existsSync(path.join(dir, "package.json")) && fs.existsSync(path.join(skills, "index.json"))) {
       return skills;
     }
     const parent = path.dirname(dir);

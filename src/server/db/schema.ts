@@ -171,12 +171,13 @@ const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_comments_visitor ON document_comments (visitor_id)`,
   `CREATE TABLE IF NOT EXISTS agent_model_configs (
     id TEXT PRIMARY KEY,
-    owner_visitor_id TEXT NOT NULL UNIQUE,
+    owner_visitor_id TEXT NOT NULL,
     name TEXT NOT NULL,
     provider TEXT NOT NULL DEFAULT 'deepseek',
     model_id TEXT NOT NULL,
     api_key TEXT NOT NULL,
     context_window INTEGER NOT NULL DEFAULT 128000,
+    is_default INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (owner_visitor_id) REFERENCES visitors(visitor_id) ON DELETE CASCADE
   )`,
@@ -213,6 +214,9 @@ export function applySchema(db: Database.Database): void {
     migrateVisitorsPasswordHash(db);
     migrateVisitorSessions(db);
     migrateAgentModelConfigContextWindow(db);
+    migrateAgentModelConfigProviderFields(db);
+    migrateAgentModelConfigDropDisplayName(db);
+    migrateAgentModelConfigMultiDefault(db);
     ensureDefaultDomain(db);
   });
   tx();
@@ -411,5 +415,120 @@ function migrateAgentModelConfigContextWindow(db: Database.Database): void {
   if (rows.some((r) => r.name === "context_window")) return;
   db.exec(
     `ALTER TABLE agent_model_configs ADD COLUMN context_window INTEGER NOT NULL DEFAULT 128000`,
+  );
+}
+
+const DEEPSEEK_PRESET_COMPAT = JSON.stringify({
+  supportsDeveloperRole: false,
+  supportsReasoningEffort: false,
+});
+
+/** agent_model_configs：提供方扩展列 + 旧行 backfill */
+function migrateAgentModelConfigProviderFields(db: Database.Database): void {
+  const rows = db.prepare(`PRAGMA table_info(agent_model_configs)`).all() as { name: string }[];
+  if (rows.length === 0) return;
+
+  if (!rows.some((r) => r.name === "kind")) {
+    db.exec(`ALTER TABLE agent_model_configs ADD COLUMN kind TEXT NOT NULL DEFAULT 'deepseek'`);
+  }
+  if (!rows.some((r) => r.name === "provider_id")) {
+    db.exec(`ALTER TABLE agent_model_configs ADD COLUMN provider_id TEXT`);
+  }
+  if (!rows.some((r) => r.name === "base_url")) {
+    db.exec(`ALTER TABLE agent_model_configs ADD COLUMN base_url TEXT`);
+  }
+  if (!rows.some((r) => r.name === "api_type")) {
+    db.exec(
+      `ALTER TABLE agent_model_configs ADD COLUMN api_type TEXT NOT NULL DEFAULT 'openai-completions'`,
+    );
+  }
+  if (!rows.some((r) => r.name === "compat_json")) {
+    db.exec(`ALTER TABLE agent_model_configs ADD COLUMN compat_json TEXT`);
+  }
+
+  db.prepare(
+    `UPDATE agent_model_configs SET
+       kind = COALESCE(NULLIF(kind, ''), 'deepseek'),
+       base_url = COALESCE(NULLIF(base_url, ''), 'https://api.deepseek.com'),
+       api_type = COALESCE(NULLIF(api_type, ''), 'openai-completions'),
+       compat_json = COALESCE(compat_json, ?)
+     WHERE base_url IS NULL OR base_url = ''`,
+  ).run(DEEPSEEK_PRESET_COMPAT);
+}
+
+/** 移除 agent_model_configs.display_name（已废弃，展示名由 kind/provider_id/name 推导） */
+function migrateAgentModelConfigDropDisplayName(db: Database.Database): void {
+  const rows = db.prepare(`PRAGMA table_info(agent_model_configs)`).all() as { name: string }[];
+  if (rows.length === 0) return;
+  if (!rows.some((r) => r.name === "display_name")) return;
+  db.exec(`ALTER TABLE agent_model_configs DROP COLUMN display_name`);
+}
+
+/** 一访客多配置：去掉 owner UNIQUE，增加 is_default */
+function migrateAgentModelConfigMultiDefault(db: Database.Database): void {
+  const cols = db.prepare(`PRAGMA table_info(agent_model_configs)`).all() as { name: string }[];
+  if (cols.length === 0) return;
+
+  const hasIsDefault = cols.some((c) => c.name === "is_default");
+  const indexes = db.prepare(`PRAGMA index_list(agent_model_configs)`).all() as {
+    name: string;
+    unique: number;
+  }[];
+  const hasOwnerUnique = indexes.some(
+    (idx) => idx.unique === 1 && idx.name.startsWith("sqlite_autoindex_agent_model_configs"),
+  );
+
+  if (hasIsDefault && !hasOwnerUnique) {
+    db.exec(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_model_configs_owner_default
+       ON agent_model_configs(owner_visitor_id) WHERE is_default = 1`,
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_agent_model_configs_owner
+       ON agent_model_configs(owner_visitor_id)`,
+    );
+    return;
+  }
+
+  db.exec(`CREATE TABLE agent_model_configs_new (
+    id TEXT PRIMARY KEY,
+    owner_visitor_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    provider TEXT NOT NULL DEFAULT 'deepseek',
+    kind TEXT NOT NULL DEFAULT 'deepseek',
+    provider_id TEXT,
+    base_url TEXT,
+    api_type TEXT NOT NULL DEFAULT 'openai-completions',
+    compat_json TEXT,
+    model_id TEXT NOT NULL,
+    api_key TEXT NOT NULL,
+    context_window INTEGER NOT NULL DEFAULT 128000,
+    is_default INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (owner_visitor_id) REFERENCES visitors(visitor_id) ON DELETE CASCADE
+  )`);
+
+  db.exec(`INSERT INTO agent_model_configs_new
+    (id, owner_visitor_id, name, provider, kind, provider_id, base_url, api_type,
+     compat_json, model_id, api_key, context_window, is_default, updated_at)
+    SELECT
+      id, owner_visitor_id, name, provider,
+      COALESCE(kind, 'deepseek'),
+      provider_id, base_url,
+      COALESCE(api_type, 'openai-completions'),
+      compat_json, model_id, api_key,
+      COALESCE(context_window, 128000),
+      1,
+      updated_at
+    FROM agent_model_configs`);
+
+  db.exec(`DROP TABLE agent_model_configs`);
+  db.exec(`ALTER TABLE agent_model_configs_new RENAME TO agent_model_configs`);
+  db.exec(
+    `CREATE UNIQUE INDEX idx_agent_model_configs_owner_default
+     ON agent_model_configs(owner_visitor_id) WHERE is_default = 1`,
+  );
+  db.exec(
+    `CREATE INDEX idx_agent_model_configs_owner ON agent_model_configs(owner_visitor_id)`,
   );
 }
