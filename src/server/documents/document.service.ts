@@ -66,6 +66,13 @@ import type {
 import { getConfig } from "../config/index.js";
 import { markdownToLexicalJson } from "./markdown-to-lexical.js";
 import { extractPlainTextFromLexical } from "./lexical-text.js";
+import {
+  onArticleDeleted,
+  onArticleMoved,
+  onArticlePublished,
+  onFolderDeleted,
+  scheduleGraphLifecycle,
+} from "./graph/lifecycle.js";
 
 // ============================================================
 //  列文档（域内可见列表）
@@ -498,6 +505,14 @@ export function updateDocument(params: {
     }
   });
 
+  scheduleGraphLifecycle(() =>
+    onArticlePublished({
+      domainId: row.domain_id,
+      documentId: row.document_id,
+      parentId: row.parent_id,
+    }),
+  );
+
   // 写后直接返回最新 DocumentDetail（而非要求前端再 GET）：
   // 1) 降低竞争态：避免 PUT 与后续 GET 间隙被他人再次推进 head；
   // 2) 单一真相：以后端实际落库结果为准（权限、head、invite 派生字段等）。
@@ -529,6 +544,11 @@ export function removeDocument(params: {
   if (row.owner_visitor_id !== params.actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可删除此文档", 403);
   }
+  const hook = {
+    domainId: row.domain_id,
+    documentId: row.document_id,
+    parentId: row.parent_id,
+  };
   const now = new Date().toISOString();
   const tx = db.transaction(() => {
     deleteDocument(db, row.document_id);
@@ -545,6 +565,8 @@ export function removeDocument(params: {
   deleteDocumentFile(row.domain_id, row.relative_path);
   // 从全文索引中移除
   removeIndex(row.document_id);
+
+  scheduleGraphLifecycle(() => onArticleDeleted(hook));
 }
 
 // ============================================================
@@ -610,6 +632,7 @@ export function moveDocument(params: {
 
   const now = new Date().toISOString();
   const oldPath = row.relative_path;
+  const oldParentId = currentParent;
   const pathChanged = oldPath !== newRelativePath;
 
   if (pathChanged) {
@@ -663,6 +686,15 @@ export function moveDocument(params: {
       // 定时器会再扫 dirty
     }
   });
+
+  scheduleGraphLifecycle(() =>
+    onArticleMoved({
+      domainId: row.domain_id,
+      documentId: row.document_id,
+      oldParentId,
+      newParentId,
+    }),
+  );
 
   return getDocument(params.documentId, params.actorVisitorId);
 }
@@ -720,6 +752,8 @@ export function removeFolder(params: {
 
   const now = new Date().toISOString();
   const deletedIds: string[] = [];
+  const parentOfFolder = folder.parent_id;
+  const domainId = folder.domain_id;
 
   const tx = db.transaction(() => {
     for (const doc of allToDelete) {
@@ -737,13 +771,21 @@ export function removeFolder(params: {
   });
   tx();
 
-  // 删除磁盘文件和索引（只删 md 文件有内容的，dir 类型不写磁盘）
+  // 磁盘：有文件就删（dir / graph_dir 通常无独立文件，exists 检查后 noop）
   for (const doc of allToDelete) {
-    if (doc.file_type === "md") {
+    try {
       deleteDocumentFile(doc.domain_id, doc.relative_path);
+    } catch {
+      // 盘上可能已不存在
+    }
+    if (doc.file_type === "md") {
       removeIndex(doc.document_id);
     }
   }
+
+  scheduleGraphLifecycle(() =>
+    onFolderDeleted({ domainId, parentId: parentOfFolder }),
+  );
 
   return { deletedCount: allToDelete.length };
 }
@@ -1032,6 +1074,14 @@ function publishMergeDocument(params: {
       // ignore
     }
   });
+
+  scheduleGraphLifecycle(() =>
+    onArticlePublished({
+      domainId: row.domain_id,
+      documentId: row.document_id,
+      parentId: row.parent_id,
+    }),
+  );
 
   // merge 发布同样采用“写后即返回最新资源”：
   // - 避免前端二次查询引入时序偏差；

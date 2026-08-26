@@ -11,13 +11,21 @@
 import { Agent, type AgentTool } from '@earendil-works/pi-agent-core';
 import { createModels, createProvider } from '@earendil-works/pi-ai';
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy';
+import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import type { Model, TSchema } from '@earendil-works/pi-ai';
 import { z } from 'zod';
+
+export type GraphAgentApiType = 'openai-completions' | 'anthropic-messages';
 
 export interface GraphAgentConfig {
   baseUrl: string;
   apiKey: string;
   modelId: string;
+  apiType?: GraphAgentApiType;
+  compat?: {
+    supportsDeveloperRole?: boolean;
+    supportsReasoningEffort?: boolean;
+  };
   /** 模型上下文窗口大小，默认 200k */
   contextWindow?: number;
   /** 最大输出 token，默认 4096 */
@@ -174,39 +182,68 @@ function buildAgentTool<T>(
 // ========== 内部：创建 Agent ==========
 
 function createAgent(config: GraphAgentConfig, tools: AgentTool[] = []): Agent {
-  const model: Model<'anthropic-messages'> = {
-    id: config.modelId,
-    name: config.modelId,
-    api: 'anthropic-messages',
-    provider: 'graph-anthropic',
-    baseUrl: config.baseUrl,
-    input: ['text'],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: config.contextWindow ?? 200000,
-    maxTokens: config.maxTokens ?? 4096,
-    reasoning: false,
+  const providerId = 'graph-llm';
+  const apiType = config.apiType ?? 'anthropic-messages';
+  const auth = {
+    apiKey: {
+      name: 'Graph LLM API key',
+      async resolve() {
+        return { auth: { apiKey: config.apiKey }, source: 'graph_config' as const };
+      },
+    },
   };
 
   const models = createModels();
-  models.setProvider(
-    createProvider({
-      id: 'graph-anthropic',
-      name: 'Graph Anthropic',
+  if (apiType === 'anthropic-messages') {
+    const model: Model<'anthropic-messages'> = {
+      id: config.modelId,
+      name: config.modelId,
+      api: 'anthropic-messages',
+      provider: providerId,
       baseUrl: config.baseUrl,
-      auth: {
-        apiKey: {
-          name: 'Graph Anthropic API key',
-          async resolve() {
-            return { auth: { apiKey: config.apiKey }, source: 'graph_config' };
-          },
-        },
-      },
-      models: [model],
-      api: anthropicMessagesApi(),
-    }),
-  );
+      input: ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: config.contextWindow ?? 200000,
+      maxTokens: config.maxTokens ?? 4096,
+      reasoning: false,
+    };
+    models.setProvider(
+      createProvider({
+        id: providerId,
+        name: 'Graph LLM',
+        baseUrl: config.baseUrl,
+        auth,
+        models: [model],
+        api: anthropicMessagesApi(),
+      }),
+    );
+  } else {
+    const model: Model<'openai-completions'> = {
+      id: config.modelId,
+      name: config.modelId,
+      api: 'openai-completions',
+      provider: providerId,
+      baseUrl: config.baseUrl,
+      input: ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: config.contextWindow ?? 200000,
+      maxTokens: config.maxTokens ?? 4096,
+      reasoning: true,
+      compat: config.compat,
+    };
+    models.setProvider(
+      createProvider({
+        id: providerId,
+        name: 'Graph LLM',
+        baseUrl: config.baseUrl,
+        auth,
+        models: [model],
+        api: openAICompletionsApi(),
+      }),
+    );
+  }
 
-  const resolved = models.getModel('graph-anthropic', config.modelId);
+  const resolved = models.getModel(providerId, config.modelId);
   if (!resolved) {
     throw new Error(`模型 ${config.modelId} 未找到`);
   }

@@ -80,11 +80,33 @@ export interface GraphEdge {
   description?: string;
 }
 
-/** 图谱 = 节点集合 + 边集合 */
+/** 图谱 = 节点集合 + 边集合（构建内存态） */
 export interface Graph {
   nodes: GraphNode[];
   edges: GraphEdge[];
 }
+
+/** 文章级落盘 meta：commitId = 上次成功抽图时的 commit */
+export type ArticleGraphMeta = {
+  commitId: string;
+  dirty: boolean;
+};
+
+/** 目录 / 域落盘 meta */
+export type DirGraphMeta = {
+  dirty: boolean;
+};
+
+/** 落盘完整图文件 */
+export type GraphFile<M extends ArticleGraphMeta | DirGraphMeta = DirGraphMeta> = {
+  version: 1;
+  meta: M;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+};
+
+export type ArticleGraphFile = GraphFile<ArticleGraphMeta>;
+export type DirGraphFile = GraphFile<DirGraphMeta>;
 
 /**
  * LLM 原始输出 —— doc 节点桩。
@@ -162,19 +184,13 @@ export interface GraphDeps {
   /** 获取文档标题 */
   getDocTitle: (documentId: string) => Promise<string>;
 
-  // —— 图谱缓存 ——
-  /** 读取文章级图谱缓存（不存在返回 null） */
-  readArticleCache: (documentId: string) => Promise<{ nodes: DocNode[]; commitId: string } | null>;
-  /** 写入文章级图谱缓存 */
-  writeArticleCache: (documentId: string, nodes: DocNode[], commitId: string) => Promise<void>;
-  /** 读取目录级图谱（不存在返回 null） */
-  readDirGraph: (folderId: string) => Promise<Graph | null>;
-  /** 写入目录级图谱 */
-  writeDirGraph: (folderId: string, graph: Graph) => Promise<void>;
-  /** 读取域级图谱（不存在返回 null） */
-  readDomainGraph: (domainId: string) => Promise<Graph | null>;
-  /** 写入域级图谱 */
-  writeDomainGraph: (domainId: string, graph: Graph) => Promise<void>;
+  // —— 图谱缓存（完整 GraphFile） ——
+  readArticleCache: (documentId: string) => Promise<ArticleGraphFile | null>;
+  writeArticleCache: (documentId: string, file: ArticleGraphFile) => Promise<void>;
+  readDirGraph: (folderId: string) => Promise<DirGraphFile | null>;
+  writeDirGraph: (folderId: string, file: DirGraphFile) => Promise<void>;
+  readDomainGraph: (domainId: string) => Promise<DirGraphFile | null>;
+  writeDomainGraph: (domainId: string, file: DirGraphFile) => Promise<void>;
 }
 
 export { TreeNode };

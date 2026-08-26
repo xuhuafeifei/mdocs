@@ -165,6 +165,8 @@ function createMockDeps(): GraphDeps {
       }));
     },
 
+    induceConceptRelations: async () => [],
+
     // —— 文档操作 ——
 
     readMarkdown: async () => "# 测试文档\n\n这是测试内容。",
@@ -185,6 +187,10 @@ function createMockDeps(): GraphDeps {
     readDirGraph: async () => null,
 
     writeDirGraph: async () => {},
+
+    readDomainGraph: async () => null,
+
+    writeDomainGraph: async () => {},
   };
 }
 
@@ -219,7 +225,7 @@ describe("buildGraph", () => {
     };
 
     const deps = createMockDeps();
-    const graph = await buildGraph(rootNode, deps);
+    const graph = await buildGraph(rootNode, deps, { force: false });
 
     expect(graph.edges).toHaveLength(0);
     expect(graph.nodes.length).toBeGreaterThan(0);
@@ -241,7 +247,7 @@ describe("buildGraph", () => {
     expect(folderNode!.children.length).toBe(2);
 
     const deps = createMockDeps();
-    const graph = await buildGraph(folderNode!, deps);
+    const graph = await buildGraph(folderNode!, deps, { force: false });
 
     // 有 doc 节点
     const docNodes = graph.nodes.filter((n) => n.type === "doc");
@@ -270,7 +276,7 @@ describe("buildGraph", () => {
     expect(parentNode).toBeDefined();
 
     const deps = createMockDeps();
-    const graph = await buildGraph(parentNode!, deps);
+    const graph = await buildGraph(parentNode!, deps, { force: false });
 
     // 父目录图谱里包含子目录的 doc 节点 + 自己归纳的 concept
     const docNodes = graph.nodes.filter((n) => n.type === "doc");

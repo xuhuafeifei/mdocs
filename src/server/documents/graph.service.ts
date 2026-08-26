@@ -17,17 +17,18 @@
 import { getDb } from "../db/connection.js";
 import {
   findDocumentById,
-  findDocumentByPath,
-  insertDocument,
   listDocumentsByDomain,
-  updateDocumentContent,
   type DocumentRow,
 } from "../db/repositories/document.repo.js";
 import { findDomainById } from "../db/repositories/domain.repo.js";
 import { buildFolderSubtree } from "./tree.service.js";
-import { readDocument, writeDocument } from "../storage/file-store.js";
-import { buildGraph, aggregateAndInduce } from "./graph/index.js";
-import type { Graph, GraphDeps, DocNode } from "./graph/types.js";
+import { readDocument } from "../storage/file-store.js";
+import {
+  buildGraph,
+  aggregateAndInduce,
+  type BuildGraphOptions,
+} from "./graph/index.js";
+import type { Graph, GraphDeps } from "./graph/types.js";
 import type { GraphAgentConfig } from "./graph/graph-agent.js";
 import {
   extractDocNodes as aiExtractDocNodes,
@@ -35,58 +36,37 @@ import {
   generateContains as aiGenerateContains,
   induceConceptRelations as aiInduceConceptRelations,
 } from "./graph/llm-chains.js";
-import {
-  ARTICLE_GRAPH_DIRNAME,
-  DIR_GRAPH_FILENAME,
-  GRAPH_FILE_TYPE,
-  articleGraphFileName,
-} from "../../shared/graph-files.js";
-import type { TreeNode, FolderSubtreeNode } from "../../shared/types/tree.js";
 import { FILE_TYPE } from "../../shared/file-types.js";
-import { randomUUID, createHash } from "node:crypto";
+import type { TreeNode, FolderSubtreeNode } from "../../shared/types/tree.js";
+import {
+  getDirGraphPayload,
+  getDomainGraphPayload,
+  readArticleGraphFile,
+  readDirGraphFile,
+  readDomainGraphFile,
+  writeArticleGraphFile,
+  writeDirGraphFile,
+  writeDomainGraphFile,
+} from "./graph-cache-io.js";
 
 /* ── 对外入口 ── */
 
 /**
  * 读取指定目录的图谱缓存（不触发构建）。
- *
- * 如果目录还没有生成过图谱，返回 null。
- *
- * @param folderId 目录的 documentId
- * @returns 图谱数据或 null
  */
 export function getGraphByFolderId(folderId: string): Graph | null {
-  const db = getDb();
-  const folder = findDocumentById(db, folderId);
-  if (!folder) return null;
-
-  const filePath = `${folder.relative_path}/${DIR_GRAPH_FILENAME}`;
-  const graphFile = findDocumentByPath(db, folder.domain_id, filePath);
-  if (!graphFile) return null;
-
-  try {
-    const { content } = readDocument(folder.domain_id, graphFile.relative_path);
-    return JSON.parse(content) as Graph;
-  } catch {
-    return null;
-  }
+  return getDirGraphPayload(folderId);
 }
 
 /**
  * 根据文档 ID 构建知识图谱。
- *
- * - 如果 docId 对应目录 → 自底向上构建整棵子树的图谱
- * - 如果 docId 对应文章 → 只提取该文章的 doc 节点
- *
- * @param docId 文章 ID 或目录的 documentId
- * @param agentConfig Agent 配置（用于调用 AI）
- * @param visitorId 访客 ID（用于权限校验，不传则不过滤）
- * @returns 构建完成的图谱（nodes + edges）
+ * `options.force` 由调用方传入；默认 false，尊重 dirty 缓存。
  */
 export async function buildGraphByDocId(
   docId: string,
   agentConfig: GraphAgentConfig,
   visitorId?: string,
+  options: BuildGraphOptions = {},
 ): Promise<Graph> {
   const db = getDb();
   const doc = findDocumentById(db, docId);
@@ -97,13 +77,12 @@ export async function buildGraphByDocId(
   console.log(`[Graph] 开始构建图谱，docId: ${docId}`);
   console.log(`[Graph] 类型: ${doc.file_type}，路径: ${doc.relative_path}`);
 
-  // 根据节点类型组装 TreeNode（graph 核心模块只认 TreeNode）
   const rootNode = buildTreeNodeForDoc(doc, visitorId);
   console.log(`[Graph] 根节点类型: ${rootNode.type}，名称: ${rootNode.name}`);
 
   const deps = createGraphDeps(agentConfig, doc.domain_id, doc.owner_visitor_id);
 
-  const graph = await buildGraph(rootNode, deps);
+  const graph = await buildGraph(rootNode, deps, options);
   console.log(`[Graph] 构建完成！节点: ${graph.nodes.length}，边: ${graph.edges.length}`);
   console.log(`[Graph]   doc 节点: ${graph.nodes.filter(n => n.type === 'doc').length}`);
   console.log(`[Graph]   concept 节点: ${graph.nodes.filter(n => n.type === 'concept').length}`);
@@ -115,17 +94,7 @@ export async function buildGraphByDocId(
  * 读取域级图谱（不触发构建）。
  */
 export function getDomainGraph(domainId: string): Graph | null {
-  const db = getDb();
-  const graphFileId = `${domainId}.graph-file`;
-  const graphFile = findDocumentById(db, graphFileId);
-  if (!graphFile) return null;
-
-  try {
-    const { content } = readDocument(domainId, graphFile.relative_path);
-    return JSON.parse(content) as Graph;
-  } catch {
-    return null;
-  }
+  return getDomainGraphPayload(domainId);
 }
 
 /**
@@ -140,6 +109,7 @@ export function getDomainGraph(domainId: string): Graph | null {
 export async function buildDomainGraph(
   domainId: string,
   agentConfig: GraphAgentConfig,
+  options: BuildGraphOptions = {},
 ): Promise<Graph> {
   const db = getDb();
   const domain = findDomainById(db, domainId);
@@ -151,7 +121,6 @@ export async function buildDomainGraph(
 
   console.log(`[Graph] 开始构建域级图谱，domainId: ${domainId}`);
 
-  // 1. 查域下所有一级节点（parent_id IS NULL 的文档和目录，排除图谱系统文件）
   const allDocs = listDocumentsByDomain(db, domainId);
   const topLevelDocs = allDocs.filter(
     (d) =>
@@ -162,27 +131,29 @@ export async function buildDomainGraph(
 
   console.log(`[Graph] 一级节点数量: ${topLevelDocs.length}`);
 
-  // 2. 对每个一级节点构建图谱
   const childGraphs: Graph[] = [];
   for (const doc of topLevelDocs) {
     try {
       const node = buildTreeNodeForDoc(doc);
-      const childGraph = await buildGraph(node, deps);
+      const childGraph = await buildGraph(node, deps, options);
       childGraphs.push(childGraph);
     } catch (err) {
       console.warn(`[Graph] 节点构建失败: ${doc.document_id}`, err);
     }
   }
 
-  // 3. 顶层汇总 + 归纳
   const result = await aggregateAndInduce(childGraphs, deps);
 
   console.log(
     `[Graph] 域级图谱构建完成！节点: ${result.nodes.length}，边: ${result.edges.length}`,
   );
 
-  // 4. 写入域级图谱文件
-  await deps.writeDomainGraph(domainId, result);
+  await deps.writeDomainGraph(domainId, {
+    version: 1,
+    meta: { dirty: false },
+    nodes: result.nodes,
+    edges: result.edges,
+  });
 
   return result;
 }
@@ -323,7 +294,6 @@ function createGraphDeps(
     /**
      * 读取文章的内容。
      * 目前文件存的是 Lexical JSON，先做简易纯文本提取。
-     * TODO: 后续接入 lobe headless 做完整的 Lexical → Markdown 转换。
      */
     readMarkdown: async (documentId: string) => {
       const doc = findDocumentById(db, documentId);
@@ -332,284 +302,40 @@ function createGraphDeps(
       return extractTextFromLexical(content);
     },
 
-    /** 获取文章当前的 head commit id，用于增量判断 */
     getCurrentCommitId: async (documentId: string) => {
       const doc = findDocumentById(db, documentId);
       if (!doc) throw new Error(`文档不存在：${documentId}`);
       return doc.head_commit_id ?? "";
     },
 
-    /**
-     * 读取文章级图谱缓存。
-     * 缓存在该文章所在目录的 __graph__/{docId}.graph.json 中。
-     * 不存在或解析失败返回 null。
-     */
-    readArticleCache: async (documentId: string) => {
-      const graphFileId = `${documentId}.graph-file`;
-      const graphFile = findDocumentById(db, graphFileId);
-      if (!graphFile) return null;
+    readArticleCache: async (documentId: string) => readArticleGraphFile(documentId),
 
-      try {
-        const { content } = readDocument(domainId, graphFile.relative_path);
-        const data = JSON.parse(content) as { commitId: string; nodes: DocNode[] };
-        return { nodes: data.nodes, commitId: data.commitId };
-      } catch {
-        return null;
-      }
+    writeArticleCache: async (documentId, file) => {
+      writeArticleGraphFile(documentId, file);
     },
 
-    /**
-     * 写入文章级图谱缓存。
-     * 如果 __graph__ 目录不存在则自动创建。
-     * 文件格式：{ commitId, nodes: DocNode[] }
-     */
-    writeArticleCache: async (documentId: string, nodes: DocNode[], commitId: string) => {
-      const doc = findDocumentById(db, documentId);
-      if (!doc || !doc.parent_id) return;
-
-      const graphDir = ensureGraphDir(db, doc.parent_id, domainId, ownerVisitorId);
-      const fileName = articleGraphFileName(documentId);
-      const filePath = `${graphDir.relative_path}/${fileName}`;
-      const content = JSON.stringify({ commitId, nodes }, null, 2);
-
-      const existing = findDocumentByPath(db, domainId, filePath);
-      if (existing) {
-        updateDocumentContent(db, {
-          documentId: existing.document_id,
-          displayName: fileName,
-          contentHash: contentHash(content),
-          updatedBy: ownerVisitorId,
-          updatedAt: new Date().toISOString(),
-        });
-      } else {
-        createGraphFile(db, {
-          documentId: `${documentId}.graph-file`,
-          domainId,
-          relativePath: filePath,
-          displayName: fileName,
-          parentId: graphDir.document_id,
-          content,
-          ownerVisitorId,
-        });
-      }
-
-      writeDocument(domainId, filePath, content);
-    },
-
-    /** 获取文章标题（display_name，回退到文件名） */
     getDocTitle: async (documentId: string) => {
       const doc = findDocumentById(db, documentId);
       if (!doc) return documentId;
       return doc.display_name || doc.relative_path.split("/").pop() || documentId;
     },
 
-    /**
-     * 读取目录级图谱。
-     * 存储在该目录下的 ___graph___.json 文件中。
-     * 不存在或解析失败返回 null。
-     */
-    readDirGraph: async (folderId: string) => {
-      const graphFileId = `${folderId}.graph-file`;
-      const graphFile = findDocumentById(db, graphFileId);
-      if (!graphFile) return null;
+    readDirGraph: async (folderId: string) => readDirGraphFile(folderId),
 
-      try {
-        const { content } = readDocument(domainId, graphFile.relative_path);
-        return JSON.parse(content) as Graph;
-      } catch {
-        return null;
-      }
+    writeDirGraph: async (folderId, file) => {
+      writeDirGraphFile(folderId, file);
     },
 
-    /**
-     * 写入目录级图谱。
-     * 存储在该目录下的 ___graph___.json 文件中。
-     */
-    writeDirGraph: async (folderId: string, graph: Graph) => {
-      const folder = findDocumentById(db, folderId);
-      if (!folder) return;
+    readDomainGraph: async (id: string) => readDomainGraphFile(id),
 
-      const filePath = `${folder.relative_path}/${DIR_GRAPH_FILENAME}`;
-      const content = JSON.stringify(graph, null, 2);
-
-      const existing = findDocumentByPath(db, domainId, filePath);
-      if (existing) {
-        updateDocumentContent(db, {
-          documentId: existing.document_id,
-          displayName: DIR_GRAPH_FILENAME,
-          contentHash: contentHash(content),
-          updatedBy: ownerVisitorId,
-          updatedAt: new Date().toISOString(),
-        });
-      } else {
-        createGraphFile(db, {
-          documentId: `${folderId}.graph-file`,
-          domainId,
-          relativePath: filePath,
-          displayName: DIR_GRAPH_FILENAME,
-          parentId: folderId,
-          content,
-          ownerVisitorId,
-        });
-      }
-
-      writeDocument(domainId, filePath, content);
-    },
-
-    /**
-     * 读取域级图谱。
-     * 存储在域根路径下的 ___graph___.json 文件中。
-     */
-    readDomainGraph: async (domainId: string) => {
-      const graphFileId = `${domainId}.graph-file`;
-      const graphFile = findDocumentById(db, graphFileId);
-      if (!graphFile) return null;
-
-      try {
-        const { content } = readDocument(domainId, graphFile.relative_path);
-        return JSON.parse(content) as Graph;
-      } catch {
-        return null;
-      }
-    },
-
-    /**
-     * 写入域级图谱。
-     * 存储在域根路径下的 ___graph___.json 文件中。
-     */
-    writeDomainGraph: async (domainId: string, graph: Graph) => {
-      const graphFileId = `${domainId}.graph-file`;
-      const filePath = DIR_GRAPH_FILENAME; // 域根路径下
-      const content = JSON.stringify(graph, null, 2);
-
-      const existing = findDocumentById(db, graphFileId);
-      if (existing) {
-        updateDocumentContent(db, {
-          documentId: graphFileId,
-          displayName: DIR_GRAPH_FILENAME,
-          contentHash: contentHash(content),
-          updatedBy: ownerVisitorId,
-          updatedAt: new Date().toISOString(),
-        });
-      } else {
-        insertDocument(db, {
-          documentId: graphFileId,
-          domainId,
-          relativePath: filePath,
-          displayName: DIR_GRAPH_FILENAME,
-          ownerVisitorId,
-          createdBy: ownerVisitorId,
-          updatedBy: ownerVisitorId,
-          contentHash: contentHash(content),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          permission: 1,
-          fileType: FILE_TYPE.GRAPH_FILE,
-          parentId: null,
-        });
-      }
-
-      writeDocument(domainId, filePath, content);
+    writeDomainGraph: async (id, file) => {
+      writeDomainGraphFile(id, file);
     },
   };
 }
 
-/* ── 图谱文件/目录管理 ── */
-
-/**
- * 查找指定父目录下的 __graph__ 子目录。
- * @returns 目录行，不存在返回 null
- */
-function findGraphDir(
-  db: ReturnType<typeof getDb>,
-  parentId: string,
-  domainId: string,
-): DocumentRow | null {
-  const parent = findDocumentById(db, parentId);
-  if (!parent) return null;
-
-  const graphDirPath = `${parent.relative_path}/${ARTICLE_GRAPH_DIRNAME}`;
-  const found = findDocumentByPath(db, domainId, graphDirPath);
-  return found || null;
-}
-
-/**
- * 确保 __graph__ 目录存在，不存在则创建。
- * @returns 目录行
- */
-function ensureGraphDir(
-  db: ReturnType<typeof getDb>,
-  parentId: string,
-  domainId: string,
-  ownerVisitorId: string,
-): DocumentRow {
-  const existing = findGraphDir(db, parentId, domainId);
-  if (existing) return existing;
-
-  const parent = findDocumentById(db, parentId);
-  if (!parent) throw new Error(`父目录不存在：${parentId}`);
-
-  const now = new Date().toISOString();
-  const dirId = `${parentId}.graph-dir`;
-  const dirPath = `${parent.relative_path}/${ARTICLE_GRAPH_DIRNAME}`;
-
-  insertDocument(db, {
-    documentId: dirId,
-    domainId,
-    relativePath: dirPath,
-    displayName: ARTICLE_GRAPH_DIRNAME,
-    ownerVisitorId,
-    createdBy: ownerVisitorId,
-    updatedBy: ownerVisitorId,
-    contentHash: "",
-    createdAt: now,
-    updatedAt: now,
-    permission: 1,
-    fileType: GRAPH_FILE_TYPE.DIR,
-    parentId,
-  });
-
-  return findDocumentById(db, dirId)!;
-}
-
-/** 创建一个 graph_file 类型的文件（DB + 磁盘） */
-function createGraphFile(
-  db: ReturnType<typeof getDb>,
-  params: {
-    documentId: string;
-    domainId: string;
-    relativePath: string;
-    displayName: string;
-    parentId: string | null;
-    content: string;
-    ownerVisitorId: string;
-  },
-): void {
-  const now = new Date().toISOString();
-  insertDocument(db, {
-    documentId: params.documentId,
-    domainId: params.domainId,
-    relativePath: params.relativePath,
-    displayName: params.displayName,
-    ownerVisitorId: params.ownerVisitorId,
-    createdBy: params.ownerVisitorId,
-    updatedBy: params.ownerVisitorId,
-    contentHash: contentHash(params.content),
-    createdAt: now,
-    updatedAt: now,
-    permission: 1,
-    fileType: GRAPH_FILE_TYPE.FILE,
-    parentId: params.parentId,
-  });
-}
-
-/* ── 工具函数 ── */
-
 /**
  * 简易 Lexical JSON → 纯文本提取。
- *
- * TODO: 后续接入 lobe headless 做完整的 Lexical → Markdown 转换，
- * 让 AI 能看到更丰富的格式信息（标题层级、列表、代码块等）。
  */
 function extractTextFromLexical(jsonStr: string): string {
   try {
@@ -620,7 +346,6 @@ function extractTextFromLexical(jsonStr: string): string {
       if (typeof node?.text === "string") {
         textParts.push(node.text);
       }
-      // 段落和标题之间加换行，保留基本结构
       if (node?.type === "paragraph" || node?.type === "heading") {
         textParts.push("\n");
       }
@@ -638,12 +363,6 @@ function extractTextFromLexical(jsonStr: string): string {
     }
     return textParts.join("").trim();
   } catch {
-    // 解析失败就返回原文，不影响主流程
     return jsonStr;
   }
-}
-
-/** 计算内容哈希（图谱文件用，不需要强一致性，sha1 足够） */
-function contentHash(str: string): string {
-  return createHash("sha1").update(str).digest("hex");
 }

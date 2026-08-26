@@ -21,6 +21,13 @@ import {
 } from "../services/endpoints";
 import "./GraphPage.css";
 
+/** 屏幕像素 → 图坐标；保证放大后线条/箭头在屏幕上仍有最小可见粗细 */
+function screenToWorld(globalScale: number, screenPx: number, minScreenPx?: number): number {
+  const scale = Math.max(globalScale, 0.2);
+  const px = Math.max(minScreenPx ?? screenPx * 0.75, screenPx);
+  return px / scale;
+}
+
 interface GraphPageProps {
   scope: "folder" | "domain";
   resourceId: string; // folderId 或 domainId
@@ -370,18 +377,35 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
               ctx.fillStyle = isConcept ? "#1e1b4b" : "#0c4a6e";
               ctx.fillText(displayText, node.x, textY);
             }}
-            // 箭头与节点同用「屏幕像素」尺度：固定世界长度会在放大后盖过节点
-            linkDirectionalArrowLength={() => {
+            // 线宽/箭头按屏幕像素恒定，并提高基准值便于放大后辨认
+            linkDirectionalArrowLength={(link: any) => {
               const scale = graphRef.current?.zoom?.() ?? 1;
-              return 5 / Math.max(scale, 0.35);
+              const hot =
+                link.source?.id === hoveredNodeId ||
+                link.target?.id === hoveredNodeId ||
+                link.source?.id === selectedNode?.id ||
+                link.target?.id === selectedNode?.id;
+              return screenToWorld(scale, hot ? 13 : 11, 9);
             }}
-            linkDirectionalArrowRelPos={0.88}
-            linkDirectionalArrowColor={() => "#94a3b8"}
-            linkWidth={() => {
+            linkDirectionalArrowRelPos={0.86}
+            linkDirectionalArrowColor={() => "#475569"}
+            linkWidth={(link: any) => {
               const scale = graphRef.current?.zoom?.() ?? 1;
-              return 1.25 / Math.max(scale, 0.35);
+              const hot =
+                link.source?.id === hoveredNodeId ||
+                link.target?.id === hoveredNodeId ||
+                link.source?.id === selectedNode?.id ||
+                link.target?.id === selectedNode?.id;
+              return screenToWorld(scale, hot ? 3.5 : 3, 2.25);
             }}
-            linkColor={() => "#cbd5e1"}
+            linkColor={(link: any) => {
+              const hot =
+                link.source?.id === hoveredNodeId ||
+                link.target?.id === hoveredNodeId ||
+                link.source?.id === selectedNode?.id ||
+                link.target?.id === selectedNode?.id;
+              return hot ? "#334155" : "#64748b";
+            }}
             linkCurvature={(link: any) => link.curvature ?? 0.12}
             linkCanvasObjectMode={() => "after"}
             linkCanvasObject={(
@@ -389,8 +413,8 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
               ctx: CanvasRenderingContext2D,
               globalScale: number,
             ) => {
-              // 标签画在弯曲线上（与 force-graph 二次贝塞尔曲率一致），并沿切线旋转
-              if (globalScale < 0.85) return;
+              // 缩放较小时也显示关系标签，避免放大后只剩细线
+              if (globalScale < 0.45) return;
               const from = link.source as { x?: number; y?: number };
               const to = link.target as { x?: number; y?: number };
               if (
@@ -429,7 +453,7 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
                 angle += Math.PI;
               }
 
-              const fontSize = 9 / globalScale;
+              const fontSize = screenToWorld(globalScale, 11, 9);
               ctx.save();
               ctx.translate(x, y);
               ctx.rotate(angle);
@@ -450,7 +474,10 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
               ctx.fillText(label, 0, 0);
               ctx.restore();
             }}
-            d3VelocityDecay={0.35}
+            onZoom={() => {
+              // 触发重绘，使 linkWidth / 箭头随缩放更新
+              graphRef.current?.refresh?.();
+            }}
             cooldownTicks={200}
             cooldownTime={5000}
             onNodeClick={(node: any) => {
