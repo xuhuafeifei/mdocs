@@ -29,6 +29,7 @@ import {
   type AgentStatus,
 } from "../services/endpoints";
 import { AgentSkillRefPicker } from "./AgentSkillRefPicker";
+import { AgentApiKeyInlineSetup } from "./AgentApiKeyInlineSetup";
 import {
   SkillFormCardBlock,
   type SkillFormCardState,
@@ -571,6 +572,17 @@ export const AgentChatPanel = forwardRef<
     }
   }
 
+  async function refreshAgentStatus() {
+    try {
+      const s = await fetchAgentStatusApi();
+      setStatus(s);
+      setStatusError(null);
+    } catch (err) {
+      setStatus(null);
+      setStatusError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   useEffect(() => {
     if (!open) {
       setHistoryOpen(false);
@@ -715,7 +727,7 @@ export const AgentChatPanel = forwardRef<
     if (!status?.enabled) {
       setStreamError(
         status?.reason === "missing_api_key"
-          ? "请先在设置 → AI 配置 DeepSeek API Key"
+          ? "请先配置 API Key"
           : status?.reason === "skills_missing"
             ? "手册 skills 未就绪，请确认已构建 agent-skills"
             : "助手暂不可用",
@@ -993,14 +1005,13 @@ export const AgentChatPanel = forwardRef<
 
   if (!open) return null;
 
+  const needsApiKey = status?.reason === "missing_api_key";
   const unavailableHint =
     statusError ??
-    (status && !status.enabled
-      ? status.reason === "missing_api_key"
-        ? "未配置 API Key：请打开设置 → AI"
-        : status.reason === "skills_missing"
-          ? "skills 未就绪"
-          : "助手暂不可用"
+    (status && !status.enabled && !needsApiKey
+      ? status.reason === "skills_missing"
+        ? "skills 未就绪"
+        : "助手暂不可用"
       : null);
 
   return (
@@ -1106,7 +1117,9 @@ export const AgentChatPanel = forwardRef<
                 <p className="mdocs-agent-panel-desc">
                   我能答疑、搜文档、整理结构，也能帮你写全文；需要精细改稿请点文档顶栏「帮写」。
                 </p>
-                {unavailableHint ? (
+                {needsApiKey ? (
+                  <AgentApiKeyInlineSetup onConfigured={refreshAgentStatus} />
+                ) : unavailableHint ? (
                   <p className="mdocs-agent-panel-status-warn">{unavailableHint}</p>
                 ) : (
                   <div className="mdocs-agent-panel-chips">
@@ -1371,6 +1384,9 @@ export const AgentChatPanel = forwardRef<
           </div>
           {streamError ? (
             <p className="mdocs-agent-panel-status-warn">{streamError}</p>
+          ) : null}
+          {needsApiKey && messages.length > 0 ? (
+            <AgentApiKeyInlineSetup onConfigured={refreshAgentStatus} />
           ) : null}
           <AgentSkillRefPicker
             selectedNames={selectedSkillNames}

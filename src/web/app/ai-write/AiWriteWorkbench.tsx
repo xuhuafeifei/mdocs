@@ -15,6 +15,7 @@ import {
   type AgentStatus,
 } from "../../services/endpoints";
 import { AgentSkillRefPicker } from "../AgentSkillRefPicker";
+import { AgentApiKeyInlineSetup } from "../AgentApiKeyInlineSetup";
 import {
   SkillFormCardBlock,
   type SkillFormCardState,
@@ -163,6 +164,15 @@ export function AiWriteWorkbench(props: {
     }
   }
 
+  async function refreshAgentStatus() {
+    try {
+      const s = await fetchAgentStatusApi();
+      setStatus(s);
+    } catch {
+      setStatus({ enabled: false, skillsReady: false, model: null });
+    }
+  }
+
   useEffect(() => {
     if (!props.open) {
       setHistoryOpen(false);
@@ -211,6 +221,8 @@ export function AiWriteWorkbench(props: {
 
   if (!props.open) return null;
 
+  const needsApiKey = status?.reason === "missing_api_key";
+
   const pendingHunks =
     proposedMd != null && proposedMd !== currentMd
       ? computeLineHunks(currentMd, proposedMd)
@@ -256,7 +268,7 @@ export function AiWriteWorkbench(props: {
     const text = input.trim();
     if (!text || sending) return;
     if (!status?.enabled) {
-      setError("请先在设置 → AI 配置 API Key");
+      setError("请先配置 API Key");
       return;
     }
     abortRef.current?.abort();
@@ -513,9 +525,14 @@ export function AiWriteWorkbench(props: {
             <>
               <div className="mdocs-ai-write-chat-messages">
                 {messages.length === 0 ? (
-                  <p className="mdocs-ai-write-hint">
-                    描述你想写或改的内容。助手可读取右侧当前稿与进场快照，再更新提案；请按段接受或拒绝后完成写回。
-                  </p>
+                  <>
+                    <p className="mdocs-ai-write-hint">
+                      描述你想写或改的内容。助手可读取右侧当前稿与进场快照，再更新提案；请按段接受或拒绝后完成写回。
+                    </p>
+                    {needsApiKey ? (
+                      <AgentApiKeyInlineSetup onConfigured={refreshAgentStatus} />
+                    ) : null}
+                  </>
                 ) : (
                   messages.map((m) => (
                     <div
@@ -605,6 +622,9 @@ export function AiWriteWorkbench(props: {
                 )}
               </div>
               {error ? <p className="mdocs-ai-write-error">{error}</p> : null}
+              {needsApiKey && messages.length > 0 ? (
+                <AgentApiKeyInlineSetup onConfigured={refreshAgentStatus} />
+              ) : null}
               <div className="mdocs-ai-write-input-row">
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
                   <AgentSkillRefPicker
