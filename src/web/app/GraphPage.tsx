@@ -5,7 +5,7 @@
  * 1. 力导向图可视化（react-force-graph-2d）
  * 2. 点击节点 → 右侧详情面板
  * 3. 右上角「生成/重新生成」按钮
- * 4. 筛选器：显示 doc 节点开关
+ * 4. 筛选器：显示 doc 节点开关（默认关，只看 concept）
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
@@ -33,8 +33,10 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showDocNodes, setShowDocNodes] = useState(true);
+  /** 默认只显示 concept，避免 doc 全开导致线乱成一团 */
+  const [showDocNodes, setShowDocNodes] = useState(false);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const graphRef = useRef<any>(null);
 
   // 加载图谱数据
@@ -104,25 +106,42 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
     };
   }, [graphData, showDocNodes]);
 
-  // 适配 dag 数据格式给 force-graph
+  // 适配 force-graph；同向平行边分配不同曲率，减少重叠
   const graphForRender = useMemo(() => {
     const nodes = displayNodes.map((n) => ({
       id: n.id,
       name: n.label,
       type: n.type,
-      val: n.type === "concept" ? 3 : 1.5, // 节点大小
+      val: n.type === "concept" ? 4 : 2,
       __raw: n,
     }));
-    const links = displayEdges.map((e) => ({
-      source: e.from,
-      target: e.to,
-      type: e.type,
-      __raw: e,
-    }));
+    const pairCount = new Map<string, number>();
+    const links = displayEdges.map((e) => {
+      const key = `${e.from}->${e.to}`;
+      const idx = pairCount.get(key) ?? 0;
+      pairCount.set(key, idx + 1);
+      const bend = idx === 0 ? 0.12 : 0.12 + idx * 0.18;
+      return {
+        source: e.from,
+        target: e.to,
+        type: e.type,
+        curvature: bend,
+        __raw: e,
+      };
+    });
     return { nodes, links };
   }, [displayNodes, displayEdges]);
 
-  // 自适应画布大小
+  // 节点变少时间距可稍紧；多时拉大斥力，少挤成团
+  const forceTuning = useMemo(() => {
+    const n = Math.max(1, displayNodes.length);
+    return {
+      linkDistance: n <= 12 ? 140 : Math.min(220, 100 + n * 4),
+      chargeStrength: n <= 12 ? -450 : Math.max(-1200, -350 - n * 12),
+    };
+  }, [displayNodes.length]);
+
+  // 自适应画布大小（须在引用 dimensions 的 effect 之前声明）
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
@@ -141,6 +160,35 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
     ro.observe(containerRef.current);
     return () => ro.disconnect();
   }, []);
+
+  // 布局稳定后自动 fit，避免飞出视口
+  useEffect(() => {
+    if (!graphData || loading) return;
+    const t = window.setTimeout(() => {
+      graphRef.current?.zoomToFit?.(400, 60);
+    }, 700);
+    return () => window.clearTimeout(t);
+  }, [graphData, showDocNodes, loading, dimensions.width, dimensions.height]);
+
+  // 通过 d3Force 调间距/斥力（库不提供 chargeStrength 等 React props）
+  useEffect(() => {
+    if (!graphData || loading) return;
+    const fg = graphRef.current;
+    if (!fg) return;
+    const charge = fg.d3Force("charge") as
+      | { strength?: (v: number) => unknown }
+      | undefined;
+    charge?.strength?.(forceTuning.chargeStrength);
+    const link = fg.d3Force("link") as
+      | {
+          distance?: (v: number) => unknown;
+          strength?: (v: number) => unknown;
+        }
+      | undefined;
+    link?.distance?.(forceTuning.linkDistance);
+    link?.strength?.(0.25);
+    fg.d3ReheatSimulation?.();
+  }, [forceTuning, graphData, loading, showDocNodes, graphForRender]);
 
   // 找到节点的子节点（用于详情面板）
   const getChildren = (nodeId: string): GraphNode[] => {
@@ -263,58 +311,96 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
             height={dimensions.height}
             graphData={graphForRender}
             nodeId="id"
-            nodeVal={(node: any) => (node.type === "concept" ? 5 : 3)}
+            nodeVal={(node: any) => (node.type === "concept" ? 6 : 3)}
             nodeColor={(node: any) =>
               node.type === "concept" ? "#8b5cf6" : "#06b6d4"
             }
             nodeCanvasObjectMode={() => "replace"}
             nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-              const label = node.name;
+              const label = String(node.name ?? "");
               const isConcept = node.type === "concept";
-              const fontSize = (isConcept ? 13 : 11) / globalScale;
-              const nodeRadius = (isConcept ? 10 : 6) / globalScale;
+              const isHot =
+                node.id === selectedNode?.id || node.id === hoveredNodeId;
+              const nodeRadius = (isConcept ? 9 : 5) / Math.max(globalScale, 0.35);
 
-              // 节点圆
               ctx.beginPath();
               ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI);
               ctx.fillStyle = isConcept ? "#8b5cf6" : "#06b6d4";
+              ctx.globalAlpha = isHot || !selectedNode ? 1 : 0.35;
               ctx.fill();
               ctx.strokeStyle = "#ffffff";
-              ctx.lineWidth = 2 / globalScale;
+              ctx.lineWidth = 1.5 / Math.max(globalScale, 0.35);
               ctx.stroke();
+              ctx.globalAlpha = 1;
 
-              // 节点标签
+              // 小缩放：只画 concept 短标题；doc 仅悬停/选中时出字
+              const showLabel =
+                isHot ||
+                (isConcept && globalScale >= 0.55) ||
+                (!isConcept && globalScale >= 1.4);
+              if (!showLabel) return;
+
+              const fontSize = Math.max(
+                10 / globalScale,
+                isConcept ? 11 / globalScale : 9 / globalScale,
+              );
+              const maxChars = isConcept
+                ? globalScale < 0.9
+                  ? 8
+                  : 16
+                : 10;
+              const displayText =
+                label.length > maxChars ? label.slice(0, maxChars) + "…" : label;
+
               ctx.font = `${isConcept ? "600" : "400"} ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
               ctx.textAlign = "center";
               ctx.textBaseline = "top";
-              ctx.fillStyle = isConcept ? "#1e1b4b" : "#0c4a6e";
 
-              const textPadding = 2 / globalScale;
-              if (isConcept) {
-                // concept 节点：显示完整名称
-                ctx.fillText(label, node.x, node.y + nodeRadius + textPadding);
-              } else {
-                // doc 节点：显示前 10 个字
-                const displayText = label.length > 10 ? label.slice(0, 10) + "…" : label;
-                ctx.fillText(displayText, node.x, node.y + nodeRadius + textPadding);
-              }
+              const textY = node.y + nodeRadius + 3 / globalScale;
+              const tw = ctx.measureText(displayText).width;
+              const padX = 4 / globalScale;
+              const padY = 2 / globalScale;
+              ctx.fillStyle = "rgba(255,255,255,0.88)";
+              ctx.fillRect(
+                node.x - tw / 2 - padX,
+                textY - padY,
+                tw + padX * 2,
+                fontSize + padY * 2,
+              );
+              ctx.fillStyle = isConcept ? "#1e1b4b" : "#0c4a6e";
+              ctx.fillText(displayText, node.x, textY);
             }}
-            linkDirectionalArrowLength={5}
-            linkDirectionalArrowRelPos={1}
-            linkDirectionalArrowColor={"#64748b"}
-            linkWidth={1.5}
-            linkColor={() => "#94a3b8"}
-            linkCurvature={0.05}
+            // 箭头与节点同用「屏幕像素」尺度：固定世界长度会在放大后盖过节点
+            linkDirectionalArrowLength={() => {
+              const scale = graphRef.current?.zoom?.() ?? 1;
+              return 5 / Math.max(scale, 0.35);
+            }}
+            linkDirectionalArrowRelPos={0.88}
+            linkDirectionalArrowColor={() => "#94a3b8"}
+            linkWidth={() => {
+              const scale = graphRef.current?.zoom?.() ?? 1;
+              return 1.25 / Math.max(scale, 0.35);
+            }}
+            linkColor={() => "#cbd5e1"}
+            linkCurvature={(link: any) => link.curvature ?? 0.12}
             linkCanvasObjectMode={() => "after"}
             linkCanvasObject={(
               link: any,
               ctx: CanvasRenderingContext2D,
               globalScale: number,
             ) => {
-              const from = link.source as { x: number; y: number };
-              const to = link.target as { x: number; y: number };
-              const midX = (from.x + to.x) / 2;
-              const midY = (from.y + to.y) / 2;
+              // 标签画在弯曲线上（与 force-graph 二次贝塞尔曲率一致），并沿切线旋转
+              if (globalScale < 0.85) return;
+              const from = link.source as { x?: number; y?: number };
+              const to = link.target as { x?: number; y?: number };
+              if (
+                from.x == null ||
+                from.y == null ||
+                to.x == null ||
+                to.y == null
+              ) {
+                return;
+              }
 
               const typeMap: Record<string, string> = {
                 contains: "包含",
@@ -322,41 +408,75 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
                 part_of: "属于",
                 depends_on: "依赖",
               };
-              const label = typeMap[link.type] || link.type;
+              const label = typeMap[link.type] || String(link.type ?? "");
+              const curvature =
+                typeof link.curvature === "number" ? link.curvature : 0.12;
 
-              const fontSize = 10 / globalScale;
-              ctx.font = `${fontSize}px sans-serif`;
+              const mx = (from.x + to.x) / 2;
+              const my = (from.y + to.y) / 2;
+              const cpx = mx - (to.y - from.y) * curvature;
+              const cpy = my + (to.x - from.x) * curvature;
+
+              const t = 0.5;
+              const u = 1 - t;
+              const x = u * u * from.x + 2 * u * t * cpx + t * t * to.x;
+              const y = u * u * from.y + 2 * u * t * cpy + t * t * to.y;
+
+              const dx = 2 * u * (cpx - from.x) + 2 * t * (to.x - cpx);
+              const dy = 2 * u * (cpy - from.y) + 2 * t * (to.y - cpy);
+              let angle = Math.atan2(dy, dx);
+              if (angle > Math.PI / 2 || angle < -Math.PI / 2) {
+                angle += Math.PI;
+              }
+
+              const fontSize = 9 / globalScale;
+              ctx.save();
+              ctx.translate(x, y);
+              ctx.rotate(angle);
+              ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
               ctx.textAlign = "center";
               ctx.textBaseline = "middle";
-
-              // 白色背景框，避免文字和线重叠
               const textWidth = ctx.measureText(label).width;
-              const padding = 3 / globalScale;
-              ctx.fillStyle = "#ffffff";
+              const padX = 3 / globalScale;
+              const padY = 1.5 / globalScale;
+              ctx.fillStyle = "rgba(255,255,255,0.92)";
               ctx.fillRect(
-                midX - textWidth / 2 - padding,
-                midY - fontSize / 2 - padding / 2,
-                textWidth + padding * 2,
-                fontSize + padding,
+                -textWidth / 2 - padX,
+                -fontSize / 2 - padY,
+                textWidth + padX * 2,
+                fontSize + padY * 2,
               );
-
               ctx.fillStyle = "#475569";
-              ctx.fillText(label, midX, midY);
+              ctx.fillText(label, 0, 0);
+              ctx.restore();
             }}
-            linkDistance={180}
-            linkStrength={0.4}
-            chargeStrength={-400}
-            cooldownTicks={300}
-            cooldownTime={8000}
+            d3VelocityDecay={0.35}
+            cooldownTicks={200}
+            cooldownTime={5000}
             onNodeClick={(node: any) => {
               setSelectedNode(node.__raw as GraphNode);
             }}
-            linkHoverPrecision={6}
+            onNodeHover={(node: any) => {
+              setHoveredNodeId(node ? String(node.id) : null);
+            }}
+            onBackgroundClick={() => {
+              setSelectedNode(null);
+              setHoveredNodeId(null);
+            }}
+            onEngineStop={() => {
+              graphRef.current?.zoomToFit?.(300, 48);
+            }}
+            linkHoverPrecision={8}
             enableNodeDrag={true}
             enableZoomInteraction={true}
             enablePanInteraction={true}
-            nodePointerAreaPaint={(node: any, color: string, ctx: CanvasRenderingContext2D, globalScale: number) => {
-              const radius = (node.type === "concept" ? 12 : 8) / globalScale;
+            nodePointerAreaPaint={(
+              node: any,
+              color: string,
+              ctx: CanvasRenderingContext2D,
+              globalScale: number,
+            ) => {
+              const radius = (node.type === "concept" ? 14 : 9) / Math.max(globalScale, 0.35);
               ctx.fillStyle = color;
               ctx.beginPath();
               ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
@@ -376,10 +496,12 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
               {selectedNode.type === "concept" ? "概念" : "知识要点"}
             </span>
             <button
+              type="button"
               className="graph-close-btn"
+              aria-label="关闭"
               onClick={() => setSelectedNode(null)}
             >
-              <X size={16} />
+              <X size={18} strokeWidth={2.25} />
             </button>
           </div>
 
