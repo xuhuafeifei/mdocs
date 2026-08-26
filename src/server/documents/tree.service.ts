@@ -21,7 +21,11 @@ export type { FolderSubtreeNode };
 /**
  * 构建指定域的文档目录树。
  */
-export function buildDocumentTree(domainId?: string, visitorId?: string | null): TreeNode[] {
+export function buildDocumentTree(
+  domainId?: string,
+  visitorId?: string | null,
+  options?: { includeTypes?: string[] },
+): TreeNode[] {
   const cfg = getConfig();
   const effective = domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
@@ -38,7 +42,12 @@ export function buildDocumentTree(domainId?: string, visitorId?: string | null):
 
   const rows = listDocumentsByDomain(db, effective);
   const filtered = rows.filter((r) => canReadDocument(r, visitorId ?? null, domainInfo));
-  return buildTreeFromRows(filtered, visitorId ?? null);
+
+  const typedRows = options?.includeTypes
+    ? filtered.filter((r) => options.includeTypes!.includes(r.file_type))
+    : filtered;
+
+  return buildTreeFromRows(typedRows, visitorId ?? null);
 }
 
 /**
@@ -50,6 +59,7 @@ export function buildDocumentTree(domainId?: string, visitorId?: string | null):
 export function buildFolderSubtree(
   folderId: string,
   visitorId?: string | null,
+  options?: { includeTypes?: string[] },
 ): FolderSubtreeNode[] {
   const db = getDb();
   const folder = findDocumentById(db, folderId);
@@ -78,7 +88,12 @@ export function buildFolderSubtree(
   const filtered = descendantRows.filter((r) =>
     canReadDocument(r, visitorId ?? null, domainInfo),
   );
-  const full = buildTreeFromRows(filtered, visitorId ?? null);
+
+  const typedRows = options?.includeTypes
+    ? filtered.filter((r) => options.includeTypes!.includes(r.file_type))
+    : filtered;
+
+  const full = buildTreeFromRows(typedRows, visitorId ?? null);
   return projectSubtree(full);
 }
 
@@ -173,9 +188,9 @@ function buildTreeFromRows(rows: DocumentRow[], visitorId: string | null): TreeN
     }
   }
 
-  // 第三步：处理 md 类型
+  // 第三步：处理 md 和 folder_desc 类型
   for (const row of rows) {
-    if (row.file_type !== "md") continue;
+    if (row.file_type !== "md" && row.file_type !== "folder_desc") continue;
     const leafName = row.relative_path.split("/").pop()!;
 
     if (leafName.toLowerCase() === FOLDER_DESC_FILENAME.toLowerCase()) {

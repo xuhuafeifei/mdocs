@@ -90,7 +90,7 @@ export function listTreeTool({ visitorId }: ToolDeps): AgentTool {
     }),
     execute: async (_id, params) => {
       const domainId = (params as { domainId?: string }).domainId?.trim() || undefined;
-      const items = flattenTree(buildDocumentTree(domainId, visitorId), 80);
+      const items = flattenTree(buildDocumentTree(domainId, visitorId, { includeTypes: ["dir", "md", "folder_desc"] }), 80);
       return asToolResult({
         domainId: domainId ?? null,
         truncated: items.length >= 80,

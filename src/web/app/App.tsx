@@ -45,6 +45,7 @@ import {
 import { VisitorRegisterDialog } from "./VisitorRegisterDialog";
 import { VisitorIdNotice } from "./VisitorIdNotice";
 import { DocumentTree, type TreeContextMenu as TreeContextMenuPayload } from "./DocumentTree";
+import { GraphPage } from "./GraphPage";
 import { TreeContextMenu } from "./TreeContextMenu";
 import { DomainSelect } from "./DomainSelect";
 import { AgentFab, agentPanelAnchorStyle, useAgentFabPosition } from "./AgentFab";
@@ -215,6 +216,11 @@ export function App() {
     content: string;
     displayName: string;
   } | null>(null);
+
+  // ---- 知识图谱视图 ----
+  const [graphScope, setGraphScope] = useState<"folder" | "domain" | null>(null);
+  const [graphResourceId, setGraphResourceId] = useState<string | null>(null);
+  const [graphName, setGraphName] = useState<string | null>(null);
   /** Keep latest editor payload for publish finalize (avoid stale closure). */
   const editorContentRef = useRef(editorContent);
   editorContentRef.current = editorContent;
@@ -654,6 +660,24 @@ export function App() {
   /**
    * 打开文档：GET 写入 activeDocMeta；正文互斥来自草稿或 GET。
    */
+  // ---- 知识图谱 ----
+  function openGraph(
+    resourceId: string,
+    name: string,
+    scope: "folder" | "domain" = "folder",
+  ): void {
+    console.log("[openGraph]", scope, resourceId, name);
+    setGraphScope(scope);
+    setGraphResourceId(resourceId);
+    setGraphName(name);
+  }
+
+  function closeGraph(): void {
+    setGraphScope(null);
+    setGraphResourceId(null);
+    setGraphName(null);
+  }
+
   async function openDocument(docId: string): Promise<void> {
     expectedDocIdRef.current = docId;
     try {
@@ -1307,6 +1331,9 @@ export function App() {
               <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip={t("newFolder")} onClick={() => openNewFolderModal()}>
                 <Folder size={20} />
               </span>
+              <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip="知识图谱" onClick={() => openGraph(currentDomainId, "知识图谱", "domain")} style={{ marginLeft: 8 }}>
+                🕸️
+              </span>
             </div>
 
             {/* 文档树：递归渲染文件夹和文档 */}
@@ -1316,6 +1343,7 @@ export function App() {
               selectedParentPath={selectedCreateParentPath}
               // 点击文档节点：先保存草稿再导航到文档
               onOpen={(node) => {
+                closeGraph();
                 if (isNarrow) setMobileNavOpen(false);
                 guardNavigate(() => navigate(`/doc/${node.documentId}`));
               }}
@@ -1324,6 +1352,7 @@ export function App() {
                 guardNavigate(() => {
                   setSelectedCreateParentPath(folderPath);
                   if (descDocumentId) {
+                    closeGraph();
                     if (isNarrow) setMobileNavOpen(false);
                     navigate(`/doc/${descDocumentId}`);
                   }
@@ -1334,10 +1363,41 @@ export function App() {
               onMoveDocument={handleMoveDocument}
               // 点击空白处取消选中，返回首页
               onDeselect={() => {
+                closeGraph();
                 guardNavigate(() => {
                   setSelectedCreateParentPath("");
                   navigate("/");
                 });
+              }}
+              // 知识图谱
+              onOpenGraph={(node, parentFolderId) => {
+                if (node.type === "folder") {
+                  openGraph(node.documentId, node.name);
+                } else {
+                  // 文件 → 打开父目录的图谱
+                  if (parentFolderId) {
+                    // 通过 parentFolderId 找父目录名称有点麻烦，先直接打开
+                    // TODO: 传父目录名称，并且定位到该文件相关节点
+                    const parent = tree.find(n => n.documentId === parentFolderId) as
+                      | Extract<TreeNode, { type: "folder" }>
+                      | undefined;
+                    openGraph(parentFolderId, parent?.name ?? "图谱");
+                  }
+                }
+              }}
+              onGenerateGraph={async (node, parentFolderId) => {
+                const folderId =
+                  node.type === "folder" ? node.documentId : parentFolderId;
+                if (!folderId) return;
+
+                const folderName =
+                  node.type === "folder"
+                    ? node.name
+                    : (tree.find((n) => n.documentId === parentFolderId) as any)?.name ??
+                      "图谱";
+
+                // 直接打开图谱页，用户可以在里面点生成按钮
+                openGraph(folderId, folderName);
               }}
             />
 
@@ -1400,7 +1460,18 @@ export function App() {
 
           {/* ========== 主内容区 ========== */}
           <main className="mdocs-main">
-            {activeDocMeta && editorContent && editorContent.documentId === activeDocMeta.documentId ? (
+            {graphScope && graphResourceId && graphName ? (
+              <GraphPage
+                key={`${graphScope}-${graphResourceId}`}
+                scope={graphScope}
+                resourceId={graphResourceId}
+                name={graphName}
+                onOpenDocument={(docId) => {
+                  closeGraph();
+                  void openDocument(docId);
+                }}
+              />
+            ) : activeDocMeta && editorContent && editorContent.documentId === activeDocMeta.documentId ? (
               <div className="mdocs-editor-with-comments">
                 {/* 编辑器区域 */}
                 <div className="mdocs-editor-container">

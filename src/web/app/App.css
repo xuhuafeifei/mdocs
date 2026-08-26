@@ -4183,3 +4183,33 @@ strong.label {
     display: none;
   }
 }
+
+/* ===== 目录树 hover 操作按钮 ===== */
+.mdocs-tree-hover-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding-right: 4px;
+}
+
+.mdocs-tree-icon-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.mdocs-tree-icon-btn:hover {
+  opacity: 1;
+  background: var(--mdocs-hover-bg, #f0f0f0);
+}

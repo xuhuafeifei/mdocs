@@ -82,7 +82,8 @@ function spanStyleFromOpenTag(htmlOpenTag: string): string {
 function htmlTagName(htmlValue: string): string {
   const inner = htmlValue.replace(/^<\/?/, "").replace(/\/?>$/, "").trim();
   const match = /^([A-Za-z][\w-]*)/.exec(inner);
-  return match ? match[1].toLowerCase() : "";
+  if (!match) return "";
+  return match![1]!.toLowerCase();
 }
 
 function markFromHtmlOpen(htmlValue: string): InlineMark | null {

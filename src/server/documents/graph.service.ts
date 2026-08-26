@@ -19,18 +19,21 @@ import {
   findDocumentById,
   findDocumentByPath,
   insertDocument,
+  listDocumentsByDomain,
   updateDocumentContent,
   type DocumentRow,
 } from "../db/repositories/document.repo.js";
+import { findDomainById } from "../db/repositories/domain.repo.js";
 import { buildFolderSubtree } from "./tree.service.js";
 import { readDocument, writeDocument } from "../storage/file-store.js";
-import { buildGraph } from "./graph/index.js";
+import { buildGraph, aggregateAndInduce } from "./graph/index.js";
 import type { Graph, GraphDeps, DocNode } from "./graph/types.js";
 import type { GraphAgentConfig } from "./graph/graph-agent.js";
 import {
   extractDocNodes as aiExtractDocNodes,
   induceConceptNodes as aiInduceConceptNodes,
   generateContains as aiGenerateContains,
+  induceConceptRelations as aiInduceConceptRelations,
 } from "./graph/llm-chains.js";
 import {
   ARTICLE_GRAPH_DIRNAME,
@@ -43,6 +46,31 @@ import { FILE_TYPE } from "../../shared/file-types.js";
 import { randomUUID, createHash } from "node:crypto";
 
 /* ── 对外入口 ── */
+
+/**
+ * 读取指定目录的图谱缓存（不触发构建）。
+ *
+ * 如果目录还没有生成过图谱，返回 null。
+ *
+ * @param folderId 目录的 documentId
+ * @returns 图谱数据或 null
+ */
+export function getGraphByFolderId(folderId: string): Graph | null {
+  const db = getDb();
+  const folder = findDocumentById(db, folderId);
+  if (!folder) return null;
+
+  const filePath = `${folder.relative_path}/${DIR_GRAPH_FILENAME}`;
+  const graphFile = findDocumentByPath(db, folder.domain_id, filePath);
+  if (!graphFile) return null;
+
+  try {
+    const { content } = readDocument(folder.domain_id, graphFile.relative_path);
+    return JSON.parse(content) as Graph;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 根据文档 ID 构建知识图谱。
@@ -83,6 +111,82 @@ export async function buildGraphByDocId(
   return graph;
 }
 
+/**
+ * 读取域级图谱（不触发构建）。
+ */
+export function getDomainGraph(domainId: string): Graph | null {
+  const db = getDb();
+  const graphFileId = `${domainId}.graph-file`;
+  const graphFile = findDocumentById(db, graphFileId);
+  if (!graphFile) return null;
+
+  try {
+    const { content } = readDocument(domainId, graphFile.relative_path);
+    return JSON.parse(content) as Graph;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 构建域级知识图谱。
+ *
+ * 流程：
+ * 1. 查域下所有一级节点（parent_id IS NULL）
+ * 2. 每个一级节点调用 buildGraph（自底向上构建）
+ * 3. 调用 aggregateAndInduce 在顶层进行归纳
+ * 4. 写入域级图谱文件
+ */
+export async function buildDomainGraph(
+  domainId: string,
+  agentConfig: GraphAgentConfig,
+): Promise<Graph> {
+  const db = getDb();
+  const domain = findDomainById(db, domainId);
+  if (!domain) {
+    throw new Error(`域不存在：${domainId}`);
+  }
+  const ownerVisitorId = domain.creator_visitor_id;
+  const deps = createGraphDeps(agentConfig, domainId, ownerVisitorId);
+
+  console.log(`[Graph] 开始构建域级图谱，domainId: ${domainId}`);
+
+  // 1. 查域下所有一级节点（parent_id IS NULL 的文档和目录，排除图谱系统文件）
+  const allDocs = listDocumentsByDomain(db, domainId);
+  const topLevelDocs = allDocs.filter(
+    (d) =>
+      !d.parent_id &&
+      d.file_type !== FILE_TYPE.GRAPH_FILE &&
+      d.file_type !== FILE_TYPE.GRAPH_DIR,
+  );
+
+  console.log(`[Graph] 一级节点数量: ${topLevelDocs.length}`);
+
+  // 2. 对每个一级节点构建图谱
+  const childGraphs: Graph[] = [];
+  for (const doc of topLevelDocs) {
+    try {
+      const node = buildTreeNodeForDoc(doc);
+      const childGraph = await buildGraph(node, deps);
+      childGraphs.push(childGraph);
+    } catch (err) {
+      console.warn(`[Graph] 节点构建失败: ${doc.document_id}`, err);
+    }
+  }
+
+  // 3. 顶层汇总 + 归纳
+  const result = await aggregateAndInduce(childGraphs, deps);
+
+  console.log(
+    `[Graph] 域级图谱构建完成！节点: ${result.nodes.length}，边: ${result.edges.length}`,
+  );
+
+  // 4. 写入域级图谱文件
+  await deps.writeDomainGraph(domainId, result);
+
+  return result;
+}
+
 /* ── TreeNode 组装 ── */
 
 /**
@@ -110,7 +214,7 @@ function buildTreeNodeForDoc(doc: DocumentRow, visitorId?: string): TreeNode {
   }
 
   if (folderDoc.file_type === FILE_TYPE.FOLDER) {
-    const subtree = buildFolderSubtree(folderDoc.document_id, visitorId);
+    const subtree = buildFolderSubtree(folderDoc.document_id, visitorId, { includeTypes: ["dir", "md", "folder_desc"] });
     return {
       type: "folder",
       name: folderDoc.display_name || folderDoc.relative_path.split("/").pop() || folderDoc.document_id,
@@ -198,6 +302,14 @@ function createGraphDeps(
       return result;
     },
 
+    /** 归纳 concept 节点之间的关系 */
+    induceConceptRelations: async (concepts) => {
+      console.log(`[Graph] AI 生成 concept 关系中...（输入 ${concepts.length} 个 concept 节点）`);
+      const result = await aiInduceConceptRelations(concepts, agentConfig);
+      console.log(`[Graph]   → 生成 ${result.length} 条 concept 关系`);
+      return result;
+    },
+
     /** 生成 contains 关系 */
     generateContains: async (nodes) => {
       console.log(`[Graph] AI 生成 contains 关系中...（输入 ${nodes.length} 个节点）`);
@@ -233,15 +345,8 @@ function createGraphDeps(
      * 不存在或解析失败返回 null。
      */
     readArticleCache: async (documentId: string) => {
-      const doc = findDocumentById(db, documentId);
-      if (!doc || !doc.parent_id) return null;
-
-      const graphDir = findGraphDir(db, doc.parent_id, domainId);
-      if (!graphDir) return null;
-
-      const fileName = articleGraphFileName(documentId);
-      const filePath = `${graphDir.relative_path}/${fileName}`;
-      const graphFile = findDocumentByPath(db, domainId, filePath);
+      const graphFileId = `${documentId}.graph-file`;
+      const graphFile = findDocumentById(db, graphFileId);
       if (!graphFile) return null;
 
       try {
@@ -278,6 +383,7 @@ function createGraphDeps(
         });
       } else {
         createGraphFile(db, {
+          documentId: `${documentId}.graph-file`,
           domainId,
           relativePath: filePath,
           displayName: fileName,
@@ -303,11 +409,8 @@ function createGraphDeps(
      * 不存在或解析失败返回 null。
      */
     readDirGraph: async (folderId: string) => {
-      const folder = findDocumentById(db, folderId);
-      if (!folder) return null;
-
-      const filePath = `${folder.relative_path}/${DIR_GRAPH_FILENAME}`;
-      const graphFile = findDocumentByPath(db, domainId, filePath);
+      const graphFileId = `${folderId}.graph-file`;
+      const graphFile = findDocumentById(db, graphFileId);
       if (!graphFile) return null;
 
       try {
@@ -340,12 +443,69 @@ function createGraphDeps(
         });
       } else {
         createGraphFile(db, {
+          documentId: `${folderId}.graph-file`,
           domainId,
           relativePath: filePath,
           displayName: DIR_GRAPH_FILENAME,
           parentId: folderId,
           content,
           ownerVisitorId,
+        });
+      }
+
+      writeDocument(domainId, filePath, content);
+    },
+
+    /**
+     * 读取域级图谱。
+     * 存储在域根路径下的 ___graph___.json 文件中。
+     */
+    readDomainGraph: async (domainId: string) => {
+      const graphFileId = `${domainId}.graph-file`;
+      const graphFile = findDocumentById(db, graphFileId);
+      if (!graphFile) return null;
+
+      try {
+        const { content } = readDocument(domainId, graphFile.relative_path);
+        return JSON.parse(content) as Graph;
+      } catch {
+        return null;
+      }
+    },
+
+    /**
+     * 写入域级图谱。
+     * 存储在域根路径下的 ___graph___.json 文件中。
+     */
+    writeDomainGraph: async (domainId: string, graph: Graph) => {
+      const graphFileId = `${domainId}.graph-file`;
+      const filePath = DIR_GRAPH_FILENAME; // 域根路径下
+      const content = JSON.stringify(graph, null, 2);
+
+      const existing = findDocumentById(db, graphFileId);
+      if (existing) {
+        updateDocumentContent(db, {
+          documentId: graphFileId,
+          displayName: DIR_GRAPH_FILENAME,
+          contentHash: contentHash(content),
+          updatedBy: ownerVisitorId,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        insertDocument(db, {
+          documentId: graphFileId,
+          domainId,
+          relativePath: filePath,
+          displayName: DIR_GRAPH_FILENAME,
+          ownerVisitorId,
+          createdBy: ownerVisitorId,
+          updatedBy: ownerVisitorId,
+          contentHash: contentHash(content),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          permission: 1,
+          fileType: FILE_TYPE.GRAPH_FILE,
+          parentId: null,
         });
       }
 
@@ -390,7 +550,7 @@ function ensureGraphDir(
   if (!parent) throw new Error(`父目录不存在：${parentId}`);
 
   const now = new Date().toISOString();
-  const dirId = randomUUID();
+  const dirId = `${parentId}.graph-dir`;
   const dirPath = `${parent.relative_path}/${ARTICLE_GRAPH_DIRNAME}`;
 
   insertDocument(db, {
@@ -416,17 +576,18 @@ function ensureGraphDir(
 function createGraphFile(
   db: ReturnType<typeof getDb>,
   params: {
+    documentId: string;
     domainId: string;
     relativePath: string;
     displayName: string;
-    parentId: string;
+    parentId: string | null;
     content: string;
     ownerVisitorId: string;
   },
 ): void {
   const now = new Date().toISOString();
   insertDocument(db, {
-    documentId: randomUUID(),
+    documentId: params.documentId,
     domainId: params.domainId,
     relativePath: params.relativePath,
     displayName: params.displayName,

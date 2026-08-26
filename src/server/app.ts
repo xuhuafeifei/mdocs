@@ -17,6 +17,7 @@ import { buildBookmarksRouter } from "./routes/bookmarks.routes.js";
 import { documentCommentsRouter } from "./routes/document-comments.routes.js";
 import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
 import { buildAgentRouter } from "./routes/agent.routes.js";
+import { buildGraphRouter } from "./routes/graph.routes.js";
 import { startIndexTimer } from "./search/document-index-manager.js";
 import { useLogger } from "./logger/logger.js";
 
@@ -80,6 +81,7 @@ export function buildApp(): Application {
   app.use("/api/cli", buildCliTokensRouter());
   app.use("/api/bookmarks", buildBookmarksRouter());
   app.use("/api/agent", buildAgentRouter());
+  app.use("/api/graph", buildGraphRouter());
   // 发表/删除评论：需要认证
   app.use("/api/documents", documentCommentsRouter);
 

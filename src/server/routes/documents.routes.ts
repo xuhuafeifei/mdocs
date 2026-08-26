@@ -391,7 +391,7 @@ export function buildDocumentsRouter(): Router {
     const folderId = req.params.folderId!;
     const visitorId = req.visitor?.visitor_id ?? null;
     try {
-      const tree = buildFolderSubtree(folderId, visitorId);
+      const tree = buildFolderSubtree(folderId, visitorId, { includeTypes: ["dir", "md", "folder_desc"] });
       res.json({ data: tree });
     } catch (err) {
       respondError(res, err, "documents-route.folder-tree");

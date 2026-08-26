@@ -91,22 +91,46 @@ async function buildFolderGraph(
     childGraphs.push(childGraph);
   }
 
-  // 2. 汇总所有子节点的完整图谱（节点 + 边全量透传）
+  // 2. 汇总 + 归纳 + 生成（公共逻辑）
+  const result = await aggregateAndInduce(childGraphs, deps);
+
+  // 3. 写目录级图谱缓存
+  await deps.writeDirGraph(folderNode.documentId, result);
+
+  return result;
+}
+
+// ========== 公共逻辑：汇总子图谱 + 顶层归纳 + 生成 contains ==========
+
+/**
+ * 把多个子图谱汇总，然后在顶层进行概念归纳和关系生成。
+ *
+ * 流程（每层都一样）：
+ * 1. 汇总所有子节点的完整图谱（节点 + 边全量透传）
+ * 2. 找出入度为 0 的顶层节点
+ * 3. 基于顶层节点，归纳出更上层的 concept 节点
+ * 4. 生成「顶层节点 ↔ 本层 concept」之间的 contains 关系（上下层）
+ * 5. 生成「本层 concept」之间的横向关系（related_to / part_of / depends_on）
+ * 6. 组装最终图谱（所有子节点数据 + 本层新增）
+ *
+ * 目录级和域级构建都复用这个逻辑。
+ */
+export async function aggregateAndInduce(
+  childGraphs: Graph[],
+  deps: GraphDeps,
+): Promise<Graph> {
+  // === 1. 汇总所有子图谱（全量透传）===
   const allNodes = childGraphs.flatMap((g) => g.nodes);
   const allEdges = childGraphs.flatMap((g) => g.edges);
 
-  // 3. 找出「入度为 0」的顶层节点
-  // 只有顶层节点才参与本层的 concept 归纳和 contains 生成，
-  // 避免下层已经被归类的节点被重复处理
-  const rootNodes = findRootNodes(allNodes, allEdges);
+  // === 2. 找出顶层节点（入度为 0）===
+  const topLevelNodes = findRootNodes(allNodes, allEdges);
 
-  // 4. 基于顶层节点中的 doc 节点，归纳 concept 节点
-  const rootDocNodes = rootNodes.filter((n): n is DocNode => n.type === 'doc');
+  // === 3. 归纳本层 concept 节点 ===
   const conceptStubs = await deps.induceConceptNodes(
-    rootDocNodes.map((n) => ({ label: n.label, description: n.description })),
+    topLevelNodes.map((n) => ({ label: n.label, description: n.description })),
   );
-
-  const conceptNodes: ConceptNode[] = conceptStubs.map((stub) => ({
+  const newConcepts: ConceptNode[] = conceptStubs.map((stub) => ({
     id: makeNodeId('concept', stub.label),
     type: 'concept',
     label: stub.label,
@@ -115,19 +139,26 @@ async function buildFolderGraph(
     confidence: stub.confidence,
   }));
 
-  // 5. 生成 contains 关系
-  // 输入：顶层节点 + 本层新生成的 concept（都属于本层的"顶层"）
-  const nodesForContains: GraphNode[] = [...rootNodes, ...conceptNodes];
-  const newEdges = await deps.generateContains(nodesForContains);
+  // === 4. 上下层关系：顶层节点 ↔ 本层 concept 的 contains ===
+  const nodesForContains: GraphNode[] = [...topLevelNodes, ...newConcepts];
+  const containsEdges = await deps.generateContains(nodesForContains);
 
-  // 6. 组装最终图谱（所有下层数据 + 本层新增）
-  const result: Graph = {
-    nodes: [...allNodes, ...conceptNodes],
-    edges: [...allEdges, ...newEdges],
+  // === 5. 横向关系：本层新生成的 concept 之间的关系 ===
+  let conceptRelationEdges: GraphEdge[] = [];
+  if (newConcepts.length >= 2) {
+    const stubs = await deps.induceConceptRelations(newConcepts);
+    conceptRelationEdges = stubs.map((r) => ({
+      from: r.fromId,
+      to: r.toId,
+      type: r.type,
+      confidence: r.confidence,
+      description: r.description,
+    }));
+  }
+
+  // === 6. 组装最终图谱 ===
+  return {
+    nodes: [...allNodes, ...newConcepts],
+    edges: [...allEdges, ...containsEdges, ...conceptRelationEdges],
   };
-
-  // 7. 写目录级图谱缓存
-  await deps.writeDirGraph(folderNode.documentId, result);
-
-  return result;
 }

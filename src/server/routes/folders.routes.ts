@@ -180,7 +180,7 @@ export function createFolder(params: {
     });
 
     // 创建 ___desc___.md（与普通 md 相同：首版 commit + head）
-    const descDocumentId = randomUUID();
+    const descDocumentId = `${folderId}.folder-desc`;
     insertMarkdownDocumentWithInitialCommit(db, {
       documentId: descDocumentId,
       domainId,
@@ -192,7 +192,7 @@ export function createFolder(params: {
       createdAt: now,
       updatedAt: now,
       permission,
-      fileType: "md",
+      fileType: "folder_desc",
       parentId: folderId,
     });
 

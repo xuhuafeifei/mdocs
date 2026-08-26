@@ -21,8 +21,13 @@ import {
   generateContainsTool,
   noContainsRelationsTool,
 } from './tools/generate-contains.tool.js';
+import {
+  conceptRelationsTool,
+  noConceptRelationsTool,
+} from './tools/concept-relations.tool.js';
 import type {
   ConceptNodeStub,
+  ConceptRelationStub,
   DocNodeStub,
   GraphEdge,
   GraphNode,
@@ -152,5 +157,54 @@ ${nodesList}`,
       confidence: r.confidence,
     }));
   }
+  return [];
+}
+
+// ========== 链路 4：生成 concept 之间的关系 ==========
+
+const CONCEPT_RELATIONS_SYSTEM = `你是一个知识图谱关系专家。你的任务是分析一组概念，找出它们之间的关系。
+
+关系类型定义：
+- related_to：两个概念相关，但没有明确的包含/依赖关系
+- part_of：A part_of B 表示 A 是 B 的一部分 / 子领域
+- depends_on：A depends_on B 表示 A 依赖于 B（B 是 A 的前提或基础）
+
+要求：
+1. 只输出高置信度的关系，宁缺毋滥
+2. fromId 和 toId 必须是输入中给出的概念 id，不要编造
+3. 关系方向要准确：
+   - part_of：部分 → 整体（小的 → 大的）
+   - depends_on：依赖方 → 被依赖方
+   - related_to：方向不敏感，但也要有意义
+4. 避免重复的关系（互为 related_to 算重复）
+5. 分析完成后，调用 submitConceptRelations 或 submitNoConceptRelations 之一提交结果`;
+
+/**
+ * 归纳 concept 节点之间的关系。
+ * 节点太少或无法判断时返回空数组。
+ */
+export async function induceConceptRelations(
+  concepts: { id: string; label: string; description: string }[],
+  agentConfig: GraphAgentConfig,
+): Promise<ConceptRelationStub[]> {
+  if (concepts.length < 2) return [];
+
+  const conceptsList = concepts
+    .map(
+      (n, i) => `${i + 1}. id: ${n.id}\n   label: ${n.label}\n   description: ${n.description}`,
+    )
+    .join('\n\n');
+
+  const result = await runToolExtractionWithFallback(
+    agentConfig,
+    conceptRelationsTool,
+    noConceptRelationsTool,
+    CONCEPT_RELATIONS_SYSTEM,
+    `请分析以下概念之间的关系：
+
+${conceptsList}`,
+  );
+
+  if (result.ok) return result.data.relations;
   return [];
 }

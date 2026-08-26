@@ -1000,3 +1000,52 @@ export async function streamAgentChatApi(
     }
   }
 }
+
+// ========== 知识图谱 ==========
+
+export interface GraphNode {
+  id: string;
+  type: "doc" | "concept";
+  label: string;
+  definition?: string;
+  description: string;
+  confidence: number;
+  sources?: Array<{
+    type: "doc";
+    documentId: string;
+    title?: string;
+    heading?: string;
+  }>;
+}
+
+export interface GraphEdge {
+  from: string;
+  to: string;
+  type: "contains";
+  confidence: number;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+/** 读取指定目录的图谱缓存 */
+export function getGraphApi(folderId: string): Promise<GraphData | null> {
+  return api<GraphData | null>(`/api/graph/${folderId}`, { method: "GET" });
+}
+
+/** 触发指定目录的图谱构建 */
+export function analyzeGraphApi(folderId: string): Promise<GraphData> {
+  return api<GraphData>(`/api/graph/${folderId}/analyze`, { method: "POST" });
+}
+
+/** 读取域级图谱缓存 */
+export function getDomainGraphApi(domainId: string): Promise<GraphData | null> {
+  return api<GraphData | null>(`/api/graph/domain/${domainId}`, { method: "GET" });
+}
+
+/** 触发域级图谱构建 */
+export function analyzeDomainGraphApi(domainId: string): Promise<GraphData> {
+  return api<GraphData>(`/api/graph/domain/${domainId}/analyze`, { method: "POST" });
+}

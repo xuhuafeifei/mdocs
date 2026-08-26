@@ -66,17 +66,18 @@ export type GraphNode = DocNode | ConceptNode;
 
 /**
  * 图谱边 —— 节点之间的关系。
- * 目前只有 contains 一种关系。
  */
 export interface GraphEdge {
   /** 起点节点 id（上层/更抽象） */
   from: string;
   /** 终点节点 id（下层/更具体） */
   to: string;
-  /** 关系类型，目前只有 'contains' */
-  type: 'contains';
+  /** 关系类型 */
+  type: 'contains' | 'related_to' | 'part_of' | 'depends_on';
   /** AI 置信度，0-1 */
   confidence: number;
+  /** 关系描述（可选） */
+  description?: string;
 }
 
 /** 图谱 = 节点集合 + 边集合 */
@@ -118,6 +119,22 @@ export interface ConceptNodeStub {
   confidence: number;
 }
 
+/**
+ * LLM 原始输出 —— concept 关系桩。
+ */
+export interface ConceptRelationStub {
+  /** 起点概念 id */
+  fromId: string;
+  /** 终点概念 id */
+  toId: string;
+  /** 关系类型 */
+  type: 'related_to' | 'part_of' | 'depends_on';
+  /** 关系描述 */
+  description?: string;
+  /** 置信度 */
+  confidence: number;
+}
+
 import type { TreeNode } from '../../../shared/types/tree.js';
 
 /**
@@ -132,6 +149,8 @@ export interface GraphDeps {
   extractDocNodes(markdown: string): Promise<DocNodeStub[]>;
   /** 从 doc 节点中归纳 concept 节点 */
   induceConceptNodes(docNodes: { label: string; description: string }[]): Promise<ConceptNodeStub[]>;
+  /** 归纳 concept 节点之间的关系 */
+  induceConceptRelations(concepts: { id: string; label: string; description: string }[]): Promise<ConceptRelationStub[]>;
   /** 为节点生成 contains 关系 */
   generateContains(nodes: GraphNode[]): Promise<GraphEdge[]>;
 
@@ -152,6 +171,10 @@ export interface GraphDeps {
   readDirGraph: (folderId: string) => Promise<Graph | null>;
   /** 写入目录级图谱 */
   writeDirGraph: (folderId: string, graph: Graph) => Promise<void>;
+  /** 读取域级图谱（不存在返回 null） */
+  readDomainGraph: (domainId: string) => Promise<Graph | null>;
+  /** 写入域级图谱 */
+  writeDomainGraph: (domainId: string, graph: Graph) => Promise<void>;
 }
 
 export { TreeNode };

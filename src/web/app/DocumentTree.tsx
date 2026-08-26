@@ -87,6 +87,10 @@ export function DocumentTree(props: {
   onDeselect?: () => void;
   /** 将文档移到目标文件夹；parentId=null 表示域根。 */
   onMoveDocument?: (documentId: string, parentId: string | null) => void | Promise<void>;
+  /** 查看图谱（目录 → 该目录图谱；文件 → 父目录图谱） */
+  onOpenGraph?: (node: TreeNode, parentFolderId?: string) => void;
+  /** 生成图谱 */
+  onGenerateGraph?: (node: TreeNode, parentFolderId?: string) => void;
 }) {
   const { t } = useI18n();
   const listRef = useRef<HTMLDivElement>(null);
@@ -232,6 +236,8 @@ export function DocumentTree(props: {
           onOpenFolder={props.onOpenFolder}
           onContextMenu={props.onContextMenu}
           onMoveDocument={props.onMoveDocument}
+          onOpenGraph={props.onOpenGraph}
+          onGenerateGraph={props.onGenerateGraph}
         />
       ))}
     </div>
@@ -252,6 +258,8 @@ type TreeShared = {
   onOpenFolder: (folderPath: string, descDocumentId: string | null | undefined) => void;
   onContextMenu: (payload: TreeContextMenu) => void;
   onMoveDocument?: (documentId: string, parentId: string | null) => void | Promise<void>;
+  onOpenGraph?: (node: TreeNode, parentFolderId?: string) => void;
+  onGenerateGraph?: (node: TreeNode, parentFolderId?: string) => void;
 };
 
 function TreeNodeView(
@@ -282,6 +290,8 @@ function TreeNodeView(
         onOpenFolder={props.onOpenFolder}
         onContextMenu={props.onContextMenu}
         onMoveDocument={props.onMoveDocument}
+        onOpenGraph={props.onOpenGraph}
+        onGenerateGraph={props.onGenerateGraph}
       />
     );
   }
@@ -301,6 +311,8 @@ function TreeNodeView(
       onOpen={props.onOpen}
       onContextMenu={props.onContextMenu}
       onMoveDocument={props.onMoveDocument}
+      onOpenGraph={props.onOpenGraph}
+      onGenerateGraph={props.onGenerateGraph}
     />
   );
 }
@@ -320,11 +332,14 @@ function DocRow(props: {
   onOpen: (node: Extract<TreeNode, { type: "document" }>) => void;
   onContextMenu: (payload: TreeContextMenu) => void;
   onMoveDocument?: (documentId: string, parentId: string | null) => void | Promise<void>;
+  onOpenGraph?: (node: TreeNode, parentFolderId?: string) => void;
+  onGenerateGraph?: (node: TreeNode, parentFolderId?: string) => void;
 }) {
   const doc = props.doc;
   const isActive = doc.documentId === props.activeDocumentId;
   const canDrag = Boolean(props.onMoveDocument);
   const dragging = props.draggingId === doc.documentId;
+  const [hovered, setHovered] = useState(false);
   const dropActive =
     props.dropHighlight?.kind === "doc" && props.dropHighlight.id === doc.documentId;
   const [suppressClick, setSuppressClick] = useState(false);
@@ -342,6 +357,8 @@ function DocRow(props: {
       data-tree-id={doc.documentId}
       style={{ ...props.indent, cursor: canDrag ? "grab" : undefined }}
       draggable={canDrag}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onDragStart={(e) => {
         if (!props.onMoveDocument) return;
         setSuppressClick(true);
@@ -401,6 +418,39 @@ function DocRow(props: {
       <span className="mdocs-tree-caret-spacer" aria-hidden />
       <span className="mdocs-tree-icon">md</span>
       <span className="mdocs-tree-label">{doc.displayName || doc.name}</span>
+      {(props.onOpenGraph || props.onGenerateGraph) && (
+        <span
+          className="mdocs-tree-hover-actions"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {props.onOpenGraph && (
+            <button
+              type="button"
+              className="mdocs-tree-icon-btn"
+              title="查看图谱"
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onOpenGraph?.(props.doc, props.parentFolderId ?? undefined);
+              }}
+            >
+              🕸️
+            </button>
+          )}
+          {props.onGenerateGraph && (
+            <button
+              type="button"
+              className="mdocs-tree-icon-btn"
+              title="生成图谱"
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onGenerateGraph?.(props.doc, props.parentFolderId ?? undefined);
+              }}
+            >
+              ⚡
+            </button>
+          )}
+        </span>
+      )}
     </div>
   );
 }
@@ -438,6 +488,8 @@ function FolderRow(props: {
   onOpenFolder: (folderPath: string, descDocumentId: string | null | undefined) => void;
   onContextMenu: (payload: TreeContextMenu) => void;
   onMoveDocument?: (documentId: string, parentId: string | null) => void | Promise<void>;
+  onOpenGraph?: (node: TreeNode, parentFolderId?: string) => void;
+  onGenerateGraph?: (node: TreeNode, parentFolderId?: string) => void;
 }) {
   const { t } = useI18n();
   const forceOpen = props.forceOpenFolderIds.has(props.folder.documentId);
@@ -530,6 +582,39 @@ function FolderRow(props: {
             {props.folder.folderDisplayName?.trim() || props.folder.name}
           </span>
         </span>
+        {(props.onOpenGraph || props.onGenerateGraph) && (
+          <span
+            className="mdocs-tree-hover-actions"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {props.onOpenGraph && (
+              <button
+                type="button"
+                className="mdocs-tree-icon-btn"
+                title="查看图谱"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onOpenGraph?.(props.folder);
+                }}
+              >
+                🕸️
+              </button>
+            )}
+            {props.onGenerateGraph && (
+              <button
+                type="button"
+                className="mdocs-tree-icon-btn"
+                title="生成图谱"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onGenerateGraph?.(props.folder);
+                }}
+              >
+                ⚡
+              </button>
+            )}
+          </span>
+        )}
       </div>
       {open &&
         props.folder.children.map((child) => (
@@ -552,6 +637,8 @@ function FolderRow(props: {
             onOpenFolder={props.onOpenFolder}
             onContextMenu={props.onContextMenu}
             onMoveDocument={props.onMoveDocument}
+            onOpenGraph={props.onOpenGraph}
+            onGenerateGraph={props.onGenerateGraph}
           />
         ))}
     </div>
