@@ -14,6 +14,12 @@ import {
   updateAgentModelConfig,
   type AgentModelConfigRow,
 } from "../../db/repositories/agent-model-config.repo.js";
+import {
+  deleteAgentApiKey,
+  getAgentApiKey,
+  readAllAgentApiKeys,
+  setAgentApiKey,
+} from "../../secrets/secrets-store.js";
 
 export const DEEPSEEK_ENDPOINT = "https://api.deepseek.com";
 
@@ -112,7 +118,11 @@ function parseCompat(raw: string | null): AgentCompat | null {
 }
 
 function rowToConfig(row: AgentModelConfigRow): VisitorAgentConfig | null {
-  if (!row.api_key || !row.base_url) return null;
+  if (!row.base_url) return null;
+  const apiKey = getAgentApiKey(row.id) ?? "";
+  if (!apiKey && !row.api_key) return null;
+  // 兼容：DB 里还有 api_key 说明迁移没跑过，优先用 secrets 的，没有就用 DB 的
+  const effectiveApiKey = apiKey || row.api_key;
   return {
     id: row.id,
     ownerVisitorId: row.owner_visitor_id,
@@ -122,19 +132,60 @@ function rowToConfig(row: AgentModelConfigRow): VisitorAgentConfig | null {
     baseUrl: row.base_url,
     apiType: row.api_type === "anthropic-messages" ? "anthropic-messages" : "openai-completions",
     modelId: row.model_id,
-    apiKey: row.api_key,
+    apiKey: effectiveApiKey,
     contextWindow: normalizeContextWindow(row.context_window),
     compat: parseCompat(row.compat_json),
     isDefault: row.is_default === 1,
   };
 }
 
+let apiKeysMigrated = false;
+
+/**
+ * 把 DB 里的旧 api_key 迁移到 secrets 文件。
+ * 幂等：只迁 DB 里有、secrets 里没有的。
+ * 迁完后不清空 DB 字段（兼容旧代码读 DB），
+ * 新代码优先读 secrets，DB 里的仅作兼容兜底。
+ */
+function migrateApiKeysFromDbIfNeeded(): void {
+  if (apiKeysMigrated) return;
+  apiKeysMigrated = true;
+
+  try {
+    const db = getDb();
+    const rows = db
+      .prepare(
+        `SELECT id, api_key FROM agent_model_configs
+         WHERE api_key IS NOT NULL AND api_key != ''`,
+      )
+      .all() as Array<{ id: string; api_key: string }>;
+    if (rows.length === 0) return;
+
+    const existing = readAllAgentApiKeys();
+    let migrated = 0;
+    for (const row of rows) {
+      if (!existing[row.id]) {
+        setAgentApiKey(row.id, row.api_key);
+        migrated++;
+      }
+    }
+    if (migrated > 0) {
+      console.log(`[agent-config] migrated ${migrated} api keys from DB to secrets file`);
+    }
+  } catch (err) {
+    // 迁移失败不影响运行，顶多继续读 DB
+    console.warn("[agent-config] migrate api keys failed:", err);
+  }
+}
+
 export function getVisitorAgentConfig(visitorId: string): VisitorAgentConfig | null {
+  migrateApiKeysFromDbIfNeeded();
   const row = findDefaultAgentModelConfigByOwner(getDb(), visitorId);
   return row ? rowToConfig(row) : null;
 }
 
 export function listVisitorAgentConfigs(visitorId: string): PublicAgentConfig[] {
+  migrateApiKeysFromDbIfNeeded();
   return listAgentModelConfigsByOwner(getDb(), visitorId)
     .map((row) => rowToConfig(row))
     .filter((cfg): cfg is VisitorAgentConfig => cfg !== null)
@@ -157,7 +208,6 @@ function buildConfigRow(input: {
   existing: AgentModelConfigRow | null;
   kind?: string;
   modelId?: string;
-  apiKey?: string;
   name?: string;
   contextWindow?: number;
   providerId?: string;
@@ -166,16 +216,6 @@ function buildConfigRow(input: {
   isDefault: boolean;
 }): AgentModelConfigRow {
   const existing = input.existing;
-  let apiKey: string;
-  if (existing) {
-    apiKey =
-      input.apiKey !== undefined && input.apiKey.trim()
-        ? input.apiKey.trim()
-        : existing.api_key;
-  } else {
-    apiKey = input.apiKey?.trim() ?? "";
-    if (!apiKey) throw new Error("api_key_required");
-  }
 
   const kind: AgentConfigKind = input.kind === "custom" ? "custom" : "deepseek";
   const name =
@@ -217,7 +257,7 @@ function buildConfigRow(input: {
       api_type: apiType,
       compat_json: null,
       model_id: modelId,
-      api_key: apiKey,
+      api_key: "", // apiKey 存 secrets 文件，DB 不再存明文
       context_window: contextWindow,
       is_default: input.isDefault ? 1 : 0,
       updated_at,
@@ -239,7 +279,7 @@ function buildConfigRow(input: {
     api_type: DEEPSEEK_PRESET.apiType,
     compat_json: DEEPSEEK_PRESET.compatJson,
     model_id: modelId,
-    api_key: apiKey,
+    api_key: "", // apiKey 存 secrets 文件，DB 不再存明文
     context_window: contextWindow,
     is_default: input.isDefault ? 1 : 0,
     updated_at,
@@ -267,6 +307,18 @@ export function upsertVisitorAgentConfig(input: {
     : null;
   if (input.id && !existing) throw new Error("config_not_found");
 
+  // apiKey 校验：新建必须传，更新可选（不传就保留原有）
+  let apiKeyToSave: string;
+  if (input.apiKey !== undefined && input.apiKey.trim()) {
+    apiKeyToSave = input.apiKey.trim();
+  } else if (existing) {
+    const existingKey = getAgentApiKey(existing.id) ?? existing.api_key;
+    apiKeyToSave = existingKey;
+  } else {
+    throw new Error("api_key_required");
+  }
+  if (!apiKeyToSave) throw new Error("api_key_required");
+
   const total = countAgentModelConfigsByOwner(db, input.ownerVisitorId);
   const makeDefault =
     input.isDefault === true ||
@@ -276,7 +328,7 @@ export function upsertVisitorAgentConfig(input: {
   const row = buildConfigRow({
     ...input,
     id: input.id ?? randomUUID(),
-    existing,
+    existing: existing ?? null,
     isDefault: false,
   });
 
@@ -290,6 +342,9 @@ export function upsertVisitorAgentConfig(input: {
   if (makeDefault) {
     setDefaultAgentModelConfig(db, input.ownerVisitorId, row.id);
   }
+
+  // apiKey 存 secrets 文件
+  setAgentApiKey(row.id, apiKeyToSave);
 
   return rowToConfig(findAgentModelConfigById(db, row.id, input.ownerVisitorId)!)!;
 }
@@ -311,6 +366,7 @@ export function deleteVisitorAgentConfig(ownerVisitorId: string, configId: strin
 
   const wasDefault = existing.is_default === 1;
   deleteAgentModelConfig(db, configId, ownerVisitorId);
+  deleteAgentApiKey(configId);
 
   if (!wasDefault) return;
 
