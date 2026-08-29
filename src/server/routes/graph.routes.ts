@@ -3,11 +3,14 @@
  *
  * 目录级：
  * - GET  /:folderId          读取指定目录的图谱缓存
- * - POST /:folderId/analyze  触发指定目录的图谱构建
+ * - POST /:folderId/analyze  触发指定目录的图谱构建（异步入队）
  *
  * 域级：
  * - GET  /domain/:domainId          读取域级图谱缓存
- * - POST /domain/:domainId/analyze  触发域级图谱构建
+ * - POST /domain/:domainId/analyze  触发域级图谱构建（异步入队）
+ *
+ * 任务查询：
+ * - GET /tasks/:taskId       查询任务状态 + 进度
  */
 import { Router, type Request, type Response } from "express";
 import {
@@ -20,6 +23,9 @@ import type { GraphAgentConfig } from "../documents/graph/graph-agent.js";
 import { getVisitorAgentConfig } from "../agent/Config/config.js";
 import { findDocumentById } from "../db/repositories/document.repo.js";
 import { getDb } from "../db/connection.js";
+import { taskQueue } from "../task-queue/index.js";
+import { FILE_TYPE } from "../../shared/file-types.js";
+import "../documents/graph-task.js"; // 副作用导入，注册图谱任务
 
 const router = Router();
 
@@ -50,6 +56,14 @@ function getAgentConfig(req: Request): GraphAgentConfig {
   throw new Error("请先在设置 → AI 中配置默认模型（或设置服务端 ANTHROPIC_BASE_URL / ANTHROPIC_API_KEY）");
 }
 
+/* ── 任务查询 ── */
+
+router.get("/tasks/:taskId", (req: Request, res: Response) => {
+  const { taskId } = req.params as { taskId: string };
+  const result = taskQueue.getTask(taskId);
+  res.json({ data: result });
+});
+
 // ========== 域级 ==========
 
 router.get("/domain/:domainId", (req: Request, res: Response) => {
@@ -58,16 +72,22 @@ router.get("/domain/:domainId", (req: Request, res: Response) => {
   res.json({ data: graph });
 });
 
-router.post("/domain/:domainId/analyze", async (req: Request, res: Response) => {
+router.post("/domain/:domainId/analyze", (req: Request, res: Response) => {
   const { domainId } = req.params as { domainId: string };
 
   try {
     const agentConfig = getAgentConfig(req);
-    const graph = await buildDomainGraph(domainId, agentConfig, { force: true });
-    res.json({ data: graph });
+    const result = taskQueue.enqueue("graph-generate", {
+      type: "domain",
+      targetId: domainId,
+      agentConfig,
+      visitorId: req.visitor?.visitor_id,
+      force: false,
+    });
+    res.json({ data: result });
   } catch (err) {
-    console.error("[Graph] 域级构建失败：", err);
-    res.status(500).json({ error: err instanceof Error ? err.message : "构建失败" });
+    console.error("[Graph] 域级构建入队失败：", err);
+    res.status(500).json({ error: err instanceof Error ? err.message : "入队失败" });
   }
 });
 
@@ -79,7 +99,7 @@ router.get("/:folderId", (req: Request, res: Response) => {
   res.json({ data: graph });
 });
 
-router.post("/:folderId/analyze", async (req: Request, res: Response) => {
+router.post("/:folderId/analyze", (req: Request, res: Response) => {
   const { folderId } = req.params as { folderId: string };
 
   const db = getDb();
@@ -91,13 +111,18 @@ router.post("/:folderId/analyze", async (req: Request, res: Response) => {
 
   try {
     const agentConfig = getAgentConfig(req);
-    const graph = await buildGraphByDocId(folderId, agentConfig, undefined, {
-      force: true,
+    // DB 里目录是 FILE_TYPE.FOLDER === "dir"，不是字面量 "folder"
+    const result = taskQueue.enqueue("graph-generate", {
+      type: folder.file_type === FILE_TYPE.FOLDER ? "dir" : "doc",
+      targetId: folderId,
+      agentConfig,
+      visitorId: req.visitor?.visitor_id,
+      force: false,
     });
-    res.json({ data: graph });
+    res.json({ data: result });
   } catch (err) {
-    console.error("[Graph] 构建失败：", err);
-    res.status(500).json({ error: err instanceof Error ? err.message : "构建失败" });
+    console.error("[Graph] 构建入队失败：", err);
+    res.status(500).json({ error: err instanceof Error ? err.message : "入队失败" });
   }
 });
 

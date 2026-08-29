@@ -59,8 +59,13 @@ export function getGraphByFolderId(folderId: string): Graph | null {
 }
 
 /**
- * 根据文档 ID 构建知识图谱。
- * `options.force` 由调用方传入；默认 false，尊重 dirty 缓存。
+ * 根据文档/目录 ID 构建知识图谱（mdocs 胶水入口）。
+ *
+ * 与核心 `buildGraph(rootNode, deps, options)` 的区别：
+ * - 本函数：只拿 docId → 查库、拼 TreeNode、造 GraphDeps，再调用 buildGraph
+ * - buildGraph：已有树和 deps，负责递归抽文章 / 归纳 / 写缓存
+ *
+ * `options.force` / `onArticle` / `onFolderPhase` 原样传给 buildGraph。
  */
 export async function buildGraphByDocId(
   docId: string,
@@ -77,11 +82,14 @@ export async function buildGraphByDocId(
   console.log(`[Graph] 开始构建图谱，docId: ${docId}`);
   console.log(`[Graph] 类型: ${doc.file_type}，路径: ${doc.relative_path}`);
 
+  // dir → 带子树的 folder 节点；md → document 节点
   const rootNode = buildTreeNodeForDoc(doc, visitorId);
   console.log(`[Graph] 根节点类型: ${rootNode.type}，名称: ${rootNode.name}`);
 
+  // 注入读盘 / AI / 写图谱缓存
   const deps = createGraphDeps(agentConfig, doc.domain_id, doc.owner_visitor_id);
 
+  // 真正构建在核心模块
   const graph = await buildGraph(rootNode, deps, options);
   console.log(`[Graph] 构建完成！节点: ${graph.nodes.length}，边: ${graph.edges.length}`);
   console.log(`[Graph]   doc 节点: ${graph.nodes.filter(n => n.type === 'doc').length}`);
@@ -333,6 +341,9 @@ function createGraphDeps(
     },
   };
 }
+
+export { createGraphDeps, buildTreeNodeForDoc };
+export type { GraphDeps } from './graph/types.js';
 
 /**
  * 简易 Lexical JSON → 纯文本提取。

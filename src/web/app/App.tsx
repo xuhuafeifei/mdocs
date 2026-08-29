@@ -9,7 +9,7 @@
  * 6. 全局消息提示与冲突处理
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, File, Folder, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
+import { BookOpen, File, Folder, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -1332,7 +1332,7 @@ export function App() {
                 <Folder size={20} />
               </span>
               <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip="知识图谱" onClick={() => openGraph(currentDomainId, "知识图谱", "domain")} style={{ marginLeft: 8 }}>
-                🕸️
+                <Network size={20} strokeWidth={1.75} />
               </span>
             </div>
 

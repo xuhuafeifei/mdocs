@@ -1064,9 +1064,9 @@ export function getGraphApi(folderId: string): Promise<GraphData | null> {
   return api<GraphData | null>(`/api/graph/${folderId}`, { method: "GET" });
 }
 
-/** 触发指定目录的图谱构建 */
-export function analyzeGraphApi(folderId: string): Promise<GraphData> {
-  return api<GraphData>(`/api/graph/${folderId}/analyze`, { method: "POST" });
+/** 触发指定目录的图谱构建（异步入队） */
+export function analyzeGraphApi(folderId: string): Promise<GraphTaskEnqueueResult> {
+  return api<GraphTaskEnqueueResult>(`/api/graph/${folderId}/analyze`, { method: "POST" });
 }
 
 /** 读取域级图谱缓存 */
@@ -1074,7 +1074,51 @@ export function getDomainGraphApi(domainId: string): Promise<GraphData | null> {
   return api<GraphData | null>(`/api/graph/domain/${domainId}`, { method: "GET" });
 }
 
-/** 触发域级图谱构建 */
-export function analyzeDomainGraphApi(domainId: string): Promise<GraphData> {
-  return api<GraphData>(`/api/graph/domain/${domainId}/analyze`, { method: "POST" });
+/** 触发域级图谱构建（异步入队） */
+export function analyzeDomainGraphApi(domainId: string): Promise<GraphTaskEnqueueResult> {
+  return api<GraphTaskEnqueueResult>(`/api/graph/domain/${domainId}/analyze`, { method: "POST" });
+}
+
+/** 查询任务状态 */
+export function getGraphTaskApi(taskId: string): Promise<GraphTaskStatus> {
+  return api<GraphTaskStatus>(`/api/graph/tasks/${encodeURIComponent(taskId)}`, {
+    method: "GET",
+  });
+}
+
+/* ── 类型 ── */
+
+export interface GraphTaskEnqueueResult {
+  taskId: string;
+  status: "pending" | "running" | "completed" | "failed";
+  position: number;
+  deduped: boolean;
+}
+
+export type GraphTaskStatusEnum =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "stale"
+  | "not_found";
+
+export interface GraphTaskLogEntry {
+  ts: string;
+  event: string;
+  level: "info" | "warn" | "error";
+  data?: any;
+}
+
+export interface GraphTaskStatus {
+  id: string;
+  type: string;
+  status: GraphTaskStatusEnum;
+  position: number;
+  progress?: { current: number; total: number };
+  logs: GraphTaskLogEntry[];
+  error?: string;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
 }

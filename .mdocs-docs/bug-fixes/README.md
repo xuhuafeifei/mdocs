@@ -19,3 +19,4 @@
 | [editor-scroll-bottom-padding-2026-05-11](./editor-scroll-bottom-padding-2026-05-11.md) | 编辑器底部滚动留白 |
 | [colorpicker-value-snaps-to-black-2026-05-11](./colorpicker-value-snaps-to-black-2026-05-11.md) | 取色器跳黑 |
 | [block-image-cursor-issue-2026-05-12](./block-image-cursor-issue-2026-05-12.md) | 块级图片光标问题 |
+| [graph-task-id-dir-vs-folder-mismatch-2026-08-29](./graph-task-id-dir-vs-folder-mismatch-2026-08-29.md) | 图谱任务 ID dir/folder 拼错致 not_found |

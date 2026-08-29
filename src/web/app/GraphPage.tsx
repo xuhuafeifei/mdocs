@@ -15,17 +15,154 @@ import {
   analyzeGraphApi,
   getDomainGraphApi,
   getGraphApi,
+  getGraphTaskApi,
   type GraphData,
   type GraphEdge,
   type GraphNode,
+  type GraphTaskLogEntry,
+  type GraphTaskStatusEnum,
 } from "../services/endpoints";
 import "./GraphPage.css";
+
+/** 把日志事件转成用户可读的文字 */
+function formatLogEvent(log: GraphTaskLogEntry): string {
+  const { event, data } = log;
+  switch (event) {
+    case "task.started":
+      return `🚀 开始生成，共 ${data?.totalDocs ?? 0} 篇文档`;
+    case "doc.started":
+      return `📄 处理中：${data?.docPath ?? ""}（${data?.index ?? 0}/${data?.total ?? 0}）`;
+    case "doc.completed":
+      return `✅ ${data?.docPath ?? ""}（提取 ${data?.conceptsExtracted ?? 0} 个知识块）`;
+    case "doc.failed":
+      return `⚠️ ${data?.docPath ?? ""} 失败：${data?.error ?? ""}`;
+    case "folder.started":
+      return `📁 归纳目录：${data?.folderPath ?? ""}`;
+    case "folder.completed":
+      return `✅ 目录归纳完成：${data?.folderPath ?? ""}`;
+    case "domain.started":
+      return `🌐 开始 domain 级合成`;
+    case "domain.completed":
+      return `✅ domain 合成完成（${data?.totalNodes ?? 0} 节点，${data?.totalEdges ?? 0} 边）`;
+    case "task.yielded":
+      return `⏸️ 让出资源，排队等待中...`;
+    case "task.progress":
+      return `⏳ ${data?.phase ?? "progress"} ${data?.current ?? 0}/${data?.total ?? 0}`;
+    case "task.completed":
+      return `🎉 生成完成！${data?.nodes ?? 0} 个节点，${data?.edges ?? 0} 条边`;
+    case "task.failed":
+      return `❌ 生成失败：${data?.error ?? ""}`;
+    default:
+      return `${event}${data ? `: ${JSON.stringify(data)}` : ""}`;
+  }
+}
+
+/** 队列位次：position 1 = 下一位；>1 才说前面还有几个 */
+function formatQueueStatus(position: number): string {
+  if (position <= 1) return "排队中，即将开始…";
+  return `排队中，前面还有 ${position - 1} 个任务`;
+}
 
 /** 屏幕像素 → 图坐标；保证放大后线条/箭头在屏幕上仍有最小可见粗细 */
 function screenToWorld(globalScale: number, screenPx: number, minScreenPx?: number): number {
   const scale = Math.max(globalScale, 0.2);
   const px = Math.max(minScreenPx ?? screenPx * 0.75, screenPx);
   return px / scale;
+}
+
+/**
+ * 按树形思路分层：入度 0 为根（顶层），其余按最长路径向下排布。
+ * 有环时环内未排到的节点挂到最底层之后。
+ */
+function computeTreeLayout(
+  nodeIds: string[],
+  edges: Array<{ from: string; to: string }>,
+  opts?: { levelGap?: number; nodeGap?: number },
+): Map<string, { x: number; y: number; level: number }> {
+  const levelGap = opts?.levelGap ?? 120;
+  const nodeGap = opts?.nodeGap ?? 160;
+  const idSet = new Set(nodeIds);
+  const children = new Map<string, string[]>();
+  const inDegree = new Map<string, number>();
+  for (const id of nodeIds) {
+    children.set(id, []);
+    inDegree.set(id, 0);
+  }
+  for (const e of edges) {
+    if (!idSet.has(e.from) || !idSet.has(e.to) || e.from === e.to) continue;
+    children.get(e.from)!.push(e.to);
+    inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1);
+  }
+
+  let roots = nodeIds.filter((id) => (inDegree.get(id) ?? 0) === 0);
+  if (roots.length === 0 && nodeIds.length > 0) {
+    const minIn = Math.min(...nodeIds.map((id) => inDegree.get(id) ?? 0));
+    roots = nodeIds.filter((id) => (inDegree.get(id) ?? 0) === minIn);
+  }
+
+  // Kahn + 最长路径：子节点 level = max(父) + 1
+  const level = new Map<string, number>();
+  const pendingIn = new Map(inDegree);
+  const queue: string[] = [];
+  for (const r of roots) {
+    level.set(r, 0);
+    queue.push(r);
+  }
+  // 把「假装成根」的节点入度清零，便于出队
+  for (const r of roots) {
+    pendingIn.set(r, 0);
+  }
+
+  let head = 0;
+  while (head < queue.length) {
+    const cur = queue[head++]!;
+    const curLevel = level.get(cur) ?? 0;
+    for (const next of children.get(cur) ?? []) {
+      const nextLevel = curLevel + 1;
+      if (!level.has(next) || nextLevel > (level.get(next) ?? 0)) {
+        level.set(next, nextLevel);
+      }
+      const left = (pendingIn.get(next) ?? 1) - 1;
+      pendingIn.set(next, left);
+      if (left <= 0 && !queue.includes(next)) {
+        queue.push(next);
+      }
+    }
+  }
+
+  // 环内残留：挂到现有最深一层之后
+  let maxLevel = 0;
+  for (const L of level.values()) maxLevel = Math.max(maxLevel, L);
+  for (const id of nodeIds) {
+    if (!level.has(id)) {
+      maxLevel += 1;
+      level.set(id, maxLevel);
+    }
+  }
+
+  const byLevel = new Map<number, string[]>();
+  for (const id of nodeIds) {
+    const L = level.get(id) ?? 0;
+    const list = byLevel.get(L) ?? [];
+    list.push(id);
+    byLevel.set(L, list);
+  }
+
+  // 同层按 id 稳定排序，左右对称铺开
+  const pos = new Map<string, { x: number; y: number; level: number }>();
+  for (const [L, ids] of byLevel) {
+    ids.sort((a, b) => a.localeCompare(b));
+    const n = ids.length;
+    const gap = n > 8 ? Math.max(100, nodeGap * (8 / n)) : nodeGap;
+    ids.forEach((id, i) => {
+      pos.set(id, {
+        x: (i - (n - 1) / 2) * gap,
+        y: L * levelGap,
+        level: L,
+      });
+    });
+  }
+  return pos;
 }
 
 interface GraphPageProps {
@@ -38,13 +175,25 @@ interface GraphPageProps {
 export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPageProps) {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** 默认只显示 concept，避免 doc 全开导致线乱成一团 */
   const [showDocNodes, setShowDocNodes] = useState(false);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const graphRef = useRef<any>(null);
+
+  // 任务状态
+  const [taskStatus, setTaskStatus] = useState<GraphTaskStatusEnum>("not_found");
+  const [taskLogs, setTaskLogs] = useState<GraphTaskLogEntry[]>([]);
+  const [taskProgress, setTaskProgress] = useState<{ current: number; total: number } | null>(null);
+  const [taskPosition, setTaskPosition] = useState(0);
+  /** 与后端 makeId 默认对齐；入队后改为接口返回的 taskId */
+  const defaultTaskId = `graph:${scope === "domain" ? "domain" : "dir"}:${resourceId}`;
+  const taskIdRef = useRef(defaultTaskId);
+  const pollTimerRef = useRef<number | null>(null);
+
+  // 是否"正在处理中"（排队中 / 运行中，都显示进度面板）
+  const isProcessing = taskStatus === "running" || taskStatus === "pending";
 
   // 加载图谱数据
   useEffect(() => {
@@ -73,19 +222,83 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
     };
   }, [resourceId, scope]);
 
+  // 进入页面 / 切换资源：复位 taskId，检查是否有在跑任务
+  useEffect(() => {
+    taskIdRef.current = defaultTaskId;
+    stopPolling();
+    void checkTaskStatus();
+    return () => stopPolling();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultTaskId]);
+
+  /** 查询一次任务状态（读 taskIdRef，避免闭包过期） */
+  async function checkTaskStatus() {
+    try {
+      const result = await getGraphTaskApi(taskIdRef.current);
+      setTaskStatus(result.status);
+      setTaskLogs(result.logs);
+      setTaskProgress(result.progress ?? null);
+      setTaskPosition(result.position);
+
+      // 完成了 → 重新加载图谱，停轮询
+      if (result.status === "completed") {
+        stopPolling();
+        reloadGraph();
+      } else if (result.status === "failed" || result.status === "stale") {
+        stopPolling();
+        if (result.error) {
+          setError(result.error);
+        }
+      } else if (result.status === "running" || result.status === "pending") {
+        startPolling();
+      }
+    } catch {
+      // 查不到就算了
+    }
+  }
+
+  /** 开始轮询 */
+  function startPolling() {
+    if (pollTimerRef.current) return;
+    pollTimerRef.current = window.setInterval(() => {
+      void checkTaskStatus();
+    }, 2000);
+  }
+
+  /** 停止轮询 */
+  function stopPolling() {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }
+
+  /** 重新加载图谱数据 */
+  async function reloadGraph() {
+    try {
+      const fetchFn = scope === "domain" ? getDomainGraphApi : getGraphApi;
+      const data = await fetchFn(resourceId);
+      setGraphData(data);
+    } catch (err: any) {
+      setError(err.message || "加载失败");
+    }
+  }
+
   // 触发生成
   const handleAnalyze = async () => {
-    if (analyzing) return;
-    setAnalyzing(true);
+    if (isProcessing) return;
     setError(null);
     try {
       const analyzeFn = scope === "domain" ? analyzeDomainGraphApi : analyzeGraphApi;
-      const data = await analyzeFn(resourceId);
-      setGraphData(data);
+      const result = await analyzeFn(resourceId);
+      taskIdRef.current = result.taskId;
+      setTaskStatus(result.status);
+      setTaskPosition(result.position);
+      setTaskLogs([]);
+      setTaskProgress(null);
+      startPolling();
     } catch (err: any) {
       setError(err.message || "生成失败");
-    } finally {
-      setAnalyzing(false);
     }
   };
 
@@ -113,21 +326,38 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
     };
   }, [graphData, showDocNodes]);
 
-  // 适配 force-graph；同向平行边分配不同曲率，减少重叠
+  // 树形分层布局 + 适配 force-graph；同向平行边轻微弯曲
   const graphForRender = useMemo(() => {
-    const nodes = displayNodes.map((n) => ({
-      id: n.id,
-      name: n.label,
-      type: n.type,
-      val: n.type === "concept" ? 4 : 2,
-      __raw: n,
-    }));
+    const layout = computeTreeLayout(
+      displayNodes.map((n) => n.id),
+      displayEdges.map((e) => ({ from: e.from, to: e.to })),
+      {
+        levelGap: showDocNodes ? 130 : 140,
+        nodeGap: showDocNodes ? 140 : 180,
+      },
+    );
+
+    const nodes = displayNodes.map((n) => {
+      const p = layout.get(n.id);
+      return {
+        id: n.id,
+        name: n.label,
+        type: n.type,
+        val: n.type === "concept" ? 4 : 2,
+        // 钉在树形坐标上，仿真不会再搅成毛球
+        fx: p?.x ?? 0,
+        fy: p?.y ?? 0,
+        __raw: n,
+        __level: p?.level ?? 0,
+      };
+    });
+
     const pairCount = new Map<string, number>();
     const links = displayEdges.map((e) => {
       const key = `${e.from}->${e.to}`;
       const idx = pairCount.get(key) ?? 0;
       pairCount.set(key, idx + 1);
-      const bend = idx === 0 ? 0.12 : 0.12 + idx * 0.18;
+      const bend = idx === 0 ? 0.04 : 0.04 + idx * 0.12;
       return {
         source: e.from,
         target: e.to,
@@ -137,14 +367,14 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
       };
     });
     return { nodes, links };
-  }, [displayNodes, displayEdges]);
+  }, [displayNodes, displayEdges, showDocNodes]);
 
-  // 节点变少时间距可稍紧；多时拉大斥力，少挤成团
+  // 树形钉点后只需轻微力；保留极弱斥力
   const forceTuning = useMemo(() => {
     const n = Math.max(1, displayNodes.length);
     return {
-      linkDistance: n <= 12 ? 140 : Math.min(220, 100 + n * 4),
-      chargeStrength: n <= 12 ? -450 : Math.max(-1200, -350 - n * 12),
+      linkDistance: 80,
+      chargeStrength: Math.max(-80, -20 - n),
     };
   }, [displayNodes.length]);
 
@@ -168,16 +398,16 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
     return () => ro.disconnect();
   }, []);
 
-  // 布局稳定后自动 fit，避免飞出视口
+  // 树形钉点几乎立刻稳定，缩短 fit 等待
   useEffect(() => {
     if (!graphData || loading) return;
     const t = window.setTimeout(() => {
-      graphRef.current?.zoomToFit?.(400, 60);
-    }, 700);
+      graphRef.current?.zoomToFit?.(400, 80);
+    }, 120);
     return () => window.clearTimeout(t);
   }, [graphData, showDocNodes, loading, dimensions.width, dimensions.height]);
 
-  // 通过 d3Force 调间距/斥力（库不提供 chargeStrength 等 React props）
+  // 树形布局：弱化力，避免把钉住的节点拽乱
   useEffect(() => {
     if (!graphData || loading) return;
     const fg = graphRef.current;
@@ -193,7 +423,9 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
         }
       | undefined;
     link?.distance?.(forceTuning.linkDistance);
-    link?.strength?.(0.25);
+    link?.strength?.(0.05);
+    // 关掉居中拉力，否则整棵树会被拽向中心挤扁
+    fg.d3Force("center", null);
     fg.d3ReheatSimulation?.();
   }, [forceTuning, graphData, loading, showDocNodes, graphForRender]);
 
@@ -261,12 +493,12 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
           <button
             className="graph-btn graph-btn-primary"
             onClick={handleAnalyze}
-            disabled={analyzing}
+            disabled={isProcessing}
           >
-            {analyzing ? (
+            {isProcessing ? (
               <>
                 <Loader2 size={14} className="spin" />
-                生成中...
+                {taskStatus === "pending" ? formatQueueStatus(taskPosition) : "生成中..."}
               </>
             ) : (
               <>
@@ -296,7 +528,7 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
           </div>
         )}
 
-        {!loading && !error && !graphData && (
+        {!loading && !error && !graphData && !isProcessing && (
           <div className="graph-empty">
             <p style={{ fontSize: 48, margin: 0 }}>🕸️</p>
             <h3>还没有知识图谱</h3>
@@ -304,14 +536,64 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
             <button
               className="graph-btn graph-btn-primary"
               onClick={handleAnalyze}
-              disabled={analyzing}
+              disabled={isProcessing}
             >
-              {analyzing ? "生成中..." : "生成图谱"}
+              {isProcessing ? "生成中..." : "生成图谱"}
             </button>
           </div>
         )}
 
-        {!loading && !error && graphData && (
+        {/* 进度面板：生成中/排队中时显示 */}
+        {isProcessing && (
+          <div className="graph-progress-panel">
+            <div className="graph-progress-header">
+              <Loader2 size={16} className="spin" />
+              <span>
+                {taskStatus === "pending"
+                  ? formatQueueStatus(taskPosition)
+                  : taskProgress
+                    ? `正在生成（${taskProgress.current}/${taskProgress.total}）`
+                    : "正在生成..."}
+              </span>
+            </div>
+            {taskProgress && taskProgress.total > 0 && (
+              <div className="graph-progress-bar">
+                <div
+                  className="graph-progress-bar-fill"
+                  style={{ width: `${(taskProgress.current / taskProgress.total) * 100}%` }}
+                />
+              </div>
+            )}
+            <div className="graph-progress-logs">
+              {taskLogs.slice(-10).map((log, i) => (
+                <div key={i} className={`graph-log-item graph-log-${log.level}`}>
+                  <span className="graph-log-event">{formatLogEvent(log)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && graphData && graphData.nodes.length === 0 && !isProcessing && (
+          <div className="graph-empty">
+            <p style={{ fontSize: 48, margin: 0 }}>📄</p>
+            <h3>图谱已生成</h3>
+            <p className="muted">当前内容暂未提取到可关联的知识概念</p>
+            <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+              内容较少或结构较简单时可能出现这种情况，补充更多内容后可以重新生成
+            </p>
+            <button
+              className="graph-btn graph-btn-primary"
+              onClick={handleAnalyze}
+              disabled={isProcessing}
+              style={{ marginTop: 12 }}
+            >
+              重新生成
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && graphData && graphData.nodes.length > 0 && (
           <ForceGraph2D
             ref={graphRef}
             width={dimensions.width}
@@ -478,8 +760,10 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
               // 触发重绘，使 linkWidth / 箭头随缩放更新
               graphRef.current?.refresh?.();
             }}
-            cooldownTicks={200}
-            cooldownTime={5000}
+            cooldownTicks={40}
+            cooldownTime={800}
+            dagMode="td"
+            dagLevelDistance={140}
             onNodeClick={(node: any) => {
               setSelectedNode(node.__raw as GraphNode);
             }}
@@ -491,7 +775,7 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
               setHoveredNodeId(null);
             }}
             onEngineStop={() => {
-              graphRef.current?.zoomToFit?.(300, 48);
+              graphRef.current?.zoomToFit?.(300, 72);
             }}
             linkHoverPrecision={8}
             enableNodeDrag={true}

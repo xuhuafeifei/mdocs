@@ -12,6 +12,7 @@
  * drop 高亮由树根统一 state 管理，dragEnd / drop 时一律清空，避免残留。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Network, Zap } from "lucide-react";
 import { useI18n } from "../i18n";
 import type {
   TreeFolderNode,
@@ -417,7 +418,12 @@ function DocRow(props: {
     >
       <span className="mdocs-tree-caret-spacer" aria-hidden />
       <span className="mdocs-tree-icon">md</span>
-      <span className="mdocs-tree-label">{doc.displayName || doc.name}</span>
+      <span
+        className="mdocs-tree-label"
+        title={doc.displayName || doc.name}
+      >
+        {doc.displayName || doc.name}
+      </span>
       {(props.onOpenGraph || props.onGenerateGraph) && (
         <span
           className="mdocs-tree-hover-actions"
@@ -433,7 +439,7 @@ function DocRow(props: {
                 props.onOpenGraph?.(props.doc, props.parentFolderId ?? undefined);
               }}
             >
-              🕸️
+              <Network size={14} strokeWidth={1.75} />
             </button>
           )}
           {props.onGenerateGraph && (
@@ -446,7 +452,7 @@ function DocRow(props: {
                 props.onGenerateGraph?.(props.doc, props.parentFolderId ?? undefined);
               }}
             >
-              ⚡
+              <Zap size={14} strokeWidth={1.75} />
             </button>
           )}
         </span>
@@ -578,7 +584,10 @@ function FolderRow(props: {
         </span>
         <FolderDirIcon />
         <span className="mdocs-tree-folder-select">
-          <span className="mdocs-tree-label">
+          <span
+            className="mdocs-tree-label"
+            title={props.folder.folderDisplayName?.trim() || props.folder.name}
+          >
             {props.folder.folderDisplayName?.trim() || props.folder.name}
           </span>
         </span>
@@ -597,7 +606,7 @@ function FolderRow(props: {
                   props.onOpenGraph?.(props.folder);
                 }}
               >
-                🕸️
+                <Network size={14} strokeWidth={1.75} />
               </button>
             )}
             {props.onGenerateGraph && (
@@ -610,7 +619,7 @@ function FolderRow(props: {
                   props.onGenerateGraph?.(props.folder);
                 }}
               >
-                ⚡
+                <Zap size={14} strokeWidth={1.75} />
               </button>
             )}
           </span>

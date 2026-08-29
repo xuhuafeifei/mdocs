@@ -45,7 +45,7 @@ import {
 } from "@lobehub/editor";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
-import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, Network, PanelLeftOpen, RefreshCw, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star, Workflow } from "lucide-react";
+import { Heading1Icon, Heading2Icon, Heading3Icon, EllipsisVertical, MinusIcon, Network, PanelLeftOpen, RefreshCw, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star, Workflow } from "lucide-react";
 
 import deepseekLogoUrl from "../assets/deepseek.svg";
 import type { ActiveDocumentMeta } from "../../shared/types/document";
@@ -182,7 +182,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
   // ---- 文档信息菜单显示状态 ----
   const [showDocInfoMenu, setShowDocInfoMenu] = useState(false);
+  const [showReaderMoreMenu, setShowReaderMoreMenu] = useState(false);
   const docInfoMenuRef = useRef<HTMLDivElement>(null);
+  const readerMoreMenuRef = useRef<HTMLDivElement>(null);
   const [visitors, setVisitors] = useState<VisitorDirectoryEntry[]>([]);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [permissionDraft, setPermissionDraft] = useState<DocumentPermissionValue>(props.meta.permission as DocumentPermissionValue);
@@ -198,13 +200,16 @@ export function DocumentEditor(props: DocumentEditorProps) {
       if (docInfoMenuRef.current && !docInfoMenuRef.current.contains(event.target as Node)) {
         setShowDocInfoMenu(false);
       }
+      if (readerMoreMenuRef.current && !readerMoreMenuRef.current.contains(event.target as Node)) {
+        setShowReaderMoreMenu(false);
+      }
     };
 
-    if (showDocInfoMenu) {
+    if (showDocInfoMenu || showReaderMoreMenu) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showDocInfoMenu]);
+  }, [showDocInfoMenu, showReaderMoreMenu]);
 
   // ---- 加载访客目录（用于显示创建者昵称）----
   useEffect(() => {
@@ -823,6 +828,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
     return () => window.clearTimeout(timer);
   }, [readerChrome, readerHeaderDocked, props.meta.documentId]);
 
+  useEffect(() => {
+    setShowReaderMoreMenu(false);
+    setShowDocInfoMenu(false);
+  }, [props.meta.documentId]);
+
   function onReaderHeaderPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!readerChrome || readerHeaderDocked) return;
     if ((e.target as HTMLElement).closest("button, a, input, textarea, select")) return;
@@ -852,6 +862,105 @@ export function DocumentEditor(props: DocumentEditorProps) {
     }
   }
 
+  function closeToolbarMenus() {
+    setShowDocInfoMenu(false);
+    setShowReaderMoreMenu(false);
+  }
+
+  function renderDocInfoMenuPanel(onClose: () => void, options?: { includeBookmark?: boolean }) {
+    const includeBookmark = options?.includeBookmark ?? true;
+    const menuItemStyle = {
+      width: "100%",
+      textAlign: "left" as const,
+      padding: "8px 16px",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      fontSize: "13px",
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+    };
+
+    return (
+      <>
+        <div style={{ padding: "4px 16px", fontSize: "13px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCreator")}</span>
+            <span>{getVisitorName(props.meta.ownerVisitorId)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCreatedAt")}</span>
+            <span>{new Date(props.meta.createdAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoSize")}</span>
+            <span>{formatFileSize(new Blob([props.initialContent]).size)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoUpdatedAt")}</span>
+            <span>{new Date(props.meta.updatedAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
+          </div>
+        </div>
+        <div style={{ height: "1px", background: "var(--mdocs-border, #e5e5e5)", margin: "8px 0" }} />
+        {includeBookmark ? (
+          <button
+            type="button"
+            style={menuItemStyle}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+            onClick={() => {
+              void toggleBookmark();
+              onClose();
+            }}
+          >
+            <span>{isBookmarked ? "⭐" : "☆"}</span>
+            <span>{isBookmarked ? t("bookmarkRemove") : t("bookmarkAdd")}</span>
+          </button>
+        ) : null}
+        {props.canManageInvites ? (
+          <button
+            type="button"
+            style={menuItemStyle}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+            onClick={() => {
+              onClose();
+              void (async () => {
+                setInviteLoading(true);
+                try {
+                  const invites = await getDocumentInvitesApi(props.meta.documentId);
+                  const inviteMap = new Map(invites.map((i) => [i.visitorId, i.permission]));
+                  setExistingInvites(inviteMap);
+                  setShowInvitePicker(true);
+                } finally {
+                  setInviteLoading(false);
+                }
+              })();
+            }}
+          >
+            <Users size={14} />
+            <span>{t("docInfoInviteMember")}</span>
+          </button>
+        ) : null}
+        <button
+          type="button"
+          style={menuItemStyle}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+          onClick={() => {
+            onClose();
+            setPermissionDraft(props.meta.permission as DocumentPermissionValue);
+            setShowPermissionDialog(true);
+          }}
+        >
+          <ShieldUser size={14} />
+          <span>{t("docInfoChangePermission")}</span>
+        </button>
+      </>
+    );
+  }
+
   return (
     <div
       className={
@@ -872,109 +981,46 @@ export function DocumentEditor(props: DocumentEditorProps) {
         }
         style={
           readerChrome && !readerHeaderDocked && readerDragOffset !== 0
-            ? { transform: `translate(-50%, ${readerDragOffset}px)` }
+            ? { transform: `translateY(${readerDragOffset}px)` }
             : undefined
         }
-        onPointerDown={onReaderHeaderPointerDown}
-        onPointerMove={onReaderHeaderPointerMove}
-        onPointerUp={onReaderHeaderPointerUp}
-        onPointerCancel={onReaderHeaderPointerUp}
       >
         {readerChrome ? (
-          <button
-            type="button"
-            className="mdocs-reader-nav-btn"
-            onClick={() => props.onOpenMobileNav?.()}
-            aria-label={t("expandSidebar")}
-          >
-            <PanelLeftOpen size={18} strokeWidth={1.75} />
-          </button>
-        ) : null}
-        {/* 文档标题输入框 */}
-        <input
-          className="mdocs-editor-title-input"
-          value={displayName}
-          // 用户输入时实时更新标题状态
-          onChange={(e) => setDisplayName(e.target.value)}
-          // 失焦时检查标题是否有变更，有则自动发布
-          onBlur={() => void saveDisplayNameIfChanged()}
-          placeholder={t("displayNamePlaceholder")}
-          // 非编辑模式时禁用标题输入
-          disabled={!editing}
-          readOnly={readerChrome && !editing}
-        />
-        {/* 域选择 / 帮写：阅读浮条不展示 */}
-        {!readerChrome ? (
-          <DomainSelect
-            // 如果没有域数据，使用 fallback 默认域避免空白
-            domains={props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY]}
-            value={props.currentDomainId}
-            onChange={props.onDomainChange}
-            onDomainsChange={props.onDomainsChange}
-            ariaLabel={t("currentDomainAria")}
-            localizeName={(name: string) => localizeDomainName(name, lang, t)}
-          />
-        ) : null}
-        {!readerChrome && props.onAiWrite ? (
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => props.onAiWrite?.()}
-            style={{
-              padding: "4px 10px",
-              whiteSpace: "nowrap",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <img src={deepseekLogoUrl} alt="" width={16} height={16} style={{ display: "block" }} />
-            帮写
-          </button>
-        ) : null}
-        <button
-          type="button"
-          className="secondary mdocs-tooltip mdocs-tooltip-bottom"
-          onClick={() => void toggleBookmark()}
-          disabled={bookmarkBusy}
-          data-tooltip={isBookmarked ? "取消收藏" : "收藏"}
-          style={{
-            padding: "4px 8px",
-            minWidth: "auto",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 4,
-            opacity: bookmarkBusy ? 0.5 : 1,
-          }}
-        >
-          <Star
-            size={18}
-            strokeWidth={1.5}
-            style={{
-              color: isBookmarked ? "#faad14" : "var(--mdocs-text-secondary, #6b7280)",
-              fill: isBookmarked ? "#faad14" : "none",
-            }}
-          />
-          {!readerChrome && isBookmarked ? <span>已收藏</span> : null}
-        </button>
-        {/* 弹性占位，将右侧按钮推到最右边 */}
-        {!readerChrome ? <span className="mdocs-editor-toolbar-spacer" aria-hidden /> : null}
-        <div className="mdocs-editor-toolbar-actions">
-          {!readerChrome && props.onSyncClick ? (
-            <button
-              type="button"
-              className={"mdocs-sync-btn mdocs-tooltip mdocs-tooltip-bottom" + (props.syncBehind ? " behind" : "")}
-              data-tooltip={props.syncBehind ? t("syncBehindHint") : t("syncPull")}
-              onClick={() => void props.onSyncClick?.()}
-              style={{ display: "flex", alignItems: "center", gap: 4 }}
+          <>
+            <div
+              className="mdocs-editor-toolbar-leading"
+              onPointerDown={onReaderHeaderPointerDown}
+              onPointerMove={onReaderHeaderPointerMove}
+              onPointerUp={onReaderHeaderPointerUp}
+              onPointerCancel={onReaderHeaderPointerUp}
             >
-              <RefreshCw size={16} strokeWidth={1.5} />
-              <span>{t("syncPull")}</span>
-            </button>
-          ) : null}
-          {readerChrome && props.canEdit ? (
-            <>
+              <button
+                type="button"
+                className="mdocs-reader-nav-btn"
+                onClick={() => props.onOpenMobileNav?.()}
+                aria-label={t("expandSidebar")}
+              >
+                <PanelLeftOpen size={18} strokeWidth={1.75} />
+              </button>
+              <input
+                className="mdocs-editor-title-input"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                onBlur={() => void saveDisplayNameIfChanged()}
+                placeholder={t("displayNamePlaceholder")}
+                disabled={!editing}
+                readOnly={!editing}
+              />
+            </div>
+            <DomainSelect
+              domains={props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY]}
+              value={props.currentDomainId}
+              onChange={props.onDomainChange}
+              onDomainsChange={props.onDomainsChange}
+              ariaLabel={t("currentDomainAria")}
+              localizeName={(name: string) => localizeDomainName(name, lang, t)}
+            />
+            {props.canEdit ? (
               <button
                 type="button"
                 className="primary mdocs-reader-action-btn"
@@ -986,209 +1032,202 @@ export function DocumentEditor(props: DocumentEditorProps) {
               >
                 {busy ? t("publishing") : t("publish")}
               </button>
-              <button
-                type="button"
-                className="danger mdocs-reader-action-btn"
-                disabled={busy}
-                onClick={() => void props.onDelete()}
-              >
-                {t("delete")}
-              </button>
-            </>
-          ) : null}
-          {!readerChrome && editing ? (
-            <>
-              {/* 未开启自动同步时，显示保存状态指示器 */}
-              {localStorage.getItem("mdocs.autoPublish") !== "true" && (
-                <span className="mdocs-save-indicator">
-                  {/* 根据状态显示不同颜色的圆点 */}
-                  <span className={"mdocs-save-dot " + (busy ? "saving" : draftExists ? "unsaved" : "saved")} />
-                  <span>
-                    {/* busy: 发布中 / draftExists: 有未保存草稿 / 否则: 已发布 */}
-                    {busy ? t("publishing") : draftExists ? t("unsaved") : t("published")}
-                  </span>
-                </span>
-              )}
-              {/* 发布按钮 */}
-              <button
-                type="button"
-                className="primary"
-                disabled={busy}
-                onClick={() => {
-                  void publish().catch(() => {});
-                }}
-              >
-                {busy ? t("publishing") : t("publish")}
-              </button>
-              {/* 删除按钮 */}
-              <button type="button" className="danger" disabled={busy} onClick={props.onDelete}>
-                {t("delete")}
-              </button>
-            </>
-          ) : null}
-          {!readerChrome && !editing && props.canEdit ? (
-            <button type="button" className="primary" onClick={() => setIsEditing(true)}>
-              {t("edit")}
-            </button>
-          ) : null}
-          {/* 评论按钮（所有模式都显示） */}
-          <button
-            type="button"
-            className="secondary mdocs-tooltip mdocs-tooltip-bottom"
-            onClick={props.onToggleComments}
-            data-tooltip="评论"
-            style={{
-              padding: "4px 8px",
-              minWidth: "auto",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 4,
-              background: props.commentPanelOpen ? "var(--mdocs-hover-bg, #f0f0f0)" : undefined,
-            }}
-          >
-            <MessageSquare size={18} strokeWidth={1.5} style={{ color: "var(--mdocs-text-secondary, #6b7280)" }} />
-            {!readerChrome && props.commentCount > 0 ? (
-              <span style={{ fontSize: "0.85rem" }}>{props.commentCount}</span>
             ) : null}
-          </button>
-          {/* 文档信息菜单按钮（所有模式都显示） */}
-          <div ref={docInfoMenuRef} className="mdocs-tooltip mdocs-tooltip-bottom" data-tooltip={t("docInfo")} style={{ position: "relative" }}>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setShowDocInfoMenu(!showDocInfoMenu)}
-              style={{ padding: "4px 8px", minWidth: "auto", display: "flex", alignItems: "center", justifyContent: "center" }}
-            >
-              <TextAlignJustify size={18} strokeWidth={1.5} style={{ color: "var(--mdocs-text-secondary, #6b7280)" }} />
-            </button>
-            {/* 下拉菜单 */}
-            {showDocInfoMenu && (
-              <div
+            <div ref={readerMoreMenuRef} className="mdocs-reader-more-menu">
+              <button
+                type="button"
+                className="mdocs-reader-more-btn"
+                aria-label="更多"
+                aria-expanded={showReaderMoreMenu}
+                onClick={() => setShowReaderMoreMenu((open) => !open)}
+              >
+                <EllipsisVertical size={18} strokeWidth={1.75} />
+              </button>
+              {showReaderMoreMenu ? (
+                <div className="mdocs-reader-more-dropdown card">
+                  <button
+                    type="button"
+                    className="mdocs-reader-more-item"
+                    disabled={bookmarkBusy}
+                    onClick={() => {
+                      void toggleBookmark();
+                      closeToolbarMenus();
+                    }}
+                  >
+                    <Star
+                      size={16}
+                      strokeWidth={1.5}
+                      style={{
+                        color: isBookmarked ? "#faad14" : "var(--mdocs-text-secondary, #6b7280)",
+                        fill: isBookmarked ? "#faad14" : "none",
+                      }}
+                    />
+                    <span>{isBookmarked ? t("bookmarkRemove") : t("bookmarkAdd")}</span>
+                  </button>
+                  {props.canEdit ? (
+                    <button
+                      type="button"
+                      className="mdocs-reader-more-item mdocs-reader-more-item--danger"
+                      disabled={busy}
+                      onClick={() => {
+                        closeToolbarMenus();
+                        void props.onDelete();
+                      }}
+                    >
+                      <span>{t("delete")}</span>
+                    </button>
+                  ) : null}
+                  <div className="mdocs-reader-more-divider" />
+                  {renderDocInfoMenuPanel(closeToolbarMenus, { includeBookmark: false })}
+                </div>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mdocs-editor-toolbar-leading">
+              <input
+                className="mdocs-editor-title-input"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                onBlur={() => void saveDisplayNameIfChanged()}
+                placeholder={t("displayNamePlaceholder")}
+                disabled={!editing}
+              />
+              <DomainSelect
+                domains={props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY]}
+                value={props.currentDomainId}
+                onChange={props.onDomainChange}
+                onDomainsChange={props.onDomainsChange}
+                ariaLabel={t("currentDomainAria")}
+                localizeName={(name: string) => localizeDomainName(name, lang, t)}
+              />
+              {props.onAiWrite ? (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => props.onAiWrite?.()}
+                  style={{
+                    padding: "4px 10px",
+                    whiteSpace: "nowrap",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <img src={deepseekLogoUrl} alt="" width={16} height={16} style={{ display: "block" }} />
+                  帮写
+                </button>
+              ) : null}
+            </div>
+            <span className="mdocs-editor-toolbar-spacer" aria-hidden />
+            <div className="mdocs-editor-toolbar-trailing">
+              <button
+                type="button"
+                className="secondary mdocs-tooltip mdocs-tooltip-bottom"
+                onClick={() => void toggleBookmark()}
+                disabled={bookmarkBusy}
+                data-tooltip={isBookmarked ? "取消收藏" : "收藏"}
                 style={{
-                  position: "absolute",
-                  top: "100%",
-                  right: 0,
-                  marginTop: "4px",
-                  background: "var(--mdocs-surface, #fff)",
-                  border: "1px solid var(--mdocs-border, #e5e5e5)",
-                  borderRadius: "8px",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                  minWidth: "220px",
-                  zIndex: 100,
-                  padding: "8px 0",
+                  padding: "4px 8px",
+                  minWidth: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 4,
+                  opacity: bookmarkBusy ? 0.5 : 1,
                 }}
               >
-                {/* 元信息区域 */}
-                <div style={{ padding: "4px 16px", fontSize: "13px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                    <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCreator")}</span>
-                    <span>{getVisitorName(props.meta.ownerVisitorId)}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                    <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCreatedAt")}</span>
-                    <span>{new Date(props.meta.createdAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                    <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoSize")}</span>
-                    <span>{formatFileSize(new Blob([props.initialContent]).size)}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoUpdatedAt")}</span>
-                    <span>{new Date(props.meta.updatedAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
-                  </div>
+                <Star
+                  size={18}
+                  strokeWidth={1.5}
+                  style={{
+                    color: isBookmarked ? "#faad14" : "var(--mdocs-text-secondary, #6b7280)",
+                    fill: isBookmarked ? "#faad14" : "none",
+                  }}
+                />
+                {isBookmarked ? <span>已收藏</span> : null}
+              </button>
+              <div className="mdocs-editor-toolbar-actions">
+                {props.onSyncClick ? (
+                  <button
+                    type="button"
+                    className={"mdocs-sync-btn mdocs-tooltip mdocs-tooltip-bottom" + (props.syncBehind ? " behind" : "")}
+                    data-tooltip={props.syncBehind ? t("syncBehindHint") : t("syncPull")}
+                    onClick={() => void props.onSyncClick?.()}
+                    style={{ display: "flex", alignItems: "center", gap: 4 }}
+                  >
+                    <RefreshCw size={16} strokeWidth={1.5} />
+                    <span>{t("syncPull")}</span>
+                  </button>
+                ) : null}
+                {editing ? (
+                  <>
+                    {localStorage.getItem("mdocs.autoPublish") !== "true" && (
+                      <span className="mdocs-save-indicator">
+                        <span className={"mdocs-save-dot " + (busy ? "saving" : draftExists ? "unsaved" : "saved")} />
+                        <span>
+                          {busy ? t("publishing") : draftExists ? t("unsaved") : t("published")}
+                        </span>
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={busy}
+                      onClick={() => {
+                        void publish().catch(() => {});
+                      }}
+                    >
+                      {busy ? t("publishing") : t("publish")}
+                    </button>
+                    <button type="button" className="danger" disabled={busy} onClick={props.onDelete}>
+                      {t("delete")}
+                    </button>
+                  </>
+                ) : null}
+                {!editing && props.canEdit ? (
+                  <button type="button" className="primary" onClick={() => setIsEditing(true)}>
+                    {t("edit")}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="secondary mdocs-tooltip mdocs-tooltip-bottom"
+                  onClick={props.onToggleComments}
+                  data-tooltip="评论"
+                  style={{
+                    padding: "4px 8px",
+                    minWidth: "auto",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
+                    background: props.commentPanelOpen ? "var(--mdocs-hover-bg, #f0f0f0)" : undefined,
+                  }}
+                >
+                  <MessageSquare size={18} strokeWidth={1.5} style={{ color: "var(--mdocs-text-secondary, #6b7280)" }} />
+                  {props.commentCount > 0 ? <span style={{ fontSize: "0.85rem" }}>{props.commentCount}</span> : null}
+                </button>
+                <div ref={docInfoMenuRef} className="mdocs-tooltip mdocs-tooltip-bottom" data-tooltip={t("docInfo")} style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setShowDocInfoMenu(!showDocInfoMenu)}
+                    style={{ padding: "4px 8px", minWidth: "auto", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <TextAlignJustify size={18} strokeWidth={1.5} style={{ color: "var(--mdocs-text-secondary, #6b7280)" }} />
+                  </button>
+                  {showDocInfoMenu ? (
+                    <div className="mdocs-doc-info-dropdown">
+                      {renderDocInfoMenuPanel(closeToolbarMenus)}
+                    </div>
+                  ) : null}
                 </div>
-                {/* 分隔线 */}
-                <div style={{ height: "1px", background: "var(--mdocs-border, #e5e5e5)", margin: "8px 0" }} />
-                {/* 可点击操作按钮区域 */}
-                <button
-                  type="button"
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "8px 16px",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-                  onClick={() => {
-                    void toggleBookmark();
-                  }}
-                >
-                  <span>{isBookmarked ? "⭐" : "☆"}</span>
-                  <span>{isBookmarked ? t("bookmarkRemove") : t("bookmarkAdd")}</span>
-                </button>
-                {props.canManageInvites && (
-                <button
-                  type="button"
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "8px 16px",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-                  onClick={() => {
-                    setShowDocInfoMenu(false);
-                    void (async () => {
-                      setInviteLoading(true);
-                      try {
-                        const invites = await getDocumentInvitesApi(props.meta.documentId);
-                        const inviteMap = new Map(invites.map((i) => [i.visitorId, i.permission]));
-                        setExistingInvites(inviteMap);
-                        setShowInvitePicker(true);
-                      } finally {
-                        setInviteLoading(false);
-                      }
-                    })();
-                  }}
-                >
-                  <Users size={14} />
-                  <span>{t("docInfoInviteMember")}</span>
-                </button>
-                )}
-                <button
-                  type="button"
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "8px 16px",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-                  onClick={() => {
-                    setShowDocInfoMenu(false);
-                    setPermissionDraft(props.meta.permission as DocumentPermissionValue);
-                    setShowPermissionDialog(true);
-                  }}
-                >
-                  <ShieldUser size={14} />
-                  <span>{t("docInfoChangePermission")}</span>
-                </button>
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
       </div>
       {showPermissionDialog && (
         <div

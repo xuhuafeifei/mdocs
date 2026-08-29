@@ -202,7 +202,7 @@
 
 .mdocs-tree-row {
   display: grid;
-  grid-template-columns: 12px 22px minmax(0, 1fr);
+  grid-template-columns: 12px 22px minmax(0, 1fr) auto;
   column-gap: 6px;
   align-items: center;
   width: 100%;
@@ -2729,6 +2729,7 @@ button.small {
 
 .mdocs-tree-folder-select {
   min-width: 0;
+  overflow: hidden;
   margin: 0;
   padding: 0;
   text-align: left;
@@ -2739,10 +2740,18 @@ button.small {
 }
 
 .mdocs-tree-label {
+  display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+
+/* 标题列裁切，给右侧操作按钮留位，避免字和图标叠在一起 */
+.mdocs-tree-row > .mdocs-tree-label,
+.mdocs-tree-row > .mdocs-tree-folder-select {
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* === Context menu === */
@@ -2868,6 +2877,35 @@ button.small {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.mdocs-editor-toolbar-leading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.mdocs-editor-toolbar-trailing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.mdocs-doc-info-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 220px;
+  z-index: 100;
+  padding: 8px 0;
+  background: var(--mdocs-surface, #fff);
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* Suppress green focus ring on editor content click */
@@ -4389,41 +4427,52 @@ strong.label {
     position: relative;
   }
 
-  /* 浮条：轻阴影，避免投出一条灰带 */
-  .mdocs-editor-toolbar--float {
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 30;
-    width: auto;
-    max-width: calc(100% - 20px);
-    padding: 6px 10px;
+  /* 浮条 / 吸附顶栏：收缩 + 标题 + 域 + 发布 + 更多 */
+  .mdocs-editor-toolbar--float,
+  .mdocs-editor-toolbar--docked {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
     gap: 6px;
-    border: 1px solid color-mix(in srgb, var(--mdocs-border) 80%, transparent);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--mdocs-surface) 96%, transparent);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-    touch-action: none;
-    cursor: grab;
-    user-select: none;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: visible;
   }
 
-  .mdocs-editor-toolbar--float:active {
+  .mdocs-editor-toolbar--float {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    padding: 8px 10px;
+    border: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--mdocs-border) 80%, transparent);
+    border-radius: 0;
+    background: color-mix(in srgb, var(--mdocs-surface) 98%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  }
+
+  .mdocs-editor-toolbar--float .mdocs-editor-toolbar-leading {
+    touch-action: none;
+    cursor: grab;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
+    padding-right: 0;
+  }
+
+  .mdocs-editor-toolbar--float .mdocs-editor-toolbar-leading:active {
     cursor: grabbing;
   }
 
-  /* 吸附顶栏：贴顶全宽，无大阴影 */
   .mdocs-editor-toolbar--docked {
     position: sticky;
     top: 0;
     left: 0;
     z-index: 30;
-    width: 100%;
-    max-width: none;
     padding: 8px 12px;
-    gap: 6px;
     border: none;
     border-radius: 0;
     border-bottom: 1px solid var(--mdocs-border);
@@ -4432,22 +4481,116 @@ strong.label {
     transform: none;
   }
 
+  .mdocs-editor-toolbar--docked .mdocs-editor-toolbar-leading {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
+    padding-right: 0;
+  }
+
   .mdocs-editor-toolbar--float .mdocs-editor-title-input,
   .mdocs-editor-toolbar--docked .mdocs-editor-title-input {
     width: auto;
-    max-width: min(42vw, 160px);
+    max-width: none;
     flex: 1 1 auto;
+    min-width: 0;
     border: none;
     background: transparent;
     box-shadow: none;
-    padding: 4px 6px;
+    padding: 4px 4px;
     font-size: 14px;
     font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .mdocs-editor-toolbar--float .mdocs-editor-toolbar-actions,
-  .mdocs-editor-toolbar--docked .mdocs-editor-toolbar-actions {
-    gap: 4px;
+  .mdocs-editor-toolbar--float .mdocs-domain-select-wrapper,
+  .mdocs-editor-toolbar--docked .mdocs-domain-select-wrapper {
+    flex: 0 1 auto;
+    min-width: 72px;
+    max-width: min(26vw, 108px);
+  }
+
+  .mdocs-editor-toolbar--float .mdocs-domain-select-trigger,
+  .mdocs-editor-toolbar--docked .mdocs-domain-select-trigger {
+    height: 32px;
+    padding: 0 6px;
+    font-size: 12px;
+  }
+
+  .mdocs-editor-toolbar--float .mdocs-reader-action-btn,
+  .mdocs-editor-toolbar--docked .mdocs-reader-action-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+    border-radius: 999px;
+    min-width: auto;
+    flex-shrink: 0;
+  }
+
+  .mdocs-reader-more-menu {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .mdocs-reader-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--mdocs-text-secondary, #6b7280);
+    cursor: pointer;
+  }
+
+  .mdocs-reader-more-btn:hover {
+    background: var(--mdocs-hover-bg, #f0f0f0);
+  }
+
+  .mdocs-reader-more-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 240px;
+    max-width: min(88vw, 300px);
+    padding: 8px 0;
+    z-index: 120;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+  }
+
+  .mdocs-reader-more-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-size: 14px;
+    color: var(--mdocs-text);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .mdocs-reader-more-item:hover {
+    background: var(--mdocs-hover-bg, #f5f5f5);
+  }
+
+  .mdocs-reader-more-item--danger {
+    color: var(--mdocs-danger, #dc2626);
+  }
+
+  .mdocs-reader-more-divider {
+    height: 1px;
+    margin: 6px 0;
+    background: var(--mdocs-border, #e5e5e5);
   }
 
   .mdocs-editor-toolbar--float .secondary,
@@ -4459,20 +4602,6 @@ strong.label {
     box-shadow: none;
   }
 
-  .mdocs-editor-toolbar--float .mdocs-reader-action-btn,
-  .mdocs-editor-toolbar--docked .mdocs-reader-action-btn {
-    padding: 4px 8px;
-    font-size: 12px;
-    line-height: 1.2;
-    white-space: nowrap;
-    border-radius: 999px;
-    min-width: auto;
-  }
-
-  .mdocs-editor-toolbar--float .mdocs-editor-title-input {
-    max-width: min(28vw, 110px);
-  }
-
   .mdocs-reader-nav-btn {
     display: inline-flex;
     align-items: center;
@@ -4481,6 +4610,7 @@ strong.label {
     border-radius: 8px;
     color: var(--mdocs-text);
     cursor: pointer;
+    flex-shrink: 0;
   }
 
   .mdocs-reader-nav-btn:hover {
@@ -4489,7 +4619,7 @@ strong.label {
 
   /* 仅浮着时给正文一点顶距；吸附后不再留空 */
   .mdocs-editor--reader:not(.mdocs-editor--reader-docked) .mdocs-editor-content-area {
-    padding-top: 52px;
+    padding-top: 48px;
   }
 
   .mdocs-editor--reader-docked .mdocs-editor-content-area {
@@ -4552,32 +4682,46 @@ strong.label {
   }
 }
 
-/* ===== 目录树 hover 操作按钮 ===== */
+/* ===== 目录树 hover 操作按钮（右侧占位 + 悬停显现） ===== */
 .mdocs-tree-hover-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
-  margin-left: auto;
-  padding-right: 4px;
+  gap: 1px;
+  justify-self: end;
+  flex-shrink: 0;
+  width: 46px; /* 固定占位，标题始终省略给图标留空 */
+  justify-content: flex-end;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.mdocs-tree-row:hover .mdocs-tree-hover-actions,
+.mdocs-tree-row:focus-within .mdocs-tree-hover-actions {
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .mdocs-tree-icon-btn {
-  width: 20px;
-  height: 20px;
-  display: flex;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   border: none;
   background: transparent;
-  border-radius: 3px;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 12px;
   padding: 0;
-  opacity: 0.7;
-  transition: opacity 0.15s, background 0.15s;
+  color: var(--mdocs-text-secondary, #6b7280);
+  transition: color 0.15s, background 0.15s;
 }
 
 .mdocs-tree-icon-btn:hover {
-  opacity: 1;
-  background: var(--mdocs-hover-bg, #f0f0f0);
+  color: var(--mdocs-text);
+  background: color-mix(in srgb, var(--mdocs-text) 8%, transparent);
+}
+
+.mdocs-tree-icon-btn svg {
+  display: block;
+  flex-shrink: 0;
 }
