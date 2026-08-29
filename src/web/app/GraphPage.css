@@ -34,6 +34,37 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.graph-depth-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.graph-btn-active {
+  background: #eef2ff;
+  border-color: #a5b4fc;
+  color: #4338ca;
+}
+
+.graph-node-tooltip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 14px));
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+  max-width: 280px;
+  white-space: normal;
+  word-break: break-word;
+  pointer-events: none;
+  z-index: 20;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 
 .graph-toggle {

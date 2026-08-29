@@ -1047,10 +1047,16 @@ export interface GraphNode {
   }>;
 }
 
+export type GraphEdgeType =
+  | "contains"
+  | "related_to"
+  | "part_of"
+  | "depends_on";
+
 export interface GraphEdge {
   from: string;
   to: string;
-  type: "contains";
+  type: GraphEdgeType | string;
   confidence: number;
 }
 

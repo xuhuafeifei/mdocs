@@ -2,9 +2,9 @@
  * 知识图谱页面
  *
  * 功能：
- * 1. 力导向图可视化（react-force-graph-2d）
- * 2. 点击节点 → 右侧详情面板
- * 3. 右上角「生成/重新生成」按钮
+ * 1. 力导向图可视化（react-force-graph-2d）——只渲染分层可见子图
+ * 2. 点击节点 → 右侧详情面板；角标展开/收起 contains 子节点
+ * 3. 工具栏：展开一级 / 展开到二级 / 全部收起；其它关系边开关
  * 4. 筛选器：显示 doc 节点开关（默认关，只看 concept）
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -22,6 +22,15 @@ import {
   type GraphTaskLogEntry,
   type GraphTaskStatusEnum,
 } from "../services/endpoints";
+import {
+  buildContainsHierarchy,
+  containsAncestors,
+  computeVisibleIds,
+  isContainsEdge,
+  isEffectivelyExpanded,
+  isOtherRelationEdge,
+  type GlobalDepth,
+} from "./graph-layered-view";
 import "./GraphPage.css";
 
 /** 把日志事件转成用户可读的文字 */
@@ -70,101 +79,6 @@ function screenToWorld(globalScale: number, screenPx: number, minScreenPx?: numb
   return px / scale;
 }
 
-/**
- * 按树形思路分层：入度 0 为根（顶层），其余按最长路径向下排布。
- * 有环时环内未排到的节点挂到最底层之后。
- */
-function computeTreeLayout(
-  nodeIds: string[],
-  edges: Array<{ from: string; to: string }>,
-  opts?: { levelGap?: number; nodeGap?: number },
-): Map<string, { x: number; y: number; level: number }> {
-  const levelGap = opts?.levelGap ?? 120;
-  const nodeGap = opts?.nodeGap ?? 160;
-  const idSet = new Set(nodeIds);
-  const children = new Map<string, string[]>();
-  const inDegree = new Map<string, number>();
-  for (const id of nodeIds) {
-    children.set(id, []);
-    inDegree.set(id, 0);
-  }
-  for (const e of edges) {
-    if (!idSet.has(e.from) || !idSet.has(e.to) || e.from === e.to) continue;
-    children.get(e.from)!.push(e.to);
-    inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1);
-  }
-
-  let roots = nodeIds.filter((id) => (inDegree.get(id) ?? 0) === 0);
-  if (roots.length === 0 && nodeIds.length > 0) {
-    const minIn = Math.min(...nodeIds.map((id) => inDegree.get(id) ?? 0));
-    roots = nodeIds.filter((id) => (inDegree.get(id) ?? 0) === minIn);
-  }
-
-  // Kahn + 最长路径：子节点 level = max(父) + 1
-  const level = new Map<string, number>();
-  const pendingIn = new Map(inDegree);
-  const queue: string[] = [];
-  for (const r of roots) {
-    level.set(r, 0);
-    queue.push(r);
-  }
-  // 把「假装成根」的节点入度清零，便于出队
-  for (const r of roots) {
-    pendingIn.set(r, 0);
-  }
-
-  let head = 0;
-  while (head < queue.length) {
-    const cur = queue[head++]!;
-    const curLevel = level.get(cur) ?? 0;
-    for (const next of children.get(cur) ?? []) {
-      const nextLevel = curLevel + 1;
-      if (!level.has(next) || nextLevel > (level.get(next) ?? 0)) {
-        level.set(next, nextLevel);
-      }
-      const left = (pendingIn.get(next) ?? 1) - 1;
-      pendingIn.set(next, left);
-      if (left <= 0 && !queue.includes(next)) {
-        queue.push(next);
-      }
-    }
-  }
-
-  // 环内残留：挂到现有最深一层之后
-  let maxLevel = 0;
-  for (const L of level.values()) maxLevel = Math.max(maxLevel, L);
-  for (const id of nodeIds) {
-    if (!level.has(id)) {
-      maxLevel += 1;
-      level.set(id, maxLevel);
-    }
-  }
-
-  const byLevel = new Map<number, string[]>();
-  for (const id of nodeIds) {
-    const L = level.get(id) ?? 0;
-    const list = byLevel.get(L) ?? [];
-    list.push(id);
-    byLevel.set(L, list);
-  }
-
-  // 同层按 id 稳定排序，左右对称铺开
-  const pos = new Map<string, { x: number; y: number; level: number }>();
-  for (const [L, ids] of byLevel) {
-    ids.sort((a, b) => a.localeCompare(b));
-    const n = ids.length;
-    const gap = n > 8 ? Math.max(100, nodeGap * (8 / n)) : nodeGap;
-    ids.forEach((id, i) => {
-      pos.set(id, {
-        x: (i - (n - 1) / 2) * gap,
-        y: L * levelGap,
-        level: L,
-      });
-    });
-  }
-  return pos;
-}
-
 interface GraphPageProps {
   scope: "folder" | "domain";
   resourceId: string; // folderId 或 domainId
@@ -178,9 +92,26 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
   const [error, setError] = useState<string | null>(null);
   /** 默认只显示 concept，避免 doc 全开导致线乱成一团 */
   const [showDocNodes, setShowDocNodes] = useState(false);
+  /** 非 contains 边（相关/属于/依赖）默认隐藏 */
+  const [showOtherEdges, setShowOtherEdges] = useState(false);
+  /** 工具栏绝对深度：0=仅顶层 */
+  const [globalDepth, setGlobalDepth] = useState<GlobalDepth>(0);
+  const [extraExpandedIds, setExtraExpandedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [tooltip, setTooltip] = useState<{
+    text: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const graphRef = useRef<any>(null);
+  /** 力导向过程中记住坐标，展开时旧节点不跳、新节点从父旁长出 */
+  const nodePosRef = useRef(new Map<string, { x: number; y: number }>());
 
   // 任务状态
   const [taskStatus, setTaskStatus] = useState<GraphTaskStatusEnum>("not_found");
@@ -201,6 +132,12 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
     setLoading(true);
     setError(null);
     setSelectedNode(null);
+    setGlobalDepth(0);
+    setExtraExpandedIds(new Set());
+    setCollapsedIds(new Set());
+    setShowOtherEdges(false);
+    setTooltip(null);
+    nodePosRef.current = new Map();
 
     const fetchFn = scope === "domain" ? getDomainGraphApi : getGraphApi;
     fetchFn(resourceId)
@@ -302,53 +239,144 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
     }
   };
 
-  // 根据显示模式过滤节点和边
-  const { displayNodes, displayEdges } = useMemo(() => {
-    if (!graphData) return { displayNodes: [], displayEdges: [] };
-
-    if (showDocNodes) {
-      return {
-        displayNodes: graphData.nodes,
-        displayEdges: graphData.edges,
-      };
-    }
-
-    // 只显示 concept 节点，以及 concept 之间的边
-    const conceptIds = new Set(
-      graphData.nodes.filter((n) => n.type === "concept").map((n) => n.id),
-    );
-    const filteredEdges = graphData.edges.filter(
-      (e) => conceptIds.has(e.from) && conceptIds.has(e.to),
-    );
-    return {
-      displayNodes: graphData.nodes.filter((n) => n.type === "concept"),
-      displayEdges: filteredEdges,
-    };
+  // 按 doc 开关得到底图，再按 contains 分层裁剪可见子图
+  const baseNodes = useMemo(() => {
+    if (!graphData) return [] as GraphNode[];
+    if (showDocNodes) return graphData.nodes;
+    return graphData.nodes.filter((n) => n.type === "concept");
   }, [graphData, showDocNodes]);
 
-  // 树形分层布局 + 适配 force-graph；同向平行边轻微弯曲
-  const graphForRender = useMemo(() => {
-    const layout = computeTreeLayout(
-      displayNodes.map((n) => n.id),
-      displayEdges.map((e) => ({ from: e.from, to: e.to })),
-      {
-        levelGap: showDocNodes ? 130 : 140,
-        nodeGap: showDocNodes ? 140 : 180,
-      },
-    );
+  const baseEdges = useMemo(() => {
+    if (!graphData) return [] as GraphEdge[];
+    const ids = new Set(baseNodes.map((n) => n.id));
+    return graphData.edges.filter((e) => ids.has(e.from) && ids.has(e.to));
+  }, [graphData, baseNodes]);
 
+  const hierarchy = useMemo(() => {
+    const contains = baseEdges
+      .filter((e) => isContainsEdge(String(e.type)))
+      .map((e) => ({ from: e.from, to: e.to }));
+    return buildContainsHierarchy(
+      baseNodes.map((n) => n.id),
+      contains,
+    );
+  }, [baseNodes, baseEdges]);
+
+  const visibleIds = useMemo(() => {
+    return computeVisibleIds(hierarchy.roots, hierarchy.childrenOf, (id) =>
+      isEffectivelyExpanded(
+        id,
+        globalDepth,
+        hierarchy.depthMap,
+        extraExpandedIds,
+        collapsedIds,
+      ),
+    );
+  }, [hierarchy, globalDepth, extraExpandedIds, collapsedIds]);
+
+  const { displayNodes, displayEdges } = useMemo(() => {
+    const nodes = baseNodes.filter((n) => visibleIds.has(n.id));
+    const edges = baseEdges.filter((e) => {
+      if (!visibleIds.has(e.from) || !visibleIds.has(e.to)) return false;
+      const t = String(e.type);
+      if (isContainsEdge(t)) return true;
+      if (showOtherEdges && isOtherRelationEdge(t)) return true;
+      return false;
+    });
+    return { displayNodes: nodes, displayEdges: edges };
+  }, [baseNodes, baseEdges, visibleIds, showOtherEdges]);
+
+  const nodeById = useMemo(() => {
+    const m = new Map<string, GraphNode>();
+    for (const n of baseNodes) m.set(n.id, n);
+    return m;
+  }, [baseNodes]);
+
+  function setToolbarDepth(depth: GlobalDepth) {
+    setGlobalDepth(depth);
+    setExtraExpandedIds(new Set());
+    setCollapsedIds(new Set());
+  }
+
+  function toggleNodeExpand(nodeId: string) {
+    const kids = hierarchy.childrenOf.get(nodeId) ?? [];
+    if (kids.length === 0) return;
+    const expanded = isEffectivelyExpanded(
+      nodeId,
+      globalDepth,
+      hierarchy.depthMap,
+      extraExpandedIds,
+      collapsedIds,
+    );
+    if (expanded) {
+      setCollapsedIds((prev) => new Set(prev).add(nodeId));
+      setExtraExpandedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(nodeId);
+        return next;
+      });
+    } else {
+      setCollapsedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(nodeId);
+        return next;
+      });
+      setExtraExpandedIds((prev) => new Set(prev).add(nodeId));
+    }
+  }
+
+  function revealAndSelect(node: GraphNode) {
+    const ancestors = containsAncestors(node.id, hierarchy.parentsOf);
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      for (const a of ancestors) next.delete(a);
+      return next;
+    });
+    setExtraExpandedIds((prev) => {
+      const next = new Set(prev);
+      for (const a of ancestors) next.add(a);
+      return next;
+    });
+    setSelectedNode(node);
+  }
+
+  // 力导向：不钉死坐标；展开时保留旧节点位置，新节点出现在父节点附近
+  const graphForRender = useMemo(() => {
     const nodes = displayNodes.map((n) => {
-      const p = layout.get(n.id);
+      const childCount = hierarchy.childrenOf.get(n.id)?.length ?? 0;
+      const expanded = isEffectivelyExpanded(
+        n.id,
+        globalDepth,
+        hierarchy.depthMap,
+        extraExpandedIds,
+        collapsedIds,
+      );
+      const saved = nodePosRef.current.get(n.id);
+      let x = saved?.x;
+      let y = saved?.y;
+      if (x == null || y == null) {
+        const parentPos = (hierarchy.parentsOf.get(n.id) ?? [])
+          .map((pid) => nodePosRef.current.get(pid))
+          .find((p) => p != null);
+        if (parentPos) {
+          x = parentPos.x + (Math.random() - 0.5) * 60;
+          y = parentPos.y + 50 + Math.random() * 40;
+        } else {
+          x = (Math.random() - 0.5) * 240;
+          y = (Math.random() - 0.5) * 180;
+        }
+        nodePosRef.current.set(n.id, { x, y });
+      }
       return {
         id: n.id,
         name: n.label,
         type: n.type,
         val: n.type === "concept" ? 4 : 2,
-        // 钉在树形坐标上，仿真不会再搅成毛球
-        fx: p?.x ?? 0,
-        fy: p?.y ?? 0,
+        x,
+        y,
         __raw: n,
-        __level: p?.level ?? 0,
+        __childCount: childCount,
+        __expanded: expanded,
       };
     });
 
@@ -357,7 +385,7 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
       const key = `${e.from}->${e.to}`;
       const idx = pairCount.get(key) ?? 0;
       pairCount.set(key, idx + 1);
-      const bend = idx === 0 ? 0.04 : 0.04 + idx * 0.12;
+      const bend = idx === 0 ? 0.08 : 0.08 + idx * 0.14;
       return {
         source: e.from,
         target: e.to,
@@ -367,14 +395,21 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
       };
     });
     return { nodes, links };
-  }, [displayNodes, displayEdges, showDocNodes]);
+  }, [
+    displayNodes,
+    displayEdges,
+    hierarchy,
+    globalDepth,
+    extraExpandedIds,
+    collapsedIds,
+  ]);
 
-  // 树形钉点后只需轻微力；保留极弱斥力
+  // 可见子图用力导向：斥力 + 弹簧，可拖拽、可飘
   const forceTuning = useMemo(() => {
     const n = Math.max(1, displayNodes.length);
     return {
-      linkDistance: 80,
-      chargeStrength: Math.max(-80, -20 - n),
+      linkDistance: Math.min(140, 70 + Math.sqrt(n) * 8),
+      chargeStrength: Math.max(-420, -120 - n * 6),
     };
   }, [displayNodes.length]);
 
@@ -398,16 +433,25 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
     return () => ro.disconnect();
   }, []);
 
-  // 树形钉点几乎立刻稳定，缩短 fit 等待
+  // 展开后稍等再 fit，给力导向一点时间散开
   useEffect(() => {
     if (!graphData || loading) return;
     const t = window.setTimeout(() => {
       graphRef.current?.zoomToFit?.(400, 80);
-    }, 120);
+    }, 450);
     return () => window.clearTimeout(t);
-  }, [graphData, showDocNodes, loading, dimensions.width, dimensions.height]);
+  }, [
+    graphData,
+    showDocNodes,
+    showOtherEdges,
+    loading,
+    dimensions.width,
+    dimensions.height,
+    globalDepth,
+    visibleIds,
+  ]);
 
-  // 树形布局：弱化力，避免把钉住的节点拽乱
+  // 力导向参数：斥力 + 连线弹簧，保留轻微居中
   useEffect(() => {
     if (!graphData || loading) return;
     const fg = graphRef.current;
@@ -423,28 +467,24 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
         }
       | undefined;
     link?.distance?.(forceTuning.linkDistance);
-    link?.strength?.(0.05);
-    // 关掉居中拉力，否则整棵树会被拽向中心挤扁
-    fg.d3Force("center", null);
+    link?.strength?.(0.35);
     fg.d3ReheatSimulation?.();
   }, [forceTuning, graphData, loading, showDocNodes, graphForRender]);
 
-  // 找到节点的子节点（用于详情面板）
+  // 找到节点的 contains 子节点（用于详情面板）
   const getChildren = (nodeId: string): GraphNode[] => {
-    if (!graphData) return [];
-    const childIds = graphData.edges
-      .filter((e) => e.from === nodeId)
-      .map((e) => e.to);
-    return graphData.nodes.filter((n) => childIds.includes(n.id));
+    const childIds = hierarchy.childrenOf.get(nodeId) ?? [];
+    return childIds
+      .map((id) => nodeById.get(id) ?? graphData?.nodes.find((n) => n.id === id))
+      .filter((n): n is GraphNode => Boolean(n));
   };
 
-  // 找到节点的父节点
+  // 找到节点的 contains 父节点
   const getParents = (nodeId: string): GraphNode[] => {
-    if (!graphData) return [];
-    const parentIds = graphData.edges
-      .filter((e) => e.to === nodeId)
-      .map((e) => e.from);
-    return graphData.nodes.filter((n) => parentIds.includes(n.id));
+    const parentIds = hierarchy.parentsOf.get(nodeId) ?? [];
+    return parentIds
+      .map((id) => nodeById.get(id) ?? graphData?.nodes.find((n) => n.id === id))
+      .filter((n): n is GraphNode => Boolean(n));
   };
 
   // 向下追溯所有相关 doc 节点
@@ -482,6 +522,40 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
           <span>知识图谱 — {name}</span>
         </div>
         <div className="graph-actions">
+          <div className="graph-depth-btns">
+            <button
+              type="button"
+              className={`graph-btn ${globalDepth === 1 ? "graph-btn-active" : ""}`}
+              onClick={() => setToolbarDepth(1)}
+              title="展开到深度 1（顶层 + 直接子）"
+            >
+              展开一级
+            </button>
+            <button
+              type="button"
+              className={`graph-btn ${globalDepth === 2 ? "graph-btn-active" : ""}`}
+              onClick={() => setToolbarDepth(2)}
+              title="展开到深度 2"
+            >
+              展开到二级
+            </button>
+            <button
+              type="button"
+              className={`graph-btn ${globalDepth === 0 && extraExpandedIds.size === 0 ? "graph-btn-active" : ""}`}
+              onClick={() => setToolbarDepth(0)}
+              title="仅顶层"
+            >
+              全部收起
+            </button>
+          </div>
+          <label className="graph-toggle">
+            <input
+              type="checkbox"
+              checked={showOtherEdges}
+              onChange={(e) => setShowOtherEdges(e.target.checked)}
+            />
+            <span>显示其它关系</span>
+          </label>
           <label className="graph-toggle">
             <input
               type="checkbox"
@@ -622,6 +696,24 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
               ctx.stroke();
               ctx.globalAlpha = 1;
 
+              // contains 子节点角标：+ / −
+              if (node.__childCount > 0) {
+                const badgeR = 7 / Math.max(globalScale, 0.4);
+                const bx = node.x + nodeRadius + badgeR * 0.9;
+                const by = node.y - nodeRadius * 0.2;
+                ctx.beginPath();
+                ctx.arc(bx, by, badgeR, 0, 2 * Math.PI);
+                ctx.fillStyle = node.__expanded ? "#475569" : "#6366f1";
+                ctx.fill();
+                ctx.fillStyle = "#ffffff";
+                const mark = node.__expanded ? "−" : "+";
+                const fs = Math.max(10 / globalScale, 9 / globalScale);
+                ctx.font = `700 ${fs}px -apple-system, BlinkMacSystemFont, sans-serif`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(mark, bx, by + 0.5 / globalScale);
+              }
+
               // 小缩放：只画 concept 短标题；doc 仅悬停/选中时出字
               const showLabel =
                 isHot ||
@@ -760,19 +852,77 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
               // 触发重绘，使 linkWidth / 箭头随缩放更新
               graphRef.current?.refresh?.();
             }}
-            cooldownTicks={40}
-            cooldownTime={800}
-            dagMode="td"
-            dagLevelDistance={140}
-            onNodeClick={(node: any) => {
+            cooldownTicks={120}
+            cooldownTime={4000}
+            d3AlphaDecay={0.022}
+            d3VelocityDecay={0.3}
+            onNodeClick={(node: any, event: MouseEvent) => {
+              const childCount = node.__childCount ?? 0;
+              if (childCount > 0 && graphRef.current && containerRef.current) {
+                const rect = containerRef.current.getBoundingClientRect();
+                const g = graphRef.current.screen2GraphCoords(
+                  event.clientX - rect.left,
+                  event.clientY - rect.top,
+                );
+                const scale = graphRef.current.zoom?.() ?? 1;
+                const nodeRadius =
+                  (node.type === "concept" ? 9 : 5) / Math.max(scale, 0.35);
+                const badgeR = 7 / Math.max(scale, 0.4);
+                const bx = node.x + nodeRadius + badgeR * 0.9;
+                const by = node.y - nodeRadius * 0.2;
+                const dx = g.x - bx;
+                const dy = g.y - by;
+                if (dx * dx + dy * dy <= (badgeR + 4 / scale) ** 2) {
+                  toggleNodeExpand(String(node.id));
+                  setSelectedNode(node.__raw as GraphNode);
+                  return;
+                }
+              }
               setSelectedNode(node.__raw as GraphNode);
+              // 单击展开；已展开则只开详情，避免看详情时被收起
+              if (childCount > 0 && !node.__expanded) {
+                toggleNodeExpand(String(node.id));
+              }
             }}
             onNodeHover={(node: any) => {
-              setHoveredNodeId(node ? String(node.id) : null);
+              if (!node) {
+                setHoveredNodeId(null);
+                setTooltip(null);
+                return;
+              }
+              setHoveredNodeId(String(node.id));
+              const label = String(node.name ?? node.__raw?.label ?? "");
+              if (graphRef.current && label) {
+                const screen = graphRef.current.graph2ScreenCoords(
+                  node.x,
+                  node.y,
+                );
+                setTooltip({
+                  text: label,
+                  x: screen.x,
+                  y: screen.y,
+                });
+              } else {
+                setTooltip({ text: label, x: 0, y: 0 });
+              }
             }}
             onBackgroundClick={() => {
               setSelectedNode(null);
               setHoveredNodeId(null);
+              setTooltip(null);
+            }}
+            onEngineTick={() => {
+              const data = graphRef.current?.graphData?.();
+              if (!data?.nodes) return;
+              for (const n of data.nodes as Array<{
+                id?: string;
+                x?: number;
+                y?: number;
+              }>) {
+                if (n.id != null && n.x != null && n.y != null) {
+                  nodePosRef.current.set(String(n.id), { x: n.x, y: n.y });
+                }
+              }
             }}
             onEngineStop={() => {
               graphRef.current?.zoomToFit?.(300, 72);
@@ -792,8 +942,26 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
               ctx.beginPath();
               ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
               ctx.fill();
+              if (node.__childCount > 0) {
+                const badgeR = 10 / Math.max(globalScale, 0.4);
+                const nodeRadius = (node.type === "concept" ? 9 : 5) / Math.max(globalScale, 0.35);
+                const bx = node.x + nodeRadius + badgeR * 0.7;
+                const by = node.y - nodeRadius * 0.2;
+                ctx.beginPath();
+                ctx.arc(bx, by, badgeR, 0, 2 * Math.PI);
+                ctx.fill();
+              }
             }}
           />
+        )}
+
+        {tooltip && (
+          <div
+            className="graph-node-tooltip"
+            style={{ left: tooltip.x, top: tooltip.y }}
+          >
+            {tooltip.text}
+          </div>
         )}
       </div>
 
@@ -843,7 +1011,7 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
                     <li
                       key={child.id}
                       className={`graph-node-item ${child.type}`}
-                      onClick={() => setSelectedNode(child)}
+                      onClick={() => revealAndSelect(child)}
                     >
                       <span className="dot" />
                       {child.label}
@@ -913,7 +1081,7 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
                   <li
                     key={parent.id}
                     className={`graph-node-item ${parent.type}`}
-                    onClick={() => setSelectedNode(parent)}
+                    onClick={() => revealAndSelect(parent)}
                   >
                     <span className="dot" />
                     {parent.label}

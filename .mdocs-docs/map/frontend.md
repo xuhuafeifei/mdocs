@@ -51,6 +51,16 @@
   | `src/web/i18n/` | `en.ts` / `zh.ts` |
   | `src/web/app/SettingsPage.tsx` | 设置页 |
 
+### 知识图谱（分层展示）
+
+- **关键词**：`GraphPage` `contains` `globalDepth` `展开一级` `可见子图`
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/web/app/GraphPage.tsx` | `GraphPage` |
+  | `src/web/app/graph-layered-view.ts` | `buildContainsHierarchy` / `computeVisibleIds` |
+- **需求**：[`../requirements/knowledge-graph/设计契约-layered-view.md`](../requirements/knowledge-graph/设计契约-layered-view.md)
+
 ### AI 帮写（coding）
 
 - **关键词**：`AiWrite` `帮写` `currentMd` `proposedMd` `hunk` `sending` `纯编辑` `inline diff` `红行只读` `diff 编提案`
