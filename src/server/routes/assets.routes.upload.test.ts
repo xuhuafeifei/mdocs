@@ -4,6 +4,7 @@ import { isAllowedAssetUpload } from "./assets.routes.js";
 describe("isAllowedAssetUpload", () => {
   it("allows pdf / txt / md / csv / html", () => {
     expect(isAllowedAssetUpload("a.pdf", "application/pdf")).toBe(true);
+    expect(isAllowedAssetUpload("a.pdf", "application/x-pdf")).toBe(true);
     expect(isAllowedAssetUpload("note.txt", "text/plain")).toBe(true);
     expect(isAllowedAssetUpload("readme.md", "text/markdown")).toBe(true);
     expect(isAllowedAssetUpload("data.csv", "text/csv")).toBe(true);

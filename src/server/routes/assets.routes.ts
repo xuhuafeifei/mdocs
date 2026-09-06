@@ -84,7 +84,15 @@ export function isAllowedAssetUpload(originalname: string, mimetype: string): bo
   if (IMAGE_EXT.has(ext)) return mime.startsWith("image/");
   if (ext === ".zip") return ZIP_MIME.has(mime);
   if (AUDIO_EXT.has(ext)) return mime.startsWith("audio/");
-  if (ext === ".pdf") return mime === "application/pdf";
+  // 浏览器/系统可能给出 application/pdf、application/x-pdf 等
+  if (ext === ".pdf") {
+    return (
+      mime === "application/pdf" ||
+      mime === "application/x-pdf" ||
+      mime === "applications/vnd.pdf" ||
+      mime.endsWith("/pdf")
+    );
+  }
   if (HTML_EXT.has(ext)) {
     return mime === "text/html" || mime === "application/xhtml+xml" || mime.startsWith("text/");
   }
@@ -257,8 +265,8 @@ export function serveAssetFile(req: Request, res: Response): void {
   const ct = HTML_EXT.has(ext)
     ? "application/octet-stream"
     : (CONTENT_TYPE_BY_EXT[ext] ?? "application/octet-stream");
-  // zip / 音频 / html 强制下载（html 不以 text/html 内联，避免 XSS）
-  if (AUDIO_EXT.has(ext) || HTML_EXT.has(ext) || ext === ".zip") {
+  // zip / 音频 / html / pdf 强制下载（html 不以 text/html 内联，避免 XSS）
+  if (AUDIO_EXT.has(ext) || HTML_EXT.has(ext) || ext === ".zip" || ext === ".pdf") {
     res.setHeader("Content-Disposition", `attachment; filename="${path.basename(abs)}"`);
   }
   res.setHeader("Content-Type", ct);

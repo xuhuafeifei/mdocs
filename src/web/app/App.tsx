@@ -921,16 +921,43 @@ export function App() {
   async function handleSyncClick(): Promise<void> {
     if (!activeDocMeta) return;
     const draft = await getDraft(activeDocMeta.documentId);
-    // 有未发布草稿时，当前版本不做覆盖式 sync / pull（本地副本优先）
-    if (draft && !draft.published) return;
+    const hasUnpublishedDraft = Boolean(draft && !draft.published);
     const conflictPending =
       draft?.conflictStatus === "publish_conflict" ||
       draft?.conflictStatus === "diverged" ||
       Boolean(draft?.conflict);
+
+    // 已有冲突 / 分叉标记 → 进合并（须在「有草稿就 return」之前，否则点击无反馈）
     if (conflictPending) {
       setMergeViewOpen(true);
       return;
     }
+
+    // 有未发布草稿：禁止覆盖式拉取；若已落后远端则打开三路合并
+    if (hasUnpublishedDraft && draft) {
+      if (syncBehind && remoteCommitId) {
+        const editBase = draft.localBaseCommitId ?? editBaseCommitId;
+        if (editBase) {
+          const built: DraftConflictRecord = {
+            localBaseCommitId: editBase,
+            remoteCommitId,
+            localSnapshotContent: draft.content,
+          };
+          await saveDraftConflict(activeDocMeta.documentId, {
+            localBaseCommitId: editBase,
+            conflictStatus: "diverged",
+            conflict: built,
+          });
+          setMergeConflict(built);
+        }
+        setMergeViewOpen(true);
+        return;
+      }
+      setMessage(t("pullBlockedDraft"));
+      window.setTimeout(() => setMessage(null), 3000);
+      return;
+    }
+
     await executePullRemote();
   }
 

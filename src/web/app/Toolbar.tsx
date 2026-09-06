@@ -300,7 +300,7 @@ const Toolbar: FC<ToolbarProps> = ({
               for (const file of files) {
                 editor.dispatchCommand(INSERT_FILE_COMMAND, { file });
               }
-            });
+            }, ".pdf,.zip,.txt,.md,.csv,.html,.htm,audio/*,*/*");
           },
         },
         // 大纲切换按钮（可选）

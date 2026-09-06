@@ -687,7 +687,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
             for (const file of files) {
               editor.dispatchCommand(INSERT_FILE_COMMAND, { file });
             }
-          });
+          }, ".pdf,.zip,.txt,.md,.csv,.html,.htm,audio/*,*/*");
         },
       },
       {

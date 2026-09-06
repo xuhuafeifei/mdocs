@@ -296,6 +296,8 @@ export const en: Record<TranslationKey, string> = {
   mergeBase: "Base",
   mergeBaseMissing: "Could not load merge base — using two-way diff",
   pullBlockedConflict: "Unresolved conflict — merge first.",
+  pullBlockedDraft:
+    "Local draft exists — cannot overwrite with pull. Publish, or use Pull when behind to open merge.",
   syncHeadMissing: "Cannot publish: reopen the document to refresh version info.",
   syncPullDone: "Pulled latest from server",
   unsavedChanges: "You have unsaved changes.",

@@ -44,7 +44,7 @@
 | `document-move` | **已同意**：同域拖拽移动文档 — [需求分析](./requirements/document-move/需求分析.md) · [设计契约](./requirements/document-move/设计契约.md) · [代码索引](./requirements/document-move/代码索引.md) |
 | `merge-inline-ui` | **已同意**：冲突 Merge 单栏 inline（接收/拒绝 · 全部用我的/别人的）— [需求分析](./requirements/merge-inline-ui/需求分析.md) · [设计契约](./requirements/merge-inline-ui/设计契约.md) |
 | `agent-mobile-context` | **已同意**：手机助手全屏；Ask 注入当前域/文 id — [需求分析](./requirements/agent-mobile-context/需求分析.md) · [设计契约](./requirements/agent-mobile-context/设计契约.md) |
-| `knowledge-graph` | 知识图谱构建与展示（历史已同意）— [需求分析](./requirements/knowledge-graph/需求分析.md) · [设计契约](./requirements/knowledge-graph/设计契约.md)；**增量已同意** 可读分层展开 — [设计契约-layered-view](./requirements/knowledge-graph/设计契约-layered-view.md) |
+| `knowledge-graph` | 知识图谱（历史已同意）— [需求分析](./requirements/knowledge-graph/需求分析.md) · [设计契约](./requirements/knowledge-graph/设计契约.md)；分层展开 [layered-view](./requirements/knowledge-graph/设计契约-layered-view.md)；**增量草案** 单一焦点 — [single-focus](./requirements/knowledge-graph/设计契约-single-focus.md) |
 | `graph-cache-dirty` | **已同意**：图谱缓存 dirty / 发布变化率 / 异步 lifecycle（无 bus）— [需求分析](./requirements/graph-cache-dirty/需求分析.md) · [设计契约](./requirements/graph-cache-dirty/设计契约.md) · [代码索引](./requirements/graph-cache-dirty/代码索引.md) |
 | `bookmarks` | 文档收藏 |
 | `auto-save-draft` | 自动保存草稿 |

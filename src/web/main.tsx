@@ -12,6 +12,35 @@ import { I18nProvider } from "./i18n";
 import "./styles/global.css";
 
 /**
+ * 兼容「路径式」文档链接（Agent / 旧习惯常发 `http://host/doc/<id>`）。
+ * 本应用使用 HashRouter，规范地址为 `http://host/#/doc/<id>`。
+ * 若不纠正，会停留在无 hash 的 /doc/...，再 navigate 时变成
+ * `/doc/旧id#/doc/新id`，表现为点不开或跳错文。
+ */
+function redirectPathDocUrlToHash(): void {
+  const { pathname, hash, search, origin } = window.location;
+  const base = import.meta.env.BASE_URL || "/";
+  const basePath = base.endsWith("/") ? base.slice(0, -1) : base;
+
+  let appPath = pathname;
+  if (basePath && appPath.startsWith(basePath)) {
+    appPath = appPath.slice(basePath.length) || "/";
+  }
+
+  const pathMatch = appPath.match(/^\/doc\/([^/]+)\/?$/);
+  if (!pathMatch) return;
+
+  const hashMatch = hash.match(/^#\/doc\/([^/?#]+)/);
+  const documentId = hashMatch?.[1] ?? pathMatch[1];
+  if (!documentId) return;
+
+  const prefix = base.endsWith("/") ? base : `${base}/`;
+  window.location.replace(`${origin}${prefix}${search}#/doc/${documentId}`);
+}
+
+redirectPathDocUrlToHash();
+
+/**
  * 获取根 DOM 节点并挂载 React 应用。
  * StrictMode 仅在开发环境触发双重渲染，用于检测副作用。
  */

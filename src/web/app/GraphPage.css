@@ -379,3 +379,85 @@
 .graph-log-error {
   color: #dc2626;
 }
+
+/* ===== 窄屏：节点详情铺满图谱区域（非侧拉） ===== */
+@media (max-width: 768px) {
+  .graph-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .graph-title {
+    font-size: 14px;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .graph-title > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .graph-actions {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px 12px;
+  }
+
+  .graph-depth-btns {
+    flex-wrap: wrap;
+  }
+
+  .graph-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .graph-detail-panel {
+    inset: 0;
+    top: 0;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    border-left: none;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 16px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    z-index: 40;
+  }
+
+  .graph-detail-header {
+    position: sticky;
+    top: 0;
+    background: #fff;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    z-index: 1;
+  }
+
+  .graph-close-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .graph-detail-title {
+    font-size: 1.25rem;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+
+  .graph-node-tooltip {
+    max-width: min(280px, 82vw);
+  }
+
+  .graph-progress-panel {
+    width: calc(100% - 24px);
+    max-width: none;
+    padding: 16px;
+  }
+}

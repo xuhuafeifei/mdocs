@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { acceptHunk, computeLineHunks, rejectHunkFromProposed, type MdHunk } from "./markdown-hunks";
+import { acceptHunk, computeLineHunks, type MdHunk } from "./markdown-hunks";
 
 type InlineSeg =
   | { kind: "same"; lines: string[]; key: string }
@@ -102,6 +102,9 @@ function EditableBlock(props: {
 /**
  * 右侧：有 pending hunk 且非流式 → 强制 inline diff（可改 proposedMd，红删只读）；
  * 无 hunk 或流式中 → 源码编 currentMd。写回仍只交 currentMd。
+ *
+ * 手改 blur 只 flush 提案文本，**冻结**当前分段布局，避免 LCS 重算把 diff 打成「上删下增」。
+ * 接受 / 拒绝 / 新提案到达后再重算布局。
  */
 export function AiWriteMarkdownPane(props: {
   currentMd: string;
@@ -115,96 +118,132 @@ export function AiWriteMarkdownPane(props: {
   const [activeHunk, setActiveHunk] = useState(0);
   const [hoveredHunk, setHoveredHunk] = useState<number | null>(null);
   const [edits, setEdits] = useState<DiffEdits>({ sameTexts: [], newTexts: [] });
+  /** 审阅期冻结的分段；flush 不改，接受/拒绝/新提案才换 */
+  const [reviewSegments, setReviewSegments] = useState<InlineSeg[]>([]);
   const dirtyRef = useRef(false);
-  const segmentsRef = useRef<InlineSeg[]>([]);
+  /** 下一次 proposedMd 更新来自本地 flush，跳过布局重算 */
+  const skipRelayoutRef = useRef(false);
+  const reviewSegmentsRef = useRef<InlineSeg[]>([]);
   const editsRef = useRef(edits);
   editsRef.current = edits;
+  reviewSegmentsRef.current = reviewSegments;
 
-  const hunks = useMemo(() => {
+  const liveHunks = useMemo(() => {
     if (props.proposedMd == null || props.proposedMd === props.currentMd) return [];
     return computeLineHunks(props.currentMd, props.proposedMd);
   }, [props.currentMd, props.proposedMd]);
 
-  const segments = useMemo(
-    () => buildInlineSegments(props.currentMd, hunks),
-    [props.currentMd, hunks],
-  );
-  segmentsRef.current = segments;
+  const showInlineDiff = !sending && (reviewSegments.length > 0
+    ? reviewSegments.some((s) => s.kind === "hunk")
+    : liveHunks.length > 0);
 
-  /** 有差异就只能 diff；用户不可切回源码 */
-  const showInlineDiff = !sending && hunks.length > 0;
+  // 进入 / 离开 diff，或 current/提案从外部变化（非 flush）时重建冻结布局
+  useEffect(() => {
+    if (sending) {
+      setReviewSegments([]);
+      dirtyRef.current = false;
+      skipRelayoutRef.current = false;
+      return;
+    }
+    if (props.proposedMd == null || props.proposedMd === props.currentMd) {
+      setReviewSegments([]);
+      dirtyRef.current = false;
+      skipRelayoutRef.current = false;
+      return;
+    }
+    if (skipRelayoutRef.current) {
+      skipRelayoutRef.current = false;
+      return;
+    }
+    const hunks = computeLineHunks(props.currentMd, props.proposedMd);
+    if (hunks.length === 0) {
+      setReviewSegments([]);
+      return;
+    }
+    const nextSegs = buildInlineSegments(props.currentMd, hunks);
+    setReviewSegments(nextSegs);
+    dirtyRef.current = false;
+    setEdits(initEditsFromSegments(nextSegs));
+  }, [sending, props.proposedMd, props.currentMd]);
+
+  const reviewHunks = useMemo(
+    () =>
+      reviewSegments
+        .filter((s): s is Extract<InlineSeg, { kind: "hunk" }> => s.kind === "hunk")
+        .map((s) => s.hunk),
+    [reviewSegments],
+  );
 
   useEffect(() => {
-    if (hunks.length === 0) {
+    if (reviewHunks.length === 0) {
       setActiveHunk(0);
       return;
     }
-    setActiveHunk((i) => Math.min(i, hunks.length - 1));
-  }, [hunks.length]);
-
-  useEffect(() => {
-    if (!showInlineDiff) {
-      dirtyRef.current = false;
-      return;
-    }
-    if (dirtyRef.current) return;
-    setEdits(initEditsFromSegments(segments));
-  }, [showInlineDiff, props.proposedMd, props.currentMd, segments]);
+    setActiveHunk((i) => Math.min(i, reviewHunks.length - 1));
+  }, [reviewHunks.length]);
 
   const focusIndex = hoveredHunk ?? activeHunk;
 
   function readFlushedProposed(): string {
-    return rebuildProposedFromEdits(segmentsRef.current, editsRef.current);
+    return rebuildProposedFromEdits(reviewSegmentsRef.current, editsRef.current);
   }
 
   function flushProposedFromEdits(): string | null {
-    if (!showInlineDiff) return props.proposedMd;
+    if (!showInlineDiff || reviewSegmentsRef.current.length === 0) {
+      return props.proposedMd;
+    }
     const next = readFlushedProposed();
     dirtyRef.current = false;
     if (next === props.currentMd) {
+      skipRelayoutRef.current = false;
       props.onProposedChange(null);
       return null;
     }
-    if (next !== props.proposedMd) props.onProposedChange(next);
+    if (next !== props.proposedMd) {
+      skipRelayoutRef.current = true;
+      props.onProposedChange(next);
+    }
     return next;
   }
 
   function onAccept(h: MdHunk) {
-    const idx = hunks.indexOf(h);
+    const seg = reviewSegmentsRef.current.find(
+      (s): s is Extract<InlineSeg, { kind: "hunk" }> =>
+        s.kind === "hunk" && s.hunk.id === h.id,
+    );
+    if (!seg) return;
+    const editedNew = editsRef.current.newTexts[seg.hunkIndex];
+    const effective: MdHunk = {
+      ...h,
+      newLines: editedNew != null ? splitLines(editedNew) : h.newLines,
+    };
     const flushed = readFlushedProposed();
     dirtyRef.current = false;
+    skipRelayoutRef.current = false;
     if (flushed === props.currentMd) {
       props.onProposedChange(null);
       return;
     }
-    const freshHunks = computeLineHunks(props.currentMd, flushed);
-    const useH = freshHunks[idx] ?? freshHunks.find((x) => x.id === h.id);
-    if (!useH) {
-      props.onProposedChange(flushed);
-      return;
-    }
-    const nextCurrent = acceptHunk(props.currentMd, useH);
+    const nextCurrent = acceptHunk(props.currentMd, effective);
     props.onCurrentChange(nextCurrent);
-    const still = computeLineHunks(nextCurrent, flushed);
-    if (still.length === 0) props.onProposedChange(null);
+    if (flushed === nextCurrent) props.onProposedChange(null);
     else props.onProposedChange(flushed);
   }
 
   function onReject(h: MdHunk) {
-    const idx = hunks.indexOf(h);
-    const flushed = readFlushedProposed();
+    const seg = reviewSegmentsRef.current.find(
+      (s): s is Extract<InlineSeg, { kind: "hunk" }> =>
+        s.kind === "hunk" && s.hunk.id === h.id,
+    );
+    if (!seg) return;
+    const nextEdits: DiffEdits = {
+      sameTexts: editsRef.current.sameTexts.slice(),
+      newTexts: editsRef.current.newTexts.slice(),
+    };
+    nextEdits.newTexts[seg.hunkIndex] = joinLines(h.oldLines);
+    const nextProposed = rebuildProposedFromEdits(reviewSegmentsRef.current, nextEdits);
     dirtyRef.current = false;
-    if (flushed === props.currentMd) {
-      props.onProposedChange(null);
-      return;
-    }
-    const freshHunks = computeLineHunks(props.currentMd, flushed);
-    const useH = freshHunks[idx] ?? freshHunks.find((x) => x.id === h.id);
-    if (!useH) {
-      props.onProposedChange(flushed);
-      return;
-    }
-    const nextProposed = rejectHunkFromProposed(flushed, useH);
+    skipRelayoutRef.current = false;
     if (nextProposed === props.currentMd) props.onProposedChange(null);
     else props.onProposedChange(nextProposed);
   }
@@ -212,19 +251,21 @@ export function AiWriteMarkdownPane(props: {
   function acceptAll() {
     const flushed = readFlushedProposed();
     dirtyRef.current = false;
+    skipRelayoutRef.current = false;
     props.onCurrentChange(flushed);
     props.onProposedChange(null);
   }
 
   function rejectAll() {
     dirtyRef.current = false;
+    skipRelayoutRef.current = false;
     props.onProposedChange(null);
   }
 
   function goHunk(delta: number) {
-    if (hunks.length === 0) return;
+    if (reviewHunks.length === 0) return;
     setActiveHunk((i) => {
-      const next = (i + delta + hunks.length) % hunks.length;
+      const next = (i + delta + reviewHunks.length) % reviewHunks.length;
       const el = document.getElementById(`mdocs-ai-hunk-${next}`);
       el?.scrollIntoView({ block: "center", behavior: "smooth" });
       return next;
@@ -249,7 +290,7 @@ export function AiWriteMarkdownPane(props: {
     });
   }
 
-  const focused = hunks[focusIndex] ?? null;
+  const focused = reviewHunks[focusIndex] ?? null;
   let sameCounter = 0;
 
   return (
@@ -258,13 +299,13 @@ export function AiWriteMarkdownPane(props: {
         <span className="mdocs-ai-write-diff-count">
           {sending
             ? "接收中·编辑我的稿"
-            : hunks.length === 0
+            : reviewHunks.length === 0
               ? props.proposedMd
                 ? "与提案一致（可编辑）"
                 : "Markdown 源码（可编辑）"
-              : `${hunks.length} 处变更（可改提案）`}
+              : `${reviewHunks.length} 处变更（可改提案）`}
         </span>
-        {!sending && hunks.length > 0 ? (
+        {!sending && reviewHunks.length > 0 ? (
           <>
             <button type="button" onClick={acceptAll}>
               全部接受
@@ -276,9 +317,9 @@ export function AiWriteMarkdownPane(props: {
         ) : null}
       </div>
 
-      {showInlineDiff ? (
+      {showInlineDiff && reviewSegments.length > 0 ? (
         <div className="mdocs-ai-write-inline" role="document">
-          {segments.map((seg) => {
+          {reviewSegments.map((seg) => {
             if (seg.kind === "same") {
               const sameIndex = sameCounter++;
               const text = edits.sameTexts[sameIndex] ?? joinLines(seg.lines);
@@ -360,7 +401,7 @@ export function AiWriteMarkdownPane(props: {
                 ↑
               </button>
               <span>
-                {focusIndex + 1} / {hunks.length}
+                {focusIndex + 1} / {reviewHunks.length}
               </span>
               <button type="button" aria-label="下一段" onClick={() => goHunk(1)}>
                 ↓

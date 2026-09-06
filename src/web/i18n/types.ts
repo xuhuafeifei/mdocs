@@ -287,6 +287,7 @@ export type TranslationKey =
   | "mergeBase"
   | "mergeBaseMissing"
   | "pullBlockedConflict"
+  | "pullBlockedDraft"
   | "syncHeadMissing"
   | "syncPullDone"
   | "syncHeadMissing"

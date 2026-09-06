@@ -294,6 +294,7 @@ export const zh: Record<TranslationKey, string> = {
   mergeBase: "祖先",
   mergeBaseMissing: "无法加载公共祖先，已退化为两方比对",
   pullBlockedConflict: "存在未解决的冲突，请先合并。",
+  pullBlockedDraft: "有未发布的本地草稿，无法覆盖拉取。可点「发布」或在落后时点「拉取更新」进入合并。",
   syncHeadMissing: "无法发布：缺少版本基准，请重新打开文档。",
   syncPullDone: "已拉取云端最新版本",
   unsavedChanges: "您有未保存的内容。",
