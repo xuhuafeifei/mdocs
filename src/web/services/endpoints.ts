@@ -242,6 +242,7 @@ export function createDocumentApi(input: {
   permission?: number;
   parentId?: string;
   contentFormat?: "markdown" | "lexical";
+  fileType?: string;
 }): Promise<DocumentDetail> {
   return api<DocumentDetail>("/api/documents", {
     method: "POST",
@@ -607,7 +608,7 @@ export function deleteCommentApi(documentId: string, commentId: string): Promise
 
 // ========== Agent model config ==========
 
-export type AgentModelId = "deepseek-v4-flash" | "deepseek-v4-pro";
+export type AgentModelId = "deepseek-flash" | "deepseek-v4-pro";
 export type AgentConfigKind = "deepseek" | "custom";
 export type AgentApiType = "openai-completions" | "anthropic-messages";
 

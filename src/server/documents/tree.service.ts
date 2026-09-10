@@ -213,6 +213,7 @@ function buildTreeFromRows(rows: DocumentRow[], visitorId: string | null): TreeN
         displayName: row.display_name,
         ownerVisitorId: row.owner_visitor_id,
         updatedAt: row.updated_at,
+        fileType: row.file_type,
       };
 
       if (row.parent_id) {

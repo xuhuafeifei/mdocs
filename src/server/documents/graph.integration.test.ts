@@ -222,6 +222,7 @@ describe("buildGraph", () => {
       displayName: "测试文档",
       ownerVisitorId: OWNER,
       updatedAt: new Date().toISOString(),
+      fileType: "md",
     };
 
     const deps = createMockDeps();

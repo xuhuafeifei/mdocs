@@ -32,7 +32,7 @@ describe("agent model configs", () => {
     upsertVisitorAgentConfig({
       ownerVisitorId: "v1",
       visitorName: "张三",
-      modelId: "deepseek-v4-flash",
+      modelId: "deepseek-flash",
       apiKey: "sk-test-key",
     });
 
@@ -74,7 +74,7 @@ describe("agent model configs", () => {
     const ds = upsertVisitorAgentConfig({
       ownerVisitorId: "v3",
       visitorName: "王五",
-      modelId: "deepseek-v4-flash",
+      modelId: "deepseek-flash",
       apiKey: "sk-ds",
     });
     const custom = upsertVisitorAgentConfig({
@@ -103,7 +103,7 @@ describe("agent model configs", () => {
     const ds = upsertVisitorAgentConfig({
       ownerVisitorId: "v4",
       visitorName: "赵六",
-      modelId: "deepseek-v4-flash",
+      modelId: "deepseek-flash",
       apiKey: "sk-ds",
     });
     upsertVisitorAgentConfig({
@@ -119,6 +119,29 @@ describe("agent model configs", () => {
     deleteVisitorAgentConfig("v4", getVisitorAgentConfig("v4")!.id);
     expect(getVisitorAgentConfig("v4")?.id).toBe(ds.id);
     expect(listVisitorAgentConfigs("v4")).toHaveLength(1);
+  });
+
+  it("旧 flash 别名保存时归一为 deepseek-flash", () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    testDbRef.db = db;
+    seedVisitor(db, "v5");
+
+    upsertVisitorAgentConfig({
+      ownerVisitorId: "v5",
+      visitorName: "钱七",
+      modelId: "deepseek-v4-flash",
+      apiKey: "sk-legacy",
+    });
+    expect(getVisitorAgentConfig("v5")?.modelId).toBe("deepseek-flash");
+
+    upsertVisitorAgentConfig({
+      ownerVisitorId: "v5",
+      visitorName: "钱七",
+      modelId: "deepseek-v4.1-flash",
+      apiKey: "sk-legacy",
+    });
+    expect(getVisitorAgentConfig("v5")?.modelId).toBe("deepseek-flash");
   });
 
   it("启动迁移会删除 agent_model_configs.display_name 列", () => {

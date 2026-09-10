@@ -20,3 +20,6 @@
 | [colorpicker-value-snaps-to-black-2026-05-11](./colorpicker-value-snaps-to-black-2026-05-11.md) | 取色器跳黑 |
 | [block-image-cursor-issue-2026-05-12](./block-image-cursor-issue-2026-05-12.md) | 块级图片光标问题 |
 | [graph-task-id-dir-vs-folder-mismatch-2026-08-29](./graph-task-id-dir-vs-folder-mismatch-2026-08-29.md) | 图谱任务 ID dir/folder 拼错致 not_found |
+| [table-paste-scroll-to-bottom-2026-09-02](./table-paste-scroll-to-bottom-2026-09-02.md) | 表格粘贴后滚到底 |
+| [pull-sync-silent-noop-with-draft-2026-09-05](./pull-sync-silent-noop-with-draft-2026-09-05.md) | 有草稿时拉取更新静默无反应 |
+| [sidebar-tree-scroll-header-footer-2026-09-10](./sidebar-tree-scroll-header-footer-2026-09-10.md) | 左侧树整栏滚动，头尾未固定 |

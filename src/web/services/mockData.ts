@@ -308,9 +308,10 @@ export function buildTree(docs: DocumentDetail[]): TreeNode[] {
       name: leaf,
       path: doc.relativePath,
       documentId: doc.documentId,
-      displayName: doc.displayName || leaf.replace(/\.md$/i, ""),
+      displayName: doc.displayName || leaf.replace(/\.md$/i, "").replace(/\.html$/i, ""),
       ownerVisitorId: doc.ownerVisitorId,
       updatedAt: doc.updatedAt,
+      fileType: doc.fileType ?? "md",
     });
   }
 

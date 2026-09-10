@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { buildDocumentTree } from "../documents/tree.service.js";
+import { treeIncludeTypes } from "../../shared/file-type-policy.js";
 
 /**
  * 构建文档树路由。
@@ -20,7 +21,7 @@ export function buildTreeRouter(): Router {
     // 获取当前已认证访客的ID（未登录则为 null）
     const visitorId = req.visitor?.visitor_id ?? null;
     // 构建并返回目录树
-    res.json({ data: buildDocumentTree(domainId, visitorId, { includeTypes: ["dir", "md", "folder_desc"] }) });
+    res.json({ data: buildDocumentTree(domainId, visitorId, { includeTypes: treeIncludeTypes() }) });
   });
 
   return router;

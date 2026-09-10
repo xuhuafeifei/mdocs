@@ -37,12 +37,25 @@ export function skillSourceToUrl(source: string | undefined): string | null {
   return `${MDOCS_SITE_DOCS_BASE}/${pathPart}.html`;
 }
 
-export const AGENT_MODEL_IDS = ["deepseek-v4-flash", "deepseek-v4-pro"] as const;
+export const AGENT_MODEL_IDS = ["deepseek-flash", "deepseek-v4-pro"] as const;
 export type AgentModelId = (typeof AGENT_MODEL_IDS)[number];
 export type AgentConfigKind = "deepseek" | "custom";
 export type AgentApiType = "openai-completions" | "anthropic-messages";
 
-export const DEFAULT_AGENT_CONTEXT_WINDOW = 128_000;
+/** DeepSeek Flash / Pro 官方上下文均为 1M */
+export const DEFAULT_AGENT_CONTEXT_WINDOW = 1_000_000;
+
+/**
+ * 旧模型名仍可调通，但服务端已切到 V4.1 Flash；写入配置时归一到 deepseek-flash。
+ * @see https://api-docs.deepseek.com/ （模型名 deepseek-flash）
+ */
+const DEEPSEEK_FLASH_ALIASES = new Set([
+  "deepseek-flash",
+  "deepseek-v4-flash",
+  "deepseek-v4-flash-vision-exp",
+  "deepseek-v4.1-flash",
+  "deepseek-v4.1-flash-expires-on-0910",
+]);
 
 const DEEPSEEK_PRESET = {
   baseUrl: DEEPSEEK_ENDPOINT,
@@ -85,6 +98,15 @@ export type PublicAgentConfig = Omit<VisitorAgentConfig, "apiKey" | "ownerVisito
 
 export function isAgentModelId(v: string): v is AgentModelId {
   return (AGENT_MODEL_IDS as readonly string[]).includes(v);
+}
+
+/** 将 DeepSeek 官方/历史别名归一为白名单模型 id */
+export function normalizeDeepseekModelId(raw: string | undefined | null): AgentModelId {
+  const id = (raw ?? "").trim();
+  if (id === "deepseek-v4-pro") return "deepseek-v4-pro";
+  if (DEEPSEEK_FLASH_ALIASES.has(id) || id === "deepseek-flash") return "deepseek-flash";
+  if (isAgentModelId(id)) return id;
+  return "deepseek-flash";
 }
 
 export function normalizeContextWindow(
@@ -264,9 +286,7 @@ function buildConfigRow(input: {
     };
   }
 
-  const modelId = isAgentModelId(input.modelId ?? existing?.model_id ?? "")
-    ? (input.modelId ?? existing?.model_id)!
-    : "deepseek-v4-flash";
+  const modelId = normalizeDeepseekModelId(input.modelId ?? existing?.model_id);
 
   return {
     id: input.id,

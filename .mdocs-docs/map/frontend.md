@@ -4,14 +4,16 @@
 
 ### App shell / 路由
 
-- **关键词**：`App` `DocumentTree` `DocumentEditor` `react-router`
+- **关键词**：`App` `DocumentTree` `DocumentEditor` `react-router` `mdocs-shell` `mdocs-sidebar-list`
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `src/web/main.tsx` | 挂载 |
-  | `src/web/app/App.tsx` | 主壳 / `openDocument` |
-  | `src/web/app/DocumentTree.tsx` | 文档树（拟增 DnD move） |
+  | `src/web/app/App.tsx` | 主壳 / `openDocument`；悬浮层在 shell **外** |
+  | `src/web/app/App.css` | `.mdocs-shell` `.mdocs-sidebar` `.mdocs-sidebar-list` |
+  | `src/web/app/DocumentTree.tsx` | 文档树根节点 = `.mdocs-sidebar-list` |
   | `src/web/app/DocumentEditor.tsx` | 编辑器容器 |
+- **布局约定**：shell 只承载 layout；侧栏头尾 `flex: 0 0 auto`，仅 list `overflow-y: auto`（见 [`../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md`](../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md)）
 - **需求**：同域拖拽移动见 [`../requirements/document-move/`](../requirements/document-move/)（已同意）
 
 ### API 客户端

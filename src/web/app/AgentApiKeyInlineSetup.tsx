@@ -55,7 +55,7 @@ export function AgentApiKeyInlineSetup(props: {
       if (kind === "deepseek") {
         await saveAgentConfigApi({
           kind: "deepseek",
-          modelId: "deepseek-v4-flash",
+          modelId: "deepseek-flash",
           apiKey: keyTrimmed,
         });
       } else {

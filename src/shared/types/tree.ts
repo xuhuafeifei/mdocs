@@ -20,6 +20,7 @@ export interface TreeDocumentNode {
   displayName: string;
   ownerVisitorId: string;
   updatedAt: string;
+  fileType: string;
 }
 
 /** 按目录取子树的精简节点（GET /folder/:folderId/tree） */

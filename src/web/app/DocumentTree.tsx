@@ -428,7 +428,7 @@ function DocRow(props: {
       }}
     >
       <span className="mdocs-tree-caret-spacer" aria-hidden />
-      <span className="mdocs-tree-icon">md</span>
+      <span className="mdocs-tree-icon">{doc.fileType === "html" ? "H" : "md"}</span>
       <span
         className="mdocs-tree-label"
         title={doc.displayName || doc.name}

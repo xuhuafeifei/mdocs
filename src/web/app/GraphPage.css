@@ -133,7 +133,8 @@
   color: #64748b;
 }
 
-.graph-empty h3 {
+.graph-empty h3,
+.graph-error h3 {
   margin: 0;
   color: #334155;
 }

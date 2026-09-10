@@ -2,15 +2,20 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  max-height: 100vh;
   min-height: 0;
+  overflow: hidden;
 }
 
 .mdocs-shell {
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  grid-template-rows: 1fr;
-  flex: 1;
+  /* 只承载主布局；悬浮层放在 shell 外，避免撑开高度 */
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
   min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  position: relative;
 }
 
 .mdocs-loading {
@@ -20,13 +25,21 @@
   justify-content: center;
 }
 
+.mdocs-shell > .mdocs-layout,
+.mdocs-shell > .mdocs-main {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 .mdocs-layout {
   display: flex;
-  flex: 1;
+  flex-direction: row;
+  align-items: stretch;
   min-height: 0;
   overflow: hidden;
-  /* shell 使用 260px | 1fr 两列网格；文档区将侧栏+正文包在同一容器内，须跨两列否则会只占第一列、右侧留空 */
-  grid-column: 1 / -1;
 }
 
 .mdocs-sidebar {
@@ -34,15 +47,20 @@
   border-right: 1px solid var(--mdocs-border);
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
   width: 240px;
-  flex-shrink: 0;
+  flex: 0 0 240px;
+  height: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+  overflow: hidden; /* 禁止整栏滚动：头尾固定 */
   transition: width 0.2s ease-out;
 }
 
 .mdocs-sidebar-collapsed {
   width: 64px;
+  flex-basis: 64px;
 }
 
 .mdocs-sidebar-collapsed .mdocs-brand span,
@@ -60,7 +78,7 @@
 .mdocs-sidebar-header {
   padding: 8px 16px;
   border-bottom: 1px solid var(--mdocs-border);
-  flex-shrink: 0;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -133,8 +151,39 @@
   flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  flex: 0 0 auto;
   border-bottom: 1px solid var(--mdocs-border);
+  position: relative;
+}
+
+/* 新建文档下拉菜单 */
+.mdocs-create-dropdown {
+  position: absolute;
+  left: 24px;
+  top: 100%;
+  background: var(--mdocs-bg);
+  border: 1px solid var(--mdocs-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 100;
+  min-width: 160px;
+  overflow: hidden;
+}
+.mdocs-create-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--mdocs-text);
+  text-align: left;
+}
+.mdocs-create-dropdown-item:hover {
+  background: var(--mdocs-accent-soft);
 }
 
 .mdocs-sidebar-icon {
@@ -157,10 +206,13 @@
 }
 
 .mdocs-sidebar-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 8px 16px;
+  flex: 1 1 0;
   min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 8px 16px;
 }
 
 .mdocs-doc-item {
@@ -314,7 +366,7 @@
 .mdocs-sidebar-footer {
   padding: 10px 16px;
   border-top: 1px solid var(--mdocs-border);
-  flex-shrink: 0;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3071,9 +3123,11 @@ button.small {
 .mdocs-main {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
+  max-height: 100%;
+  height: 100%;
   overflow: hidden;
   position: relative;
 }

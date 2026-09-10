@@ -15,8 +15,8 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { MiniSelect } from "./MiniSelect";
 
 const DS_MODELS = [
-  { value: "deepseek-v4-flash", label: "deepseek-v4-flash" },
-  { value: "deepseek-v4-pro", label: "deepseek-v4-pro" },
+  { value: "deepseek-flash", label: "deepseek-flash（V4.1 Flash）" },
+  { value: "deepseek-v4-pro", label: "deepseek-v4-pro（将路由至 Flash）" },
 ] as const;
 
 const API_TYPES = [
@@ -48,8 +48,8 @@ export function AgentConfigPanel() {
   const [providerId, setProviderId] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiType, setApiType] = useState<AgentApiType>("openai-completions");
-  const [modelId, setModelId] = useState("deepseek-v4-flash");
-  const [contextWindow, setContextWindow] = useState(128000);
+  const [modelId, setModelId] = useState("deepseek-flash");
+  const [contextWindow, setContextWindow] = useState(1000000);
   const [apiKey, setApiKey] = useState("");
   const [hasApiKey, setHasApiKey] = useState(false);
   const [apiKeyMasked, setApiKeyMasked] = useState<string | null>(null);
@@ -86,8 +86,8 @@ export function AgentConfigPanel() {
     setProviderId("");
     setBaseUrl("");
     setApiType("openai-completions");
-    setModelId("deepseek-v4-flash");
-    setContextWindow(128000);
+    setModelId("deepseek-flash");
+    setContextWindow(1000000);
     setApiKey("");
     setHasApiKey(false);
     setApiKeyMasked(null);
@@ -105,8 +105,25 @@ export function AgentConfigPanel() {
     setProviderId(cfg.providerId ?? "");
     setBaseUrl(cfg.baseUrl);
     setApiType(cfg.apiType);
-    setModelId(cfg.modelId);
-    setContextWindow(cfg.contextWindow || 128000);
+    // 旧 flash 别名在下拉里已无选项，展示时归一到 deepseek-flash
+    const mid = cfg.modelId.trim();
+    const flashAliases = new Set([
+      "deepseek-flash",
+      "deepseek-v4-flash",
+      "deepseek-v4-flash-vision-exp",
+      "deepseek-v4.1-flash",
+      "deepseek-v4.1-flash-expires-on-0910",
+    ]);
+    setModelId(
+      cfg.kind === "deepseek"
+        ? mid === "deepseek-v4-pro"
+          ? "deepseek-v4-pro"
+          : flashAliases.has(mid)
+            ? "deepseek-flash"
+            : mid || "deepseek-flash"
+        : mid,
+    );
+    setContextWindow(cfg.contextWindow || 1000000);
     setHasApiKey(cfg.hasApiKey);
     setApiKeyMasked(cfg.apiKeyMasked);
     setApiKey("");
@@ -465,7 +482,7 @@ export function AgentConfigPanel() {
                     max={2000000}
                     step={1000}
                     value={contextWindow}
-                    onChange={(e) => setContextWindow(Number(e.target.value) || 128000)}
+                    onChange={(e) => setContextWindow(Number(e.target.value) || 1000000)}
                   />
                   <p className="mdocs-agent-field-hint">{t("agentConfigContextWindowDesc")}</p>
                 </label>

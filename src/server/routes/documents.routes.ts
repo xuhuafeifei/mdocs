@@ -22,6 +22,8 @@ import { searchDocuments } from "../search/search.service.js";
 import { requireDocumentAccess, requireDocumentOwner } from "../middleware/document-auth.middleware.js";
 import { StoragePathError } from "../storage/paths.js";
 import type { PublishVersionContext } from "../../shared/types/document.js";
+import { FILE_TYPE } from "../../shared/file-types.js";
+import { treeIncludeTypes } from "../../shared/file-type-policy.js";
 import { useLogger } from "../logger/logger.js";
 import { buildFolderSubtree } from "../documents/tree.service.js";
 
@@ -98,12 +100,17 @@ export function buildDocumentsRouter(): Router {
       permission?: unknown;
       parentId?: unknown;
       contentFormat?: unknown;
+      fileType?: unknown;
     };
     // 校验必填字段：文件名和内容必须是字符串
     if (typeof body.fileName !== "string" || typeof body.content !== "string") {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "fileName and content are required" } });
       return;
     }
+    // 校验 fileType：仅允许用户创建 md 和 html
+    const rawFileType = body.fileType;
+    const fileType =
+      rawFileType === FILE_TYPE.HTML ? FILE_TYPE.HTML : FILE_TYPE.DOCUMENT;
     try {
       // 调用服务层创建文档，把请求参数映射为服务参数
       const doc = createDocument({
@@ -111,6 +118,7 @@ export function buildDocumentsRouter(): Router {
         fileName: body.fileName,
         displayName: typeof body.displayName === "string" ? body.displayName : undefined,
         content: body.content,
+        fileType,
         domainId: typeof body.domainId === "string" ? body.domainId : undefined,
         permission: typeof body.permission === "number" ? body.permission : undefined,
         parentId: typeof body.parentId === "string" ? body.parentId : undefined,
@@ -391,7 +399,7 @@ export function buildDocumentsRouter(): Router {
     const folderId = req.params.folderId!;
     const visitorId = req.visitor?.visitor_id ?? null;
     try {
-      const tree = buildFolderSubtree(folderId, visitorId, { includeTypes: ["dir", "md", "folder_desc"] });
+      const tree = buildFolderSubtree(folderId, visitorId, { includeTypes: treeIncludeTypes() });
       res.json({ data: tree });
     } catch (err) {
       respondError(res, err, "documents-route.folder-tree");

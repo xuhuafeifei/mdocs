@@ -35,21 +35,22 @@ export function parseDisplayNameFolder(raw: string): { ok: true; display: string
 
 /**
  * Validate a markdown filename the user typed (one segment, may omit `.md` before normalise elsewhere).
- * Returns trimmed display filename ending with `.md`.
+ * Returns trimmed display filename ending with `.md` or `.html`.
  */
 export function parseDisplayNameMarkdownFile(raw: string): { ok: true; displayFile: string } | { ok: false; message: string } {
   let t = raw.trim();
   if (!t) return { ok: false, message: "enter a file name" };
   if (t.includes("/") || t.includes("\\")) return { ok: false, message: "use a file name, not a path" };
   if (t === "." || t === "..") return { ok: false, message: "invalid file name" };
-  if (!t.toLowerCase().endsWith(".md")) t += ".md";
+  const lower = t.toLowerCase();
+  if (!lower.endsWith(".md") && !lower.endsWith(".html")) t += ".md";
   if (t.length > DISPLAY_FILE_MAX) return { ok: false, message: "file name is too long" };
   return { ok: true, displayFile: t };
 }
 
 /**
- * Normalise every `/`-separated segment for storage (dirs + final `.md` stem).
- * Last segment must end with `.md`; extension casing preserved as input segment.
+ * Normalise every `/`-separated segment for storage (dirs + final file stem).
+ * Last segment must end with `.md` or `.html`; extension casing preserved as input segment.
  */
 export function normaliseRelativePathForStorage(raw: string): string {
   const t = raw.trim().replace(/\\/g, "/");
@@ -65,11 +66,13 @@ export function normaliseRelativePathForStorage(raw: string): string {
     out.push(s);
   }
   const last = parts[parts.length - 1]!;
-  if (!last.toLowerCase().endsWith(".md")) {
-    throw new DocPathError("document path must end with .md");
+  const lower = last.toLowerCase();
+  const ext = lower.endsWith(".html") ? ".html" : lower.endsWith(".md") ? ".md" : null;
+  if (!ext) {
+    throw new DocPathError("document path must end with .md or .html");
   }
-  const stem = last.slice(0, -3);
-  const suffix = last.slice(-3);
+  const stem = last.slice(0, -ext.length);
+  const suffix = last.slice(-ext.length);
   const ns = normalisePathSegmentForStorage(stem);
   if (!ns) throw new DocPathError("invalid file name");
   out.push(ns + suffix);

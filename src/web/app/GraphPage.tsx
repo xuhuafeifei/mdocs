@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import ForceGraph2D from "react-force-graph-2d";
-import { X, Play, Loader2 } from "lucide-react";
+import { X, Play, Loader2, Settings2 } from "lucide-react";
 import {
   analyzeDomainGraphApi,
   analyzeGraphApi,
@@ -22,6 +22,8 @@ import {
   type GraphTaskLogEntry,
   type GraphTaskStatusEnum,
 } from "../services/endpoints";
+import { ApiRequestError } from "../services/client";
+import { AgentApiKeyInlineSetup } from "./AgentApiKeyInlineSetup";
 import {
   buildContainsHierarchy,
   containsAncestors,
@@ -123,6 +125,9 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
   const defaultTaskId = `graph:${scope === "domain" ? "domain" : "dir"}:${resourceId}`;
   const taskIdRef = useRef(defaultTaskId);
   const pollTimerRef = useRef<number | null>(null);
+  /** 未配置 AI 模型：报错时不显示泛泛的失败，而是引导用户配置 */
+  const [aiNotConfigured, setAiNotConfigured] = useState(false);
+  const [showAiSetup, setShowAiSetup] = useState(false);
 
   // 是否"正在处理中"（排队中 / 运行中，都显示进度面板）
   const isProcessing = taskStatus === "running" || taskStatus === "pending";
@@ -226,6 +231,7 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
   const handleAnalyze = async () => {
     if (isProcessing) return;
     setError(null);
+    setAiNotConfigured(false);
     try {
       const analyzeFn = scope === "domain" ? analyzeDomainGraphApi : analyzeGraphApi;
       const result = await analyzeFn(resourceId);
@@ -236,8 +242,22 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
       setTaskProgress(null);
       startPolling();
     } catch (err: any) {
-      setError(err.message || "生成失败");
+      // 未配置 AI：引导去配置，而不是丢一句 "request failed"
+      if (err instanceof ApiRequestError && err.code === "AI_NOT_CONFIGURED") {
+        setAiNotConfigured(true);
+        setError(err.message);
+        return;
+      }
+      setError(err?.message || "生成失败");
     }
+  };
+
+  /** 配置完 AI 后自动重试生成 */
+  const handleAiConfigured = async () => {
+    setShowAiSetup(false);
+    setAiNotConfigured(false);
+    setError(null);
+    await handleAnalyze();
   };
 
   // 按 doc 开关得到底图，再按 contains 分层裁剪可见子图
@@ -575,6 +595,14 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
             <span>显示 doc 节点</span>
           </label>
           <button
+            className="graph-btn"
+            onClick={() => setShowAiSetup(true)}
+            title="配置用于图谱分析的 AI 模型"
+          >
+            <Settings2 size={14} />
+            配置 AI
+          </button>
+          <button
             className="graph-btn graph-btn-primary"
             onClick={handleAnalyze}
             disabled={isProcessing}
@@ -605,10 +633,30 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
 
         {error && !loading && (
           <div className="graph-error">
-            <p>❌ {error}</p>
-            <button className="graph-btn" onClick={handleAnalyze}>
-              重试生成
-            </button>
+            {aiNotConfigured ? (
+              <>
+                <p style={{ fontSize: 40, margin: 0 }}>🔑</p>
+                <h3>还没有配置 AI 模型</h3>
+                <p className="muted">
+                  图谱由 AI 分析生成，需要先配置一个可用的模型
+                </p>
+                <button
+                  className="graph-btn graph-btn-primary"
+                  onClick={() => setShowAiSetup(true)}
+                  style={{ marginTop: 12 }}
+                >
+                  <Settings2 size={14} />
+                  配置 AI
+                </button>
+              </>
+            ) : (
+              <>
+                <p>❌ {error}</p>
+                <button className="graph-btn" onClick={handleAnalyze}>
+                  重试生成
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -1100,6 +1148,31 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
               </ul>
             </div>
           )}
+        </div>
+      )}
+      {/* AI 配置弹框：复用智能助手的配置卡片，配置完自动重试生成 */}
+      {showAiSetup && (
+        <div
+          className="mdocs-dialog-backdrop"
+          role="presentation"
+          onMouseDown={(ev) => {
+            if (ev.target === ev.currentTarget) setShowAiSetup(false);
+          }}
+        >
+          <div
+            className="mdocs-dialog card"
+            role="dialog"
+            aria-modal="true"
+            aria-label="配置 AI 模型"
+          >
+            <h2>配置 AI 模型</h2>
+            <AgentApiKeyInlineSetup onConfigured={handleAiConfigured} />
+            <div className="mdocs-dialog-actions">
+              <button type="button" onClick={() => setShowAiSetup(false)}>
+                取消
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

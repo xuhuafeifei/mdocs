@@ -37,6 +37,7 @@ import {
   induceConceptRelations as aiInduceConceptRelations,
 } from "./graph/llm-chains.js";
 import { FILE_TYPE } from "../../shared/file-types.js";
+import { graphWalkIncludeTypes } from "../../shared/file-type-policy.js";
 import type { TreeNode, FolderSubtreeNode } from "../../shared/types/tree.js";
 import {
   getDirGraphPayload,
@@ -193,7 +194,7 @@ function buildTreeNodeForDoc(doc: DocumentRow, visitorId?: string): TreeNode {
   }
 
   if (folderDoc.file_type === FILE_TYPE.FOLDER) {
-    const subtree = buildFolderSubtree(folderDoc.document_id, visitorId, { includeTypes: ["dir", "md", "folder_desc"] });
+    const subtree = buildFolderSubtree(folderDoc.document_id, visitorId, { includeTypes: graphWalkIncludeTypes() });
     return {
       type: "folder",
       name: folderDoc.display_name || folderDoc.relative_path.split("/").pop() || folderDoc.document_id,
@@ -212,6 +213,7 @@ function buildTreeNodeForDoc(doc: DocumentRow, visitorId?: string): TreeNode {
     displayName: doc.display_name,
     ownerVisitorId: doc.owner_visitor_id,
     updatedAt: doc.updated_at,
+    fileType: doc.file_type,
   };
 }
 
@@ -241,6 +243,7 @@ function subtreeNodesToTreeNodes(nodes: FolderSubtreeNode[]): TreeNode[] {
       displayName: n.title,
       ownerVisitorId: "",
       updatedAt: "",
+      fileType: "md",
     };
   });
 }

@@ -159,7 +159,7 @@ export function listFolderChildren(
 /**
  * 规范化文件名：确保文件名有效且以 .md 结尾
  */
-function normalizeFileName(fileName: string): string {
+function normalizeFileName(fileName: string, fileType?: string): string {
   let normalized = fileName.trim();
 
   // 移除路径字符，只保留文件名
@@ -168,14 +168,19 @@ function normalizeFileName(fileName: string): string {
   // 替换非法字符
   normalized = normalized.replace(/[^\w\u4e00-\u9fa5\-_.]/g, "_");
 
-  // 确保以 .md 结尾
-  if (!normalized.toLowerCase().endsWith(".md")) {
-    normalized += ".md";
+  // 按 fileType 确定目标后缀
+  const ext = fileType === FILE_TYPE.HTML ? ".html" : ".md";
+
+  // 确保以正确后缀结尾
+  const lower = normalized.toLowerCase();
+  if (!lower.endsWith(".md") && !lower.endsWith(".html")) {
+    normalized += ext;
   }
 
   // 避免空文件名
-  if (normalized === ".md") {
-    normalized = "untitled.md";
+  const checkLower = normalized.toLowerCase();
+  if (checkLower === ".md" || checkLower === ".html") {
+    normalized = "untitled" + ext;
   }
 
   return normalized;
@@ -183,7 +188,7 @@ function normalizeFileName(fileName: string): string {
 
 export function createDocument(params: {
   actorVisitorId: string;
-  fileName: string; // 改为只接受文件名，后端自动计算路径
+  fileName: string;
   displayName?: string;
   content: string;
   domainId?: string;
@@ -193,11 +198,16 @@ export function createDocument(params: {
   /** 内容格式，默认 'lexical'；传 'markdown' 时自动转换为 Lexical JSON */
   contentFormat?: "markdown" | "lexical";
 }): DocumentDetail {
-  // 如果 markdown 格式，先转为 Lexical JSON
+  const fileType = params.fileType ?? FILE_TYPE.DOCUMENT;
+  const policy = getPolicy(fileType as any);
+
+  // html 文件：禁止 markdown→Lexical，内容原样存
   const content =
-    params.contentFormat === "markdown"
-      ? markdownToLexicalJson(params.content)
-      : params.content;
+    fileType === FILE_TYPE.HTML
+      ? params.content
+      : params.contentFormat === "markdown"
+        ? markdownToLexicalJson(params.content)
+        : params.content;
   const cfg = getConfig();
   const domainId = params.domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
@@ -218,7 +228,7 @@ export function createDocument(params: {
 
   // 自动计算 relativePath
   let relativePath: string;
-  const normalizedFileName = normalizeFileName(params.fileName);
+  const normalizedFileName = normalizeFileName(params.fileName, fileType);
 
   if (!params.parentId) {
     // 没有 parentId，是域的顶层文件
@@ -290,7 +300,7 @@ export function createDocument(params: {
       createdAt: now,
       updatedAt: now,
       permission,
-      fileType: params.fileType ?? "md",
+      fileType,
       parentId: params.parentId ?? null,
     });
     insertCommit(db, {
@@ -398,10 +408,15 @@ export function updateDocument(params: {
   /** 发布版本信息：乐观锁与 merge 发布 */
   version?: PublishVersionContext;
 }): DocumentDetail {
-  const content = normalizeDocumentContent(params.content, params.contentFormat);
   const db = getDb();
   const row = findDocumentById(db, params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+
+  // html 文件：不走 markdown→Lexical，内容原样存
+  const content =
+    row.file_type === FILE_TYPE.HTML
+      ? params.content
+      : normalizeDocumentContent(params.content, params.contentFormat);
 
   const domain = findDomainById(db, row.domain_id);
   const domainPermission = domain?.permission ?? "public";
@@ -600,8 +615,8 @@ export function moveDocument(params: {
   if (row.owner_visitor_id !== params.actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可移动此文件", 403);
   }
-  if (row.file_type !== "md") {
-    throw new DocumentError("INVALID_TYPE", "只能移动文档，不能移动文件夹", 400);
+  if (!getPolicy(row.file_type as any).movable) {
+    throw new DocumentError("INVALID_TYPE", "该类型文件不支持移动", 400);
   }
 
   const currentParent = row.parent_id ?? null;

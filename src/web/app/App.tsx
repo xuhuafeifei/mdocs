@@ -9,7 +9,7 @@
  * 6. 全局消息提示与冲突处理
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, File, Folder, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
+import { BookOpen, Code, File, FileText, Folder, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -85,6 +85,9 @@ import "./comments.css";
 /** 重依赖按需加载：首屏只拉壳，编辑器/助手/设置进独立 chunk */
 const DocumentEditor = lazy(() =>
   import("./DocumentEditor").then((m) => ({ default: m.DocumentEditor })),
+);
+const HtmlEditor = lazy(() =>
+  import("./HtmlEditor").then((m) => ({ default: m.HtmlEditor })),
 );
 const SettingsPage = lazy(() =>
   import("./SettingsPage").then((m) => ({ default: m.SettingsPage })),
@@ -202,6 +205,8 @@ export function App() {
   // ---- 域列表与当前域 ----
   const [domains, setDomains] = useState<DomainSummary[]>([]);
   const [currentDomainId, setCurrentDomainId] = useState("default");
+  const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
+  const createDropdownRef = useRef<HTMLDivElement>(null);
 
   // ---- 路由参数：URL 中的文档 ID ----
   const { documentId } = useParams();
@@ -524,6 +529,8 @@ export function App() {
       const custom = ev as CustomEvent<{ status?: number; code?: string; message?: string }>;
       // 409 冲突统一由业务弹窗处理（如 ConflictModal / MergeView），不走通用错误弹窗
       if (custom.detail?.status === 409) return;
+      // 未配置 AI：由发起页面自行引导（如图谱页给出「配置 AI」入口），弹窗只会盖住它
+      if (custom.detail?.code === "AI_NOT_CONFIGURED") return;
       const msg = custom.detail?.message;
       if (msg) setAlertMessage(msg);
     };
@@ -681,6 +688,19 @@ export function App() {
     // 清图谱焦点，回无焦点状态
     setFocus(null);
   }
+
+  // 点击外部关闭创建类型下拉
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (createDropdownRef.current && !createDropdownRef.current.contains(e.target as Node)) {
+        setCreateDropdownOpen(false);
+      }
+    }
+    if (createDropdownOpen) {
+      document.addEventListener("mousedown", onDown);
+      return () => document.removeEventListener("mousedown", onDown);
+    }
+  }, [createDropdownOpen]);
 
   async function openDocument(docId: string): Promise<void> {
     expectedDocIdRef.current = docId;
@@ -1166,135 +1186,6 @@ export function App() {
       )}
 
       <div className="mdocs-shell">
-      {/* 注册成功后的访客 ID 提示条 */}
-      {pendingVisitorId && visitor && (
-        <VisitorIdNotice
-          visitorId={pendingVisitorId}
-          onDismiss={() => setPendingVisitorId(null)}
-        />
-      )}
-
-      {/* 恢复码展示弹窗（注册后仅展示一次） */}
-      {recoveryCode && (
-        <div
-          className="mdocs-dialog-backdrop"
-          style={{ position: "fixed", zIndex: 9999 }}
-          onClick={(e) => { if (e.target === e.currentTarget) setRecoveryCode(null); }}
-        >
-          <div className="mdocs-dialog card" style={{ maxWidth: 480, textAlign: "center" }}>
-            <h1 style={{ fontSize: "1.25rem", marginBottom: 8 }}>🔑 保存你的恢复码</h1>
-            <p className="muted" style={{ marginBottom: 16, lineHeight: 1.5 }}>
-              恢复码是你的唯一凭证，当 Token 丢失时可用它找回身份。
-              <br />
-              <strong>请立即复制保存，此弹窗关闭后不可再查看。</strong>
-            </p>
-            <div
-              style={{
-                background: "#f5f5f5",
-                borderRadius: 8,
-                padding: "12px 16px",
-                fontFamily: "monospace",
-                fontSize: "1.25rem",
-                letterSpacing: "0.1em",
-                marginBottom: 20,
-                userSelect: "all",
-              }}
-            >
-              {recoveryCode}
-            </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => {
-                  navigator.clipboard.writeText(recoveryCode);
-                }}
-              >
-                复制恢复码
-              </button>
-              <button
-                type="button"
-                onClick={() => setRecoveryCode(null)}
-              >
-                已保存，关闭
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Agent 可拖动悬浮入口 + 附近对话框壳 */}
-      {!isDemoMode() && (
-        <>
-          <AgentFab
-            open={agentPanelOpen}
-            onToggle={() => {
-              if (agentPanelOpen) {
-                agentPanelRef.current?.requestClose();
-              } else {
-                setAgentPanelOpen(true);
-              }
-            }}
-            position={agentFabPos}
-            onPositionChange={setAgentFabPos}
-            disableDrag={isNarrow}
-          />
-          {agentPanelOpen ? (
-            <Suspense fallback={null}>
-              <AgentChatPanel
-                ref={agentPanelRef}
-                open={agentPanelOpen}
-                onClose={() => {
-                  setAgentPanelOpen(false);
-                  setAgentPanelFullscreen(false);
-                }}
-                visitorName={visitor?.visitorName}
-                fullscreen={isNarrow || agentPanelFullscreen}
-                onToggleFullscreen={
-                  isNarrow ? undefined : () => setAgentPanelFullscreen((v) => !v)
-                }
-                domainId={currentDomainId || null}
-                documentId={activeDocMeta?.documentId ?? null}
-                documentTitle={activeDocMeta?.displayName ?? null}
-                documentPath={activeDocMeta?.relativePath ?? null}
-                graphFileId={focus?.kind === "graph" ? `${focus.resourceId}.graph-file` : null}
-                graphLabel={focus?.kind === "graph" ? focus.name : null}
-                anchorStyle={
-                  isNarrow || agentPanelFullscreen
-                    ? undefined
-                    : agentPanelAnchorStyle(agentFabPos)
-                }
-                onOpenDocument={(docId) => {
-                  setView("docs");
-                  void guardNavigate(() => navigate(`/doc/${docId}`));
-                  setAgentPanelOpen(false);
-                  setAgentPanelFullscreen(false);
-                }}
-                onTreeChanged={() => void refreshTree()}
-                onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
-                onOpenCoding={(payload) => void openAiWriteForDocument(payload)}
-              />
-            </Suspense>
-          ) : null}
-        </>
-      )}
-
-      {!isDemoMode() && aiWriteBoot ? (
-        <Suspense fallback={null}>
-          <AiWriteWorkbench
-            open={aiWriteOpen}
-            initialMarkdown={aiWriteBoot.markdown}
-            documentId={aiWriteBoot.documentId}
-            displayName={aiWriteBoot.displayName}
-            onClose={() => {
-              setAiWriteOpen(false);
-              setAiWriteBoot(null);
-            }}
-            onComplete={completeAiWrite}
-          />
-        </Suspense>
-      ) : null}
-
       {/* 根据当前视图渲染设置页或文档页 */}
       {view === "settings" ? (
         <Suspense fallback={<div className="mdocs-main muted" style={{ padding: 24 }}>加载设置…</div>}>
@@ -1372,10 +1263,27 @@ export function App() {
             </header>
 
             {/* 新建文档/文件夹图标 */}
-            <div className="mdocs-sidebar-actions">
-              <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip={t("newDocument")} onClick={() => openNewDocumentModal()} style={{ color: "var(--mdocs-accent)" }}>
+            <div className="mdocs-sidebar-actions" ref={createDropdownRef} style={{ position: "relative" }}>
+              <span
+                className="mdocs-sidebar-icon mdocs-tooltip"
+                data-tooltip={t("newDocument")}
+                onClick={() => setCreateDropdownOpen((v) => !v)}
+                style={{ color: "var(--mdocs-accent)" }}
+              >
                 <File size={20} />
               </span>
+              {createDropdownOpen && (
+                <div className="mdocs-create-dropdown">
+                  <button type="button" className="mdocs-create-dropdown-item" onClick={() => { setCreateDropdownOpen(false); openNewDocumentModal(); }}>
+                    <FileText size={14} strokeWidth={1.5} />
+                    Markdown
+                  </button>
+                  <button type="button" className="mdocs-create-dropdown-item" onClick={() => { setCreateDropdownOpen(false); openNewDocumentModal(undefined, "html"); }}>
+                    <Code size={14} strokeWidth={1.5} />
+                    HTML
+                  </button>
+                </div>
+              )}
               <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip={t("newFolder")} onClick={() => openNewFolderModal()}>
                 <Folder size={20} />
               </span>
@@ -1520,6 +1428,22 @@ export function App() {
                 }}
               />
             ) : activeDocMeta && editorContent && editorContent.documentId === activeDocMeta.documentId ? (
+              activeDocMeta.fileType === "html" ? (
+                <HtmlEditor
+                  key={activeDocMeta.documentId}
+                  initialContent={editorContent.content}
+                  displayName={editorContent.displayName}
+                  canEdit={Boolean(visitor && (activeDocMeta.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDocMeta.permission) || activeDocMeta.invitedEdit === true))}
+                  onContentChange={(c) => {
+                    setEditorContent((prev) => prev ? { ...prev, content: c } : prev);
+                  }}
+                  onPublish={() => {
+                    void publishDocument(editorContent.content, activeDocMeta.displayName, activeDocMeta.documentId, activeDocMeta.permission);
+                  }}
+                  readerChrome={isNarrow}
+                  onOpenMobileNav={() => setMobileNavOpen(true)}
+                />
+              ) : (
               <div className="mdocs-editor-with-comments">
                 {/* 编辑器区域 */}
                 <div className="mdocs-editor-container">
@@ -1590,8 +1514,8 @@ export function App() {
                   />
                 )}
               </div>
+              )
             ) : (
-              // ---- 没有文档打开：渲染欢迎页 ----
               <div className="mdocs-welcome">
                 {isNarrow ? (
                   <button
@@ -1979,7 +1903,134 @@ export function App() {
           )}
         </div>
       )}
-    </div>
+      </div>
+
+      {/* 悬浮层放在 shell 外，避免参与主布局高度计算 */}
+      {pendingVisitorId && visitor && (
+        <VisitorIdNotice
+          visitorId={pendingVisitorId}
+          onDismiss={() => setPendingVisitorId(null)}
+        />
+      )}
+
+      {recoveryCode && (
+        <div
+          className="mdocs-dialog-backdrop"
+          style={{ position: "fixed", zIndex: 9999 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setRecoveryCode(null); }}
+        >
+          <div className="mdocs-dialog card" style={{ maxWidth: 480, textAlign: "center" }}>
+            <h1 style={{ fontSize: "1.25rem", marginBottom: 8 }}>🔑 保存你的恢复码</h1>
+            <p className="muted" style={{ marginBottom: 16, lineHeight: 1.5 }}>
+              恢复码是你的唯一凭证，当 Token 丢失时可用它找回身份。
+              <br />
+              <strong>请立即复制保存，此弹窗关闭后不可再查看。</strong>
+            </p>
+            <div
+              style={{
+                background: "#f5f5f5",
+                borderRadius: 8,
+                padding: "12px 16px",
+                fontFamily: "monospace",
+                fontSize: "1.25rem",
+                letterSpacing: "0.1em",
+                marginBottom: 20,
+                userSelect: "all",
+              }}
+            >
+              {recoveryCode}
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  navigator.clipboard.writeText(recoveryCode);
+                }}
+              >
+                复制恢复码
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecoveryCode(null)}
+              >
+                已保存，关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isDemoMode() && (
+        <>
+          <AgentFab
+            open={agentPanelOpen}
+            onToggle={() => {
+              if (agentPanelOpen) {
+                agentPanelRef.current?.requestClose();
+              } else {
+                setAgentPanelOpen(true);
+              }
+            }}
+            position={agentFabPos}
+            onPositionChange={setAgentFabPos}
+            disableDrag={isNarrow}
+          />
+          {agentPanelOpen ? (
+            <Suspense fallback={null}>
+              <AgentChatPanel
+                ref={agentPanelRef}
+                open={agentPanelOpen}
+                onClose={() => {
+                  setAgentPanelOpen(false);
+                  setAgentPanelFullscreen(false);
+                }}
+                visitorName={visitor?.visitorName}
+                fullscreen={isNarrow || agentPanelFullscreen}
+                onToggleFullscreen={
+                  isNarrow ? undefined : () => setAgentPanelFullscreen((v) => !v)
+                }
+                domainId={currentDomainId || null}
+                documentId={activeDocMeta?.documentId ?? null}
+                documentTitle={activeDocMeta?.displayName ?? null}
+                documentPath={activeDocMeta?.relativePath ?? null}
+                graphFileId={focus?.kind === "graph" ? `${focus.resourceId}.graph-file` : null}
+                graphLabel={focus?.kind === "graph" ? focus.name : null}
+                anchorStyle={
+                  isNarrow || agentPanelFullscreen
+                    ? undefined
+                    : agentPanelAnchorStyle(agentFabPos)
+                }
+                onOpenDocument={(docId) => {
+                  setView("docs");
+                  void guardNavigate(() => navigate(`/doc/${docId}`));
+                  setAgentPanelOpen(false);
+                  setAgentPanelFullscreen(false);
+                }}
+                onTreeChanged={() => void refreshTree()}
+                onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
+                onOpenCoding={(payload) => void openAiWriteForDocument(payload)}
+              />
+            </Suspense>
+          ) : null}
+        </>
+      )}
+
+      {!isDemoMode() && aiWriteBoot ? (
+        <Suspense fallback={null}>
+          <AiWriteWorkbench
+            open={aiWriteOpen}
+            initialMarkdown={aiWriteBoot.markdown}
+            documentId={aiWriteBoot.documentId}
+            displayName={aiWriteBoot.displayName}
+            onClose={() => {
+              setAiWriteOpen(false);
+              setAiWriteBoot(null);
+            }}
+            onComplete={completeAiWrite}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

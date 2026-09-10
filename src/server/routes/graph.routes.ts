@@ -29,6 +29,14 @@ import "../documents/graph-task.js"; // 副作用导入，注册图谱任务
 
 const router = Router();
 
+/** 未配置可用 AI 时抛出，前端据此引导用户去配置（而不是显示一句泛泛的失败） */
+class AiNotConfiguredError extends Error {
+  readonly code = "AI_NOT_CONFIGURED";
+  constructor() {
+    super("请先配置 AI 模型后再生成图谱");
+  }
+}
+
 /** 优先用当前访客默认 AI 配置；未配置时再读服务端环境变量（兼容旧部署） */
 function getAgentConfig(req: Request): GraphAgentConfig {
   const visitorId = req.visitor?.visitor_id;
@@ -53,7 +61,7 @@ function getAgentConfig(req: Request): GraphAgentConfig {
     return { baseUrl, apiKey, modelId, apiType: "anthropic-messages" };
   }
 
-  throw new Error("请先在设置 → AI 中配置默认模型（或设置服务端 ANTHROPIC_BASE_URL / ANTHROPIC_API_KEY）");
+  throw new AiNotConfiguredError();
 }
 
 /* ── 任务查询 ── */
@@ -86,8 +94,13 @@ router.post("/domain/:domainId/analyze", (req: Request, res: Response) => {
     });
     res.json({ data: result });
   } catch (err) {
+    if (err instanceof AiNotConfiguredError) {
+      res.status(400).json({ error: { code: err.code, message: err.message } });
+      return;
+    }
     console.error("[Graph] 域级构建入队失败：", err);
-    res.status(500).json({ error: err instanceof Error ? err.message : "入队失败" });
+    const message = err instanceof Error ? err.message : "入队失败";
+    res.status(500).json({ error: { code: "GRAPH_ENQUEUE_FAILED", message } });
   }
 });
 
@@ -105,7 +118,7 @@ router.post("/:folderId/analyze", (req: Request, res: Response) => {
   const db = getDb();
   const folder = findDocumentById(db, folderId);
   if (!folder) {
-    res.status(404).json({ error: "目录不存在" });
+    res.status(404).json({ error: { message: "目录不存在" } });
     return;
   }
 
@@ -121,8 +134,13 @@ router.post("/:folderId/analyze", (req: Request, res: Response) => {
     });
     res.json({ data: result });
   } catch (err) {
+    if (err instanceof AiNotConfiguredError) {
+      res.status(400).json({ error: { code: err.code, message: err.message } });
+      return;
+    }
     console.error("[Graph] 构建入队失败：", err);
-    res.status(500).json({ error: err instanceof Error ? err.message : "入队失败" });
+    const message = err instanceof Error ? err.message : "入队失败";
+    res.status(500).json({ error: { code: "GRAPH_ENQUEUE_FAILED", message } });
   }
 });
 

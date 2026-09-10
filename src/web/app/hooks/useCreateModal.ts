@@ -48,7 +48,7 @@ function buildLexicalJsonHeading(title: string): string {
 }
 
 export type CreateModalState =
-  | { kind: "document"; parentMode: "selection" | "fixed"; parentPath: string; draft: string }
+  | { kind: "document"; parentMode: "selection" | "fixed"; parentPath: string; draft: string; fileType: "md" | "html" }
   | { kind: "folder"; parentMode: "selection" | "fixed"; parentPath: string; draft: string };
 
 /**
@@ -143,7 +143,7 @@ export function useCreateModal(opts: UseCreateModalOpts) {
   /**
    * 打开「新建文档」模态框。若传入 explicitParentPath，则固定父路径不可更改。
    */
-  function openNewDocumentModal(explicitParentPath?: string): void {
+  function openNewDocumentModal(explicitParentPath?: string, fileType: "md" | "html" = "md"): void {
     // 判断是否从上下文菜单传入的固定父路径
     const fixed = explicitParentPath !== undefined;
     // 清空之前的错误提示
@@ -153,8 +153,9 @@ export function useCreateModal(opts: UseCreateModalOpts) {
       kind: "document",
       parentMode: fixed ? "fixed" : "selection",
       parentPath: fixed ? explicitParentPath! : "",
-      // 默认文件名为 untitled.md
-      draft: "untitled.md",
+      // 默认文件名按类型区分
+      draft: fileType === "html" ? "untitled.html" : "untitled.md",
+      fileType,
     });
   }
 
@@ -195,6 +196,41 @@ export function useCreateModal(opts: UseCreateModalOpts) {
     try {
       // ========== 新建文档逻辑 ==========
       if (createModal.kind === "document") {
+        const fileType = createModal.fileType;
+        // html 文件：直接用原文
+        if (fileType === "html") {
+          const fileParsed = parseDisplayNameMarkdownFile(createModal.draft);
+          if (!fileParsed.ok) {
+            setCreateModalError(translateStorageError(t, fileParsed.message));
+            return;
+          }
+          const displayFile = fileParsed.displayFile;
+          const displayTitle = displayFile.replace(/\.html$/i, "").replace(/\.md$/i, "");
+          let relativePath: string;
+          try {
+            relativePath = normaliseRelativePathForStorage(joinDocPath(effectiveParent, displayFile));
+          } catch (e) {
+            setCreateModalError(translateError(t, e));
+            return;
+          }
+          if (paths.has(relativePath)) {
+            setCreateModalError(t("pathExists"));
+            return;
+          }
+          const parentId = effectiveParent ? findFolderIdByPath(tree, effectiveParent) ?? undefined : undefined;
+          const doc = await createDocumentApi({
+            fileName: displayFile,
+            displayName: displayTitle,
+            content: "",
+            domainId: currentDomainId,
+            parentId,
+            fileType: "html",
+          });
+          await refreshTree();
+          onDocCreated(doc);
+          setCreateModal(null);
+          return;
+        }
         // 解析用户输入的文件名，验证格式并规范化
         const fileParsed = parseDisplayNameMarkdownFile(createModal.draft);
         if (!fileParsed.ok) {
