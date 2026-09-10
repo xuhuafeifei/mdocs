@@ -15,6 +15,7 @@ import { getSkillLoader } from "../Skill/skill-loader.js";
 import {
   buildSystemPrompt,
   type AgentMode,
+  type AgentUiReferences,
 } from "./system-prompt.js";
 import { createToolsForMode } from "./tools-registry.js";
 import {
@@ -77,7 +78,7 @@ export async function runOnboardingChat(params: {
   workingMarkdown?: string;
   baseMarkdown?: string;
   /** normal：当前 UI 域/文 reference（不作权限校验） */
-  references?: { domainId?: string; documentId?: string } | null;
+  references?: AgentUiReferences | null;
   onEvent: (event: AgentStreamEvent) => void;
   signal?: AbortSignal;
 }): Promise<void> {

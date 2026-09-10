@@ -80,6 +80,8 @@ export interface TreeContextMenu {
 export function DocumentTree(props: {
   nodes: TreeNode[];
   activeDocumentId: string | null;
+  /** 图谱焦点时树高亮锚点（可见 folderId 或 documentId） */
+  graphFocusAnchorId?: string | null;
   /** Folder path used as default parent for "New document" / "New folder" from the sidebar. */
   selectedParentPath: string;
   onOpen: (node: Extract<TreeNode, { type: "document" }>) => void;
@@ -99,10 +101,11 @@ export function DocumentTree(props: {
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const reveal = useMemo(() => {
-    const id = props.activeDocumentId?.trim();
+    // 图谱焦点时用 anchor 展开定位；文档焦点时用 activeDocumentId
+    const id = props.graphFocusAnchorId?.trim() || props.activeDocumentId?.trim();
     if (!id) return null;
     return findRevealTarget(props.nodes, id);
-  }, [props.nodes, props.activeDocumentId]);
+  }, [props.nodes, props.activeDocumentId, props.graphFocusAnchorId]);
 
   const forceOpenFolderIds = useMemo(
     () => new Set(reveal?.forceOpenFolderIds ?? []),
@@ -225,6 +228,7 @@ export function DocumentTree(props: {
           parentPath=""
           parentFolderId={null}
           activeDocumentId={props.activeDocumentId}
+          graphFocusAnchorId={props.graphFocusAnchorId ?? null}
           selectedParentPath={props.selectedParentPath}
           forceOpenFolderIds={forceOpenFolderIds}
           dropHighlight={dropHighlight}
@@ -247,6 +251,8 @@ export function DocumentTree(props: {
 
 type TreeShared = {
   activeDocumentId: string | null;
+  /** 图谱焦点锚点（folderId 或 documentId）——匹配行显示独立图谱高亮 */
+  graphFocusAnchorId: string | null;
   selectedParentPath: string;
   forceOpenFolderIds: Set<string>;
   dropHighlight: DropHighlight;
@@ -279,6 +285,7 @@ function TreeNodeView(
         depth={props.depth}
         indent={indent}
         activeDocumentId={props.activeDocumentId}
+        graphFocusAnchorId={props.graphFocusAnchorId}
         selectedParentPath={props.selectedParentPath}
         forceOpenFolderIds={props.forceOpenFolderIds}
         dropHighlight={props.dropHighlight}
@@ -303,6 +310,7 @@ function TreeNodeView(
       parentPath={props.parentPath}
       parentFolderId={props.parentFolderId}
       activeDocumentId={props.activeDocumentId}
+      graphFocusAnchorId={props.graphFocusAnchorId}
       dropHighlight={props.dropHighlight}
       setDropHighlight={props.setDropHighlight}
       clearDropHighlight={props.clearDropHighlight}
@@ -324,6 +332,7 @@ function DocRow(props: {
   parentPath: string;
   parentFolderId: string | null;
   activeDocumentId: string | null;
+  graphFocusAnchorId: string | null;
   dropHighlight: DropHighlight;
   setDropHighlight: (h: DropHighlight) => void;
   clearDropHighlight: () => void;
@@ -338,6 +347,7 @@ function DocRow(props: {
 }) {
   const doc = props.doc;
   const isActive = doc.documentId === props.activeDocumentId;
+  const isGraphFocus = doc.documentId === props.graphFocusAnchorId;
   const canDrag = Boolean(props.onMoveDocument);
   const dragging = props.draggingId === doc.documentId;
   const [hovered, setHovered] = useState(false);
@@ -352,6 +362,7 @@ function DocRow(props: {
       className={
         "mdocs-tree-row mdocs-tree-doc" +
         (isActive ? " active" : "") +
+        (isGraphFocus ? " mdocs-tree-row--graph-focus" : "") +
         (dragging ? " mdocs-tree-dragging" : "") +
         (dropActive ? " mdocs-tree-drop-target" : "")
       }
@@ -482,6 +493,7 @@ function FolderRow(props: {
   depth: number;
   indent: React.CSSProperties;
   activeDocumentId: string | null;
+  graphFocusAnchorId: string | null;
   selectedParentPath: string;
   forceOpenFolderIds: Set<string>;
   dropHighlight: DropHighlight;
@@ -508,6 +520,7 @@ function FolderRow(props: {
 
   const isActive =
     Boolean(props.folder.descDocumentId) && props.folder.descDocumentId === props.activeDocumentId;
+  const isGraphFocus = props.folder.documentId === props.graphFocusAnchorId;
   const isSelectTarget = props.selectedParentPath === props.folder.path;
   const dropActive =
     props.dropHighlight?.kind === "folder" && props.dropHighlight.id === props.folder.documentId;
@@ -522,6 +535,7 @@ function FolderRow(props: {
         className={
           "mdocs-tree-row mdocs-tree-folder mdocs-tree-folder-row" +
           (isActive ? " active" : isSelectTarget ? " mdocs-tree-select-target" : "") +
+          (isGraphFocus ? " mdocs-tree-row--graph-focus" : "") +
           (dropActive ? " mdocs-tree-drop-target" : "")
         }
         data-tree-id={props.folder.documentId}
@@ -634,6 +648,7 @@ function FolderRow(props: {
             parentPath={props.folder.path}
             parentFolderId={props.folder.documentId}
             activeDocumentId={props.activeDocumentId}
+            graphFocusAnchorId={props.graphFocusAnchorId}
             selectedParentPath={props.selectedParentPath}
             forceOpenFolderIds={props.forceOpenFolderIds}
             dropHighlight={props.dropHighlight}

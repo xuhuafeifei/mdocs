@@ -950,8 +950,12 @@ export async function streamAgentChatApi(
     documentId?: string | null;
     workingMarkdown?: string;
     baseMarkdown?: string;
-    /** normal：当前 UI 域 / 打开文 */
-    references?: { domainId?: string; documentId?: string };
+    /** normal：当前 UI 域 / 打开文 / 图谱 */
+    references?: {
+      domainId?: string;
+      documentId?: string;
+      graphFileId?: string;
+    };
     signal?: AbortSignal;
     onEvent: (event: AgentStreamEvent) => void;
   },

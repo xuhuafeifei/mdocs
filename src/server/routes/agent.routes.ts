@@ -594,6 +594,10 @@ export function buildAgentRouter(): Router {
               typeof ref.documentId === "string"
                 ? ref.documentId.trim() || undefined
                 : undefined,
+            graphFileId:
+              typeof ref.graphFileId === "string"
+                ? ref.graphFileId.trim() || undefined
+                : undefined,
           }
         : undefined;
 

@@ -227,6 +227,18 @@
   border-left: 3px solid var(--mdocs-accent);
 }
 
+/* 图谱焦点高亮：与正文选中区分（紫色系 + 左侧圆点标） */
+.mdocs-tree-row--graph-focus {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: #a78bfa;
+  border-left: 3px solid #8b5cf6;
+}
+
+.mdocs-tree-row--graph-focus .mdocs-tree-label {
+  color: #6d28d9;
+  font-weight: 600;
+}
+
 .mdocs-tree-select-target {
   background: var(--mdocs-bg);
   border-color: var(--mdocs-border);
@@ -1002,6 +1014,250 @@
   background: #f2f4f7;
 }
 
+.mdocs-agent-mermaid {
+  position: relative;
+  margin: 0.65em 0;
+  border: 1px solid #e8eaed;
+  border-radius: 8px;
+  background: #fafbfc;
+  overflow: hidden;
+}
+
+.mdocs-agent-mermaid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e8eaed;
+  background: #f5f6f8;
+}
+
+.mdocs-agent-mermaid-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: #e8eaed;
+}
+
+.mdocs-agent-mermaid-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #646a73;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.mdocs-agent-mermaid-toggle-btn.is-active {
+  background: #fff;
+  color: #1f2329;
+  box-shadow: 0 0 0 1px #d0d5dd;
+}
+
+.mdocs-agent-mermaid-copy {
+  position: static;
+}
+
+.mdocs-agent-mermaid-diagram {
+  padding: 12px;
+  overflow-x: auto;
+  background: #fff;
+}
+
+.mdocs-agent-mermaid-svg {
+  display: flex;
+  justify-content: center;
+  line-height: 0;
+}
+
+.mdocs-agent-mermaid-svg-hit {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  border-radius: 4px;
+}
+
+.mdocs-agent-mermaid-svg-hit:hover {
+  outline: 1px solid #d0d5dd;
+  outline-offset: 2px;
+}
+
+.mdocs-agent-mermaid-svg-hit:focus-visible {
+  outline: 2px solid #3370ff;
+  outline-offset: 2px;
+}
+
+.mdocs-agent-mermaid-svg-inner {
+  display: flex;
+  justify-content: center;
+  line-height: 0;
+  pointer-events: none;
+}
+
+.mdocs-agent-mermaid-svg svg,
+.mdocs-agent-mermaid-svg-inner svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mdocs-agent-mermaid-float {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mdocs-agent-mermaid-float-backdrop {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: rgba(15, 23, 42, 0.55);
+  cursor: pointer;
+}
+
+.mdocs-agent-mermaid-float-chrome {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(96vw, 1100px);
+  height: min(88vh, 800px);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+}
+
+.mdocs-agent-mermaid-float-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e8eaed;
+  background: #f5f6f8;
+}
+
+.mdocs-agent-mermaid-float-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #e8eaed;
+  border-radius: 6px;
+  background: #fff;
+  color: #1f2329;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mdocs-agent-mermaid-float-btn:hover {
+  background: #f2f4f7;
+}
+
+.mdocs-agent-mermaid-float-scale {
+  min-width: 48px;
+  text-align: center;
+  font-size: 12px;
+  color: #646a73;
+  font-variant-numeric: tabular-nums;
+}
+
+.mdocs-agent-mermaid-float-stage {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  background:
+    linear-gradient(90deg, #f0f2f5 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(#f0f2f5 1px, transparent 1px) 0 0 / 16px 16px,
+    #fafbfc;
+}
+
+.mdocs-agent-mermaid-float-stage.is-dragging {
+  cursor: grabbing;
+}
+
+.mdocs-agent-mermaid-float-canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center center;
+  line-height: 0;
+  user-select: none;
+  pointer-events: none;
+}
+
+.mdocs-agent-mermaid-float-canvas svg {
+  display: block;
+  max-width: none;
+  height: auto;
+}
+
+.mdocs-agent-mermaid-float-hint {
+  margin: 0;
+  padding: 6px 10px;
+  border-top: 1px solid #e8eaed;
+  background: #fafbfc;
+  color: #8f959e;
+  font-size: 12px;
+  text-align: center;
+}
+
+.mdocs-agent-mermaid-loading {
+  padding: 16px 8px;
+  text-align: center;
+  color: #8f959e;
+  font-size: 12.5px;
+}
+
+.mdocs-agent-mermaid-error {
+  padding: 8px;
+  color: #a8071a;
+  font-size: 12.5px;
+}
+
+.mdocs-agent-mermaid-error p {
+  margin: 0 0 6px;
+}
+
+.mdocs-agent-mermaid-error pre {
+  margin: 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: #fff2f0;
+  color: #cf1322;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11.5px;
+}
+
+.mdocs-agent-mermaid-code {
+  margin: 0;
+}
+
+.mdocs-agent-mermaid-code pre {
+  margin: 0;
+  border-radius: 0;
+  background: #f5f6f8;
+}
+
 .mdocs-agent-panel-md pre code {
   padding: 0;
   background: transparent;
@@ -1502,6 +1758,7 @@
   width: 26px;
   height: 26px;
   margin-left: 4px;
+  padding: 0; /* 覆盖 global button padding，否则 26px 盒内装不下图标 */
   border: 1px solid #d0d5dd;
   border-radius: 8px;
   background: #fff;
@@ -4679,6 +4936,31 @@ strong.label {
 
   .mdocs-layout--settings .mdocs-settings-header {
     display: none;
+  }
+
+  .mdocs-layout--settings .mdocs-settings-card {
+    padding: 16px;
+    border-radius: 10px;
+  }
+
+  .mdocs-layout--settings .mdocs-settings-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+
+  .mdocs-layout--settings .mdocs-settings-table {
+    min-width: 500px;
+  }
+
+  .mdocs-layout--settings .mdocs-settings-item {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .mdocs-layout--settings .mdocs-settings-lang {
+    flex-wrap: wrap;
   }
 }
 

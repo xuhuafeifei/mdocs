@@ -1,9 +1,9 @@
 # 知识图谱单一焦点（文档 | 图谱）— 设计契约
 
-> **状态**：草案  
+> **状态**：已同意（2026-09-02）  
 > **所属需求**：`knowledge-graph`（增量：焦点模型 + Ask 引用；不改图谱构建）  
 > 关联：[`agent-mobile-context`](../agent-mobile-context/设计契约.md) 的 `references` 扩展  
-> 未经「已同意」不得开始写业务代码。
+> 第一期实现：App.tsx 焦点互斥 + DocumentTree 高亮切换；Ask 引用和后端只读控制为第二期。
 
 ## 方案摘要
 

@@ -8,6 +8,8 @@ import {
   waitForUserChoice,
 } from "./choice-pending.js";
 import { asToolResult, type ToolDeps } from "./tool-deps.js";
+import { FILE_TYPE } from "../../../shared/file-types.js";
+import { canOverwrite } from "../../../shared/file-type-policy.js";
 
 const OVERWRITE_OPTION = "直接覆写";
 const OPEN_CODING_OPTION = "打开帮写审阅";
@@ -79,6 +81,16 @@ export function overwriteDocumentTool({
         assertDocumentAccess(documentId, visitorId, "edit");
         const doc = getDocument(documentId, visitorId, "text");
         const plain = doc.content ?? "";
+
+        // 只允许覆写可写的文件类型（读政策表）
+        if (!canOverwrite(doc.fileType as any)) {
+          return asToolResult({
+            status: "rejected",
+            documentId,
+            overwritten: false,
+            message: "仅支持覆写普通文档，不支持该类型的文件",
+          });
+        }
         const displayName =
           String(doc.displayName ?? "").trim() || "未命名文档";
         const headCommitId = doc.headCommitId;

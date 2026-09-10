@@ -1,4 +1,4 @@
-import { Check, Copy, FileText, History, Plus, X } from "lucide-react";
+import { Check, Copy, FileText, History, Maximize2, Minimize2, Network, Plus, X } from "lucide-react";
 import {
   forwardRef,
   useEffect,
@@ -34,6 +34,7 @@ import {
   SkillFormCardBlock,
   type SkillFormCardState,
 } from "./AgentSkillFormCard";
+import { AgentMermaidBlock, extractMermaidFromPre } from "./AgentMermaidBlock";
 
 function nodeText(node: ReactNode): string {
   if (node == null || typeof node === "boolean") return "";
@@ -84,13 +85,21 @@ function MarkdownPreWithCopy(props: { children?: ReactNode }) {
   );
 }
 
+function MarkdownPre(props: { children?: ReactNode }) {
+  const mermaidSource = extractMermaidFromPre(props.children);
+  if (mermaidSource != null) {
+    return <AgentMermaidBlock source={mermaidSource} codeChildren={props.children} />;
+  }
+  return <MarkdownPreWithCopy>{props.children}</MarkdownPreWithCopy>;
+}
+
 function AgentMarkdown(props: { children: string }) {
   return (
     <div className="mdocs-agent-panel-md">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          pre: ({ children }) => <MarkdownPreWithCopy>{children}</MarkdownPreWithCopy>,
+          pre: ({ children }) => <MarkdownPre>{children}</MarkdownPre>,
         }}
       >
         {props.children}
@@ -458,13 +467,18 @@ export const AgentChatPanel = forwardRef<
     visitorName?: string;
     /** 跟随 FAB 的定位（left / bottom）；全屏时忽略 */
     anchorStyle?: React.CSSProperties;
-    /** 窄屏全屏铺满 */
+    /** 窄屏全屏铺满；PC 可手动切换 */
     fullscreen?: boolean;
+    /** PC：切换全屏；窄屏不传则不显示按钮 */
+    onToggleFullscreen?: () => void;
     /** 当前域 / 打开文，每轮 Ask 作为 references 发给后端 */
     domainId?: string | null;
     documentId?: string | null;
     documentTitle?: string | null;
     documentPath?: string | null;
+    /** 图谱焦点：引用图谱隐藏文件（与 documentId 互斥） */
+    graphFileId?: string | null;
+    graphLabel?: string | null;
     onOpenDocument?: (documentId: string) => void | Promise<void>;
     /** Agent 建文/建文件夹/移动等改树后回调，用于刷新侧栏 */
     onTreeChanged?: () => void | Promise<void>;
@@ -486,10 +500,13 @@ export const AgentChatPanel = forwardRef<
     visitorName,
     anchorStyle,
     fullscreen,
+    onToggleFullscreen,
     domainId,
     documentId,
     documentTitle,
     documentPath,
+    graphFileId,
+    graphLabel,
     onOpenDocument,
     onTreeChanged,
     onDocumentOverwritten,
@@ -524,10 +541,13 @@ export const AgentChatPanel = forwardRef<
   const docRefActive = Boolean(documentId?.trim()) && !docRefDismissed;
   const docRefTitle = documentTitle?.trim() || "当前文档";
   const docRefPath = documentPath?.trim() || "";
+  /** 图谱引用：graphFileId 存在且未取消时激活（与 docRef 互斥） */
+  const graphRefActive = Boolean(graphFileId?.trim()) && !docRefDismissed;
+  const graphRefTitle = graphLabel?.trim() || "当前图谱";
 
   useEffect(() => {
     setDocRefDismissed(false);
-  }, [documentId]);
+  }, [documentId, graphFileId]);
 
   function nextId(prefix: string) {
     idRef.current += 1;
@@ -760,7 +780,9 @@ export const AgentChatPanel = forwardRef<
         skillNames: selectedSkillNames.length > 0 ? selectedSkillNames : undefined,
         references: {
           domainId: domainId?.trim() || undefined,
-          documentId: docRefActive ? documentId!.trim() : undefined,
+          // 文档引用与图谱引用互斥（图谱焦点优先）
+          documentId: !graphRefActive && docRefActive ? documentId!.trim() : undefined,
+          graphFileId: graphRefActive ? graphFileId!.trim() : undefined,
         },
         signal: ac.signal,
         onEvent: (event) => {
@@ -1050,6 +1072,21 @@ export const AgentChatPanel = forwardRef<
           >
             <History size={16} strokeWidth={1.8} />
           </button>
+          {onToggleFullscreen ? (
+            <button
+              type="button"
+              className="mdocs-agent-panel-icon-btn"
+              title={fullscreen ? "退出全屏" : "全屏"}
+              aria-label={fullscreen ? "退出全屏" : "全屏"}
+              onClick={onToggleFullscreen}
+            >
+              {fullscreen ? (
+                <Minimize2 size={16} strokeWidth={1.8} />
+              ) : (
+                <Maximize2 size={16} strokeWidth={1.8} />
+              )}
+            </button>
+          ) : null}
           <button
             type="button"
             className="mdocs-agent-panel-icon-btn"
@@ -1394,7 +1431,25 @@ export const AgentChatPanel = forwardRef<
             disabled={sending || !status?.enabled}
           />
           <div className="mdocs-agent-panel-input-wrap">
-            {docRefActive ? (
+            {graphRefActive ? (
+              <div className="mdocs-agent-doc-ref mdocs-agent-graph-ref">
+                <Network size={15} strokeWidth={1.75} className="mdocs-agent-doc-ref-icon" aria-hidden />
+                <div className="mdocs-agent-doc-ref-text">
+                  <span className="mdocs-agent-doc-ref-title">{graphRefTitle}</span>
+                  <span className="mdocs-agent-doc-ref-path">图谱（只读）</span>
+                </div>
+                <button
+                  type="button"
+                  className="mdocs-agent-doc-ref-unlink"
+                  title="取消引用"
+                  aria-label="取消引用当前图谱"
+                  disabled={sending}
+                  onClick={() => setDocRefDismissed(true)}
+                >
+                  <X size={14} strokeWidth={2} aria-hidden />
+                </button>
+              </div>
+            ) : docRefActive ? (
               <div className="mdocs-agent-doc-ref">
                 <FileText size={15} strokeWidth={1.75} className="mdocs-agent-doc-ref-icon" aria-hidden />
                 <div className="mdocs-agent-doc-ref-text">

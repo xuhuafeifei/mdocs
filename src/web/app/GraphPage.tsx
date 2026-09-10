@@ -7,7 +7,7 @@
  * 3. 工具栏：展开一级 / 展开到二级 / 全部收起；其它关系边开关
  * 4. 筛选器：显示 doc 节点开关（默认关，只看 concept）
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import { X, Play, Loader2 } from "lucide-react";
 import {
@@ -84,9 +84,10 @@ interface GraphPageProps {
   resourceId: string; // folderId 或 domainId
   name: string;
   onOpenDocument: (documentId: string) => void;
+  onClose?: () => void; // 手机端退出图谱
 }
 
-export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPageProps) {
+export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: GraphPageProps) {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -520,6 +521,15 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument }: GraphPage
         <div className="graph-title">
           <span className="graph-icon">🕸️</span>
           <span>知识图谱 — {name}</span>
+          {onClose && (
+            <button
+              className="graph-btn graph-btn-close"
+              onClick={onClose}
+              title="关闭图谱"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
         <div className="graph-actions">
           <div className="graph-depth-btns">

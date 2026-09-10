@@ -380,12 +380,50 @@
   color: #dc2626;
 }
 
-/* ===== 窄屏：节点详情铺满图谱区域（非侧拉） ===== */
+/* ===== 窄屏：图谱铺满全屏，工具栏紧凑 ===== */
 @media (max-width: 768px) {
+  .graph-page {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+  }
+
   .graph-toolbar {
     flex-wrap: wrap;
     gap: 8px;
-    padding: 10px 12px;
+    padding: 8px 12px;
+    position: relative;
+    opacity: 1;
+    pointer-events: auto;
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .graph-btn-close {
+    display: inline-flex;
+    margin-left: auto;
+  }
+}
+
+@media (min-width: 769px) {
+  .graph-btn-close {
+    display: none;
+  }
+}
+
+  .graph-toolbar::before {
+    display: none;
+  }
+
+  .graph-toolbar:hover,
+  .graph-toolbar:focus-within,
+  .graph-toolbar--visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .graph-toolbar--visible::before {
+    opacity: 0;
   }
 
   .graph-title {

@@ -773,13 +773,14 @@ export function SettingsPage(props: {
                         {bookmarkSearch ? t("bookmarkNoMatch") : t("bookmarkEmpty")}
                       </div>
                     ) : (
-                      <table className="mdocs-settings-table">
-                        <thead>
-                          <tr>
-                            <th>{t("bookmarkColTitle")}</th>
-                            <th>{t("bookmarkColDomain")}</th>
-                            <th>{t("bookmarkColAuthor")}</th>
-                            <th>{t("bookmarkColTime")}</th>
+                      <div className="mdocs-settings-table-wrap">
+                        <table className="mdocs-settings-table">
+                          <thead>
+                            <tr>
+                              <th>{t("bookmarkColTitle")}</th>
+                              <th>{t("bookmarkColDomain")}</th>
+                              <th>{t("bookmarkColAuthor")}</th>
+                              <th>{t("bookmarkColTime")}</th>
                             <th style={{ textAlign: "right" }}></th>
                           </tr>
                         </thead>
@@ -810,6 +811,7 @@ export function SettingsPage(props: {
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     )}
                   </>
                 )}
@@ -840,7 +842,8 @@ export function SettingsPage(props: {
                       {myDocumentSearch ? t("myDocumentsNoMatch") : t("myDocumentsEmpty")}
                     </div>
                   ) : (
-                    <table className="mdocs-settings-table">
+                    <div className="mdocs-settings-table-wrap">
+                      <table className="mdocs-settings-table">
                       <thead>
                         <tr>
                           <th>{t("myDocumentsColTitle")}</th>
@@ -881,6 +884,7 @@ export function SettingsPage(props: {
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   )}
                 </>
               )}

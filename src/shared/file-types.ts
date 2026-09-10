@@ -12,6 +12,8 @@
 export const FILE_TYPE = {
   /** 普通 Markdown 文章（文档树中可见） */
   DOCUMENT: 'md',
+  /** HTML 文档（文档树中可见） */
+  HTML: 'html',
   /** 普通目录（文档树中可见） */
   FOLDER: 'dir',
   /** 目录描述文件 ___desc___.md（文档树中不可见，用于展示目录介绍） */
@@ -24,9 +26,9 @@ export const FILE_TYPE = {
 
 export type FileType = typeof FILE_TYPE[keyof typeof FILE_TYPE];
 
-/** 判断是否是文档树中可见的类型（普通 md 文件 + 目录） */
+/** 判断是否是文档树中可见的类型 */
 export function isVisibleFileType(fileType: string): boolean {
-  return fileType === FILE_TYPE.DOCUMENT || fileType === FILE_TYPE.FOLDER;
+  return fileType === FILE_TYPE.DOCUMENT || fileType === FILE_TYPE.HTML || fileType === FILE_TYPE.FOLDER;
 }
 
 /** 判断是否是目录类型（普通目录或特殊目录） */

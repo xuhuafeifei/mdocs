@@ -209,19 +209,22 @@ export function App() {
   // ---- 路由导航函数 ----
   const navigate = useNavigate();
 
-  // ---- 当前打开文档的服务端 meta（不含正文） ----
+  // ---- 单一焦点（文档 | 图谱） ----
+  type AppFocus =
+    | { kind: "document"; documentId: string }
+    | { kind: "graph"; scope: "folder" | "domain"; resourceId: string; name: string }
+    | null;
+
+  const [focus, setFocus] = useState<AppFocus>(null);
+
+  // 从焦点派生活动文档 ID（仅 document 焦点时有效）
+  const activeDocumentId = focus?.kind === "document" ? focus.documentId : null;
   const [activeDocMeta, setActiveDocMeta] = useState<ActiveDocumentMeta | null>(null);
   const [editorContent, setEditorContent] = useState<{
     documentId: string;
     content: string;
     displayName: string;
   } | null>(null);
-
-  // ---- 知识图谱视图 ----
-  const [graphScope, setGraphScope] = useState<"folder" | "domain" | null>(null);
-  const [graphResourceId, setGraphResourceId] = useState<string | null>(null);
-  const [graphName, setGraphName] = useState<string | null>(null);
-  /** Keep latest editor payload for publish finalize (avoid stale closure). */
   const editorContentRef = useRef(editorContent);
   editorContentRef.current = editorContent;
   const [contentRevision, setContentRevision] = useState(0);
@@ -317,6 +320,7 @@ export function App() {
 
   // ---- 上手助手浮层 ----
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
+  const [agentPanelFullscreen, setAgentPanelFullscreen] = useState(false);
   const [agentFabPos, setAgentFabPos] = useAgentFabPosition();
   const agentPanelRef = useRef<AgentChatPanelHandle | null>(null);
 
@@ -667,19 +671,21 @@ export function App() {
     scope: "folder" | "domain" = "folder",
   ): void {
     console.log("[openGraph]", scope, resourceId, name);
-    setGraphScope(scope);
-    setGraphResourceId(resourceId);
-    setGraphName(name);
+    // 切到图谱焦点：清文档焦点（activeDocMeta 清空，编辑器卸载）
+    setActiveDocMeta(null);
+    setEditorContent(null);
+    setFocus({ kind: "graph", scope, resourceId, name });
   }
 
   function closeGraph(): void {
-    setGraphScope(null);
-    setGraphResourceId(null);
-    setGraphName(null);
+    // 清图谱焦点，回无焦点状态
+    setFocus(null);
   }
 
   async function openDocument(docId: string): Promise<void> {
     expectedDocIdRef.current = docId;
+    // 切到文档焦点：清图谱焦点
+    setFocus({ kind: "document", documentId: docId });
     try {
       const draft = await getDraft(docId);
       if (expectedDocIdRef.current !== docId) return;
@@ -728,6 +734,8 @@ export function App() {
       // URL 中有文档 ID，尝试打开该文档
       void openDocument(documentId);
     } else {
+      // 无文档 ID → 无焦点（欢迎页）
+      setFocus(null);
       setActiveDocMeta(null);
       setEditorContent(null);
       setEditBaseCommitId(null);
@@ -1236,18 +1244,31 @@ export function App() {
               <AgentChatPanel
                 ref={agentPanelRef}
                 open={agentPanelOpen}
-                onClose={() => setAgentPanelOpen(false)}
+                onClose={() => {
+                  setAgentPanelOpen(false);
+                  setAgentPanelFullscreen(false);
+                }}
                 visitorName={visitor?.visitorName}
-                fullscreen={isNarrow}
+                fullscreen={isNarrow || agentPanelFullscreen}
+                onToggleFullscreen={
+                  isNarrow ? undefined : () => setAgentPanelFullscreen((v) => !v)
+                }
                 domainId={currentDomainId || null}
                 documentId={activeDocMeta?.documentId ?? null}
                 documentTitle={activeDocMeta?.displayName ?? null}
                 documentPath={activeDocMeta?.relativePath ?? null}
-                anchorStyle={isNarrow ? undefined : agentPanelAnchorStyle(agentFabPos)}
+                graphFileId={focus?.kind === "graph" ? `${focus.resourceId}.graph-file` : null}
+                graphLabel={focus?.kind === "graph" ? focus.name : null}
+                anchorStyle={
+                  isNarrow || agentPanelFullscreen
+                    ? undefined
+                    : agentPanelAnchorStyle(agentFabPos)
+                }
                 onOpenDocument={(docId) => {
                   setView("docs");
                   void guardNavigate(() => navigate(`/doc/${docId}`));
                   setAgentPanelOpen(false);
+                  setAgentPanelFullscreen(false);
                 }}
                 onTreeChanged={() => void refreshTree()}
                 onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
@@ -1366,11 +1387,11 @@ export function App() {
             {/* 文档树：递归渲染文件夹和文档 */}
             <DocumentTree
               nodes={tree}
-              activeDocumentId={documentId ?? null}
+              activeDocumentId={activeDocumentId}
+              graphFocusAnchorId={focus?.kind === "graph" ? focus.resourceId : null}
               selectedParentPath={selectedCreateParentPath}
               // 点击文档节点：先保存草稿再导航到文档
               onOpen={(node) => {
-                closeGraph();
                 if (isNarrow) setMobileNavOpen(false);
                 guardNavigate(() => navigate(`/doc/${node.documentId}`));
               }}
@@ -1487,14 +1508,14 @@ export function App() {
 
           {/* ========== 主内容区 ========== */}
           <main className="mdocs-main">
-            {graphScope && graphResourceId && graphName ? (
+            {focus?.kind === "graph" ? (
               <GraphPage
-                key={`${graphScope}-${graphResourceId}`}
-                scope={graphScope}
-                resourceId={graphResourceId}
-                name={graphName}
+                key={`${focus.scope}-${focus.resourceId}`}
+                scope={focus.scope}
+                resourceId={focus.resourceId}
+                name={focus.name}
+                onClose={closeGraph}
                 onOpenDocument={(docId) => {
-                  closeGraph();
                   void openDocument(docId);
                 }}
               />

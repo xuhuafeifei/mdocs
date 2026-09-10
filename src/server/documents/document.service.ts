@@ -66,6 +66,8 @@ import type {
 import { getConfig } from "../config/index.js";
 import { markdownToLexicalJson } from "./markdown-to-lexical.js";
 import { extractPlainTextFromLexical } from "./lexical-text.js";
+import { FILE_TYPE } from "../../shared/file-types.js";
+import { getPolicy } from "../../shared/file-type-policy.js";
 import {
   onArticleDeleted,
   onArticleMoved,
@@ -359,10 +361,19 @@ export function getDocument(
     const invite = findDocumentInvite(getDb(), documentId, visitorId);
     invitedEdit = invite?.permission === "edit";
   }
-  // 根据 format 决定返回原始 JSON 还是纯文本
-  const finalContent = format === "text"
-    ? extractPlainTextFromLexical(content)
-    : content;
+  // 根据政策表的 textExtract 决定 format 行为
+  const policy = getPolicy(row.file_type as any);
+  let finalContent: string;
+  if (policy.textExtract === 'none') {
+    // 图谱等：忽略 format，始终返回原始内容
+    finalContent = content;
+  } else if (policy.textExtract === 'raw') {
+    // html 等：返回原始内容（可选剥标签）
+    finalContent = content;
+  } else {
+    // lexical：根据 format 决定
+    finalContent = format === 'text' ? extractPlainTextFromLexical(content) : content;
+  }
   return {
     ...rowToSummary(row),
     content: finalContent,

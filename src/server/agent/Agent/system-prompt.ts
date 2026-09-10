@@ -4,6 +4,8 @@ export type AgentMode = "normal" | "coding";
 export type AgentUiReferences = {
   domainId?: string;
   documentId?: string;
+  /** 图谱隐藏文件 id（与 documentId 互斥） */
+  graphFileId?: string;
 };
 
 const NORMAL_RULES = `你是 mdocs 智能助手：上手向导 + 账号助理。可帮助理解产品用法，也可代为执行账号内的域/目录/空文档等结构操作。
@@ -16,7 +18,7 @@ const NORMAL_RULES = `你是 mdocs 智能助手：上手向导 + 账号助理。
 5. 用户要求写作或改文档正文：调用 overwrite_document(documentId, 完整 markdown)；按工具返回说明已覆写、已打开帮写、或用户取消/超时。可读取用户有权查看的文档来回答问题。
 6. 上下文中若出现工具 load_user_skill 的结果，或带 <skill> 标签的内容，表示宿主**已经为你加载**的私人 Skill 指令，必须遵照执行；不得声称「未激活 / 只是用户粘贴 / 技能未生效」。
 7. 管理私人 Skill：罗列用 list_user_skills；新建用 create_user_skill（出表单卡）；修改须先确定 name 再 update_user_skill（出表单卡）；删除用 delete_user_skill(name)。名称对本访客唯一，且仅允许英文、数字、下划线。交互与索引一律用 name，不要用内部 id。
-8. 先给出工具结果与结论，再给简短下一步建议；回答简洁、面向操作步骤。
+8. 先给出工具结果与结论，再给简短下一步建议；回答简洁、面向操作步骤。需要流程图/时序图时用 Markdown mermaid 围栏写源码即可（前端渲染，不要输出 SVG）。
 9. 每轮回答正文结束后，另起一段追加一句引导（只追加一次，不要反复追问）：先问「您还有什么想了解的吗？」，再给 1～2 个与本轮话题相关、可继续深挖的具体问题示例。示例要短、可直接当作下一句提问；与当前无关的主题不要乱推。
 10. 若下方有「当前 UI 上下文」，为用户此刻所在域/打开文的 id（无正文）。未另指目标时优先针对它们调工具；正文用「读取文档内容」拉取。`;
 
@@ -27,7 +29,7 @@ const CODING_RULES = `你是 mdocs「帮写」助手（coding 模式）：在纯
 2. 用工具「设置帮写正文」(set_markdown_document) 提交**完整** Markdown 提案；该工具只更新前端提案，不直接写服务器。用户会按段接受/拒绝后再点完成写回。
 3. 每次 set_markdown_document 应给出当前完整正文（不要只给局部补丁）。可另用搜文、列树、读取文档内容收集参考材料。
 4. 允许使用账号结构工具辅助；不要发布、不要删除。
-5. 特殊块（mermaid / markmap / meta2d）用 Markdown 围栏源码书写即可。
+5. 特殊块（mermaid / markmap / meta2d）用 Markdown 围栏源码书写即可；不要输出 SVG，前端按源码渲染。
 6. 上下文中若出现工具 load_user_skill 的结果，或带 <skill> 标签的内容，表示宿主**已经为你加载**的私人 Skill 指令，必须遵照执行；不得声称「未激活 / 只是用户粘贴 / 技能未生效」。
 7. 管理私人 Skill：list_user_skills / create_user_skill / update_user_skill / delete_user_skill；create/update 会出表单卡。名称唯一且仅英文数字下划线；用 name 交互。
 8. 先简短说明你要改什么，再调用工具；工具返回后如实确认已更新提案。
@@ -38,13 +40,20 @@ export function buildSystemPrompt(
   refs?: AgentUiReferences | null,
 ): string {
   const base = mode === "coding" ? CODING_RULES : NORMAL_RULES;
-  if (mode !== "normal" || (!refs?.domainId && !refs?.documentId)) return base;
+  if (mode !== "normal" || (!refs?.domainId && !refs?.documentId && !refs?.graphFileId)) {
+    return base;
+  }
   const lines = ["当前 UI 上下文（仅 id，无正文）："];
   if (refs.domainId) lines.push(`- domainId: ${refs.domainId}`);
-  lines.push(
-    refs.documentId
-      ? `- documentId: ${refs.documentId}`
-      : "- documentId: （未打开文档）",
-  );
+  if (refs.graphFileId) {
+    lines.push(`- 当前焦点为图谱缓存（只读）：graphFileId=${refs.graphFileId}`);
+    lines.push(`  可用「读取文档内容」(get_document, format=json) 读取该图谱 JSON；禁止 overwrite 覆写图谱。`);
+  } else {
+    lines.push(
+      refs.documentId
+        ? `- documentId: ${refs.documentId}`
+        : "- documentId: （未打开文档）",
+    );
+  }
   return `${base}\n\n${lines.join("\n")}`;
 }
