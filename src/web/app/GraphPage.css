@@ -404,13 +404,6 @@
     display: inline-flex;
     margin-left: auto;
   }
-}
-
-@media (min-width: 769px) {
-  .graph-btn-close {
-    display: none;
-  }
-}
 
   .graph-toolbar::before {
     display: none;
@@ -498,5 +491,11 @@
     width: calc(100% - 24px);
     max-width: none;
     padding: 16px;
+  }
+}
+
+@media (min-width: 769px) {
+  .graph-btn-close {
+    display: none;
   }
 }
