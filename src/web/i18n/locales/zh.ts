@@ -13,6 +13,7 @@ export const zh: Record<TranslationKey, string> = {
   publish: "发布",
   publishing: "发布中...",
   published: "已发布",
+  preview: "预览",
   cancel: "取消",
   create: "创建",
   creating: "创建中...",

@@ -11,6 +11,7 @@ export type TranslationKey =
   | "publish"
   | "publishing"
   | "published"
+  | "preview"
   | "cancel"
   | "create"
   | "creating"

@@ -7,6 +7,7 @@
  * - graph_file / graph_dir：图谱相关文件（文档树中不可见）
  *
  * 新增文件类型在这里统一定义，不要散落在各处。
+ * 能力开关见 `file-type-policy.ts`。
  */
 
 export const FILE_TYPE = {
@@ -26,10 +27,8 @@ export const FILE_TYPE = {
 
 export type FileType = typeof FILE_TYPE[keyof typeof FILE_TYPE];
 
-/** 判断是否是文档树中可见的类型 */
-export function isVisibleFileType(fileType: string): boolean {
-  return fileType === FILE_TYPE.DOCUMENT || fileType === FILE_TYPE.HTML || fileType === FILE_TYPE.FOLDER;
-}
+/** 判断是否是文档树中可见的类型（委托政策表 treeVisible） */
+export { isVisibleFileType } from './file-type-policy.js';
 
 /** 判断是否是目录类型（普通目录或特殊目录） */
 export function isFolderFileType(fileType: string): boolean {

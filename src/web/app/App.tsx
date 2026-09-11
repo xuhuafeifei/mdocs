@@ -75,6 +75,8 @@ import {
 } from "./draftPublishFailure";
 import { useAutoPublish } from "./hooks/useAutoPublish";
 import { useDocumentVersion } from "./hooks/useDocumentVersion";
+import { aiWriteResultToHtml, htmlToAiWriteSeed } from "./ai-write/htmlAiWrite";
+import { FILE_TYPE } from "../../shared/file-types";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 import deepseekLogoUrl from "../assets/deepseek.svg";
 import "./App.css";
@@ -335,6 +337,8 @@ export function App() {
     markdown: string;
     documentId: string | null;
     displayName: string;
+    /** 写回目标：html → contentKind=html；否则 Lexical */
+    fileType: string;
   } | null>(null);
 
   // ---- 导航前保存草稿的引用 ----
@@ -365,24 +369,31 @@ export function App() {
   async function openAiWriteForCurrentDoc(): Promise<void> {
     if (!activeDocMeta || !editorContent) return;
     await saveBeforeNavRef.current?.();
-    // 必须用 lobe 官方 markdown 导出；convert lexical→md 只是纯文本近似，会丢掉 MD 结构
-    let markdown = exportMarkdownRef.current?.() ?? "";
-    if (!markdown.trim()) {
-      try {
-        const converted = await convertContentApi({
-          content: editorContent.content,
-          from: "lexical",
-          to: "markdown",
-        });
-        markdown = converted.content;
-      } catch {
-        markdown = "";
+    const isHtml = activeDocMeta.fileType === FILE_TYPE.HTML;
+    let markdown = "";
+    if (isHtml) {
+      markdown = htmlToAiWriteSeed(editorContent.content);
+    } else {
+      // 必须用 lobe 官方 markdown 导出；convert lexical→md 只是纯文本近似，会丢掉 MD 结构
+      markdown = exportMarkdownRef.current?.() ?? "";
+      if (!markdown.trim()) {
+        try {
+          const converted = await convertContentApi({
+            content: editorContent.content,
+            from: "lexical",
+            to: "markdown",
+          });
+          markdown = converted.content;
+        } catch {
+          markdown = "";
+        }
       }
     }
     setAiWriteBoot({
       markdown,
       documentId: activeDocMeta.documentId,
       displayName: editorContent.displayName || activeDocMeta.displayName || "未命名",
+      fileType: isHtml ? FILE_TYPE.HTML : FILE_TYPE.DOCUMENT,
     });
     setAiWriteOpen(true);
     setAgentPanelOpen(false);
@@ -393,6 +404,7 @@ export function App() {
       markdown: "",
       documentId: null,
       displayName: "未命名",
+      fileType: FILE_TYPE.DOCUMENT,
     });
     setAiWriteOpen(true);
     setAgentPanelOpen(false);
@@ -408,23 +420,29 @@ export function App() {
     await saveBeforeNavRef.current?.();
     let markdown = "";
     let displayName = payload.displayName.trim() || "未命名";
+    let fileType: string = FILE_TYPE.DOCUMENT;
     try {
       const doc = await getDocumentApi(documentId);
       displayName = doc.displayName?.trim() || displayName;
-      try {
-        const converted = await convertContentApi({
-          content: doc.content,
-          from: "lexical",
-          to: "markdown",
-        });
-        markdown = converted.content;
-      } catch {
-        markdown = "";
+      fileType = doc.fileType === FILE_TYPE.HTML ? FILE_TYPE.HTML : FILE_TYPE.DOCUMENT;
+      if (fileType === FILE_TYPE.HTML) {
+        markdown = htmlToAiWriteSeed(doc.content);
+      } else {
+        try {
+          const converted = await convertContentApi({
+            content: doc.content,
+            from: "lexical",
+            to: "markdown",
+          });
+          markdown = converted.content;
+        } catch {
+          markdown = "";
+        }
       }
     } catch {
       /* 读失败仍打开空稿 */
     }
-    setAiWriteBoot({ markdown, documentId, displayName });
+    setAiWriteBoot({ markdown, documentId, displayName, fileType });
     setAiWriteOpen(true);
     setAgentPanelOpen(false);
     setView("docs");
@@ -445,6 +463,14 @@ export function App() {
     documentId: string | null;
     displayName: string;
   }): Promise<{ documentId: string }> {
+    const targetFileType =
+      result.documentId && aiWriteBoot?.documentId === result.documentId
+        ? aiWriteBoot.fileType
+        : activeDocMeta?.documentId === result.documentId
+          ? activeDocMeta.fileType
+          : FILE_TYPE.DOCUMENT;
+    const isHtml = targetFileType === FILE_TYPE.HTML;
+
     if (result.documentId) {
       const ok = window.confirm("将把帮写结果写入当前文档的本地草稿（不会自动发布）。继续？");
       if (!ok) {
@@ -452,17 +478,24 @@ export function App() {
         (err as Error & { silent?: boolean }).silent = true;
         throw err;
       }
-      const converted = await convertContentApi({
-        content: result.markdown,
-        from: "markdown",
-        to: "lexical",
-      });
       const meta = activeDocMeta?.documentId === result.documentId ? activeDocMeta : null;
+      let draftContent: string;
+      if (isHtml) {
+        draftContent = aiWriteResultToHtml(result.markdown);
+      } else {
+        const converted = await convertContentApi({
+          content: result.markdown,
+          from: "markdown",
+          to: "lexical",
+        });
+        draftContent = converted.content;
+      }
       await upsertContentDraft({
         documentId: result.documentId,
-        content: converted.content,
+        content: draftContent,
         displayName: result.displayName,
         localBaseCommitIdAtEditStart: meta?.headCommitId ?? null,
+        contentKind: isHtml ? "html" : "lexical",
         snapshotMeta: meta
           ? {
               permission: meta.permission,
@@ -474,7 +507,7 @@ export function App() {
       if (activeDocMeta?.documentId === result.documentId) {
         setEditorContent({
           documentId: result.documentId,
-          content: converted.content,
+          content: draftContent,
           displayName: result.displayName,
         });
         setContentRevision((r) => r + 1);
@@ -1429,20 +1462,67 @@ export function App() {
               />
             ) : activeDocMeta && editorContent && editorContent.documentId === activeDocMeta.documentId ? (
               activeDocMeta.fileType === "html" ? (
-                <HtmlEditor
-                  key={activeDocMeta.documentId}
-                  initialContent={editorContent.content}
-                  displayName={editorContent.displayName}
-                  canEdit={Boolean(visitor && (activeDocMeta.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDocMeta.permission) || activeDocMeta.invitedEdit === true))}
-                  onContentChange={(c) => {
-                    setEditorContent((prev) => prev ? { ...prev, content: c } : prev);
-                  }}
-                  onPublish={() => {
-                    void publishDocument(editorContent.content, activeDocMeta.displayName, activeDocMeta.documentId, activeDocMeta.permission);
-                  }}
-                  readerChrome={isNarrow}
-                  onOpenMobileNav={() => setMobileNavOpen(true)}
-                />
+                <div className="mdocs-editor-with-comments">
+                  <div className="mdocs-editor-container">
+                    <Suspense
+                      fallback={
+                        <div className="muted" style={{ padding: 24 }}>
+                          加载编辑器…
+                        </div>
+                      }
+                    >
+                      <HtmlEditor
+                        key={activeDocMeta.documentId}
+                        meta={activeDocMeta}
+                        initialContent={editorContent.content}
+                        initialDisplayName={editorContent.displayName}
+                        contentRevision={contentRevision}
+                        canEdit={Boolean(visitor && (activeDocMeta.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDocMeta.permission) || activeDocMeta.invitedEdit === true))}
+                        domains={domains}
+                        currentDomainId={currentDomainId}
+                        onDomainChange={(domainId) => {
+                          guardNavigate(() => {
+                            localStorage.setItem("mdocs.currentDomainId", domainId);
+                            setCurrentDomainId(domainId);
+                            setActiveDocMeta(null);
+                            setEditorContent(null);
+                            setSelectedCreateParentPath("");
+                            navigate("/");
+                            void refreshTree(domainId);
+                          });
+                        }}
+                        onDomainsChange={setDomains}
+                        onContentChange={(c) => {
+                          setEditorContent((prev) => (prev ? { ...prev, content: c } : prev));
+                        }}
+                        onDraftExistsChange={setEditorDraftExists}
+                        onPublish={publishDocument}
+                        syncBehind={syncBehind}
+                        onSyncClick={() => void handleSyncClick()}
+                        canManageInvites={Boolean(visitor && visitor.visitorId === activeDocMeta.ownerVisitorId)}
+                        onDelete={async () => {
+                          requestDeleteDocument(activeDocMeta.documentId, activeDocMeta.relativePath);
+                        }}
+                        onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
+                        commentPanelOpen={commentPanelOpen}
+                        commentCount={commentCount}
+                        onAiWrite={() => void openAiWriteForCurrentDoc()}
+                        onShowToast={setMessage}
+                        readerChrome={isNarrow}
+                        onOpenMobileNav={() => setMobileNavOpen(true)}
+                      />
+                    </Suspense>
+                  </div>
+                  {commentPanelOpen && (
+                    <CommentsPanel
+                      documentId={activeDocMeta.documentId}
+                      visitorId={visitor?.visitorId}
+                      visitorName={visitor?.visitorName}
+                      documentOwnerId={activeDocMeta.ownerVisitorId}
+                      onClose={() => setCommentPanelOpen(false)}
+                    />
+                  )}
+                </div>
               ) : (
               <div className="mdocs-editor-with-comments">
                 {/* 编辑器区域 */}
@@ -1591,6 +1671,7 @@ export function App() {
                   documentId={activeDocMeta.documentId}
                   displayName={activeDocMeta.displayName}
                   conflict={mergeConflict}
+                  fileType={activeDocMeta.fileType}
                   onClose={() => setMergeViewOpen(false)}
                   onSuccess={handleMergeSuccess}
                   onError={(msg) => setAlertMessage(msg)}

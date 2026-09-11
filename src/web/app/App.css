@@ -341,16 +341,31 @@
 
 .mdocs-tree-icon {
   justify-self: center;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--mdocs-text-muted);
-  width: 18px;
+  width: auto;
+  min-width: 24px;
   text-align: center;
-  padding: 1px 3px;
+  padding: 2px 5px;
   border-radius: var(--mdocs-radius-sm);
   background: var(--mdocs-bg);
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.mdocs-tree-icon-html {
+  color: #16a34a;
+}
+
+.mdocs-tree-html-bracket {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1;
 }
 
 .mdocs-tree-icon-dir {
+  color: #6b7280;
   background: transparent;
   padding: 0;
   justify-self: center;
@@ -624,11 +639,45 @@
   background: #fafbfc;
 }
 
+.mdocs-agent-panel-scroll-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .mdocs-agent-panel-welcome {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding-right: 2px;
+}
+
+.mdocs-chat-jump-bottom {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.mdocs-chat-jump-bottom:hover {
+  color: #1f2329;
+  border-color: #d0d5dd;
+  background: #f8fafc;
 }
 
 .mdocs-agent-panel-hello {
@@ -4287,6 +4336,14 @@ strong.label {
   border-bottom: none;
 }
 
+.mdocs-ai-write-chat-scroll-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .mdocs-ai-write-chat-messages {
   flex: 1;
   overflow: auto;
@@ -4424,6 +4481,32 @@ strong.label {
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
+}
+.mdocs-ai-write-diff-toolbar .mdocs-ai-write-diff-accept-all {
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  color: #389e0d;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.mdocs-ai-write-diff-toolbar .mdocs-ai-write-diff-reject-all {
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  color: #cf1322;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.mdocs-ai-write-diff-toolbar .mdocs-ai-write-diff-accept-all:hover {
+  background: #d9f7be;
+  border-color: #95de64;
+}
+.mdocs-ai-write-diff-toolbar .mdocs-ai-write-diff-reject-all:hover {
+  background: #ffd8d2;
+  border-color: #ffa39e;
 }
 .mdocs-ai-write-diff-count {
   margin-right: auto;

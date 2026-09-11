@@ -307,10 +307,10 @@ export function AiWriteMarkdownPane(props: {
         </span>
         {!sending && reviewHunks.length > 0 ? (
           <>
-            <button type="button" onClick={acceptAll}>
+            <button type="button" className="mdocs-ai-write-diff-accept-all" onClick={acceptAll}>
               全部接受
             </button>
-            <button type="button" onClick={rejectAll}>
+            <button type="button" className="mdocs-ai-write-diff-reject-all" onClick={rejectAll}>
               全部拒绝
             </button>
           </>

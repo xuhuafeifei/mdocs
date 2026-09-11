@@ -45,9 +45,8 @@ import {
 } from "@lobehub/editor";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
-import { Heading1Icon, Heading2Icon, Heading3Icon, EllipsisVertical, MinusIcon, Network, PanelLeftOpen, RefreshCw, SigmaIcon, Table2Icon, TextAlignJustify, ShieldUser, Users, MessageSquare, Star, Workflow } from "lucide-react";
+import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, Network, SigmaIcon, Table2Icon, ShieldUser, Users, Star, Workflow } from "lucide-react";
 
-import deepseekLogoUrl from "../assets/deepseek.svg";
 import type { ActiveDocumentMeta } from "../../shared/types/document";
 import { getDocumentTaskQueue } from "./documentTaskQueue";
 import type { DomainSummary } from "../../shared/types/domain";
@@ -59,12 +58,11 @@ import {
 import { useI18n } from "../i18n";
 import { openFileSelector } from "./actions";
 import Toolbar from "./Toolbar";
-import { DomainSelect } from "./DomainSelect";
+import { DocChrome } from "./DocChrome";
 import { uploadAssetApi, checkBookmarkApi, addBookmarkApi, removeBookmarkApi, fetchVisitorsDirectoryApi, addDocumentInviteApi, getDocumentInvitesApi, removeDocumentInviteApi } from "../services/endpoints";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { usePublishGuard } from "./hooks/usePublishGuard";
 import { localizeDomainName } from "./utils";
-import { FALLBACK_DOMAIN_SUMMARY } from "../services/domainsBootstrap";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 
@@ -969,266 +967,89 @@ export function DocumentEditor(props: DocumentEditorProps) {
         (readerChrome && readerHeaderDocked ? " mdocs-editor--reader-docked" : "")
       }
     >
-      {/* ========== 编辑器顶部工具栏 ========== */}
-      <div
-        className={
-          "mdocs-editor-toolbar" +
-          (readerChrome
-            ? readerHeaderDocked
-              ? " mdocs-editor-toolbar--docked"
-              : " mdocs-editor-toolbar--float"
-            : "")
-        }
-        style={
-          readerChrome && !readerHeaderDocked && readerDragOffset !== 0
-            ? { transform: `translateY(${readerDragOffset}px)` }
-            : undefined
-        }
-      >
-        {readerChrome ? (
+      {/* ========== 文档顶栏（DocChrome） ========== */}
+      <DocChrome
+        fileType={props.meta.fileType || "md"}
+        displayName={displayName}
+        onDisplayNameChange={setDisplayName}
+        onDisplayNameBlur={() => void saveDisplayNameIfChanged()}
+        domains={props.domains}
+        currentDomainId={props.currentDomainId}
+        onDomainChange={props.onDomainChange}
+        onDomainsChange={props.onDomainsChange}
+        canEdit={props.canEdit}
+        editing={editing}
+        onEnterEdit={() => setIsEditing(true)}
+        onAiWrite={props.onAiWrite}
+        syncBehind={props.syncBehind}
+        onSyncClick={props.onSyncClick}
+        busy={busy}
+        draftExists={draftExists}
+        onPublish={() => {
+          void publish().catch(() => {});
+        }}
+        onDelete={() => {
+          void props.onDelete();
+        }}
+        isBookmarked={isBookmarked}
+        bookmarkBusy={bookmarkBusy}
+        onToggleBookmark={() => void toggleBookmark()}
+        onToggleComments={props.onToggleComments}
+        commentPanelOpen={props.commentPanelOpen}
+        commentCount={props.commentCount}
+        docInfoMenu={renderDocInfoMenuPanel(closeToolbarMenus)}
+        docInfoOpen={showDocInfoMenu}
+        onToggleDocInfo={() => setShowDocInfoMenu(!showDocInfoMenu)}
+        docInfoMenuRef={docInfoMenuRef}
+        readerChrome={readerChrome}
+        onOpenMobileNav={props.onOpenMobileNav}
+        readerHeaderDocked={readerHeaderDocked}
+        readerDragOffset={readerDragOffset}
+        onReaderHeaderPointerDown={onReaderHeaderPointerDown}
+        onReaderHeaderPointerMove={onReaderHeaderPointerMove}
+        onReaderHeaderPointerUp={onReaderHeaderPointerUp}
+        readerMoreOpen={showReaderMoreMenu}
+        onToggleReaderMore={() => setShowReaderMoreMenu((open) => !open)}
+        readerMoreMenuRef={readerMoreMenuRef}
+        readerMoreMenu={
           <>
-            <div
-              className="mdocs-editor-toolbar-leading"
-              onPointerDown={onReaderHeaderPointerDown}
-              onPointerMove={onReaderHeaderPointerMove}
-              onPointerUp={onReaderHeaderPointerUp}
-              onPointerCancel={onReaderHeaderPointerUp}
+            <button
+              type="button"
+              className="mdocs-reader-more-item"
+              disabled={bookmarkBusy}
+              onClick={() => {
+                void toggleBookmark();
+                closeToolbarMenus();
+              }}
             >
-              <button
-                type="button"
-                className="mdocs-reader-nav-btn"
-                onClick={() => props.onOpenMobileNav?.()}
-                aria-label={t("expandSidebar")}
-              >
-                <PanelLeftOpen size={18} strokeWidth={1.75} />
-              </button>
-              <input
-                className="mdocs-editor-title-input"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                onBlur={() => void saveDisplayNameIfChanged()}
-                placeholder={t("displayNamePlaceholder")}
-                disabled={!editing}
-                readOnly={!editing}
+              <Star
+                size={16}
+                strokeWidth={1.5}
+                style={{
+                  color: isBookmarked ? "#faad14" : "var(--mdocs-text-secondary, #6b7280)",
+                  fill: isBookmarked ? "#faad14" : "none",
+                }}
               />
-            </div>
-            <DomainSelect
-              domains={props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY]}
-              value={props.currentDomainId}
-              onChange={props.onDomainChange}
-              onDomainsChange={props.onDomainsChange}
-              ariaLabel={t("currentDomainAria")}
-              localizeName={(name: string) => localizeDomainName(name, lang, t)}
-            />
+              <span>{isBookmarked ? t("bookmarkRemove") : t("bookmarkAdd")}</span>
+            </button>
             {props.canEdit ? (
               <button
                 type="button"
-                className="primary mdocs-reader-action-btn"
+                className="mdocs-reader-more-item mdocs-reader-more-item--danger"
                 disabled={busy}
                 onClick={() => {
-                  if (!editing) setIsEditing(true);
-                  void publish().catch(() => {});
+                  closeToolbarMenus();
+                  void props.onDelete();
                 }}
               >
-                {busy ? t("publishing") : t("publish")}
+                <span>{t("delete")}</span>
               </button>
             ) : null}
-            <div ref={readerMoreMenuRef} className="mdocs-reader-more-menu">
-              <button
-                type="button"
-                className="mdocs-reader-more-btn"
-                aria-label="更多"
-                aria-expanded={showReaderMoreMenu}
-                onClick={() => setShowReaderMoreMenu((open) => !open)}
-              >
-                <EllipsisVertical size={18} strokeWidth={1.75} />
-              </button>
-              {showReaderMoreMenu ? (
-                <div className="mdocs-reader-more-dropdown card">
-                  <button
-                    type="button"
-                    className="mdocs-reader-more-item"
-                    disabled={bookmarkBusy}
-                    onClick={() => {
-                      void toggleBookmark();
-                      closeToolbarMenus();
-                    }}
-                  >
-                    <Star
-                      size={16}
-                      strokeWidth={1.5}
-                      style={{
-                        color: isBookmarked ? "#faad14" : "var(--mdocs-text-secondary, #6b7280)",
-                        fill: isBookmarked ? "#faad14" : "none",
-                      }}
-                    />
-                    <span>{isBookmarked ? t("bookmarkRemove") : t("bookmarkAdd")}</span>
-                  </button>
-                  {props.canEdit ? (
-                    <button
-                      type="button"
-                      className="mdocs-reader-more-item mdocs-reader-more-item--danger"
-                      disabled={busy}
-                      onClick={() => {
-                        closeToolbarMenus();
-                        void props.onDelete();
-                      }}
-                    >
-                      <span>{t("delete")}</span>
-                    </button>
-                  ) : null}
-                  <div className="mdocs-reader-more-divider" />
-                  {renderDocInfoMenuPanel(closeToolbarMenus, { includeBookmark: false })}
-                </div>
-              ) : null}
-            </div>
+            <div className="mdocs-reader-more-divider" />
+            {renderDocInfoMenuPanel(closeToolbarMenus, { includeBookmark: false })}
           </>
-        ) : (
-          <>
-            <div className="mdocs-editor-toolbar-leading">
-              <input
-                className="mdocs-editor-title-input"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                onBlur={() => void saveDisplayNameIfChanged()}
-                placeholder={t("displayNamePlaceholder")}
-                disabled={!editing}
-              />
-              <DomainSelect
-                domains={props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY]}
-                value={props.currentDomainId}
-                onChange={props.onDomainChange}
-                onDomainsChange={props.onDomainsChange}
-                ariaLabel={t("currentDomainAria")}
-                localizeName={(name: string) => localizeDomainName(name, lang, t)}
-              />
-              {props.onAiWrite ? (
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => props.onAiWrite?.()}
-                  style={{
-                    padding: "4px 10px",
-                    whiteSpace: "nowrap",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  <img src={deepseekLogoUrl} alt="" width={16} height={16} style={{ display: "block" }} />
-                  帮写
-                </button>
-              ) : null}
-            </div>
-            <span className="mdocs-editor-toolbar-spacer" aria-hidden />
-            <div className="mdocs-editor-toolbar-trailing">
-              <button
-                type="button"
-                className="secondary mdocs-tooltip mdocs-tooltip-bottom"
-                onClick={() => void toggleBookmark()}
-                disabled={bookmarkBusy}
-                data-tooltip={isBookmarked ? "取消收藏" : "收藏"}
-                style={{
-                  padding: "4px 8px",
-                  minWidth: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 4,
-                  opacity: bookmarkBusy ? 0.5 : 1,
-                }}
-              >
-                <Star
-                  size={18}
-                  strokeWidth={1.5}
-                  style={{
-                    color: isBookmarked ? "#faad14" : "var(--mdocs-text-secondary, #6b7280)",
-                    fill: isBookmarked ? "#faad14" : "none",
-                  }}
-                />
-                {isBookmarked ? <span>已收藏</span> : null}
-              </button>
-              <div className="mdocs-editor-toolbar-actions">
-                {props.onSyncClick ? (
-                  <button
-                    type="button"
-                    className={"mdocs-sync-btn mdocs-tooltip mdocs-tooltip-bottom" + (props.syncBehind ? " behind" : "")}
-                    data-tooltip={props.syncBehind ? t("syncBehindHint") : t("syncPull")}
-                    onClick={() => void props.onSyncClick?.()}
-                    style={{ display: "flex", alignItems: "center", gap: 4 }}
-                  >
-                    <RefreshCw size={16} strokeWidth={1.5} />
-                    <span>{t("syncPull")}</span>
-                  </button>
-                ) : null}
-                {editing ? (
-                  <>
-                    {localStorage.getItem("mdocs.autoPublish") !== "true" && (
-                      <span className="mdocs-save-indicator">
-                        <span className={"mdocs-save-dot " + (busy ? "saving" : draftExists ? "unsaved" : "saved")} />
-                        <span>
-                          {busy ? t("publishing") : draftExists ? t("unsaved") : t("published")}
-                        </span>
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      className="primary"
-                      disabled={busy}
-                      onClick={() => {
-                        void publish().catch(() => {});
-                      }}
-                    >
-                      {busy ? t("publishing") : t("publish")}
-                    </button>
-                    <button type="button" className="danger" disabled={busy} onClick={props.onDelete}>
-                      {t("delete")}
-                    </button>
-                  </>
-                ) : null}
-                {!editing && props.canEdit ? (
-                  <button type="button" className="primary" onClick={() => setIsEditing(true)}>
-                    {t("edit")}
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="secondary mdocs-tooltip mdocs-tooltip-bottom"
-                  onClick={props.onToggleComments}
-                  data-tooltip="评论"
-                  style={{
-                    padding: "4px 8px",
-                    minWidth: "auto",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 4,
-                    background: props.commentPanelOpen ? "var(--mdocs-hover-bg, #f0f0f0)" : undefined,
-                  }}
-                >
-                  <MessageSquare size={18} strokeWidth={1.5} style={{ color: "var(--mdocs-text-secondary, #6b7280)" }} />
-                  {props.commentCount > 0 ? <span style={{ fontSize: "0.85rem" }}>{props.commentCount}</span> : null}
-                </button>
-                <div ref={docInfoMenuRef} className="mdocs-tooltip mdocs-tooltip-bottom" data-tooltip={t("docInfo")} style={{ position: "relative" }}>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => setShowDocInfoMenu(!showDocInfoMenu)}
-                    style={{ padding: "4px 8px", minWidth: "auto", display: "flex", alignItems: "center", justifyContent: "center" }}
-                  >
-                    <TextAlignJustify size={18} strokeWidth={1.5} style={{ color: "var(--mdocs-text-secondary, #6b7280)" }} />
-                  </button>
-                  {showDocInfoMenu ? (
-                    <div className="mdocs-doc-info-dropdown">
-                      {renderDocInfoMenuPanel(closeToolbarMenus)}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+        }
+      />
       {showPermissionDialog && (
         <div
           className="mdocs-dialog-backdrop"

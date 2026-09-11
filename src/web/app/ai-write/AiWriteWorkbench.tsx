@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { History, Plus } from "lucide-react";
+import { ArrowDown, History, Plus } from "lucide-react";
 import deepseekLogoUrl from "../../assets/deepseek.svg";
 import {
   bindCodingSessionDocumentApi,
@@ -150,6 +150,49 @@ export function AiWriteWorkbench(props: {
   const [error, setError] = useState<string | null>(null);
   const [busyComplete, setBusyComplete] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const [showJumpBottom, setShowJumpBottom] = useState(false);
+
+  /** 距底部超过该像素时显示「置底」 */
+  const JUMP_BOTTOM_GAP = 120;
+
+  function distanceFromBottom(el: HTMLElement): number {
+    return el.scrollHeight - el.scrollTop - el.clientHeight;
+  }
+
+  function scrollToBottom() {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    setShowJumpBottom(false);
+  }
+
+  function scrollToBottomIfStuck() {
+    if (!stickToBottomRef.current) return;
+    scrollToBottom();
+  }
+
+  function onListScroll() {
+    const el = listRef.current;
+    if (!el) return;
+    const gap = distanceFromBottom(el);
+    stickToBottomRef.current = gap <= 48;
+    setShowJumpBottom(gap > JUMP_BOTTOM_GAP);
+  }
+
+  function jumpToBottom() {
+    stickToBottomRef.current = true;
+    scrollToBottom();
+  }
+
+  useLayoutEffect(() => {
+    if (!props.open) return;
+    scrollToBottomIfStuck();
+    const el = listRef.current;
+    if (!el) return;
+    setShowJumpBottom(distanceFromBottom(el) > JUMP_BOTTOM_GAP);
+  }, [messages, props.open]);
 
   async function refreshSessions() {
     setSessionsLoading(true);
@@ -276,6 +319,7 @@ export function AiWriteWorkbench(props: {
     abortRef.current = ac;
     const userId = nextId("u");
     const asstId = nextId("a");
+    stickToBottomRef.current = true;
     setMessages((prev) => [
       ...prev,
       {
@@ -289,6 +333,10 @@ export function AiWriteWorkbench(props: {
     setInput("");
     setSending(true);
     setError(null);
+    requestAnimationFrame(() => {
+      scrollToBottom();
+      requestAnimationFrame(scrollToBottom);
+    });
 
     const patchAssistant = (fn: (blocks: AssistantBlock[]) => AssistantBlock[]) => {
       setMessages((prev) =>
@@ -523,7 +571,12 @@ export function AiWriteWorkbench(props: {
             </div>
           ) : (
             <>
-              <div className="mdocs-ai-write-chat-messages">
+              <div className="mdocs-ai-write-chat-scroll-wrap">
+              <div
+                className="mdocs-ai-write-chat-messages"
+                ref={listRef}
+                onScroll={onListScroll}
+              >
                 {messages.length === 0 ? (
                   <>
                     <p className="mdocs-ai-write-hint">
@@ -620,6 +673,19 @@ export function AiWriteWorkbench(props: {
                     </div>
                   ))
                 )}
+              </div>
+              {showJumpBottom ? (
+                <button
+                  type="button"
+                  className="mdocs-chat-jump-bottom"
+                  onClick={jumpToBottom}
+                  title="回到底部"
+                  aria-label="回到底部"
+                >
+                  <ArrowDown size={14} strokeWidth={2} aria-hidden />
+                  <span>置底</span>
+                </button>
+              ) : null}
               </div>
               {error ? <p className="mdocs-ai-write-error">{error}</p> : null}
               {needsApiKey && messages.length > 0 ? (

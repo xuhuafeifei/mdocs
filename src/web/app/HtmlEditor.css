@@ -31,3 +31,9 @@
   border: none;
   background: white;
 }
+
+.mdocs-html-editor-textarea::placeholder {
+  color: var(--mdocs-text-muted, #999);
+  font-family: inherit;
+  font-size: inherit;
+}

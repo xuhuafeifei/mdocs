@@ -12,7 +12,7 @@
  * drop 高亮由树根统一 state 管理，dragEnd / drop 时一律清空，避免残留。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Network, Zap } from "lucide-react";
+import { Folder as FolderIcon, Network, Zap } from "lucide-react";
 import { useI18n } from "../i18n";
 import type {
   TreeFolderNode,
@@ -428,7 +428,7 @@ function DocRow(props: {
       }}
     >
       <span className="mdocs-tree-caret-spacer" aria-hidden />
-      <span className="mdocs-tree-icon">{doc.fileType === "html" ? "H" : "md"}</span>
+      <span className={`mdocs-tree-icon${doc.fileType === "html" ? " mdocs-tree-icon-html" : ""}`}>{doc.fileType === "html" ? <span className="mdocs-tree-html-bracket">&lt;/&gt;</span> : "md"}</span>
       <span
         className="mdocs-tree-label"
         title={doc.displayName || doc.name}
@@ -475,15 +475,7 @@ function DocRow(props: {
 function FolderDirIcon() {
   return (
     <span className="mdocs-tree-icon mdocs-tree-icon-dir" aria-hidden>
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path
-          d="M2 4.5h4.2L7.3 6H14v8.5H2V4.5z"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinejoin="round"
-        />
-        <path d="M2 4.5V3h4l1.1 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      </svg>
+      <FolderIcon size={16} />
     </span>
   );
 }

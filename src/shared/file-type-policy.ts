@@ -2,9 +2,13 @@
  * file_type 政策表。
  *
  * 每种文件类型的能力集中定义，避免硬编码分散在各处。
- * 前后端共用一份表。
+ * 前后端共用一份表。只表达「这类文件能做什么 / 数据怎么走」，
+ * 不塞编辑器品牌名（选 UI 按 fileType 在前端分支）。
+ *
+ * 注意：此处只用 `import type` 引用 file-types，避免与
+ * `file-types` re-export `isVisibleFileType` 形成运行时循环依赖。
  */
-import { FILE_TYPE, type FileType } from './file-types.js';
+import type { FileType } from './file-types.js';
 
 /* ── 政策字段 ── */
 
@@ -31,14 +35,19 @@ export interface FileTypePolicy {
   draftKind: 'lexical' | 'html' | 'none';
   /** merge 管道 */
   mergePipeline: 'lexical-md-bridge' | 'raw-text' | 'none';
-  /** 编辑器类型 */
-  editor: 'lobe' | 'html' | 'none';
+  /**
+   * 顶栏是否提供 AI 帮写入口。
+   * html：工作台与写回均为 HTML 原文（不做 MD↔HTML）。
+   */
+  aiWrite: boolean;
+  /** 顶栏是否提供评论入口（按 documentId，与正文格式无关） */
+  comments: boolean;
 }
 
-/* ── 政策表 ── */
+/* ── 政策表（键与 FILE_TYPE 字面量一致） ── */
 
 const POLICY_TABLE: Record<FileType, FileTypePolicy> = {
-  [FILE_TYPE.DOCUMENT]: {
+  md: {
     treeVisible: true,
     treeInclude: true,
     movable: true,
@@ -50,9 +59,10 @@ const POLICY_TABLE: Record<FileType, FileTypePolicy> = {
     writeNormalize: 'md-lexical',
     draftKind: 'lexical',
     mergePipeline: 'lexical-md-bridge',
-    editor: 'lobe',
+    aiWrite: true,
+    comments: true,
   },
-  [FILE_TYPE.HTML]: {
+  html: {
     treeVisible: true,
     treeInclude: true,
     movable: true,
@@ -64,9 +74,10 @@ const POLICY_TABLE: Record<FileType, FileTypePolicy> = {
     writeNormalize: 'raw',
     draftKind: 'html',
     mergePipeline: 'raw-text',
-    editor: 'html',
+    aiWrite: true,
+    comments: true,
   },
-  [FILE_TYPE.FOLDER]: {
+  dir: {
     treeVisible: true,
     treeInclude: true,
     movable: false,
@@ -78,9 +89,10 @@ const POLICY_TABLE: Record<FileType, FileTypePolicy> = {
     writeNormalize: 'none',
     draftKind: 'none',
     mergePipeline: 'none',
-    editor: 'none',
+    aiWrite: false,
+    comments: false,
   },
-  [FILE_TYPE.FOLDER_DESC]: {
+  folder_desc: {
     treeVisible: false,
     treeInclude: true,
     movable: false,
@@ -92,9 +104,10 @@ const POLICY_TABLE: Record<FileType, FileTypePolicy> = {
     writeNormalize: 'md-lexical',
     draftKind: 'none',
     mergePipeline: 'none',
-    editor: 'none',
+    aiWrite: false,
+    comments: false,
   },
-  [FILE_TYPE.GRAPH_FILE]: {
+  graph_file: {
     treeVisible: false,
     treeInclude: false,
     movable: false,
@@ -106,9 +119,10 @@ const POLICY_TABLE: Record<FileType, FileTypePolicy> = {
     writeNormalize: 'none',
     draftKind: 'none',
     mergePipeline: 'none',
-    editor: 'none',
+    aiWrite: false,
+    comments: false,
   },
-  [FILE_TYPE.GRAPH_DIR]: {
+  graph_dir: {
     treeVisible: false,
     treeInclude: false,
     movable: false,
@@ -120,7 +134,8 @@ const POLICY_TABLE: Record<FileType, FileTypePolicy> = {
     writeNormalize: 'none',
     draftKind: 'none',
     mergePipeline: 'none',
-    editor: 'none',
+    aiWrite: false,
+    comments: false,
   },
 };
 
@@ -162,4 +177,10 @@ export function movableDocTypes(): FileType[] {
 /** 判断该文件类型是否可被 overwrite_document 覆写 */
 export function canOverwrite(fileType: FileType): boolean {
   return POLICY_TABLE[fileType]?.writeNormalize !== 'none';
+}
+
+/** 侧栏树是否可见（treeVisible） */
+export function isVisibleFileType(fileType: string): boolean {
+  const policy = POLICY_TABLE[fileType as FileType];
+  return policy?.treeVisible === true;
 }

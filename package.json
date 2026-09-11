@@ -65,6 +65,7 @@
     "react-router-dom": "^7.14.2",
     "remark": "^15.0.1",
     "remark-gfm": "^4.0.1",
+    "remark-html": "^16.0.1",
     "remark-math": "^6.0.0",
     "zod": "^3.23.8"
   },

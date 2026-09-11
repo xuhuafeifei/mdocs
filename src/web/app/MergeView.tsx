@@ -1,6 +1,9 @@
 /**
  * 冲突 Merge：单栏 inline（红=我的 / 绿=别人的），与帮写审阅同构。
  * 接收=remote，拒绝=local；全部决议后方可手改并发布。
+ *
+ * md：Lexical → LexicalMarkdownBridge → MD → merge-plan → convert → Lexical
+ * html：原文直通 merge-plan → updateDocument（无 Bridge / convert）
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
@@ -23,11 +26,15 @@ import {
 } from "../services/endpoints";
 import type { DraftConflictRecord } from "../storage/drafts";
 import type { DocumentDetail } from "../../shared/types/document";
+import { getPolicy } from "../../shared/file-type-policy";
+import type { FileType } from "../../shared/file-types";
 
 export interface MergeViewProps {
   documentId: string;
   displayName: string;
   conflict: DraftConflictRecord;
+  /** 缺省 md；html 走 raw-text 管道 */
+  fileType?: string;
   onClose: () => void;
   onSuccess: (doc: DocumentDetail) => void;
   onError: (message: string) => void;
@@ -35,6 +42,10 @@ export interface MergeViewProps {
 
 export function MergeView(props: MergeViewProps) {
   const { t } = useI18n();
+  const mergePipeline =
+    getPolicy((props.fileType ?? "md") as FileType)?.mergePipeline ?? "lexical-md-bridge";
+  const isRawText = mergePipeline === "raw-text";
+
   const [localMd, setLocalMd] = useState("");
   const [baseMd, setBaseMd] = useState("");
   const [baseLexical, setBaseLexical] = useState<string | null>(null);
@@ -58,7 +69,12 @@ export function MergeView(props: MergeViewProps) {
       try {
         const doc = await getDocumentApi(props.documentId);
         if (cancelled) return;
-        setRemoteLexical(doc.content);
+        if (isRawText) {
+          setRemoteMd(doc.content);
+          setLoadingRemote(false);
+        } else {
+          setRemoteLexical(doc.content);
+        }
       } catch {
         if (!cancelled) props.onError(t("mergeLoadRemoteFailed"));
         if (!cancelled) setLoadingRemote(false);
@@ -67,7 +83,7 @@ export function MergeView(props: MergeViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [props.documentId, props.onError, t]);
+  }, [props.documentId, props.onError, t, isRawText]);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +100,12 @@ export function MergeView(props: MergeViewProps) {
         );
         if (cancelled) return;
         if (ctx.mode === "three_way" && ctx.mergeBaseContent) {
-          setBaseLexical(ctx.mergeBaseContent);
+          if (isRawText) {
+            setBaseMd(ctx.mergeBaseContent);
+            setBaseReady(true);
+          } else {
+            setBaseLexical(ctx.mergeBaseContent);
+          }
           return;
         }
         setBaseMissing(true);
@@ -98,7 +119,18 @@ export function MergeView(props: MergeViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [props.documentId, props.conflict.localBaseCommitId, props.conflict.remoteCommitId]);
+  }, [
+    props.documentId,
+    props.conflict.localBaseCommitId,
+    props.conflict.remoteCommitId,
+    isRawText,
+  ]);
+
+  // html：本地快照即原文
+  useEffect(() => {
+    if (!isRawText) return;
+    setLocalMd(props.conflict.localSnapshotContent);
+  }, [isRawText, props.conflict.localSnapshotContent]);
 
   const handleRemoteMd = useCallback((md: string) => {
     setRemoteMd(md);
@@ -163,13 +195,17 @@ export function MergeView(props: MergeViewProps) {
     const body = stripConflictPlaceholders(publishBody);
     setBusy(true);
     try {
-      const { content: lexical } = await convertContentApi({
-        content: body,
-        from: "markdown",
-        to: "lexical",
-      });
+      const content = isRawText
+        ? body
+        : (
+            await convertContentApi({
+              content: body,
+              from: "markdown",
+              to: "lexical",
+            })
+          ).content;
       await updateDocumentApi(props.documentId, {
-        content: lexical,
+        content,
         displayName: props.displayName,
         version: {
           localBaseCommitId: props.conflict.localBaseCommitId,
@@ -192,27 +228,31 @@ export function MergeView(props: MergeViewProps) {
 
   return (
     <div className="mdocs-merge-overlay">
-      <LexicalMarkdownBridge
-        lexicalJson={props.conflict.localSnapshotContent}
-        onMarkdown={handleLocalMd}
-        onError={() => props.onError(t("mergeLoadLocalFailed"))}
-      />
-      {baseLexical ? (
-        <LexicalMarkdownBridge
-          lexicalJson={baseLexical}
-          onMarkdown={handleBaseMd}
-          onError={handleBaseBridgeError}
-        />
-      ) : null}
-      {remoteLexical ? (
-        <LexicalMarkdownBridge
-          lexicalJson={remoteLexical}
-          onMarkdown={handleRemoteMd}
-          onError={() => {
-            setLoadingRemote(false);
-            props.onError(t("mergeLoadRemoteFailed"));
-          }}
-        />
+      {!isRawText ? (
+        <>
+          <LexicalMarkdownBridge
+            lexicalJson={props.conflict.localSnapshotContent}
+            onMarkdown={handleLocalMd}
+            onError={() => props.onError(t("mergeLoadLocalFailed"))}
+          />
+          {baseLexical ? (
+            <LexicalMarkdownBridge
+              lexicalJson={baseLexical}
+              onMarkdown={handleBaseMd}
+              onError={handleBaseBridgeError}
+            />
+          ) : null}
+          {remoteLexical ? (
+            <LexicalMarkdownBridge
+              lexicalJson={remoteLexical}
+              onMarkdown={handleRemoteMd}
+              onError={() => {
+                setLoadingRemote(false);
+                props.onError(t("mergeLoadRemoteFailed"));
+              }}
+            />
+          ) : null}
+        </>
       ) : null}
       <header className="mdocs-merge-toolbar">
         <div className="mdocs-merge-toolbar-title">

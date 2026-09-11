@@ -8,8 +8,10 @@ export type { DraftConflictRecord, DraftConflictStatus };
 
 // ---- 数据库配置 ----
 const DB_NAME = "mdocs-drafts";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const STORE = "drafts";
+
+export type DraftContentKind = "lexical" | "html";
 
 /**
  * IndexedDB 主键为 `documentId`。
@@ -19,8 +21,10 @@ const STORE = "drafts";
  */
 export interface DraftRecord {
   documentId: string;
-  /** Lexical JSON serialization */
+  /** Lexical JSON（md）或 HTML 原文（html），由 contentKind 区分 */
   content: string;
+  /** 缺省视为 lexical，兼容旧 md 草稿 */
+  contentKind?: DraftContentKind;
   displayName: string;
   updatedAt: number;
   published: boolean;
@@ -85,6 +89,21 @@ function openDB(): Promise<IDBDatabase> {
             cursor.continue();
           };
         }
+        if (oldVersion > 0 && oldVersion < 5) {
+          const tx = req.transaction!;
+          const store = tx.objectStore(STORE);
+          const cursorReq = store.openCursor();
+          cursorReq.onsuccess = () => {
+            const cursor = cursorReq.result;
+            if (!cursor) return;
+            const v = cursor.value as Record<string, unknown>;
+            if (v.contentKind == null) {
+              v.contentKind = "lexical";
+              cursor.update(v);
+            }
+            cursor.continue();
+          };
+        }
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -101,6 +120,8 @@ export async function upsertContentDraft(params: {
   documentId: string;
   content: string;
   displayName: string;
+  /** 缺省 lexical；html 文档传 html */
+  contentKind?: DraftContentKind;
   /** 开编时服务端 head；仅首次创建草稿时写入 localBaseCommitId */
   localBaseCommitIdAtEditStart?: string | null;
   /** 首次落盘时写入的文档快照 meta（后续自动保存不覆盖） */
@@ -114,6 +135,7 @@ export async function upsertContentDraft(params: {
   const record: DraftRecord = {
     documentId: params.documentId,
     content: params.content,
+    contentKind: params.contentKind ?? existing?.contentKind ?? "lexical",
     displayName: params.displayName,
     updatedAt: Date.now(),
     published: false,
@@ -164,10 +186,12 @@ export async function rebuildDraftAfterMerge(params: {
   permission: number;
   ownerVisitorId: string;
   domainId: string;
+  contentKind?: DraftContentKind;
 }): Promise<void> {
   await saveDraft({
     documentId: params.documentId,
     content: params.content,
+    contentKind: params.contentKind ?? "lexical",
     displayName: params.displayName,
     updatedAt: Date.now(),
     published: false,

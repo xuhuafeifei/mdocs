@@ -13,6 +13,7 @@ export const en: Record<TranslationKey, string> = {
   publish: "Publish",
   publishing: "Publishing...",
   published: "Published",
+  preview: "Preview",
   cancel: "Cancel",
   create: "Create",
   creating: "Creating...",
