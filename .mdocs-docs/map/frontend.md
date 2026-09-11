@@ -13,8 +13,11 @@
   | `src/web/app/App.css` | `.mdocs-shell` `.mdocs-sidebar` `.mdocs-sidebar-list` |
   | `src/web/app/DocumentTree.tsx` | 文档树根节点 = `.mdocs-sidebar-list` |
   | `src/web/app/DocumentEditor.tsx` | 编辑器容器 |
+  | `src/web/app/DocChrome.tsx` | 文档顶栏（桌面+reader）；`aiWrite`/`comments` |
+  | `src/web/app/HtmlEditor.tsx` | HTML 预览/编辑（sandbox iframe） |
+  | `src/web/app/MergeView.tsx` | 冲突 merge；`fileType` → raw-text 管道 |
 - **布局约定**：shell 只承载 layout；侧栏头尾 `flex: 0 0 auto`，仅 list `overflow-y: auto`（见 [`../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md`](../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md)）
-- **需求**：同域拖拽移动见 [`../requirements/document-move/`](../requirements/document-move/)（已同意）
+- **需求**：同域拖拽移动见 [`../requirements/document-move/`](../requirements/document-move/)（已同意）；HTML 文档见 [`../requirements/html-documents/`](../requirements/html-documents/)
 
 ### API 客户端
 
@@ -33,7 +36,7 @@
   |------|------|
   | `src/web/app/hooks/useAutoSave.ts` | 自动保存 |
   | `src/web/app/hooks/useAutoPublish.ts` | 自动发布 |
-  | `src/web/storage/drafts.ts` | `saveDraft` / `getDraft` |
+  | `src/web/storage/drafts.ts` | `saveDraft` / `getDraft`；`contentKind` lexical\|html |
 
 ### 异步卸载保护（可复用）
 
@@ -62,6 +65,12 @@
   | `src/web/app/GraphPage.tsx` | `GraphPage` |
   | `src/web/app/graph-layered-view.ts` | `buildContainsHierarchy` / `computeVisibleIds` |
 - **需求**：[`../requirements/knowledge-graph/设计契约-layered-view.md`](../requirements/knowledge-graph/设计契约-layered-view.md)
+
+### 知识图谱（访问门禁）
+
+- **关键词**：`graph access` `full` `viaDocumentInvites` `GRAPH_FORBIDDEN`
+- **结论**：private/restricted 仅域协作 `full`；public 放开；invite 不授图谱。
+- **需求**：[`../requirements/knowledge-graph/设计契约-graph-access.md`](../requirements/knowledge-graph/设计契约-graph-access.md) · [代码索引](../requirements/knowledge-graph/代码索引-graph-access.md)
 
 ### AI 帮写（coding）
 

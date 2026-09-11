@@ -106,6 +106,25 @@
 - **HTTP**：`GET/POST/DELETE …/documents/:id/invites` 仅 **文档创建者** 可调用；被 invite 授予 `edit` 的用户可编辑正文，但不可列出或变更邀请列表。（服务层 `add/remove` 亦校验 owner；此前 `GET` 列表曾与「任意 edit」中间件不一致，已收紧。）
 - **约束**：与域成员互斥。已是域成员的人不能被 invite。
 - **检查时机**：每次读/写前重算，不缓存。
+- **与图谱**：invite **不授** 图谱读/生成（private/restricted）。见 [`../requirements/knowledge-graph/设计契约-graph-access.md`](../requirements/knowledge-graph/设计契约-graph-access.md)。
+
+### 可见性粒度（核心：无目录级邀请）
+
+> 决策沉淀：[`../decisions/011-permission-visibility-no-folder-invite.md`](../decisions/011-permission-visibility-no-folder-invite.md)
+
+mdocs **没有**「邀请某人到某个目录，则该目录下所有文章自动可见」的能力。
+
+| 机制 | 粒度 | 能做什么 |
+|------|------|----------|
+| `domain_members` | 整个域 | `restricted` 域：成员进树；文档档位为 `domain_read`/`domain_write` 时成员可读/可写 |
+| `document_invites` | **单篇** `document_id` | 给圈外访客授该文档的 `read` 或 `edit` |
+| 文档/域公开档位 | 面向所有人 | 如 `public_read`，不是「只给某一个人」 |
+
+要点：
+
+1. 树上的「目录」只是 `file_type=dir` 的文档行；对目录 invite **不会**继承到子文档。
+2. 读树、搜索、打开正文均按 **每一行** 调 `canReadDocument`；子文章未 invite / 非成员 / 非公开 → 不可见。
+3. 若业务上要「某人能看某文件夹下全部文章」：当前只能 **加为域成员**（范围是整域）、**逐篇 invite**，或 **提高公开档位**。目录级 ACL 若要做，须新需求，不得假定已存在。
 
 ## CLI Token
 

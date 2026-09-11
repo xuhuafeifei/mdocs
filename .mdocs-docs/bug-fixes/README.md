@@ -23,3 +23,4 @@
 | [table-paste-scroll-to-bottom-2026-09-02](./table-paste-scroll-to-bottom-2026-09-02.md) | 表格粘贴后滚到底 |
 | [pull-sync-silent-noop-with-draft-2026-09-05](./pull-sync-silent-noop-with-draft-2026-09-05.md) | 有草稿时拉取更新静默无反应 |
 | [sidebar-tree-scroll-header-footer-2026-09-10](./sidebar-tree-scroll-header-footer-2026-09-10.md) | 左侧树整栏滚动，头尾未固定 |
+| [overwrite-html-markdown-rejected-2026-09-11](./overwrite-html-markdown-rejected-2026-09-11.md) | Ask 覆写 html 误传 markdown 被 400 |

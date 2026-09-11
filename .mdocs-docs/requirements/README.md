@@ -6,7 +6,8 @@
 
 | 夹 | 入口 |
 |----|------|
-| [html-documents](./html-documents/设计契约.md) | **草案**：HTML 文档 + file_type 政策表 |
+| [mdocs-cli-graph](./mdocs-cli-graph/设计契约.md) | **已同意**：CLI `graph get/analyze/task` + URL 纠偏；域图显式 `--domain` |
+| [html-documents](./html-documents/设计契约.md) | **一期已落地**；**二期草案** [DocChrome](./html-documents/设计契约-doc-chrome.md) |
 | [graph-cache-dirty](./graph-cache-dirty/设计契约.md) | **已同意**：图谱 dirty / 缓存 |
 | [agent-provider-config](./agent-provider-config/设计契约.md) | **已同意**：LLM 两条配置线（DeepSeek / 自定义 + providerId） |
 | [user-agent-skills](./user-agent-skills/需求分析.md) | **已同意**：私人用户 skill + 引用展开 |

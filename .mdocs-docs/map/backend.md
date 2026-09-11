@@ -28,12 +28,14 @@
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/server/documents/document.service.ts` | 文档业务（拟增 `moveDocument`） |
+  | `src/server/documents/document.service.ts` | 文档业务（含 html raw / FTS·图谱政策门控） |
   | `src/server/documents/tree.service.ts` | `buildDocumentTree` `buildFolderSubtree` |
   | `src/server/storage/file-store.ts` | `readDocument` / `writeDocument`（拟增 rename） |
-  | `src/shared/docPath.ts` | 路径校验 |
+  | `src/shared/docPath.ts` | 路径校验（`.md` / `.html` / `.json`） |
+  | `src/shared/file-type-policy.ts` | file_type 政策表 + 派生查询 |
+  | `src/shared/file-types.ts` | `FILE_TYPE` 常量 |
   | `src/shared/types/tree.ts` | `TreeNode` `FolderSubtreeNode` |
-- **需求**：[`../requirements/document-move/`](../requirements/document-move/)；[`../requirements/folder-subtree/`](../requirements/folder-subtree/)
+- **需求**：[`../requirements/document-move/`](../requirements/document-move/)；[`../requirements/folder-subtree/`](../requirements/folder-subtree/)；[`../requirements/html-documents/`](../requirements/html-documents/)
 
 ### 路由
 
