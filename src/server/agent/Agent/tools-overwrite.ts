@@ -9,7 +9,7 @@ import {
 } from "./choice-pending.js";
 import { asToolResult, type ToolDeps } from "./tool-deps.js";
 import { FILE_TYPE } from "../../../shared/file-types.js";
-import { canOverwrite } from "../../../shared/file-type-policy.js";
+import { canOverwrite, getPolicy } from "../../../shared/file-type-policy.js";
 
 const OVERWRITE_OPTION = "直接覆写";
 const OPEN_CODING_OPTION = "打开帮写审阅";
@@ -33,14 +33,18 @@ function classifyChoice(choice: string): "overwrite" | "coding" | "cancel" {
 function doOverwrite(params: {
   visitorId: string;
   documentId: string;
-  markdown: string;
+  content: string;
   localBaseCommitId: string;
+  fileType: string;
 }) {
+  const policy = getPolicy(params.fileType as any);
+  const isRaw = policy.writeNormalize === "raw";
   const updated = updateDocument({
     actorVisitorId: params.visitorId,
     documentId: params.documentId,
-    content: params.markdown,
-    contentFormat: "markdown",
+    content: params.content,
+    // html：原样 raw，勿传 contentFormat=markdown
+    ...(isRaw ? {} : { contentFormat: "markdown" as const }),
     version: { localBaseCommitId: params.localBaseCommitId },
   });
   return asToolResult({
@@ -50,11 +54,13 @@ function doOverwrite(params: {
     headCommitId: updated.headCommitId ?? null,
     overwritten: true,
     localBaseCommitId: params.localBaseCommitId,
+    fileType: params.fileType,
   });
 }
 
 /**
  * Ask 覆写：空文直写；有正文则请用户选「直接覆写 / 打开帮写 / 取消」。
+ * md → content 必须是 Markdown；html → content 必须是 HTML。不做格式互转。
  */
 export function overwriteDocumentTool({
   visitorId,
@@ -65,25 +71,31 @@ export function overwriteDocumentTool({
     name: "overwrite_document",
     label: "覆写文档正文",
     description:
-      "将完整 Markdown 写入指定文档（服务端）。几乎空则直接写入；已有实质正文时本工具会弹出选择卡，选项固定为以下三项（勿另调 ask_user_choice 自拟其它文案）：「直接覆写」「打开帮写审阅」「取消」。有正文不是无法覆写，只是要用户点选。必须传入完整 markdown。",
+      "将完整正文写入指定文档（服务端）。必须先确认目标 fileType：" +
+      "md → content 只能是完整 Markdown；" +
+      "html → content 只能是完整 HTML（禁止传 Markdown，不做 MD↔HTML 转换）。" +
+      "几乎空则直接写入；已有实质正文时本工具会弹出选择卡，选项固定为：「直接覆写」「打开帮写审阅」「取消」。" +
+      "有正文不是无法覆写，只是要用户点选。",
     parameters: Type.Object({
       documentId: Type.String({ description: "目标文档 documentId" }),
-      markdown: Type.String({ description: "要写入的完整 Markdown 正文" }),
+      content: Type.String({
+        description:
+          "完整正文，格式必须与文档类型一致：md→Markdown；html→HTML。禁止错格式，系统不会自动转换",
+      }),
     }),
     execute: async (_id, params) => {
-      const documentId = String(
-        (params as { documentId?: string }).documentId ?? "",
-      ).trim();
-      const markdown = String((params as { markdown?: string }).markdown ?? "");
+      const raw = params as { documentId?: string; content?: string; markdown?: string };
+      const documentId = String(raw.documentId ?? "").trim();
+      const content = String(raw.content ?? raw.markdown ?? "");
       if (!documentId) throw new Error("documentId is required");
 
       try {
         assertDocumentAccess(documentId, visitorId, "edit");
         const doc = getDocument(documentId, visitorId, "text");
         const plain = doc.content ?? "";
+        const fileType = doc.fileType || FILE_TYPE.DOCUMENT;
 
-        // 只允许覆写可写的文件类型（读政策表）
-        if (!canOverwrite(doc.fileType as any)) {
+        if (!canOverwrite(fileType as any)) {
           return asToolResult({
             status: "rejected",
             documentId,
@@ -104,8 +116,9 @@ export function overwriteDocumentTool({
           return doOverwrite({
             visitorId,
             documentId,
-            markdown,
+            content,
             localBaseCommitId: headCommitId,
+            fileType,
           });
         }
 
@@ -157,8 +170,9 @@ export function overwriteDocumentTool({
           return doOverwrite({
             visitorId,
             documentId,
-            markdown,
+            content,
             localBaseCommitId: base,
+            fileType: fresh.fileType || fileType,
           });
         }
         if (action === "coding") {

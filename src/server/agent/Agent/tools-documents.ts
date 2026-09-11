@@ -9,6 +9,8 @@ import { buildDocumentTree } from "../../documents/tree.service.js";
 import { createFolder } from "../../routes/folders.routes.js";
 import { searchDocuments } from "../../search/search.service.js";
 import { asToolResult, type ToolDeps } from "./tool-deps.js";
+import { FILE_TYPE } from "../../../shared/file-types.js";
+import { treeIncludeTypes } from "../../../shared/file-type-policy.js";
 
 /** Agent 上下文体积上限；超长正文截断并标注 */
 const GET_DOCUMENT_MAX_CHARS = 50_000;
@@ -90,7 +92,7 @@ export function listTreeTool({ visitorId }: ToolDeps): AgentTool {
     }),
     execute: async (_id, params) => {
       const domainId = (params as { domainId?: string }).domainId?.trim() || undefined;
-      const items = flattenTree(buildDocumentTree(domainId, visitorId, { includeTypes: ["dir", "md", "folder_desc"] }), 80);
+      const items = flattenTree(buildDocumentTree(domainId, visitorId, { includeTypes: treeIncludeTypes() }), 80);
       return asToolResult({
         domainId: domainId ?? null,
         truncated: items.length >= 80,
@@ -123,7 +125,7 @@ export function getDocumentTool({ visitorId }: ToolDeps): AgentTool {
     name: "get_document",
     label: "读取文档内容",
     description:
-      "按 documentId 读取当前访客有权阅读的文档正文。默认纯文本（从 Lexical 抽取）；format=json 返回 Lexical JSON。与 HTTP GET /api/documents/:id 同一套读权限，无额外特权。",
+      "按 documentId 读取当前访客有权阅读的文档正文。响应含 fileType。默认 format=text：md 从 Lexical 抽纯文本，html 为 HTML 原文；format=json 返回存盘原文。与 HTTP GET /api/documents/:id 同一套读权限，无额外特权。",
     parameters: Type.Object({
       documentId: Type.String({ description: "文档 documentId" }),
       format: Type.Optional(
@@ -154,6 +156,7 @@ export function getDocumentTool({ visitorId }: ToolDeps): AgentTool {
           displayName: doc.displayName,
           domainId: doc.domainId,
           relativePath: doc.relativePath,
+          fileType: doc.fileType,
           permission: doc.permission,
           format,
           contentTruncated,
@@ -174,27 +177,42 @@ export function createDocumentTool({ visitorId }: ToolDeps): AgentTool {
   return {
     name: "create_document",
     label: "创建空文档",
-    description: "创建空 Markdown 文档（不写正文）",
+    description:
+      "创建空文档（不写正文）。默认 fileType=md（Markdown）。创建 HTML 文档必须传 fileType=html，或 fileName 以 .html 结尾；创建后若要写正文，再调用 overwrite_document。",
     parameters: Type.Object({
-      fileName: Type.String({ description: "文件名，可不带 .md" }),
+      fileName: Type.String({
+        description: "文件名；Markdown 可不带后缀，HTML 建议 untitled.html 或传 fileType=html",
+      }),
       displayName: Type.Optional(Type.String({ description: "展示名，可选" })),
       domainId: Type.Optional(Type.String({ description: "域 ID，可选" })),
       parentId: Type.Optional(Type.String({ description: "父目录 documentId，可选" })),
+      fileType: Type.Optional(
+        Type.Union([Type.Literal("md"), Type.Literal("html")], {
+          description: "md=Markdown（默认）；html=HTML 文档",
+        }),
+      ),
     }),
     execute: async (_id, params) => {
-      const { fileName, displayName, domainId, parentId } = params as {
+      const { fileName, displayName, domainId, parentId, fileType } = params as {
         fileName: string;
         displayName?: string;
         domainId?: string;
         parentId?: string;
+        fileType?: string;
       };
       if (!fileName?.trim()) throw new Error("fileName is required");
+      const kind =
+        fileType === "html" || /\.html$/i.test(fileName.trim())
+          ? FILE_TYPE.HTML
+          : FILE_TYPE.DOCUMENT;
       const doc = createDocument({
         actorVisitorId: visitorId,
         fileName: fileName.trim(),
         displayName: displayName?.trim() || undefined,
         content: "",
-        contentFormat: "markdown",
+        ...(kind === FILE_TYPE.HTML
+          ? { fileType: FILE_TYPE.HTML }
+          : { contentFormat: "markdown" as const }),
         domainId: domainId?.trim() || undefined,
         parentId: parentId?.trim() || undefined,
       });
@@ -204,6 +222,7 @@ export function createDocumentTool({ visitorId }: ToolDeps): AgentTool {
         displayName: doc.displayName,
         relativePath: doc.relativePath,
         permission: doc.permission,
+        fileType: doc.fileType,
       });
     },
   };

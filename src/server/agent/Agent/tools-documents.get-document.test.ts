@@ -85,12 +85,30 @@ describe("get_document tool", () => {
       content: string;
       format: string;
       documentId: string;
+      fileType: string;
       contentTruncated: boolean;
     };
     expect(details.documentId).toBe(created.documentId);
+    expect(details.fileType).toBe("md");
     expect(details.format).toBe("text");
     expect(details.contentTruncated).toBe(false);
     expect(details.content).toContain("你好世界");
+  });
+
+  it("html 文档返回 fileType=html 与 HTML 原文", async () => {
+    const html = "<p>hello</p>";
+    const created = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "page.html",
+      content: html,
+      fileType: "html",
+      domainId: "public-domain",
+      permission: Permission.PUBLIC_READ,
+    });
+    const result = await runGetDocument(OWNER, { documentId: created.documentId });
+    const details = result.details as { content: string; fileType: string };
+    expect(details.fileType).toBe("html");
+    expect(details.content).toBe(html);
   });
 
   it("无权访客不可读 private 文档", async () => {

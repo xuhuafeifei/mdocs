@@ -76,6 +76,28 @@ import {
   scheduleGraphLifecycle,
 } from "./graph/lifecycle.js";
 
+function scheduleFtsIfNeeded(fileType: string, documentId: string): void {
+  const policy = getPolicy(fileType as any);
+  if (!policy?.ftsIndex) return;
+  markDirty(documentId);
+  process.nextTick(() => {
+    try {
+      rebuildDocument(documentId);
+    } catch {
+      // 定时器会再扫 dirty
+    }
+  });
+}
+
+function scheduleGraphIfExtractable(
+  fileType: string,
+  task: () => Promise<void>,
+): void {
+  const policy = getPolicy(fileType as any);
+  if (!policy?.graphExtract) return;
+  scheduleGraphLifecycle(task);
+}
+
 // ============================================================
 //  列文档（域内可见列表）
 // ============================================================
@@ -201,9 +223,17 @@ export function createDocument(params: {
   const fileType = params.fileType ?? FILE_TYPE.DOCUMENT;
   const policy = getPolicy(fileType as any);
 
-  // html 文件：禁止 markdown→Lexical，内容原样存
+  if (policy.writeNormalize === "raw" && params.contentFormat === "markdown") {
+    throw new DocumentError(
+      "BAD_REQUEST",
+      "html 文档不支持 contentFormat=markdown",
+      400,
+    );
+  }
+
+  // html 等 raw 类型：内容原样存；md：可 markdown→Lexical
   const content =
-    fileType === FILE_TYPE.HTML
+    policy.writeNormalize === "raw"
       ? params.content
       : params.contentFormat === "markdown"
         ? markdownToLexicalJson(params.content)
@@ -322,15 +352,8 @@ export function createDocument(params: {
   });
   tx();
 
-  // 异步标记并重建索引（不阻塞 API 响应）
-  markDirty(documentId);
-  process.nextTick(() => {
-    try {
-      rebuildDocument(documentId);
-    } catch (err) {
-      // 忽略索引失败，定时器会再次扫描 dirty
-    }
-  });
+  // 异步标记并重建索引（仅 ftsIndex 类型）
+  scheduleFtsIfNeeded(fileType, documentId);
 
   return {
     documentId,
@@ -412,9 +435,17 @@ export function updateDocument(params: {
   const row = findDocumentById(db, params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
-  // html 文件：不走 markdown→Lexical，内容原样存
+  // html 等 raw：不走 markdown→Lexical
+  const policy = getPolicy(row.file_type as any);
+  if (policy.writeNormalize === "raw" && params.contentFormat === "markdown") {
+    throw new DocumentError(
+      "BAD_REQUEST",
+      "html 文档不支持 contentFormat=markdown",
+      400,
+    );
+  }
   const content =
-    row.file_type === FILE_TYPE.HTML
+    policy.writeNormalize === "raw"
       ? params.content
       : normalizeDocumentContent(params.content, params.contentFormat);
 
@@ -459,7 +490,9 @@ export function updateDocument(params: {
     }
     const localSnapshotContent =
       mergeCtx.localSnapshotContent !== undefined
-        ? normalizeDocumentContent(mergeCtx.localSnapshotContent, params.contentFormat)
+        ? policy.writeNormalize === "raw"
+          ? mergeCtx.localSnapshotContent
+          : normalizeDocumentContent(mergeCtx.localSnapshotContent, params.contentFormat)
         : undefined;
     return publishMergeDocument({
       row,
@@ -522,16 +555,9 @@ export function updateDocument(params: {
   });
   tx();
 
-  markDirty(row.document_id);
-  process.nextTick(() => {
-    try {
-      rebuildDocument(row.document_id);
-    } catch (err) {
-      // ignore
-    }
-  });
+  scheduleFtsIfNeeded(row.file_type, row.document_id);
 
-  scheduleGraphLifecycle(() =>
+  scheduleGraphIfExtractable(row.file_type, () =>
     onArticlePublished({
       domainId: row.domain_id,
       documentId: row.document_id,
@@ -589,10 +615,10 @@ export function removeDocument(params: {
   });
   tx();
   deleteDocumentFile(row.domain_id, row.relative_path);
-  // 从全文索引中移除
+  // 从全文索引中移除（非 fts 类型也安全 no-op）
   removeIndex(row.document_id);
 
-  scheduleGraphLifecycle(() => onArticleDeleted(hook));
+  scheduleGraphIfExtractable(row.file_type, () => onArticleDeleted(hook));
 }
 
 // ============================================================
@@ -704,16 +730,9 @@ export function moveDocument(params: {
     throw err;
   }
 
-  markDirty(row.document_id);
-  process.nextTick(() => {
-    try {
-      rebuildDocument(row.document_id);
-    } catch {
-      // 定时器会再扫 dirty
-    }
-  });
+  scheduleFtsIfNeeded(row.file_type, row.document_id);
 
-  scheduleGraphLifecycle(() =>
+  scheduleGraphIfExtractable(row.file_type, () =>
     onArticleMoved({
       domainId: row.domain_id,
       documentId: row.document_id,
@@ -804,7 +823,7 @@ export function removeFolder(params: {
     } catch {
       // 盘上可能已不存在
     }
-    if (doc.file_type === "md") {
+    if (getPolicy(doc.file_type as any)?.ftsIndex) {
       removeIndex(doc.document_id);
     }
   }
@@ -1092,16 +1111,9 @@ function publishMergeDocument(params: {
   });
   tx();
 
-  markDirty(row.document_id);
-  process.nextTick(() => {
-    try {
-      rebuildDocument(row.document_id);
-    } catch {
-      // ignore
-    }
-  });
+  scheduleFtsIfNeeded(row.file_type, row.document_id);
 
-  scheduleGraphLifecycle(() =>
+  scheduleGraphIfExtractable(row.file_type, () =>
     onArticlePublished({
       domainId: row.domain_id,
       documentId: row.document_id,

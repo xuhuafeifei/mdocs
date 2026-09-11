@@ -10,6 +10,8 @@ import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access
 import { canReadDocument, DocumentError, type DomainAccessInfo } from "../access/access-control.js";
 import { getConfig } from "../config/index.js";
 import { FOLDER_DESC_FILENAME } from "../../shared/folderDesc.js";
+import { getPolicy } from "../../shared/file-type-policy.js";
+import type { FileType } from "../../shared/file-types.js";
 import type {
   FolderSubtreeNode,
   TreeFolderNode,
@@ -138,7 +140,7 @@ function projectSubtree(nodes: TreeNode[]): FolderSubtreeNode[] {
  *
  * 步骤：
  * 1. 为所有 dir 创建文件夹节点，document_id → TreeFolderNode 映射
- * 2. 处理 md：___desc___.md 挂载到父文件夹，普通文档挂在父文件夹下
+ * 2. 处理文章叶子：folder_desc 挂到父文件夹；md/html 等 treeVisible 类型挂到树上
  * 3. 将文件夹挂在各自的父文件夹下
  * 4. 对根节点和子节点递归排序
  */
@@ -188,13 +190,19 @@ function buildTreeFromRows(rows: DocumentRow[], visitorId: string | null): TreeN
     }
   }
 
-  // 第三步：处理 md 和 folder_desc 类型
+  // 第三步：处理叶子（md / html / folder_desc …），读政策 treeInclude
   for (const row of rows) {
-    if (row.file_type !== "md" && row.file_type !== "folder_desc") continue;
+    if (row.file_type === "dir") continue;
+    const policy = getPolicy(row.file_type as FileType);
+    if (!policy?.treeInclude) continue;
+
     const leafName = row.relative_path.split("/").pop()!;
 
-    if (leafName.toLowerCase() === FOLDER_DESC_FILENAME.toLowerCase()) {
-      // 描述文档：挂载到父文件夹
+    if (
+      row.file_type === "folder_desc" ||
+      leafName.toLowerCase() === FOLDER_DESC_FILENAME.toLowerCase()
+    ) {
+      // 描述文档：挂载到父文件夹（不作为独立树节点）
       if (row.parent_id) {
         const parent = folderById.get(row.parent_id);
         if (parent) {
@@ -203,8 +211,8 @@ function buildTreeFromRows(rows: DocumentRow[], visitorId: string | null): TreeN
           if (t) parent.folderDisplayName = t;
         }
       }
-    } else {
-      // 普通文档
+    } else if (policy.treeVisible) {
+      // 普通文档（md / html 等）
       const node: TreeNode = {
         type: "document",
         name: leafName,
@@ -228,7 +236,6 @@ function buildTreeFromRows(rows: DocumentRow[], visitorId: string | null): TreeN
       }
     }
   }
-
   // 递归排序
   for (const node of roots) {
     if (node.type === "folder") sortFolder(node);

@@ -37,7 +37,7 @@ import {
   induceConceptRelations as aiInduceConceptRelations,
 } from "./graph/llm-chains.js";
 import { FILE_TYPE } from "../../shared/file-types.js";
-import { graphWalkIncludeTypes } from "../../shared/file-type-policy.js";
+import { getPolicy, graphWalkIncludeTypes } from "../../shared/file-type-policy.js";
 import type { TreeNode, FolderSubtreeNode } from "../../shared/types/tree.js";
 import {
   getDirGraphPayload,
@@ -131,12 +131,15 @@ export async function buildDomainGraph(
   console.log(`[Graph] 开始构建域级图谱，domainId: ${domainId}`);
 
   const allDocs = listDocumentsByDomain(db, domainId);
-  const topLevelDocs = allDocs.filter(
-    (d) =>
-      !d.parent_id &&
-      d.file_type !== FILE_TYPE.GRAPH_FILE &&
-      d.file_type !== FILE_TYPE.GRAPH_DIR,
-  );
+  const topLevelDocs = allDocs.filter((d) => {
+    if (d.parent_id) return false;
+    if (d.file_type === FILE_TYPE.GRAPH_FILE || d.file_type === FILE_TYPE.GRAPH_DIR) {
+      return false;
+    }
+    const policy = getPolicy(d.file_type as any);
+    // 结构节点（dir）或可抽取文章才进域顶层 walk；html 等跳过
+    return Boolean(policy?.graphWalkStruct || policy?.graphExtract);
+  });
 
   console.log(`[Graph] 一级节点数量: ${topLevelDocs.length}`);
 

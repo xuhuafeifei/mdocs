@@ -164,6 +164,23 @@ describe("buildDocumentTree parent_id logic", () => {
     });
   });
 
+  it("html 文档挂在根级且 fileType=html", () => {
+    createDocument({
+      actorVisitorId: OWNER,
+      fileName: "untitled.html",
+      content: "<p>hi</p>",
+      domainId: "default",
+      fileType: "html",
+    });
+    const tree = buildDocumentTree("default", OWNER);
+    expect(tree).toHaveLength(1);
+    expect(tree[0]).toMatchObject({
+      type: "document",
+      name: "untitled.html",
+      fileType: "html",
+    });
+  });
+
   it("文件夹 + 文档：子文档挂在文件夹下", () => {
     const folderId = createFolder("guide");
     createDoc("guide/getting-started.md", "# start", "default", folderId);
