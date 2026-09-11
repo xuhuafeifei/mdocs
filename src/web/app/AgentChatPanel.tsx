@@ -1,8 +1,10 @@
-import { Check, Copy, FileText, History, Maximize2, Minimize2, Network, Plus, X } from "lucide-react";
+import { ArrowDown, Check, Copy, FileText, History, Maximize2, Minimize2, Network, Plus, X } from "lucide-react";
 import {
   forwardRef,
+  memo,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -93,20 +95,20 @@ function MarkdownPre(props: { children?: ReactNode }) {
   return <MarkdownPreWithCopy>{props.children}</MarkdownPreWithCopy>;
 }
 
-function AgentMarkdown(props: { children: string }) {
+/** 模块级稳定引用：避免输入框改 state 时 components 换新导致 Mermaid 卸载重挂 */
+const agentMarkdownComponents = {
+  pre: ({ children }: { children?: ReactNode }) => <MarkdownPre>{children}</MarkdownPre>,
+};
+
+const AgentMarkdown = memo(function AgentMarkdown(props: { children: string }) {
   return (
     <div className="mdocs-agent-panel-md">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          pre: ({ children }) => <MarkdownPre>{children}</MarkdownPre>,
-        }}
-      >
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={agentMarkdownComponents}>
         {props.children}
       </ReactMarkdown>
     </div>
   );
-}
+});
 
 /** 当轮流式时间线；不落盘，历史重开无 blocks 则只显示 content */
 type AssistantBlock =
@@ -535,6 +537,7 @@ export const AgentChatPanel = forwardRef<
   const idRef = useRef(0);
   /** 用户是否贴在底部；上滑阅读时为 false，不再强制滚 */
   const stickToBottomRef = useRef(true);
+  const [showJumpBottom, setShowJumpBottom] = useState(false);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
@@ -554,21 +557,45 @@ export const AgentChatPanel = forwardRef<
     return `${prefix}-${idRef.current}`;
   }
 
-  function isNearBottom(el: HTMLElement, threshold = 48): boolean {
-    return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+  /** 距底部超过该像素时显示「置底」 */
+  const JUMP_BOTTOM_GAP = 120;
+
+  function distanceFromBottom(el: HTMLElement): number {
+    return el.scrollHeight - el.scrollTop - el.clientHeight;
+  }
+
+  function scrollToBottom() {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    setShowJumpBottom(false);
   }
 
   function scrollToBottomIfStuck() {
-    const el = listRef.current;
-    if (!el || !stickToBottomRef.current) return;
-    el.scrollTop = el.scrollHeight;
+    if (!stickToBottomRef.current) return;
+    scrollToBottom();
   }
 
   function onListScroll() {
     const el = listRef.current;
     if (!el) return;
-    stickToBottomRef.current = isNearBottom(el);
+    const gap = distanceFromBottom(el);
+    stickToBottomRef.current = gap <= 48;
+    setShowJumpBottom(gap > JUMP_BOTTOM_GAP);
   }
+
+  function jumpToBottom() {
+    stickToBottomRef.current = true;
+    scrollToBottom();
+  }
+
+  /** 消息更新后立刻贴底（回车发送 / 流式增量） */
+  useLayoutEffect(() => {
+    scrollToBottomIfStuck();
+    const el = listRef.current;
+    if (!el) return;
+    setShowJumpBottom(distanceFromBottom(el) > JUMP_BOTTOM_GAP);
+  }, [messages]);
 
   async function refreshSessions() {
     setSessionsLoading(true);
@@ -772,7 +799,10 @@ export const AgentChatPanel = forwardRef<
     setSending(true);
     setStreamError(null);
     setHistoryOpen(false);
-    requestAnimationFrame(() => scrollToBottomIfStuck());
+    requestAnimationFrame(() => {
+      scrollToBottom();
+      requestAnimationFrame(scrollToBottom);
+    });
 
     try {
       let hadError = false;
@@ -1143,11 +1173,12 @@ export const AgentChatPanel = forwardRef<
         </div>
       ) : (
         <div className="mdocs-agent-panel-body">
-          <div
-            className="mdocs-agent-panel-welcome"
-            ref={listRef}
-            onScroll={onListScroll}
-          >
+          <div className="mdocs-agent-panel-scroll-wrap">
+            <div
+              className="mdocs-agent-panel-welcome"
+              ref={listRef}
+              onScroll={onListScroll}
+            >
             {messages.length === 0 ? (
               <>
                 <p className="mdocs-agent-panel-hello">你好，我是 mdocs 智能助手</p>
@@ -1418,6 +1449,19 @@ export const AgentChatPanel = forwardRef<
                 ))}
               </div>
             )}
+          </div>
+            {showJumpBottom ? (
+              <button
+                type="button"
+                className="mdocs-chat-jump-bottom"
+                onClick={jumpToBottom}
+                title="回到底部"
+                aria-label="回到底部"
+              >
+                <ArrowDown size={14} strokeWidth={2} aria-hidden />
+                <span>置底</span>
+              </button>
+            ) : null}
           </div>
           {streamError ? (
             <p className="mdocs-agent-panel-status-warn">{streamError}</p>

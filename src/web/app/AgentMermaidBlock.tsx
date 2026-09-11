@@ -1,7 +1,9 @@
 import { Check, Code2, Copy, Network, X, ZoomIn, ZoomOut } from "lucide-react";
 import {
+  memo,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -59,6 +61,24 @@ function loadMermaid() {
     });
   }
   return mermaidInit;
+}
+
+/** 同源 SVG 缓存：父级重挂载时避免闪「渲染中」 */
+const SVG_CACHE_MAX = 32;
+const svgCache = new Map<string, string>();
+
+function svgCacheGet(source: string): string | null {
+  return svgCache.get(source) ?? null;
+}
+
+function svgCacheSet(source: string, svg: string): void {
+  if (svgCache.has(source)) svgCache.delete(source);
+  svgCache.set(source, svg);
+  while (svgCache.size > SVG_CACHE_MAX) {
+    const oldest = svgCache.keys().next().value;
+    if (oldest == null) break;
+    svgCache.delete(oldest);
+  }
 }
 
 function clampScale(n: number): number {
@@ -212,16 +232,16 @@ function MermaidFloatViewer(props: { svg: string; onClose: () => void }) {
   );
 }
 
-export function AgentMermaidBlock(props: { source: string; codeChildren?: ReactNode }) {
+function _AgentMermaidBlock(props: { source: string; codeChildren?: ReactNode }) {
   const reactId = useId().replace(/:/g, "");
   const [mode, setMode] = useState<ViewMode>("diagram");
-  const [svg, setSvg] = useState<string | null>(null);
+  const [svg, setSvg] = useState<string | null>(() => svgCacheGet(props.source.trim()));
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [floatOpen, setFloatOpen] = useState(false);
   const copyTimerRef = useRef<number | null>(null);
-  const renderGenRef = useRef(0);
   const source = props.source.trim();
+  const stableSource = useMemo(() => source, [source]);
 
   useEffect(() => {
     return () => {
@@ -231,25 +251,33 @@ export function AgentMermaidBlock(props: { source: string; codeChildren?: ReactN
 
   useEffect(() => {
     if (mode !== "diagram") return;
-    if (!source) {
+    if (!stableSource) {
       setSvg(null);
       setError(null);
       return;
     }
 
-    const gen = ++renderGenRef.current;
+    const cached = svgCacheGet(stableSource);
+    if (cached) {
+      setSvg(cached);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
           const mermaid = await loadMermaid();
-          if (gen !== renderGenRef.current) return;
-          const id = `mdocs-agent-mmd-${reactId}-${gen}`;
-          const { svg: nextSvg } = await mermaid.render(id, source);
-          if (gen !== renderGenRef.current) return;
+          if (cancelled) return;
+          const id = `mdocs-agent-mmd-${reactId}-${Date.now()}`;
+          const { svg: nextSvg } = await mermaid.render(id, stableSource);
+          if (cancelled) return;
+          svgCacheSet(stableSource, nextSvg);
           setSvg(nextSvg);
           setError(null);
         } catch (err) {
-          if (gen !== renderGenRef.current) return;
+          if (cancelled) return;
           setSvg(null);
           setError(err instanceof Error ? err.message : "Mermaid 渲染失败");
         }
@@ -257,10 +285,10 @@ export function AgentMermaidBlock(props: { source: string; codeChildren?: ReactN
     }, 200);
 
     return () => {
+      cancelled = true;
       window.clearTimeout(timer);
-      renderGenRef.current += 1;
     };
-  }, [mode, source, reactId]);
+  }, [mode, stableSource, reactId]);
 
   async function onCopy() {
     if (!source) return;
@@ -363,3 +391,5 @@ export function AgentMermaidBlock(props: { source: string; codeChildren?: ReactN
     </div>
   );
 }
+
+export const AgentMermaidBlock = memo(_AgentMermaidBlock, (prev, next) => prev.source === next.source);
