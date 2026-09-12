@@ -1,8 +1,7 @@
 /**
  * 访客注册/登录弹窗
- * 顶部两个 Tab：注册、登录
- * 注册：两步流 - 1. 输入名称  2. 输入密码（可选）
- * 登录：两种方式 - 用户名+密码 / 恢复码
+ * 主界面为登录，下方「没有账号？点击注册」进入注册两步流。
+ * 注册完成后自动切回登录，让用户用刚设的密码登录。
  */
 import { useState } from "react";
 import { useI18n } from "../i18n";
@@ -18,11 +17,10 @@ export function VisitorRegisterDialog(props: {
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  // 顶部 Tab：注册/登录
-  const [tab, setTab] = useState<"register" | "login">("register");
+  // 当前页面：login | register | register-password
+  const [page, setPage] = useState<"login" | "register" | "register-password">("login");
 
   // ===== 注册相关 state =====
-  const [registerStep, setRegisterStep] = useState<1 | 2>(1);
   const [registerName, setRegisterName] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
 
@@ -32,10 +30,8 @@ export function VisitorRegisterDialog(props: {
   const [loginPassword, setLoginPassword] = useState("");
   const [recoveryCode, setRecoveryCode] = useState("");
 
-  /**
-   * 注册第一步：校验名称（不真正调用接口，只是切到第二步）
-   */
-  function goToStep2(e: React.FormEvent): void {
+  /** 注册第一步：校验名称，进入密码页 */
+  function goToPassword(e: React.FormEvent): void {
     e.preventDefault();
     const trimmed = registerName.trim();
     if (!trimmed) {
@@ -43,12 +39,10 @@ export function VisitorRegisterDialog(props: {
       return;
     }
     setLocalError(null);
-    setRegisterStep(2);
+    setPage("register-password");
   }
 
-  /**
-   * 注册第二步：提交名称和密码（可选），真正调用注册接口
-   */
+  /** 注册第二步：提交名称和密码，成功后切回登录 */
   async function submitRegister(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setBusy(true);
@@ -56,18 +50,22 @@ export function VisitorRegisterDialog(props: {
     try {
       const pwd = registerPassword.trim();
       await props.onSubmit(registerName.trim(), pwd || undefined);
+      // 注册成功 → 清空表单 → 切回登录
+      setRegisterName("");
+      setRegisterPassword("");
+      setPage("login");
+      setLoginMode("password");
+      setLoginName(registerName.trim());
+      setLoginPassword(pwd || "");
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : String(err));
-      // 出错了切回第一步，让用户重新输入名称
-      setRegisterStep(1);
+      setPage("register");
     } finally {
       setBusy(false);
     }
   }
 
-  /**
-   * 密码登录
-   */
+  /** 密码登录 */
   async function handlePasswordLogin(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     const name = loginName.trim();
@@ -89,9 +87,7 @@ export function VisitorRegisterDialog(props: {
     }
   }
 
-  /**
-   * 恢复码登录
-   */
+  /** 恢复码登录 */
   async function handleRecover(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     const code = recoveryCode.trim();
@@ -114,146 +110,23 @@ export function VisitorRegisterDialog(props: {
 
   const error = localError ?? props.error;
 
-  // 切换 Tab 时清空错误
-  function switchTab(newTab: "register" | "login") {
+  function switchToRegister() {
     setLocalError(null);
-    setTab(newTab);
+    setRegisterName("");
+    setRegisterPassword("");
+    setPage("register");
+  }
+
+  function switchToLogin() {
+    setLocalError(null);
+    setPage("login");
   }
 
   return (
     <div className="mdocs-dialog-backdrop">
       <div className="mdocs-dialog card" style={{ maxWidth: 420 }}>
-        {/* 顶部 Tab 栏 */}
-        <div
-          style={{
-            display: "flex",
-            borderBottom: "1px solid var(--mdocs-border)",
-            marginBottom: 16,
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => switchTab("register")}
-            style={{
-              flex: 1,
-              padding: "12px",
-              border: "none",
-              background: tab === "register" ? "var(--mdocs-bg)" : "none",
-              color: tab === "register" ? "var(--mdocs-text)" : "var(--mdocs-text-secondary)",
-              cursor: "pointer",
-              fontWeight: tab === "register" ? 600 : 400,
-              borderBottom: tab === "register" ? "2px solid var(--mdocs-accent)" : "none",
-            }}
-          >
-            注册
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTab("login")}
-            style={{
-              flex: 1,
-              padding: "12px",
-              border: "none",
-              background: tab === "login" ? "var(--mdocs-bg)" : "none",
-              color: tab === "login" ? "var(--mdocs-text)" : "var(--mdocs-text-secondary)",
-              cursor: "pointer",
-              fontWeight: tab === "login" ? 600 : 400,
-              borderBottom: tab === "login" ? "2px solid var(--mdocs-accent)" : "none",
-            }}
-          >
-            登录
-          </button>
-        </div>
-
-        {/* ========== Tab 1：注册 ========== */}
-        {tab === "register" && (
-          <>
-            {registerStep === 1 ? (
-              <>
-                <h1>{t("welcomeTitle")}</h1>
-                <p>{t("welcomeDesc")}</p>
-                <form onSubmit={goToStep2}>
-                  <input
-                    autoFocus
-                    placeholder={t("visitorNamePlaceholder")}
-                    value={registerName}
-                    onChange={(e) => setRegisterName(e.target.value)}
-                    maxLength={60}
-                  />
-                  {error && <div className="mdocs-dialog-error">{error}</div>}
-                  <button type="submit" className="primary" disabled={busy}>
-                    下一步
-                  </button>
-                </form>
-                <p style={{ marginTop: 16, textAlign: "center" }}>
-                  <button
-                    type="button"
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "var(--mdocs-accent)",
-                      cursor: "pointer",
-                      fontSize: "0.875rem",
-                      textDecoration: "underline",
-                      padding: 0,
-                    }}
-                    onClick={() => switchTab("login")}
-                  >
-                    已有账号？点击登录
-                  </button>
-                </p>
-              </>
-            ) : (
-              <>
-                <h1>设置密码（可选）</h1>
-                <p style={{ marginBottom: 8 }}>
-                  设置密码后，你可以在其他浏览器或设备上使用「用户名+密码」登录。
-                </p>
-                <p style={{ color: "var(--mdocs-text-secondary)", fontSize: "0.875rem", marginBottom: 16 }}>
-                  留空不设置密码也能正常使用，但只能在当前浏览器操作。
-                </p>
-                <form onSubmit={submitRegister}>
-                  <input
-                    autoFocus
-                    type="password"
-                    placeholder="设置密码（至少 4 位）"
-                    value={registerPassword}
-                    onChange={(e) => setRegisterPassword(e.target.value)}
-                    minLength={4}
-                  />
-                  {error && <div className="mdocs-dialog-error">{error}</div>}
-                  <button
-                    type="submit"
-                    className="primary"
-                    disabled={busy}
-                    style={{ marginTop: 8 }}
-                  >
-                    {busy ? t("creating") : "完成注册"}
-                  </button>
-                </form>
-                <p style={{ marginTop: 16, textAlign: "center" }}>
-                  <button
-                    type="button"
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "var(--mdocs-text-secondary)",
-                      cursor: "pointer",
-                      fontSize: "0.875rem",
-                      padding: 0,
-                    }}
-                    onClick={() => setRegisterStep(1)}
-                  >
-                    ← 返回上一步
-                  </button>
-                </p>
-              </>
-            )}
-          </>
-        )}
-
-        {/* ========== Tab 2：登录 ========== */}
-        {tab === "login" && (
+        {/* ========== 登录 ========== */}
+        {page === "login" && (
           <>
             {/* 登录方式子 Tab */}
             <div
@@ -327,23 +200,6 @@ export function VisitorRegisterDialog(props: {
                     {busy ? "验证中…" : "登录"}
                   </button>
                 </form>
-                <p style={{ marginTop: 16, textAlign: "center" }}>
-                  <button
-                    type="button"
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "var(--mdocs-accent)",
-                      cursor: "pointer",
-                      fontSize: "0.875rem",
-                      textDecoration: "underline",
-                      padding: 0,
-                    }}
-                    onClick={() => switchTab("register")}
-                  >
-                    没有账号？去注册
-                  </button>
-                </p>
               </>
             ) : (
               <>
@@ -365,6 +221,111 @@ export function VisitorRegisterDialog(props: {
                 </form>
               </>
             )}
+
+            {/* 切换到注册 */}
+            <p style={{ marginTop: 16, textAlign: "center" }}>
+              <button
+                type="button"
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--mdocs-accent)",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
+                  textDecoration: "underline",
+                  padding: 0,
+                }}
+                onClick={switchToRegister}
+              >
+                没有账号？点击注册
+              </button>
+            </p>
+          </>
+        )}
+
+        {/* ========== 注册第一步：输入名称 ========== */}
+        {page === "register" && (
+          <>
+            <h1>{t("welcomeTitle")}</h1>
+            <p>{t("welcomeDesc")}</p>
+            <form onSubmit={goToPassword}>
+              <input
+                autoFocus
+                placeholder={t("visitorNamePlaceholder")}
+                value={registerName}
+                onChange={(e) => setRegisterName(e.target.value)}
+                maxLength={60}
+              />
+              {error && <div className="mdocs-dialog-error">{error}</div>}
+              <button type="submit" className="primary" disabled={busy}>
+                下一步
+              </button>
+            </form>
+            <p style={{ marginTop: 16, textAlign: "center" }}>
+              <button
+                type="button"
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--mdocs-accent)",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
+                  textDecoration: "underline",
+                  padding: 0,
+                }}
+                onClick={switchToLogin}
+              >
+                已有账号？点击登录
+              </button>
+            </p>
+          </>
+        )}
+
+        {/* ========== 注册第二步：设置密码 ========== */}
+        {page === "register-password" && (
+          <>
+            <h1>设置密码（可选）</h1>
+            <p style={{ marginBottom: 8 }}>
+              设置密码后，你可以在其他浏览器或设备上使用「用户名+密码」登录。
+            </p>
+            <p style={{ color: "var(--mdocs-text-secondary)", fontSize: "0.875rem", marginBottom: 16 }}>
+              留空不设置密码也能正常使用，但只能在当前浏览器操作。
+            </p>
+            <form onSubmit={submitRegister}>
+              <input
+                autoFocus
+                type="password"
+                placeholder="设置密码（至少 4 位）"
+                value={registerPassword}
+                onChange={(e) => setRegisterPassword(e.target.value)}
+                minLength={4}
+              />
+              {error && <div className="mdocs-dialog-error">{error}</div>}
+              <button
+                type="submit"
+                className="primary"
+                disabled={busy}
+                style={{ marginTop: 8 }}
+              >
+                {busy ? t("creating") : "完成注册"}
+              </button>
+            </form>
+            <p style={{ marginTop: 16, textAlign: "center" }}>
+              <button
+                type="button"
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--mdocs-text-secondary)",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
+                  padding: 0,
+                }}
+                onClick={() => setPage("register")}
+              >
+                ← 返回上一步
+              </button>
+            </p>
           </>
         )}
       </div>
