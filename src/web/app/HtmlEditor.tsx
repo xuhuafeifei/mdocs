@@ -98,7 +98,7 @@ export function HtmlEditor(props: HtmlEditorProps) {
   useEffect(() => {
     setContent(props.initialContent);
     setDisplayName(props.initialDisplayName);
-    setPreviewMode(false);
+    setPreviewMode(true);
   }, [documentId]);
 
   useEffect(() => {
@@ -424,6 +424,7 @@ export function HtmlEditor(props: HtmlEditorProps) {
           onToggleDocInfo={() => setShowDocInfoMenu(!showDocInfoMenu)}
           docInfoMenuRef={docInfoMenuRef}
           readerChrome={props.readerChrome}
+          readerHeaderDocked={props.readerChrome}
           onOpenMobileNav={props.onOpenMobileNav}
           readerMoreOpen={showReaderMoreMenu}
           onToggleReaderMore={() => setShowReaderMoreMenu((o) => !o)}
