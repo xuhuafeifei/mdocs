@@ -37,3 +37,81 @@
   font-family: inherit;
   font-size: inherit;
 }
+
+/* 编辑/预览滑动开关 */
+.mdocs-editor-mode-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  height: 28px;
+}
+
+.mdocs-editor-mode-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.mdocs-editor-mode-toggle-slider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 120px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--mdocs-bg);
+  border: 1px solid var(--mdocs-border);
+  transition: background 0.2s;
+  overflow: hidden;
+}
+
+.mdocs-editor-mode-toggle-label {
+  position: absolute;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 28px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: color 0.2s;
+  z-index: 1;
+}
+
+.mdocs-editor-mode-toggle-label--left {
+  left: 0;
+  color: var(--mdocs-text-secondary, #6b7280);
+}
+
+.mdocs-editor-mode-toggle-label--right {
+  right: 0;
+  color: var(--mdocs-text-secondary, #6b7280);
+}
+
+/* 滑块：选中预览（右侧）时滑到右边 */
+.mdocs-editor-mode-toggle-slider::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 56px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--mdocs-primary, #1677ff);
+  transition: transform 0.2s ease;
+  z-index: 0;
+}
+
+.mdocs-editor-mode-toggle input:checked + .mdocs-editor-mode-toggle-slider::before {
+  transform: translateX(58px);
+}
+
+/* 当前模式文字变白 */
+.mdocs-editor-mode-toggle input:not(:checked) + .mdocs-editor-mode-toggle-slider .mdocs-editor-mode-toggle-label--left,
+.mdocs-editor-mode-toggle input:checked + .mdocs-editor-mode-toggle-slider .mdocs-editor-mode-toggle-label--right {
+  color: #fff;
+}

@@ -488,22 +488,17 @@ export function HtmlEditor(props: HtmlEditorProps) {
           }
           leadingExtra={
             props.canEdit && !props.readerChrome ? (
-              <>
-                <button
-                  type="button"
-                  className={!previewMode ? "primary" : "secondary"}
-                  onClick={() => setPreviewMode(false)}
-                >
-                  {t("edit")}
-                </button>
-                <button
-                  type="button"
-                  className={previewMode ? "primary" : "secondary"}
-                  onClick={() => setPreviewMode(true)}
-                >
-                  {t("preview")}
-                </button>
-              </>
+              <label className="mdocs-editor-mode-toggle" aria-label={previewMode ? t("preview") : t("edit")}>
+                <input
+                  type="checkbox"
+                  checked={previewMode}
+                  onChange={() => setPreviewMode((p) => !p)}
+                />
+                <span className="mdocs-editor-mode-toggle-slider">
+                  <span className="mdocs-editor-mode-toggle-label mdocs-editor-mode-toggle-label--left">{t("edit")}</span>
+                  <span className="mdocs-editor-mode-toggle-label mdocs-editor-mode-toggle-label--right">{t("preview")}</span>
+                </span>
+              </label>
             ) : null
           }
         />
