@@ -401,7 +401,7 @@ export function HtmlEditor(props: HtmlEditorProps) {
           onDomainsChange={props.onDomainsChange}
           canEdit={props.canEdit}
           editing={editing}
-          onEnterEdit={() => setPreviewMode(false)}
+          // 分段控制器已提供编辑/预览切换，不传 onEnterEdit 避免顶栏右侧出现重复的编辑按钮
           onAiWrite={props.onAiWrite}
           syncBehind={props.syncBehind}
           onSyncClick={props.onSyncClick}
