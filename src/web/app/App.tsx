@@ -9,7 +9,7 @@
  * 6. 全局消息提示与冲突处理
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Code, File, FileText, Folder, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
+import { BookOpen, Code, Code2, File, FileText, Folder, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -1608,17 +1608,32 @@ export function App() {
                     <span>{t("brand")}</span>
                   </button>
                 ) : null}
+                <div className="mdocs-welcome-icon">
+                  <Code2 size={64} strokeWidth={1} opacity={0.15} />
+                </div>
                 <h1>{t("brand")}</h1>
-                <p className="muted mdocs-welcome-lead">
-                  {/* 根据文档树是否为空显示不同提示 */}
-                  {tree.length === 0 ? t("noDocsInDomain") : t("createDocToStart")}
-                </p>
+                <p className="mdocs-welcome-lead">{t("createDocToStart")}</p>
+                <div className="mdocs-welcome-actions">
+                  <button type="button" className="primary" onClick={() => openNewDocumentModal()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <File size={16} strokeWidth={1.5} />
+                    {t("newDocument")}
+                  </button>
+                  <button type="button" className="secondary" onClick={() => openNewFolderModal()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Folder size={16} strokeWidth={1.5} />
+                    {t("newFolder")}
+                  </button>
+                  {!isDemoMode() ? (
+                    <button type="button" className="secondary" onClick={() => openAiWriteBlank()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <img src={deepseekLogoUrl} alt="" width={16} height={16} style={{ display: "block" }} />
+                      AI 帮写
+                    </button>
+                  ) : null}
+                </div>
                 <div className="mdocs-welcome-domain">
                   <label className="muted mdocs-welcome-domain-label">
                     {t("domainLabel")}
                   </label>
                   <DomainSelect
-                    // 如果域列表为空，使用 fallback 默认域，避免下拉显示空白
                     domains={domains.length ? domains : [{ domainId: "default", domainName: t("defaultDomain"), permission: "", creatorVisitorId: "", docCount: 0 }]}
                     value={currentDomainId}
                     onChange={(domainId) => {
@@ -1636,22 +1651,6 @@ export function App() {
                     ariaLabel={t("domainLabel")}
                     localizeName={(name: string) => localizeDomainName(name, lang, t)}
                   />
-                </div>
-                <div className="mdocs-welcome-actions">
-                  <button type="button" className="primary" onClick={() => openNewDocumentModal()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <File size={16} strokeWidth={1.5} />
-                    {t("newDocument")}
-                  </button>
-                  <button type="button" className="secondary" onClick={() => openNewFolderModal()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <Folder size={16} strokeWidth={1.5} />
-                    {t("newFolder")}
-                  </button>
-                  {!isDemoMode() ? (
-                    <button type="button" className="secondary" onClick={() => openAiWriteBlank()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <img src={deepseekLogoUrl} alt="" width={16} height={16} style={{ display: "block" }} />
-                      AI 帮写
-                    </button>
-                  ) : null}
                 </div>
               </div>
             )}

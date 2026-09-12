@@ -26,6 +26,11 @@ export interface DocChromeProps {
   canEdit: boolean;
   editing: boolean;
   onEnterEdit?: () => void;
+  /**
+   * html：发布/删除不跟预览开关走；也不再显示顶栏「进入编辑」。
+   * md 保持「先进入编辑才出现发布/删除」。
+   */
+  actionsAlwaysVisible?: boolean;
   onAiWrite?: () => void;
   syncBehind?: boolean;
   onSyncClick?: () => void;
@@ -64,6 +69,9 @@ export function DocChrome(props: DocChromeProps) {
   const policy = getPolicy((props.fileType || "md") as FileType);
   const showAiWrite = Boolean(policy?.aiWrite && props.onAiWrite);
   const showComments = Boolean(policy?.comments && props.onToggleComments);
+  const showDocActions =
+    props.canEdit && (props.editing || Boolean(props.actionsAlwaysVisible));
+  const titleLocked = !showDocActions;
 
   const domains = props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY];
 
@@ -116,6 +124,7 @@ export function DocChrome(props: DocChromeProps) {
           ariaLabel={t("currentDomainAria")}
           localizeName={(name: string) => localizeDomainName(name, lang, t)}
         />
+        {props.leadingExtra}
         {props.canEdit && props.onPublish ? (
           <button
             type="button"
@@ -193,7 +202,7 @@ export function DocChrome(props: DocChromeProps) {
         {props.onToggleBookmark ? (
           <button
             type="button"
-            className="secondary mdocs-tooltip mdocs-tooltip-bottom"
+            className="ghost mdocs-tooltip mdocs-tooltip-bottom"
             onClick={() => props.onToggleBookmark?.()}
             disabled={props.bookmarkBusy}
             data-tooltip={props.isBookmarked ? "取消收藏" : "收藏"}
@@ -280,7 +289,7 @@ export function DocChrome(props: DocChromeProps) {
           {showComments ? (
             <button
               type="button"
-              className="secondary mdocs-tooltip mdocs-tooltip-bottom"
+              className="ghost mdocs-tooltip mdocs-tooltip-bottom"
               onClick={() => props.onToggleComments?.()}
               data-tooltip="评论"
               style={{

@@ -43,7 +43,7 @@
 }
 
 .mdocs-sidebar {
-  background: var(--mdocs-surface);
+  background: #fafafa;
   border-right: 1px solid var(--mdocs-border);
   display: flex;
   flex-direction: column;
@@ -259,7 +259,7 @@
   align-items: center;
   width: 100%;
   text-align: left;
-  padding: 4px 10px;
+  padding: 6px 12px;
   border-radius: 6px;
   background: transparent;
   border: 1px solid transparent;
@@ -274,9 +274,11 @@
 }
 
 .mdocs-tree-row.active {
-  background: var(--mdocs-accent-soft);
-  border-color: var(--mdocs-accent-secondary);
+  background: #f2f3f5;
   border-left: 3px solid var(--mdocs-accent);
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
 }
 
 /* 图谱焦点高亮：与正文选中区分（紫色系 + 左侧圆点标） */
@@ -3179,6 +3181,7 @@ button.small {
   height: 100%;
   overflow: hidden;
   position: relative;
+  background: #ffffff;
 }
 
 .mdocs-empty {
@@ -3929,6 +3932,14 @@ strong.label {
   justify-content: center;
   gap: 16px;
   padding: 32px;
+}
+
+.mdocs-welcome-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mdocs-text-disabled);
+  margin-bottom: 8px;
 }
 
 .mdocs-welcome h1 {
