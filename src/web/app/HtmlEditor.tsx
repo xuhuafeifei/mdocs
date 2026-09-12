@@ -68,7 +68,7 @@ export function HtmlEditor(props: HtmlEditorProps) {
 
   const [content, setContent] = useState(props.initialContent);
   const [displayName, setDisplayName] = useState(props.initialDisplayName);
-  const [previewMode, setPreviewMode] = useState(false);
+  const [previewMode, setPreviewMode] = useState(true);
   const [busy, setBusy] = useState(false);
   const [draftExists, setDraftExists] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
@@ -449,6 +449,25 @@ export function HtmlEditor(props: HtmlEditorProps) {
                 />
                 <span>{isBookmarked ? t("bookmarkRemove") : t("bookmarkAdd")}</span>
               </button>
+              <div className="mdocs-reader-more-divider" />
+              {/* 手机端预览/编辑切换 */}
+              <button
+                type="button"
+                className="mdocs-reader-more-item"
+                disabled={!previewMode}
+                onClick={() => { setPreviewMode(false); closeMenus(); }}
+              >
+                {t("edit")}
+              </button>
+              <button
+                type="button"
+                className="mdocs-reader-more-item"
+                disabled={previewMode}
+                onClick={() => { setPreviewMode(true); closeMenus(); }}
+              >
+                {t("preview")}
+              </button>
+              <div className="mdocs-reader-more-divider" />
               {props.canEdit ? (
                 <button
                   type="button"
