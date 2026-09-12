@@ -3774,7 +3774,7 @@ strong.label {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  z-index: 40;
+  z-index: 200;
   animation: backdrop-in 0.2s ease;
 }
 
