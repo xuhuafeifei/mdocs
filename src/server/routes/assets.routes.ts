@@ -75,31 +75,9 @@ const CONTENT_TYPE_BY_EXT: Record<string, string> = {
   ".csv": "text/csv; charset=utf-8",
 };
 
-/** Empty MIME / octet-stream always ok; otherwise must match the extension family. */
-export function isAllowedAssetUpload(originalname: string, mimetype: string): boolean {
-  const ext = path.extname(originalname).toLowerCase();
-  if (!ALLOWED_UPLOAD_EXT.has(ext)) return false;
-  const mime = (mimetype || "").toLowerCase();
-  if (!mime || mime === "application/octet-stream") return true;
-  if (IMAGE_EXT.has(ext)) return mime.startsWith("image/");
-  if (ext === ".zip") return ZIP_MIME.has(mime);
-  if (AUDIO_EXT.has(ext)) return mime.startsWith("audio/");
-  // 浏览器/系统可能给出 application/pdf、application/x-pdf 等
-  if (ext === ".pdf") {
-    return (
-      mime === "application/pdf" ||
-      mime === "application/x-pdf" ||
-      mime === "applications/vnd.pdf" ||
-      mime.endsWith("/pdf")
-    );
-  }
-  if (HTML_EXT.has(ext)) {
-    return mime === "text/html" || mime === "application/xhtml+xml" || mime.startsWith("text/");
-  }
-  if (TEXT_EXT.has(ext)) {
-    return mime.startsWith("text/") || mime === "application/csv";
-  }
-  return false;
+/** 不再限制文件类型：任何文件都可上传。未知扩展名存为 .bin。 */
+export function isAllowedAssetUpload(_originalname: string, _mimetype: string): boolean {
+  return true;
 }
 
 // MIME 类型到扩展名的映射表（远程图片转存）
