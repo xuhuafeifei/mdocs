@@ -543,17 +543,16 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
         <div className="graph-title">
           <span className="graph-icon">🕸️</span>
           <span className="graph-title-text" title={`知识图谱 — ${name}`}>知识图谱 — {name}</span>
-          {onClose && (
-            <button
-              className="graph-btn graph-btn-close"
-              onClick={onClose}
-              title="退出图谱"
-            >
-              <X size={14} />
-            </button>
-          )}
         </div>
         <div className="graph-actions">
+          {onClose && (
+            <button
+              className="graph-btn graph-btn-danger"
+              onClick={onClose}
+            >
+              退出图谱
+            </button>
+          )}
           {/* 层级控制下拉 */}
           <div className="graph-dropdown">
             <button

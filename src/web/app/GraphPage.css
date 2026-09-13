@@ -97,6 +97,18 @@
   background: #4f46e5;
 }
 
+/* 退出图谱红色按钮 */
+.graph-btn-danger {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: white;
+  font-weight: 500;
+}
+
+.graph-btn-danger:hover {
+  background: #dc2626;
+}
+
 /* 下拉菜单容器 */
 .graph-dropdown {
   position: relative;
@@ -472,9 +484,6 @@
     border-bottom: 1px solid #e2e8f0;
   }
 
-  .graph-btn-close {
-    display: inline-flex;
-    margin-left: auto;
   }
 
   .graph-title {
@@ -542,8 +551,4 @@
   }
 }
 
-@media (min-width: 769px) {
-  .graph-btn-close {
-    margin-left: 6px;
-  }
 }
