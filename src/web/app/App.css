@@ -4836,12 +4836,20 @@ strong.label {
   .mdocs-editor-toolbar--float,
   .mdocs-editor-toolbar--docked {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
     width: 100%;
     box-sizing: border-box;
     overflow: visible;
+  }
+
+  /* html：两行堆叠（第一行「导航 + 三角 + 三点」，第二行可折叠操作） */
+  .mdocs-editor-toolbar--float.mdocs-editor-toolbar--stacked,
+  .mdocs-editor-toolbar--docked.mdocs-editor-toolbar--stacked {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
   }
 
   .mdocs-editor-toolbar--float {

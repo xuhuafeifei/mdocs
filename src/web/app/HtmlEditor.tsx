@@ -424,6 +424,7 @@ export function HtmlEditor(props: HtmlEditorProps) {
           onToggleDocInfo={() => setShowDocInfoMenu(!showDocInfoMenu)}
           docInfoMenuRef={docInfoMenuRef}
           readerChrome={props.readerChrome}
+          readerActionsCollapsible
           readerHeaderDocked={props.readerChrome}
           onOpenMobileNav={props.onOpenMobileNav}
           readerMoreOpen={showReaderMoreMenu}
