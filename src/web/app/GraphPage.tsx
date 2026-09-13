@@ -130,6 +130,7 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
   const [showAiSetup, setShowAiSetup] = useState(false);
   const [showDepthMenu, setShowDepthMenu] = useState(false);
   const [showViewMenu, setShowViewMenu] = useState(false);
+  const [showMobileActions, setShowMobileActions] = useState(false);
 
   // 是否"正在处理中"（排队中 / 运行中，都显示进度面板）
   const isProcessing = taskStatus === "running" || taskStatus === "pending";
@@ -540,11 +541,9 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
     <div className="graph-page">
       {/* 顶部工具栏 */}
       <div className="graph-toolbar">
-        <div className="graph-title">
+        <div className="graph-toolbar-left">
           <span className="graph-icon">🕸️</span>
           <span className="graph-title-text" title={`知识图谱 — ${name}`}>知识图谱 — {name}</span>
-        </div>
-        <div className="graph-actions">
           {onClose && (
             <button
               className="graph-btn graph-btn-danger"
@@ -553,103 +552,117 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
               退出图谱
             </button>
           )}
-          {/* 层级控制下拉 */}
-          <div className="graph-dropdown">
-            <button
-              type="button"
-              className="graph-btn"
-              onClick={() => setShowDepthMenu((o) => !o)}
-              onBlur={() => setTimeout(() => setShowDepthMenu(false), 150)}
-            >
-              层级控制 <ChevronDown size={12} />
-            </button>
-            {showDepthMenu && (
-              <div className="graph-dropdown-menu">
-                <button
-                  type="button"
-                  className={`graph-dropdown-item ${globalDepth === 1 ? "active" : ""}`}
-                  onMouseDown={() => { setToolbarDepth(1); setShowDepthMenu(false); }}
-                >
-                  展开一级
-                </button>
-                <button
-                  type="button"
-                  className={`graph-dropdown-item ${globalDepth === 2 ? "active" : ""}`}
-                  onMouseDown={() => { setToolbarDepth(2); setShowDepthMenu(false); }}
-                >
-                  展开到二级
-                </button>
-                <button
-                  type="button"
-                  className={`graph-dropdown-item ${globalDepth === 0 && extraExpandedIds.size === 0 ? "active" : ""}`}
-                  onMouseDown={() => { setToolbarDepth(0); setShowDepthMenu(false); }}
-                >
-                  全部收起
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* 视图设置下拉 */}
-          <div className="graph-dropdown">
-            <button
-              type="button"
-              className="graph-btn"
-              onClick={() => setShowViewMenu((o) => !o)}
-              onBlur={() => setTimeout(() => setShowViewMenu(false), 150)}
-            >
-              <Eye size={14} /> 视图 <ChevronDown size={12} />
-            </button>
-            {showViewMenu && (
-              <div className="graph-dropdown-menu graph-dropdown-menu--right">
-                <label className="graph-dropdown-switch">
-                  <input
-                    type="checkbox"
-                    checked={showOtherEdges}
-                    onChange={(e) => setShowOtherEdges(e.target.checked)}
-                  />
-                  <span>显示其它关系</span>
-                </label>
-                <label className="graph-dropdown-switch">
-                  <input
-                    type="checkbox"
-                    checked={showDocNodes}
-                    onChange={(e) => setShowDocNodes(e.target.checked)}
-                  />
-                  <span>显示 doc 节点</span>
-                </label>
-              </div>
-            )}
-          </div>
-
-          {/* 配置 AI — 幽灵按钮 */}
+        </div>
+        <div className="graph-toolbar-right">
+          {/* 手机端：展开/收起按钮 */}
           <button
-            className="graph-btn graph-btn-ghost"
-            onClick={() => setShowAiSetup(true)}
-            title="配置用于图谱分析的 AI 模型"
+            type="button"
+            className="graph-btn graph-mobile-toggle"
+            onClick={() => setShowMobileActions((o) => !o)}
           >
-            <Settings2 size={14} />
-            配置 AI
+            <ChevronDown size={14} style={{ transform: showMobileActions ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
+            操作
           </button>
+          {/* PC 端直接显示，手机端通过 showMobileActions 控制 */}
+          <div className={`graph-mobile-actions${showMobileActions ? " open" : ""}`}>
+            {/* 层级控制下拉 */}
+            <div className="graph-dropdown">
+              <button
+                type="button"
+                className="graph-btn"
+                onClick={() => setShowDepthMenu((o) => !o)}
+                onBlur={() => setTimeout(() => setShowDepthMenu(false), 150)}
+              >
+                层级控制 <ChevronDown size={12} />
+              </button>
+              {showDepthMenu && (
+                <div className="graph-dropdown-menu graph-dropdown-menu--right">
+                  <button
+                    type="button"
+                    className={`graph-dropdown-item ${globalDepth === 1 ? "active" : ""}`}
+                    onMouseDown={() => { setToolbarDepth(1); setShowDepthMenu(false); }}
+                  >
+                    展开一级
+                  </button>
+                  <button
+                    type="button"
+                    className={`graph-dropdown-item ${globalDepth === 2 ? "active" : ""}`}
+                    onMouseDown={() => { setToolbarDepth(2); setShowDepthMenu(false); }}
+                  >
+                    展开到二级
+                  </button>
+                  <button
+                    type="button"
+                    className={`graph-dropdown-item ${globalDepth === 0 && extraExpandedIds.size === 0 ? "active" : ""}`}
+                    onMouseDown={() => { setToolbarDepth(0); setShowDepthMenu(false); }}
+                  >
+                    全部收起
+                  </button>
+                </div>
+              )}
+            </div>
 
-          {/* 重新生成 — 主操作 */}
-          <button
-            className="graph-btn graph-btn-primary"
-            onClick={handleAnalyze}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 size={14} className="spin" />
-                {taskStatus === "pending" ? formatQueueStatus(taskPosition) : "生成中..."}
-              </>
-            ) : (
-              <>
-                <RefreshCw size={14} />
-                {graphData ? "重新生成" : "生成图谱"}
-              </>
-            )}
-          </button>
+            {/* 视图设置下拉 */}
+            <div className="graph-dropdown">
+              <button
+                type="button"
+                className="graph-btn"
+                onClick={() => setShowViewMenu((o) => !o)}
+                onBlur={() => setTimeout(() => setShowViewMenu(false), 150)}
+              >
+                <Eye size={14} /> 视图 <ChevronDown size={12} />
+              </button>
+              {showViewMenu && (
+                <div className="graph-dropdown-menu graph-dropdown-menu--right">
+                  <label className="graph-dropdown-switch">
+                    <input
+                      type="checkbox"
+                      checked={showOtherEdges}
+                      onChange={(e) => setShowOtherEdges(e.target.checked)}
+                    />
+                    <span>显示其它关系</span>
+                  </label>
+                  <label className="graph-dropdown-switch">
+                    <input
+                      type="checkbox"
+                      checked={showDocNodes}
+                      onChange={(e) => setShowDocNodes(e.target.checked)}
+                    />
+                    <span>显示 doc 节点</span>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* 配置 AI — 幽灵按钮 */}
+            <button
+              className="graph-btn graph-btn-ghost"
+              onClick={() => setShowAiSetup(true)}
+              title="配置用于图谱分析的 AI 模型"
+            >
+              <Settings2 size={14} />
+              配置 AI
+            </button>
+
+            {/* 重新生成 — 主操作 */}
+            <button
+              className="graph-btn graph-btn-primary"
+              onClick={handleAnalyze}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 size={14} className="spin" />
+                  {taskStatus === "pending" ? formatQueueStatus(taskPosition) : "生成中..."}
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={14} />
+                  {graphData ? "重新生成" : "生成图谱"}
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
