@@ -5164,7 +5164,8 @@ strong.label {
 }
 
 .mdocs-tree-row:hover .mdocs-tree-hover-actions,
-.mdocs-tree-row:focus-within .mdocs-tree-hover-actions {
+.mdocs-tree-row:focus-within .mdocs-tree-hover-actions,
+.mdocs-tree-row.active .mdocs-tree-hover-actions {
   visibility: visible;
   pointer-events: auto;
 }
