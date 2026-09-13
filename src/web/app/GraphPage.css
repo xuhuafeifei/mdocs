@@ -13,41 +13,155 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
+  padding: 10px 16px;
   border-bottom: 1px solid #e2e8f0;
   background: white;
+  gap: 12px;
+  min-height: 48px;
 }
 
 .graph-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
 }
 
 .graph-icon {
-  font-size: 20px;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.graph-title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .graph-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.graph-depth-btns {
-  display: flex;
+/* 通用按钮 */
+.graph-btn {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: white;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  height: 32px;
 }
 
-.graph-btn-active {
+.graph-btn:hover {
+  background: #f1f5f9;
+}
+
+.graph-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 幽灵按钮（无边框） */
+.graph-btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: #6366f1;
+}
+
+.graph-btn-ghost:hover {
   background: #eef2ff;
-  border-color: #a5b4fc;
+}
+
+/* 主操作紫色实心 */
+.graph-btn-primary {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: white;
+}
+
+.graph-btn-primary:hover {
+  background: #4f46e5;
+}
+
+/* 下拉菜单容器 */
+.graph-dropdown {
+  position: relative;
+}
+
+.graph-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 150px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  padding: 6px;
+  z-index: 20;
+}
+
+.graph-dropdown-menu--right {
+  left: auto;
+  right: 0;
+}
+
+.graph-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #334155;
+  transition: background 0.1s;
+}
+
+.graph-dropdown-item:hover {
+  background: #f1f5f9;
+}
+
+.graph-dropdown-item.active {
+  background: #eef2ff;
   color: #4338ca;
+  font-weight: 600;
+}
+
+.graph-dropdown-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.graph-dropdown-switch:hover {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.graph-dropdown-switch input[type="checkbox"] {
+  accent-color: #6366f1;
 }
 
 .graph-node-tooltip {
@@ -65,48 +179,6 @@
   pointer-events: none;
   z-index: 20;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
-}
-
-.graph-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: #475569;
-  cursor: pointer;
-  user-select: none;
-}
-
-.graph-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: white;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.graph-btn:hover {
-  background: #f1f5f9;
-}
-
-.graph-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.graph-btn-primary {
-  background: #6366f1;
-  border-color: #6366f1;
-  color: white;
-}
-
-.graph-btn-primary:hover {
-  background: #4f46e5;
 }
 
 /* 图谱画布 */
@@ -391,8 +463,8 @@
 
   .graph-toolbar {
     flex-wrap: wrap;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 6px;
+    padding: 8px 10px;
     position: relative;
     opacity: 1;
     pointer-events: auto;
@@ -405,46 +477,22 @@
     margin-left: auto;
   }
 
-  .graph-toolbar::before {
-    display: none;
-  }
-
-  .graph-toolbar:hover,
-  .graph-toolbar:focus-within,
-  .graph-toolbar--visible {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .graph-toolbar--visible::before {
-    opacity: 0;
-  }
-
   .graph-title {
     font-size: 14px;
     min-width: 0;
     flex: 1 1 auto;
   }
 
-  .graph-title > span:last-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .graph-actions {
     width: 100%;
     justify-content: flex-start;
-    gap: 8px 12px;
-  }
-
-  .graph-depth-btns {
-    flex-wrap: wrap;
+    gap: 6px;
   }
 
   .graph-btn {
-    padding: 6px 10px;
+    padding: 5px 8px;
     font-size: 12px;
+    height: 28px;
   }
 
   .graph-detail-panel {
@@ -496,6 +544,6 @@
 
 @media (min-width: 769px) {
   .graph-btn-close {
-    display: none;
+    margin-left: 6px;
   }
 }

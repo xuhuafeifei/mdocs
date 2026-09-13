@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import ForceGraph2D from "react-force-graph-2d";
-import { X, Play, Loader2, Settings2 } from "lucide-react";
+import { X, Play, Loader2, Settings2, ChevronDown, Eye, RefreshCw } from "lucide-react";
 import {
   analyzeDomainGraphApi,
   analyzeGraphApi,
@@ -128,6 +128,8 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
   /** 未配置 AI 模型：报错时不显示泛泛的失败，而是引导用户配置 */
   const [aiNotConfigured, setAiNotConfigured] = useState(false);
   const [showAiSetup, setShowAiSetup] = useState(false);
+  const [showDepthMenu, setShowDepthMenu] = useState(false);
+  const [showViewMenu, setShowViewMenu] = useState(false);
 
   // 是否"正在处理中"（排队中 / 运行中，都显示进度面板）
   const isProcessing = taskStatus === "running" || taskStatus === "pending";
@@ -540,68 +542,98 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
       <div className="graph-toolbar">
         <div className="graph-title">
           <span className="graph-icon">🕸️</span>
-          <span>知识图谱 — {name}</span>
+          <span className="graph-title-text" title={`知识图谱 — ${name}`}>知识图谱 — {name}</span>
           {onClose && (
             <button
               className="graph-btn graph-btn-close"
               onClick={onClose}
-              title="关闭图谱"
+              title="退出图谱"
             >
               <X size={14} />
             </button>
           )}
         </div>
         <div className="graph-actions">
-          <div className="graph-depth-btns">
+          {/* 层级控制下拉 */}
+          <div className="graph-dropdown">
             <button
               type="button"
-              className={`graph-btn ${globalDepth === 1 ? "graph-btn-active" : ""}`}
-              onClick={() => setToolbarDepth(1)}
-              title="展开到深度 1（顶层 + 直接子）"
+              className="graph-btn"
+              onClick={() => setShowDepthMenu((o) => !o)}
+              onBlur={() => setTimeout(() => setShowDepthMenu(false), 150)}
             >
-              展开一级
+              层级控制 <ChevronDown size={12} />
             </button>
-            <button
-              type="button"
-              className={`graph-btn ${globalDepth === 2 ? "graph-btn-active" : ""}`}
-              onClick={() => setToolbarDepth(2)}
-              title="展开到深度 2"
-            >
-              展开到二级
-            </button>
-            <button
-              type="button"
-              className={`graph-btn ${globalDepth === 0 && extraExpandedIds.size === 0 ? "graph-btn-active" : ""}`}
-              onClick={() => setToolbarDepth(0)}
-              title="仅顶层"
-            >
-              全部收起
-            </button>
+            {showDepthMenu && (
+              <div className="graph-dropdown-menu">
+                <button
+                  type="button"
+                  className={`graph-dropdown-item ${globalDepth === 1 ? "active" : ""}`}
+                  onMouseDown={() => { setToolbarDepth(1); setShowDepthMenu(false); }}
+                >
+                  展开一级
+                </button>
+                <button
+                  type="button"
+                  className={`graph-dropdown-item ${globalDepth === 2 ? "active" : ""}`}
+                  onMouseDown={() => { setToolbarDepth(2); setShowDepthMenu(false); }}
+                >
+                  展开到二级
+                </button>
+                <button
+                  type="button"
+                  className={`graph-dropdown-item ${globalDepth === 0 && extraExpandedIds.size === 0 ? "active" : ""}`}
+                  onMouseDown={() => { setToolbarDepth(0); setShowDepthMenu(false); }}
+                >
+                  全部收起
+                </button>
+              </div>
+            )}
           </div>
-          <label className="graph-toggle">
-            <input
-              type="checkbox"
-              checked={showOtherEdges}
-              onChange={(e) => setShowOtherEdges(e.target.checked)}
-            />
-            <span>显示其它关系</span>
-          </label>
-          <label className="graph-toggle">
-            <input
-              type="checkbox"
-              checked={showDocNodes}
-              onChange={(e) => setShowDocNodes(e.target.checked)}
-            />
-            <span>显示 doc 节点</span>
-          </label>
+
+          {/* 视图设置下拉 */}
+          <div className="graph-dropdown">
+            <button
+              type="button"
+              className="graph-btn"
+              onClick={() => setShowViewMenu((o) => !o)}
+              onBlur={() => setTimeout(() => setShowViewMenu(false), 150)}
+            >
+              <Eye size={14} /> 视图 <ChevronDown size={12} />
+            </button>
+            {showViewMenu && (
+              <div className="graph-dropdown-menu graph-dropdown-menu--right">
+                <label className="graph-dropdown-switch">
+                  <input
+                    type="checkbox"
+                    checked={showOtherEdges}
+                    onChange={(e) => setShowOtherEdges(e.target.checked)}
+                  />
+                  <span>显示其它关系</span>
+                </label>
+                <label className="graph-dropdown-switch">
+                  <input
+                    type="checkbox"
+                    checked={showDocNodes}
+                    onChange={(e) => setShowDocNodes(e.target.checked)}
+                  />
+                  <span>显示 doc 节点</span>
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* 配置 AI — 幽灵按钮 */}
           <button
-            className="graph-btn"
+            className="graph-btn graph-btn-ghost"
             onClick={() => setShowAiSetup(true)}
             title="配置用于图谱分析的 AI 模型"
           >
             <Settings2 size={14} />
             配置 AI
           </button>
+
+          {/* 重新生成 — 主操作 */}
           <button
             className="graph-btn graph-btn-primary"
             onClick={handleAnalyze}
@@ -614,7 +646,7 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
               </>
             ) : (
               <>
-                <Play size={14} />
+                <RefreshCw size={14} />
                 {graphData ? "重新生成" : "生成图谱"}
               </>
             )}
