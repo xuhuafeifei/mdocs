@@ -573,16 +573,17 @@ function FolderRow(props: {
           tabIndex={0}
           aria-expanded={open}
           aria-label={open ? t("collapseFolder") : t("expandFolder")}
+          // 纯展开/收起，不激活文件夹：手机端激活会关掉侧栏抽屉，
+          // 用户点小三角只是想展开，不该把目录栏带走
           onClick={(e) => {
             e.stopPropagation();
             setUserOpen((v) => !v);
-            activateFolder();
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
+              e.stopPropagation();
               setUserOpen((v) => !v);
-              activateFolder();
             }
           }}
         >
