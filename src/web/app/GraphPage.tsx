@@ -131,6 +131,7 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
   const [showDepthMenu, setShowDepthMenu] = useState(false);
   const [showViewMenu, setShowViewMenu] = useState(false);
   const [showMobileActions, setShowMobileActions] = useState(false);
+  const mobileActionsRef = useRef<HTMLDivElement>(null);
 
   // 是否"正在处理中"（排队中 / 运行中，都显示进度面板）
   const isProcessing = taskStatus === "running" || taskStatus === "pending";
@@ -537,6 +538,18 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
     return result;
   };
 
+  // 点击外部关闭手机端操作浮层
+  useEffect(() => {
+    if (!showMobileActions) return;
+    const onDown = (e: MouseEvent) => {
+      if (mobileActionsRef.current && !mobileActionsRef.current.contains(e.target as Node)) {
+        setShowMobileActions(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [showMobileActions]);
+
   return (
     <div className="graph-page">
       {/* 顶部工具栏 */}
@@ -554,17 +567,94 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
           )}
         </div>
         <div className="graph-toolbar-right">
-          {/* 手机端：展开/收起按钮 */}
-          <button
-            type="button"
-            className="graph-btn graph-mobile-toggle"
-            onClick={() => setShowMobileActions((o) => !o)}
-          >
-            <ChevronDown size={14} style={{ transform: showMobileActions ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
-            操作
-          </button>
-          {/* PC 端直接显示，手机端通过 showMobileActions 控制 */}
-          <div className={`graph-mobile-actions${showMobileActions ? " open" : ""}`}>
+          {/* 手机端：三点展开按钮 */}
+          <div className="graph-mobile-toggle-wrap" ref={mobileActionsRef}>
+            <button
+              type="button"
+              className="graph-mobile-toggle-btn"
+              onClick={() => setShowMobileActions((o) => !o)}
+              aria-label="更多操作"
+            >
+              <EllipsisVertical size={18} strokeWidth={1.75} />
+            </button>
+            {showMobileActions && (
+              <div className="graph-mobile-actions card" onClick={() => setShowMobileActions(false)}>
+                {/* 层级控制 */}
+                <div className="graph-mobile-action-group">
+                  <div className="graph-mobile-action-label">层级控制</div>
+                  <button
+                    type="button"
+                    className={`graph-mobile-action-item ${globalDepth === 1 ? "active" : ""}`}
+                    onMouseDown={() => setToolbarDepth(1)}
+                  >
+                    展开一级
+                  </button>
+                  <button
+                    type="button"
+                    className={`graph-mobile-action-item ${globalDepth === 2 ? "active" : ""}`}
+                    onMouseDown={() => setToolbarDepth(2)}
+                  >
+                    展开到二级
+                  </button>
+                  <button
+                    type="button"
+                    className={`graph-mobile-action-item ${globalDepth === 0 && extraExpandedIds.size === 0 ? "active" : ""}`}
+                    onMouseDown={() => setToolbarDepth(0)}
+                  >
+                    全部收起
+                  </button>
+                </div>
+                {/* 视图设置 */}
+                <div className="graph-mobile-action-group">
+                  <div className="graph-mobile-action-label">视图</div>
+                  <label className="graph-mobile-action-switch">
+                    <input
+                      type="checkbox"
+                      checked={showOtherEdges}
+                      onChange={(e) => setShowOtherEdges(e.target.checked)}
+                    />
+                    <span>显示其它关系</span>
+                  </label>
+                  <label className="graph-mobile-action-switch">
+                    <input
+                      type="checkbox"
+                      checked={showDocNodes}
+                      onChange={(e) => setShowDocNodes(e.target.checked)}
+                    />
+                    <span>显示 doc 节点</span>
+                  </label>
+                </div>
+                {/* 配置 AI */}
+                <button
+                  className="graph-mobile-action-item"
+                  onMouseDown={() => setShowAiSetup(true)}
+                >
+                  <Settings2 size={14} />
+                  配置 AI
+                </button>
+                {/* 重新生成 */}
+                <button
+                  className="graph-mobile-action-item graph-mobile-action-primary"
+                  onMouseDown={handleAnalyze}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 size={14} className="spin" />
+                      {taskStatus === "pending" ? formatQueueStatus(taskPosition) : "生成中..."}
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw size={14} />
+                      {graphData ? "重新生成" : "生成图谱"}
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+          {/* PC 端直接显示 */}
+          <div className="graph-desktop-actions">
             {/* 层级控制下拉 */}
             <div className="graph-dropdown">
               <button

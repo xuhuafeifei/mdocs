@@ -488,35 +488,118 @@
   }
 
   .graph-toolbar-right {
-    width: 100%;
+    width: auto;
     position: relative;
   }
 
-  /* PC 端隐藏移动端切换按钮，手机端显示 */
-  .graph-mobile-toggle {
+  /* 手机端三点菜单容器 */
+  .graph-mobile-toggle-wrap {
+    position: relative;
+  }
+
+  .graph-mobile-toggle-btn {
     display: inline-flex;
-    width: 100%;
+    align-items: center;
     justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--mdocs-text-secondary, #6b7280);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .graph-mobile-toggle-btn:hover {
+    background: var(--mdocs-hover-bg, #f0f0f0);
   }
 
   .graph-mobile-actions {
-    display: none;
     position: absolute;
-    top: calc(100% + 4px);
+    top: calc(100% + 6px);
     right: 0;
-    left: 0;
+    min-width: 220px;
+    max-width: min(88vw, 280px);
+    padding: 8px 0;
+    z-index: 120;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
     background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    padding: 8px;
-    z-index: 20;
+    border: 1px solid var(--mdocs-border, #e0e0e0);
+    border-radius: 12px;
+    display: flex;
     flex-direction: column;
-    gap: 6px;
   }
 
-  .graph-mobile-actions.open {
+  .graph-mobile-action-group {
+    padding: 4px 0;
+  }
+
+  .graph-mobile-action-label {
+    padding: 6px 16px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--mdocs-text-muted, #616161);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .graph-mobile-action-item {
     display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-size: 14px;
+    color: var(--mdocs-text);
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .graph-mobile-action-item:hover {
+    background: var(--mdocs-hover-bg, #f5f5f5);
+  }
+
+  .graph-mobile-action-item.active {
+    background: var(--mdocs-hover-bg, #f5f5f5);
+    font-weight: 600;
+  }
+
+  .graph-mobile-action-item:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .graph-mobile-action-primary {
+    color: #6366f1;
+    font-weight: 600;
+    border-top: 1px solid var(--mdocs-border, #e0e0e0);
+    margin-top: 4px;
+    padding-top: 12px;
+  }
+
+  .graph-mobile-action-switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    font-size: 14px;
+    color: var(--mdocs-text);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .graph-mobile-action-switch:hover {
+    background: var(--mdocs-hover-bg, #f5f5f5);
+  }
+
+  .graph-mobile-action-switch input[type="checkbox"] {
+    accent-color: #6366f1;
   }
 
   .graph-btn {
@@ -574,12 +657,12 @@
 
 /* 桌面端：隐藏移动端切换按钮，始终显示操作区 */
 @media (min-width: 769px) {
-  .graph-mobile-toggle {
+  .graph-mobile-toggle-wrap {
     display: none;
   }
 
-  .graph-mobile-actions {
-    display: flex !important;
+  .graph-desktop-actions {
+    display: flex;
     flex-direction: row;
     gap: 8px;
     align-items: center;
