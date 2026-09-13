@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import ForceGraph2D from "react-force-graph-2d";
-import { X, Play, Loader2, Settings2, ChevronDown, Eye, RefreshCw } from "lucide-react";
+import { X, Loader2, Settings2, ChevronDown, Eye, RefreshCw, EllipsisVertical } from "lucide-react";
 import {
   analyzeDomainGraphApi,
   analyzeGraphApi,
