@@ -27,6 +27,32 @@ fs.mkdirSync(outDir, { recursive: true });
 /** @type {{ id: string, name: string, description: string, keywords: string[], source: string }[]} */
 const index = [];
 
+// 内置项目信息 skill：官网与仓库地址
+const projectDir = path.join(outDir, "project-info");
+fs.mkdirSync(projectDir, { recursive: true });
+const projectBody = `---
+id: project-info
+name: 项目信息
+description: mdocs 项目官网与源代码仓库地址
+keywords: [官网, 仓库, 项目地址]
+source: project-info
+---
+
+# mdocs 项目信息
+
+- **项目官网**：https://xuhuafeifei.github.io/mdocs-site/
+- **源代码仓库**：https://github.com/xuhuafeifei/mdocs
+- **许可协议**：MIT
+`;
+fs.writeFileSync(path.join(projectDir, "SKILL.md"), projectBody);
+index.push({
+  id: "project-info",
+  name: "项目信息",
+  description: "mdocs 项目官网与源代码仓库地址",
+  keywords: ["官网", "仓库", "项目地址"],
+  source: "project-info",
+});
+
 for (const rel of walk(siteDocs)) {
   if (!rel.endsWith(".md") && !rel.endsWith(".mdx")) continue;
   const abs = path.join(siteDocs, rel);
