@@ -44,7 +44,7 @@
 | 评论 | html **支持**；政策 `comments: true`（md/html） |
 | 帮写 | 仅 `policy.aiWrite && onAiWrite`；**md=true，html=true**（工作台仍为 Markdown，进场/写回按 HTML 原文，见决策 5） |
 | 标题失焦 | DocChrome 回调；策略跟调用方（与现 md 对齐） |
-| 预览/编辑 | HtmlEditor 自管；经 `leadingExtra` / `trailingExtra` |
+| 预览/编辑 | html：**滑动开关**（左编辑 / 右预览），只切正文；**发布/删除常驻**（不跟开关显隐）；不再用 DocChrome 右侧「进入编辑」 |
 | 默认打开 | html 仍强制预览，忽略 `autoEdit` |
 
 ---
@@ -104,7 +104,7 @@ readerChrome?, onOpenMobileNav?, reader 手势相关可选
 二期：按 fileType 选正文；共用 DocChrome（含手机 reader）
         md   → DocChrome + DocumentEditor 正文 + CommentsPanel（可开）
         html → DocChrome + HtmlEditor 正文 + CommentsPanel（可开）
-        帮写入口仅 md（aiWrite）
+        帮写入口 md 与 html 都开（aiWrite=true）；html 走原文进/原文出
 ```
 
 ---
@@ -118,8 +118,22 @@ readerChrome?, onOpenMobileNav?, reader 手势相关可选
 | `src/web/app/DocChrome.tsx` | **新建**（桌面 + reader） |
 | `src/web/app/DocumentEditor.tsx` | 顶栏改 DocChrome |
 | `src/web/app/HtmlEditor.tsx` | 去迷你顶栏；接 DocChrome + extra |
-| `src/web/app/App.tsx` | fileType 分支；html 接评论面板与 chrome 回调；帮写仍只对 md 有意义 |
-| 代码索引 / mdocs-site | 同步：html 有评论；帮写仍仅 md |
+| `src/web/app/App.tsx` | fileType 分支；html 接评论面板与 chrome 回调；html 帮写 seed/写回 |
+| `src/web/app/ai-write/htmlAiWrite.ts` | **新建**：`htmlToAiWriteSeed` / `aiWriteResultToHtml`（原文进/原文出） |
+| 代码索引 / mdocs-site | 同步：html 有评论、有帮写 |
+
+---
+
+## 手机端行为（2026-09-13 补）
+
+| 项 | 契约 |
+|----|------|
+| HTML 默认模式 | **默认预览**（`previewMode` 初值 `true`，且切文档时重置为 `true`）。一期是「默认预览」但实现里被 `setPreviewMode(false)` 覆盖成编辑，已修 |
+| 手机 Header 形态 | **占据空间（docked）**，与面板贴合；不悬浮在内容上。实现传 `readerHeaderDocked={props.readerChrome}` |
+| 操作栏折叠 | `readerChrome` 下拆两行：第一行「汉堡 + 标题 + 展开按钮 + ⋯」常显；第二行「域选择 + leadingExtra + 发布」**默认折叠**，点展开按钮显示 |
+| 预览/编辑入口 | 手机端放 **⋯ 三点菜单**内（两项，当前模式 disabled）；桌面端放顶栏分段控制器 |
+| 编辑/预览控件 | 桌面端为 **iOS 风格浅色分段控制器**（`#F2F3F5` 底 + 白色滑块），非两个实心按钮、非深蓝滑动开关 |
+| 重复入口 | HTML 不传 `onEnterEdit`，避免预览模式下顶栏右侧再出现一个绿色「编辑」按钮 |
 
 ---
 
@@ -128,21 +142,32 @@ readerChrome?, onOpenMobileNav?, reader 手势相关可选
 | 风险 | 缓解 |
 |------|------|
 | 顶栏与权限/邀请耦合 | DocChrome + slot |
-| 误以为 html「权限不支持帮写」 | 契约与 UI 文案不这么写；表注释写清「管道未就绪」 |
+| 误以为 html「不支持帮写」 | `aiWrite=true`；走 `htmlAiWrite` 原文进/原文出 |
 | reader 与桌面行为分叉 | 强制同组件，验收含窄屏 |
+| 手机操作栏挤爆 | 第二行默认折叠 + 横向滚动 |
 
 ---
 
 ## 测试要点
 
-1. md：帮写可见；评论可用  
-2. html：帮写 **不可见**；评论 **可用**（与 md 同 API）  
-3. html：域 / 同步 / 发布 / 删除 / 收藏 / 文档信息（邀请·权限）可用  
-4. 窄屏：html/md 均走 DocChrome reader，可回目录、发布  
-5. 政策单测：`html.aiWrite===false`，`html.comments===true`
+1. md：帮写可见；评论可用
+2. html：帮写 **可见**；评论 **可用**（与 md 同 API）
+3. html：域 / 同步 / 发布 / 删除 / 收藏 / 文档信息（邀请·权限）可用
+4. 窄屏：html/md 均走 DocChrome reader，可回目录、发布
+5. 政策单测：`html.aiWrite===true`，`html.comments===true`
+6. 手机 HTML：进入即预览；Header 占位不悬浮；操作栏默认折叠、点开展开
+7. 桌面 HTML：分段控制器切换生效，且预览模式下右侧无重复编辑按钮
+8. `htmlAiWrite` 单测：seed 去首尾空白、写回原样 HTML
 
 ---
 
-## 待你拍板
+## 落地状态（2026-09-13）
 
-实现按上文提案落地（评论开、帮写关、reader 同组件、删 `editor`、文档信息复用、编辑器内嵌 DocChrome）。
+**已全部落地**，原「待你拍板」清单确认如下：
+
+- 评论：html 开（与 md 同 API）✅
+- 帮写：html **开**（原提案为关，后按决策 5 改为开，走 HTML 原文）✅
+- 政策表删除 `editor` 列 ✅
+- reader 与桌面同组件 ✅
+- 文档信息复用 ✅
+- 编辑器内嵌 DocChrome ✅

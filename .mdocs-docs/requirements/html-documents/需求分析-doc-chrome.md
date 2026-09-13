@@ -15,31 +15,37 @@ HtmlEditor 自带迷你顶栏（编辑·预览·发布），与 DocumentEditor �
 1. 抽出 **DocChrome**（文档顶栏）：**桌面 + 手机 reader 同一组件**
 2. md / html 共用 DocChrome；正文按 **`fileType`** 选择编辑器（删除政策表 `editor` 列）
 3. **权限与 md 无区别**；评论按 documentId，html **同样支持**
-4. 帮写：权限无差，但现网管道只服务 Lexical/md → 二期 html **暂关入口**（`aiWrite: false`），不是「html 没权限」
+4. 帮写：权限无差；**html 也开放入口**（`aiWrite: true`）——进场以 HTML 原文为 seed，完成写回 HTML 草稿（见「落地修正」）
 5. 政策表增 `aiWrite`、`comments` 等能力列，DocChrome 读表显隐
 
 ## 非目标（二期不做）
 
-- HTML 帮写 **落盘管道**（除非拍板二期一起做）
 - Lobe 格式工具条进 DocChrome
 - Monaco / WYSIWYG / `allow-scripts`
 - 另起插件注册中心；继续用 `file-type-policy` 管 **类型能力**（不管挂哪个编辑器品牌）
 
-## 「aiWrite: html 先 off」含义
+## 「html 帮写」落地修正（2026-09-13）
 
-| | |
-|--|--|
-| **是** | 政策表 `html.aiWrite = false` → DocChrome **不渲染**帮写按钮 |
-| **不是** | 按钮还在但点了报错；也不是后端拒绝帮写 API |
-| **以后打开** | 改表为 `true` **且**补 `aiWriteFormat` + 落盘管道后才算支持 |
+原分析里写的是「html 暂关帮写」（`aiWrite: false`），**实际落地改为开放**，理由与做法：
+
+| 项 | 落地值 |
+|----|--------|
+| 政策表 | `html.aiWrite = true` |
+| 进场 | 工作台仍是 Markdown 对话，但 seed 用 **HTML 原文** |
+| 写回 | 原样写回 `contentKind=html` 草稿，不做 MD↔HTML 静默转换 |
+| 落点 | `src/web/app/ai-write/htmlAiWrite.ts`（`htmlToAiWriteSeed` / `aiWriteResultToHtml`） |
+| 未引入 | `aiWriteFormat` 列（当前不需要，原文进原文出即可） |
+
+原「先 off 再开」的三条判断（是 / 不是 / 以后打开）随之作废。
 
 ## 验收
 
-1. 打开 html：顶栏与 md 对齐（含手机 reader）；**有**评论；**无**帮写按钮  
-2. 打开 md：帮写 + 评论与现网一致  
-3. html 权限/邀请/改权限与 md 同路径可用  
-4. html 仍默认预览；预览/编辑切换不误跳回  
-5. 政策：`html.comments===true`，`html.aiWrite===false`
+1. 打开 html：顶栏与 md 对齐（含手机 reader）；**有**评论；**有**帮写按钮
+2. 打开 md：帮写 + 评论与现网一致
+3. html 权限/邀请/改权限与 md 同路径可用
+4. html 默认预览；预览/编辑切换不误跳回
+5. 政策：`html.comments===true`，`html.aiWrite===true`
+6. 手机 html：操作栏默认折叠、Header 占位不悬浮
 
 ## 依据
 

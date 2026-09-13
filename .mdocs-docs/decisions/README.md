@@ -22,3 +22,5 @@
 | 008 | [访客名唯一 + 按名迁移](./008-visitor-name-unique-and-migrate-by-name.md) | accepted | 昵称唯一约束；迁移支持按名称 |
 | 009 | [前端路径处理去掉 visitorId](./009-remove-visitor-id-from-frontend-path-processing.md) | accepted | 个人域路径前缀仅后端处理 |
 | 011 | [权限可见性：无目录级邀请](./011-permission-visibility-no-folder-invite.md) | accepted | 圈人仅域成员 + 单篇 document_invites；邀请目录≠子树可见 |
+| 012 | [桌面壳用 Tauri 2](./012-desktop-tauri-webview-shell.md) | accepted | Mac + Windows 薄壳；系统 WebView，不内置前端 |
+| 013 | [附件上传不做类型限制](./013-asset-upload-no-type-restriction.md) | accepted | `isAllowedAssetUpload` 恒 true；下载侧 Content-Type 白名单解耦，误拒成本 > 防护收益 |

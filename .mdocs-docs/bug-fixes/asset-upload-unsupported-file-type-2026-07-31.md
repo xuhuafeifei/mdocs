@@ -1,5 +1,8 @@
 # asset-upload-unsupported-file-type-2026-07-31
 
+> ⚠️ **本文的「白名单」思路已于 2026-09-13 被推翻**：`isAllowedAssetUpload` 改为恒返回 `true`，不再限制文件类型。
+> 见 [ADR-013](../decisions/013-asset-upload-no-type-restriction.md)。本文保留为历史记录；其中**单文件上限 55MB**、**`link-to-img` 仅图片** 两条仍然有效。
+
 > 一句话：编辑器侧已支持 zip/音频附件，但 mdocs `/api/assets/upload` 只放行图片，导致 `unsupported file type`；随后将单文件上限从 12MB 提到 55MB。
 
 ## 现象
