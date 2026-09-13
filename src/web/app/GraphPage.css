@@ -36,6 +36,17 @@
   flex-shrink: 0;
 }
 
+/* 桌面端：显示操作按钮组，隐藏手机端三点菜单 */
+.graph-desktop-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.graph-mobile-toggle-wrap {
+  display: none;
+}
+
 .graph-icon {
   font-size: 18px;
   flex-shrink: 0;
@@ -492,8 +503,13 @@
     position: relative;
   }
 
-  /* 手机端三点菜单容器 */
+  /* 手机端：隐藏操作按钮组（收进三点菜单），显示三点菜单容器 */
+  .graph-desktop-actions {
+    display: none;
+  }
+
   .graph-mobile-toggle-wrap {
+    display: block;
     position: relative;
   }
 
@@ -652,19 +668,5 @@
     width: calc(100% - 24px);
     max-width: none;
     padding: 16px;
-  }
-}
-
-/* 桌面端：隐藏移动端切换按钮，始终显示操作区 */
-@media (min-width: 769px) {
-  .graph-mobile-toggle-wrap {
-    display: none;
-  }
-
-  .graph-desktop-actions {
-    display: flex;
-    flex-direction: row;
-    gap: 8px;
-    align-items: center;
   }
 }
