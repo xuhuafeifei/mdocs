@@ -3,8 +3,8 @@
  *
  * 帮写 / 评论显隐读 file-type-policy（aiWrite / comments）。
  */
-import type { CSSProperties, ReactNode, RefObject } from "react";
-import { EllipsisVertical, MessageSquare, PanelLeftOpen, RefreshCw, Star, TextAlignJustify } from "lucide-react";
+import { useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { ChevronUp, EllipsisVertical, MessageSquare, PanelLeftOpen, RefreshCw, Star, TextAlignJustify } from "lucide-react";
 import { useI18n } from "../i18n";
 import { localizeDomainName } from "./utils";
 import deepseekLogoUrl from "../assets/deepseek.svg";
@@ -72,6 +72,7 @@ export function DocChrome(props: DocChromeProps) {
   const showDocActions =
     props.canEdit && (props.editing || Boolean(props.actionsAlwaysVisible));
   const titleLocked = !showDocActions;
+  const [readerActionsOpen, setReaderActionsOpen] = useState(false);
 
   const domains = props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY];
 
@@ -91,70 +92,86 @@ export function DocChrome(props: DocChromeProps) {
   if (props.readerChrome) {
     return (
       <div className={toolbarClass} style={toolbarStyle}>
-        <div
-          className="mdocs-editor-toolbar-leading"
-          onPointerDown={props.onReaderHeaderPointerDown}
-          onPointerMove={props.onReaderHeaderPointerMove}
-          onPointerUp={props.onReaderHeaderPointerUp}
-          onPointerCancel={props.onReaderHeaderPointerUp}
-        >
-          <button
-            type="button"
-            className="mdocs-reader-nav-btn"
-            onClick={() => props.onOpenMobileNav?.()}
-            aria-label={t("expandSidebar")}
+        {/* 第一行：汉堡 + 标题 + 展开按钮 + 三点 */}
+        <div className="mdocs-reader-top-row">
+          <div
+            className="mdocs-editor-toolbar-leading"
+            onPointerDown={props.onReaderHeaderPointerDown}
+            onPointerMove={props.onReaderHeaderPointerMove}
+            onPointerUp={props.onReaderHeaderPointerUp}
+            onPointerCancel={props.onReaderHeaderPointerUp}
           >
-            <PanelLeftOpen size={18} strokeWidth={1.75} />
-          </button>
-          <input
-            className="mdocs-editor-title-input"
-            value={props.displayName}
-            onChange={(e) => props.onDisplayNameChange(e.target.value)}
-            onBlur={props.onDisplayNameBlur}
-            placeholder={t("displayNamePlaceholder")}
-            disabled={!props.editing}
-            readOnly={!props.editing}
-          />
-        </div>
-        <DomainSelect
-          domains={domains}
-          value={props.currentDomainId}
-          onChange={props.onDomainChange}
-          onDomainsChange={props.onDomainsChange}
-          ariaLabel={t("currentDomainAria")}
-          localizeName={(name: string) => localizeDomainName(name, lang, t)}
-        />
-        {props.leadingExtra}
-        {props.canEdit && props.onPublish ? (
-          <button
-            type="button"
-            className="primary mdocs-reader-action-btn"
-            disabled={props.busy}
-            onClick={() => {
-              if (!props.editing) props.onEnterEdit?.();
-              props.onPublish?.();
-            }}
-          >
-            {props.busy ? t("publishing") : t("publish")}
-          </button>
-        ) : null}
-        {props.readerMoreMenu != null ? (
-          <div ref={props.readerMoreMenuRef} className="mdocs-reader-more-menu">
             <button
               type="button"
-              className="mdocs-reader-more-btn"
-              aria-label="更多"
-              aria-expanded={props.readerMoreOpen}
-              onClick={() => props.onToggleReaderMore?.()}
+              className="mdocs-reader-nav-btn"
+              onClick={() => props.onOpenMobileNav?.()}
+              aria-label={t("expandSidebar")}
             >
-              <EllipsisVertical size={18} strokeWidth={1.75} />
+              <PanelLeftOpen size={18} strokeWidth={1.75} />
             </button>
-            {props.readerMoreOpen ? (
-              <div className="mdocs-reader-more-dropdown card">{props.readerMoreMenu}</div>
-            ) : null}
+            <input
+              className="mdocs-editor-title-input"
+              value={props.displayName}
+              onChange={(e) => props.onDisplayNameChange(e.target.value)}
+              onBlur={props.onDisplayNameBlur}
+              placeholder={t("displayNamePlaceholder")}
+              disabled={!props.editing}
+              readOnly={!props.editing}
+            />
           </div>
-        ) : null}
-        {props.trailingExtra}
+          <button
+            type="button"
+            className="mdocs-reader-expand-btn"
+            onClick={() => setReaderActionsOpen((o) => !o)}
+            aria-label={readerActionsOpen ? "收起操作栏" : "展开操作栏"}
+          >
+            <ChevronUp size={16} strokeWidth={2} style={{ transform: readerActionsOpen ? "rotate(0deg)" : "rotate(180deg)", transition: "transform 0.2s" }} />
+          </button>
+          {props.readerMoreMenu != null ? (
+            <div ref={props.readerMoreMenuRef} className="mdocs-reader-more-menu">
+              <button
+                type="button"
+                className="mdocs-reader-more-btn"
+                aria-label="更多"
+                aria-expanded={props.readerMoreOpen}
+                onClick={() => props.onToggleReaderMore?.()}
+              >
+                <EllipsisVertical size={18} strokeWidth={1.75} />
+              </button>
+              {props.readerMoreOpen ? (
+                <div className="mdocs-reader-more-dropdown card">{props.readerMoreMenu}</div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        {/* 第二行：展开的操作栏 */}
+        {readerActionsOpen && (
+          <div className="mdocs-reader-actions-row">
+            <DomainSelect
+              domains={domains}
+              value={props.currentDomainId}
+              onChange={props.onDomainChange}
+              onDomainsChange={props.onDomainsChange}
+              ariaLabel={t("currentDomainAria")}
+              localizeName={(name: string) => localizeDomainName(name, lang, t)}
+            />
+            {props.leadingExtra}
+            {props.canEdit && props.onPublish ? (
+              <button
+                type="button"
+                className="primary mdocs-reader-action-btn"
+                disabled={props.busy}
+                onClick={() => {
+                  if (!props.editing) props.onEnterEdit?.();
+                  props.onPublish?.();
+                }}
+              >
+                {props.busy ? t("publishing") : t("publish")}
+              </button>
+            ) : null}
+            {props.trailingExtra}
+          </div>
+        )}
       </div>
     );
   }

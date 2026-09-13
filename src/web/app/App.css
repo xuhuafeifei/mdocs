@@ -4836,9 +4836,9 @@ strong.label {
   .mdocs-editor-toolbar--float,
   .mdocs-editor-toolbar--docked {
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 6px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
     width: 100%;
     box-sizing: border-box;
     overflow: visible;
@@ -4850,7 +4850,7 @@ strong.label {
     left: 0;
     right: 0;
     z-index: 30;
-    padding: 8px 10px;
+    padding: 6px 8px;
     border: none;
     border-bottom: 1px solid color-mix(in srgb, var(--mdocs-border) 80%, transparent);
     border-radius: 0;
@@ -4859,7 +4859,38 @@ strong.label {
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   }
 
-  .mdocs-editor-toolbar--float .mdocs-editor-toolbar-leading {
+  .mdocs-editor-toolbar--docked {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 30;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 0;
+    border-bottom: 1px solid var(--mdocs-border);
+    background: var(--mdocs-surface);
+    box-shadow: none;
+    transform: none;
+  }
+
+  .mdocs-reader-top-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .mdocs-reader-actions-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0 2px 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mdocs-editor-toolbar--float .mdocs-editor-toolbar-leading,
+  .mdocs-editor-toolbar--docked .mdocs-editor-toolbar-leading {
     touch-action: none;
     cursor: grab;
     flex: 1 1 auto;
@@ -4870,27 +4901,6 @@ strong.label {
 
   .mdocs-editor-toolbar--float .mdocs-editor-toolbar-leading:active {
     cursor: grabbing;
-  }
-
-  .mdocs-editor-toolbar--docked {
-    position: sticky;
-    top: 0;
-    left: 0;
-    z-index: 30;
-    padding: 8px 12px;
-    border: none;
-    border-radius: 0;
-    border-bottom: 1px solid var(--mdocs-border);
-    background: var(--mdocs-surface);
-    box-shadow: none;
-    transform: none;
-  }
-
-  .mdocs-editor-toolbar--docked .mdocs-editor-toolbar-leading {
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: none;
-    padding-right: 0;
   }
 
   .mdocs-editor-toolbar--float .mdocs-editor-title-input,
@@ -5019,6 +5029,26 @@ strong.label {
   }
 
   .mdocs-reader-nav-btn:hover {
+    background: var(--mdocs-hover-bg, #f0f0f0);
+  }
+
+  .mdocs-reader-expand-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--mdocs-border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--mdocs-text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+
+  .mdocs-reader-expand-btn:hover {
     background: var(--mdocs-hover-bg, #f0f0f0);
   }
 
