@@ -5,7 +5,7 @@
 | 文件 | 范围 |
 |------|------|
 | [`backend.md`](./backend.md) | 服务端、DB、API、搜索、存储 |
-| [`frontend.md`](./frontend.md) | Web、编辑器、树、设置 |
+| [`frontend.md`](./frontend.md) | Web、编辑器、树、设置；Android / 桌面 WebView 壳 |
 | [`identity-auth.md`](./identity-auth.md) | 访客、Token、权限 |
 | [`draft-publish.md`](./draft-publish.md) | activeDocMeta、草稿、发布、commit |
 | [`ops.md`](./ops.md) | 开发环境、测试、clean-room |

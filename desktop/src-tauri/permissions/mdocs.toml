@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-save-server-url"
+description = "Save the mdocs server URL and open it"
+commands.allow = ["save_server_url"]
+
+[[permission]]
+identifier = "allow-saved-server-url"
+description = "Read the saved mdocs server URL"
+commands.allow = ["saved_server_url"]

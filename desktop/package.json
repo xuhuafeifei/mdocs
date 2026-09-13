@@ -1,0 +1,14 @@
+{
+  "name": "mdocs-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "description": "mdocs desktop WebView shell (not part of @fgbg/mdocs)",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.0"
+  }
+}

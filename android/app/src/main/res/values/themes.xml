@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MdocsShell" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/mdocs_accent</item>
+        <item name="colorPrimaryDark">@color/mdocs_accent_dark</item>
+        <item name="colorAccent">@color/mdocs_accent</item>
+        <item name="android:statusBarColor">@color/mdocs_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/mdocs_surface</item>
+        <item name="android:windowBackground">@color/mdocs_bg</item>
+    </style>
+</resources>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>mdocs</title>
+    <style>
+      :root {
+        --mdocs-accent: #4caf50;
+        --mdocs-bg: #f5f5f5;
+        --mdocs-text: #212121;
+        --mdocs-surface: #ffffff;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--mdocs-bg);
+        color: var(--mdocs-text);
+      }
+      .wrap {
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      img { width: 64px; height: 64px; }
+      h1 { margin: 16px 0 0; font-size: 22px; }
+      form {
+        width: min(420px, 100%);
+        margin-top: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      input {
+        font-size: 16px;
+        padding: 10px 12px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+      }
+      button {
+        font-size: 16px;
+        padding: 10px 12px;
+        border: 0;
+        border-radius: 6px;
+        background: var(--mdocs-accent);
+        color: var(--mdocs-surface);
+        cursor: pointer;
+      }
+      .err { color: #c62828; min-height: 1.2em; font-size: 14px; }
+      .hint { color: #616161; font-size: 13px; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <img src="./logo.svg" alt="mdocs" />
+      <h1>连接服务器</h1>
+      <form id="form">
+        <input
+          id="url"
+          type="text"
+          autocomplete="off"
+          placeholder="例如 192.168.1.8:4000 或 https://mdocs.example.com"
+        />
+        <button type="submit">打开</button>
+        <div class="err" id="err"></div>
+        <p class="hint">之后可在菜单里更换服务器</p>
+      </form>
+    </div>
+    <script>
+      const invoke = window.__TAURI__?.core?.invoke;
+      const err = document.getElementById("err");
+      const input = document.getElementById("url");
+
+      (async () => {
+        if (!invoke) return;
+        try {
+          const saved = await invoke("saved_server_url");
+          if (saved) input.value = saved;
+        } catch (_) {}
+      })();
+
+      document.getElementById("form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        err.textContent = "";
+        if (!invoke) {
+          err.textContent = "壳未就绪，请用 npm run tauri 启动";
+          return;
+        }
+        try {
+          await invoke("save_server_url", { url: input.value });
+        } catch (ex) {
+          err.textContent = String(ex);
+        }
+      });
+    </script>
+  </body>
+</html>

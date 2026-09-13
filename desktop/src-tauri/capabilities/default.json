@@ -1,0 +1,11 @@
+{
+  "identifier": "default",
+  "description": "mdocs desktop shell",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:menu:default",
+    "allow-save-server-url",
+    "allow-saved-server-url"
+  ]
+}

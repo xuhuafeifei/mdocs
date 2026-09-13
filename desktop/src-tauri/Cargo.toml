@@ -1,0 +1,20 @@
+[package]
+name = "mdocs-desktop"
+version = "1.0.0"
+description = "mdocs desktop WebView shell"
+authors = ["mdocs"]
+edition = "2021"
+
+[lib]
+name = "mdocs_desktop_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "=2.11.5", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+arboard = "3"
