@@ -189,6 +189,11 @@ pub fn run() {
                 .inner_size(1280.0, 800.0)
                 .min_inner_size(720.0, 480.0)
                 .decorations(true)
+                // 关掉 wry 的原生拖放处理：否则文件拖入会被原生层吞掉，只发一个
+                // 没人监听的 Tauri DragDropEvent，网页侧 HTML5 drop 永远不触发
+                //（表现为「拖文件到文章里没反应、不上传」）。
+                // 编辑器自带 UploadPlugin 已在网页侧处理 drop → handleUpload。
+                .disable_drag_drop_handler()
                 .on_navigation(move |url| {
                     let server = handle_nav
                         .state::<ShellState>()
