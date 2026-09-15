@@ -20,6 +20,10 @@ import {
   SkillFormCardBlock,
   type SkillFormCardState,
 } from "../AgentSkillFormCard";
+import {
+  AgentChoiceCardBlock,
+  type AgentChoiceCardState,
+} from "../AgentChoiceCard";
 import { AiWriteMarkdownPane } from "./AiWriteMarkdownPane";
 import { computeLineHunks } from "./markdown-hunks";
 
@@ -28,7 +32,8 @@ type AssistantBlock =
   | { type: "thinking"; text: string }
   | { type: "text"; text: string }
   | { type: "tool"; text: string }
-  | SkillFormCardState;
+  | SkillFormCardState
+  | AgentChoiceCardState;
 
 type ChatLine =
   | { id: string; role: "user"; content: string; skillNames?: string[] }
@@ -70,7 +75,9 @@ function appendTool(blocks: AssistantBlock[], text: string): AssistantBlock[] {
 
 function hasVisibleAssistant(blocks: AssistantBlock[]): boolean {
   return blocks.some((b) =>
-    b.type === "text" || b.type === "thinking" ? b.text.length > 0 : true,
+    b.type === "text" || b.type === "thinking"
+      ? b.text.length > 0
+      : true,
   );
 }
 
@@ -392,6 +399,29 @@ export function AiWriteWorkbench(props: {
                 status: "open" as const,
               },
             ]);
+          } else if (event.type === "choice_card") {
+            stickToBottomRef.current = true;
+            patchAssistant((blocks) => [
+              ...blocks,
+              {
+                type: "choice_card" as const,
+                requestId: event.requestId,
+                title: event.title,
+                options: event.options,
+                expiresAt: event.expiresAt,
+                status: "open" as const,
+              },
+            ]);
+          } else if (event.type === "choice_expired") {
+            patchAssistant((blocks) =>
+              blocks.map((b) =>
+                b.type === "choice_card" &&
+                b.requestId === event.requestId &&
+                b.status === "open"
+                  ? { ...b, status: "expired" as const }
+                  : b,
+              ),
+            );
           } else if (event.type === "skill_form_expired") {
             patchAssistant((blocks) =>
               blocks.map((b) =>
@@ -651,7 +681,33 @@ export function AiWriteWorkbench(props: {
                                   );
                                 }}
                               />
-                            ) : block.text ? (
+                            ) : block.type === "choice_card" ? (
+                              <AgentChoiceCardBlock
+                                key={`${m.id}-ch-${bi}`}
+                                block={block}
+                                onResolved={(requestId, choice, status) => {
+                                  setMessages((prev) =>
+                                    prev.map((msg) => {
+                                      if (msg.id !== m.id || msg.role !== "assistant") return msg;
+                                      return {
+                                        ...msg,
+                                        blocks: msg.blocks.map((b) =>
+                                          b.type === "choice_card" &&
+                                          b.requestId === requestId
+                                            ? {
+                                                ...b,
+                                                status,
+                                                selected:
+                                                  status === "selected" ? choice : b.selected,
+                                              }
+                                            : b,
+                                        ),
+                                      };
+                                    }),
+                                  );
+                                }}
+                              />
+                            ) : block.type === "text" && block.text ? (
                               <div
                                 key={`${m.id}-text-${bi}`}
                                 className="mdocs-agent-panel-md"
