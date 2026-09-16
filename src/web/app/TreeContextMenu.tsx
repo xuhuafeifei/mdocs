@@ -11,6 +11,7 @@
 import { useEffect, useRef } from "react";
 import { useI18n } from "../i18n";
 import type { TreeNode } from "../../shared/types/tree";
+import { copyTextToClipboard } from "./copyText";
 
 export function TreeContextMenu(props: {
   x: number;
@@ -113,8 +114,7 @@ export function TreeContextMenu(props: {
         type="button"
         className="mdocs-context-item"
         onClick={() => {
-          void navigator.clipboard.writeText(nodeId);
-          props.onClose();
+          void copyTextToClipboard(nodeId).finally(props.onClose);
         }}
       >
         {t("copyDocumentId")}
@@ -126,10 +126,9 @@ export function TreeContextMenu(props: {
           // 与 main.tsx 的规范地址一致：origin + BASE_URL + #/doc/<id>
           const base = import.meta.env.BASE_URL || "/";
           const prefix = base.endsWith("/") ? base : `${base}/`;
-          void navigator.clipboard.writeText(
+          void copyTextToClipboard(
             `${window.location.origin}${prefix}#/doc/${urlDocId}`,
-          );
-          props.onClose();
+          ).finally(props.onClose);
         }}
       >
         {t("copyDocumentUrl")}

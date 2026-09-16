@@ -1,0 +1,3 @@
+# Keep shebang scripts LF so Linux `env node` works after npm publish from Windows
+bin/** text eol=lf
+*.sh text eol=lf
