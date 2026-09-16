@@ -488,16 +488,21 @@ export function updateDocument(params: {
         400,
       );
     }
+    if (mergeCtx.forceLocal === true && row.owner_visitor_id !== params.actorVisitorId) {
+      throw new DocumentError("FORBIDDEN", "仅文档所有者可以强制覆盖", 403);
+    }
     const localSnapshotContent =
       mergeCtx.localSnapshotContent !== undefined
         ? policy.writeNormalize === "raw"
           ? mergeCtx.localSnapshotContent
           : normalizeDocumentContent(mergeCtx.localSnapshotContent, params.contentFormat)
         : undefined;
+    const mergeContent =
+      mergeCtx.forceLocal === true ? (localSnapshotContent ?? content) : content;
     return publishMergeDocument({
       row,
       actorVisitorId: params.actorVisitorId,
-      content,
+      content: mergeContent,
       displayName,
       permission: params.permission,
       localBaseCommitId,

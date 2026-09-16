@@ -218,15 +218,18 @@ export function buildVisitorsRouter(): Router {
 
   /**
    * GET /me/documents
-   * 获取当前登录访客创建的所有文档。
+   * 获取当前登录访客创建的所有文档，支持分页。
+   * 查询参数: offset（默认 0）, limit（默认 20，最大 100）
    */
   router.get("/me/documents", (req: Request, res: Response) => {
     if (!req.visitor) {
       res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
       return;
     }
-    const documents = listDocumentsByVisitor(getDb(), req.visitor.visitor_id);
-    res.json({ data: documents });
+    const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10) || 20));
+    const result = listDocumentsByVisitor(getDb(), req.visitor.visitor_id, offset, limit);
+    res.json({ data: result });
   });
 
   /**

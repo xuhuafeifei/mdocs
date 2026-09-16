@@ -288,7 +288,7 @@ export function buildDocumentsRouter(): Router {
    * - displayName?: string  可选，新展示名
    * - permission?: number   可选，新权限档位
    * - contentFormat?: 'markdown' | 'lexical'
-   * - version?: { localBaseCommitId?, merge?: { remoteCommitId, localSnapshotContent? } }
+   * - version?: { localBaseCommitId?, merge?: { remoteCommitId, localSnapshotContent?, forceLocal? } }
    */
   router.put("/:documentId", requireDocumentAccess("edit"), (req: Request, res: Response) => {
     // 中间件只校验了文档访问权，编辑操作仍需确认已登录（ req.visitor 存在）
@@ -520,6 +520,7 @@ function parsePublishVersion(raw: unknown): PublishVersionContext | undefined {
           typeof m.localSnapshotContent === "string"
             ? m.localSnapshotContent
             : undefined,
+        forceLocal: m.forceLocal === true ? true : undefined,
       };
     }
   }

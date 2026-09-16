@@ -322,8 +322,11 @@ async function demoApi<T>(
   }
 
   // 我的文档
-  if (path === "/api/visitors/me/documents" && method === "GET") {
-    return mockFetchMyDocuments() as unknown as T;
+  if (path.startsWith("/api/visitors/me/documents") && method === "GET") {
+    const url = new URL(path, window.location.origin);
+    const offset = parseInt(url.searchParams.get("offset") || "0", 10);
+    const limit = parseInt(url.searchParams.get("limit") || "20", 10);
+    return mockFetchMyDocuments(offset, limit) as unknown as T;
   }
 
   // ==== 书签 ====
@@ -389,7 +392,7 @@ async function demoApi<T>(
  */
 export async function api<T>(
   path: string,
-  init: RequestInit & { requireAuth?: boolean } = {},
+  init: RequestInit & { requireAuth?: boolean; silent?: boolean } = {},
 ): Promise<T> {
   try {
     // Demo Mode 使用 Mock API，跳过网络请求
@@ -434,7 +437,7 @@ export async function api<T>(
     // 返回响应中的 data 字段
     return (body as { data: T }).data;
   } catch (err) {
-    if (err instanceof ApiRequestError) {
+    if (err instanceof ApiRequestError && !init.silent) {
       emitApiError(err);
     }
     throw err;

@@ -23,6 +23,16 @@
   | `src/web/app/hooks/useAutoPublish.ts` | 自动发布 |
   | `src/web/app/hooks/usePublishGuard.ts` | 发布冲突 |
 
+### 发布冲突 / 强制覆盖
+
+- **关键词**：`VERSION_CONFLICT` `forceLocal` `ConflictModal` `publishMerge`
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/server/documents/document.service.ts` | `assertNoVersionConflict` `publishMergeDocument` |
+  | `src/web/app/ConflictModal.tsx` | 冲突入口弹窗 |
+- **需求**：[`../requirements/conflict-force-overwrite/`](../requirements/conflict-force-overwrite/)
+
 ### Commit / merge-base
 
 - **关键词**：`commit` `merge-base` `fork` `commit-graph`

@@ -6,7 +6,8 @@
 
 | 夹 | 入口 |
 |----|------|
-| [mdocs-cli-graph](./mdocs-cli-graph/设计契约.md) | **已同意**：CLI `graph get/analyze/task` + URL 纠偏；域图显式 `--domain` |
+| [merge-inline-ui](./merge-inline-ui/需求分析.md) | **已同意（历史）**：冲突 Merge 单栏 inline |
+| [conflict-force-overwrite](./conflict-force-overwrite/需求分析.md) | **已同意**：冲突时 owner 强制覆盖（假 merge，正文=本地） |
 | [android-webview-shell](./android-webview-shell/设计契约.md) | **已同意**：Android 侧载 APK，用户自填 mdocs 地址 |
 | [desktop-webview-shell](./desktop-webview-shell/设计契约.md) | **已同意**：Tauri 2 桌面壳（Mac + Windows），用户自填 mdocs 地址 |
 | [html-documents](./html-documents/设计契约.md) | **一期已落地**；**二期已落地** [DocChrome](./html-documents/设计契约-doc-chrome.md)（含手机端折叠、默认预览、分段控制器） |

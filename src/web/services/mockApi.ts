@@ -10,7 +10,7 @@ import { FOLDER_DESC_FILENAME, folderDescPathForFolder } from "../../shared/fold
 import { normalisePathSegmentForStorage } from "../../shared/storagePath";
 import { ApiRequestError } from "./api-request-error";
 import { DEMO_VISITOR, DEMO_VISITOR_ID, DEMO_DOMAINS, DEMO_DOCUMENTS, buildTree } from "./mockData";
-import type { Bookmark, MyDocument } from "./endpoints";
+import type { Bookmark, MyDocument, PaginatedResult } from "./endpoints";
 
 /** 数据库名称 */
 const DB_NAME = "mdocs-demo";
@@ -792,11 +792,13 @@ export async function mockRemoveDocumentInvite(documentId: string, targetVisitor
 // ==================== 我的文档 Mock ====================
 
 /**
- * 获取当前访客创建的所有文档
+ * 获取当前访客创建的所有文档，支持分页。
+ * @param offset 偏移量
+ * @param limit 每页条数
  */
-export async function mockFetchMyDocuments(): Promise<MyDocument[]> {
+export async function mockFetchMyDocuments(offset = 0, limit = 20): Promise<PaginatedResult<MyDocument>> {
   const allDocs = await getAllDocuments();
-  return allDocs
+  const allItems = allDocs
     .filter((d) => d.ownerVisitorId === DEMO_VISITOR_ID)
     .map((d) => ({
       documentId: d.documentId,
@@ -807,4 +809,7 @@ export async function mockFetchMyDocuments(): Promise<MyDocument[]> {
       updatedAt: d.updatedAt,
       permission: d.permission,
     }));
+  const total = allItems.length;
+  const items = allItems.slice(offset, offset + limit);
+  return { items, total, offset, limit };
 }

@@ -109,11 +109,11 @@ export function listMyDocumentsTool({ visitorId }: ToolDeps): AgentTool {
     description: "列出当前访客创建的文档（按更新时间倒序）",
     parameters: Type.Object({}),
     execute: async () => {
-      const all = listDocumentsByVisitor(getDb(), visitorId);
-      const documents = all.slice(0, 50);
+      const result = listDocumentsByVisitor(getDb(), visitorId);
+      const documents = result.items.slice(0, 50);
       return asToolResult({
-        total: all.length,
-        truncated: all.length > 50,
+        total: result.total,
+        truncated: result.total > 50,
         documents,
       });
     },

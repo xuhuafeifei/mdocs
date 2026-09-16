@@ -141,6 +141,9 @@ export function SettingsPage(props: {
   const [myDocuments, setMyDocuments] = useState<MyDocument[]>([]);
   const [myDocumentsLoading, setMyDocumentsLoading] = useState(false);
   const [myDocumentSearch, setMyDocumentSearch] = useState("");
+  const [myDocPage, setMyDocPage] = useState(0);
+  const [myDocTotal, setMyDocTotal] = useState(0);
+  const MY_DOC_PAGE_SIZE = 20;
 
   // ---- 域列表（用于 domainId -> domainName 映射）----
   const [domains, setDomains] = useState<DomainSummary[]>([]);
@@ -243,12 +246,14 @@ export function SettingsPage(props: {
   }
 
   /** 加载当前访客创建的所有文档 */
-  async function loadMyDocuments(): Promise<void> {
+  async function loadMyDocuments(page = 0): Promise<void> {
     try {
       setMyDocumentsLoading(true);
-      const result = await fetchMyDocumentsApi();
+      const result = await fetchMyDocumentsApi(page * MY_DOC_PAGE_SIZE, MY_DOC_PAGE_SIZE);
       if (!mountedRef.current) return;
-      setMyDocuments(result);
+      setMyDocuments(result.items);
+      setMyDocTotal(result.total);
+      setMyDocPage(page);
     } catch {
       // 加载失败忽略
     } finally {
@@ -381,15 +386,7 @@ export function SettingsPage(props: {
     );
   });
 
-  // ---- 过滤后的我的文章列表 ----
-  const filteredDocuments = myDocuments.filter((d) => {
-    if (!myDocumentSearch.trim()) return true;
-    const search = myDocumentSearch.toLowerCase();
-    return (
-      (d.displayName || d.relativePath || "").toLowerCase().includes(search) ||
-      (d.domainId || "").toLowerCase().includes(search)
-    );
-  });
+  const myDocTotalPages = Math.ceil(myDocTotal / MY_DOC_PAGE_SIZE);
 
   return (
     <div className={"mdocs-layout" + (isNarrow ? " mdocs-layout--reader mdocs-layout--settings" : "")}>
@@ -824,20 +821,29 @@ export function SettingsPage(props: {
               <h2 className="mdocs-settings-title">{t("myDocuments")}</h2>
             </div>
             <div className="mdocs-settings-card">
-              <input
-                type="text"
-                className="mdocs-settings-search"
-                placeholder="搜索文章…"
-                value={myDocumentSearch}
-                onChange={(e) => setMyDocumentSearch(e.target.value)}
-              />
+              <div className="mdocs-settings-table-toolbar">
+                <input
+                  type="text"
+                  className="mdocs-settings-search"
+                  placeholder="搜索文章…"
+                  value={myDocumentSearch}
+                  onChange={(e) => setMyDocumentSearch(e.target.value)}
+                />
+                <span className="mdocs-settings-page-info">
+                  {t("myDocumentsPageInfo", {
+                    current: String(myDocTotalPages > 0 ? myDocPage + 1 : 0),
+                    total: String(myDocTotalPages),
+                    count: String(myDocTotal),
+                  })}
+                </span>
+              </div>
               {myDocumentsLoading ? (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
                   {t("loading")}
                 </div>
               ) : (
                 <>
-                  {filteredDocuments.length === 0 ? (
+                  {myDocuments.length === 0 ? (
                     <div style={{ textAlign: "center", padding: "40px 0", opacity: 0.6 }}>
                       {myDocumentSearch ? t("myDocumentsNoMatch") : t("myDocumentsEmpty")}
                     </div>
@@ -854,7 +860,7 @@ export function SettingsPage(props: {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredDocuments.map((doc) => (
+                        {myDocuments.map((doc) => (
                           <tr key={doc.documentId}>
                             <td style={{ cursor: "pointer", fontWeight: 500 }} onClick={() => props.onOpenDocument(doc.documentId)}>
                               {doc.displayName || doc.relativePath || "Untitled"}
@@ -884,6 +890,27 @@ export function SettingsPage(props: {
                         ))}
                       </tbody>
                     </table>
+                    </div>
+                  )}
+                  {/* 分页控件 */}
+                  {myDocTotalPages > 1 && (
+                    <div className="mdocs-settings-pagination">
+                      <button
+                        type="button"
+                        className="secondary small"
+                        disabled={myDocPage <= 0}
+                        onClick={() => loadMyDocuments(myDocPage - 1)}
+                      >
+                        {t("myDocumentsPrev")}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary small"
+                        disabled={myDocPage >= myDocTotalPages - 1}
+                        onClick={() => loadMyDocuments(myDocPage + 1)}
+                      >
+                        {t("myDocumentsNext")}
+                      </button>
                     </div>
                   )}
                 </>

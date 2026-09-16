@@ -39,10 +39,36 @@
   line-height: 1.5;
 }
 
+.mdocs-conflict-modal-force-hint {
+  margin: -8px 0 16px;
+  font-size: 13px;
+  color: #8c8c8c;
+  line-height: 1.45;
+}
+
 .mdocs-conflict-modal-actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.mdocs-conflict-force-btn {
+  border: 1px solid #cf1322;
+  background: #fff;
+  color: #cf1322;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.mdocs-conflict-force-btn:hover:not(:disabled) {
+  background: #fff1f0;
+}
+
+.mdocs-conflict-force-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .mdocs-sync-btn {

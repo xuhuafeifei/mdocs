@@ -48,7 +48,7 @@ vi.mock("../storage/file-store.js", () => ({
 }));
 
 import { DocumentError } from "../access/access-control.js";
-import { createDocument, getDocumentMergeContext, updateDocument } from "./document.service.js";
+import { createDocument, getDocument, getDocumentMergeContext, updateDocument } from "./document.service.js";
 import { findCommitById } from "../db/repositories/commit.repo.js";
 import { findDocumentById } from "../db/repositories/document.repo.js";
 import { insertDocumentInvite } from "../db/repositories/document.repo.js";
@@ -256,6 +256,80 @@ describe("updateDocument merge 发布", () => {
         },
       }),
     ).toThrow(DocumentError);
+  });
+
+  it("forceLocal：owner 以本地正文作为 merge 工作区", () => {
+    const created = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "force-local.md",
+      content: '{"base":true}',
+      domainId: "default",
+    });
+    const base = created.headCommitId!;
+    const remote = updateDocument({
+      actorVisitorId: OWNER,
+      documentId: created.documentId,
+      content: '{"remote":true}',
+      version: { localBaseCommitId: base },
+    });
+    const head = remote.headCommitId!;
+
+    const overwritten = updateDocument({
+      actorVisitorId: OWNER,
+      documentId: created.documentId,
+      content: '{"should-be-ignored":true}',
+      version: {
+        localBaseCommitId: base,
+        merge: {
+          remoteCommitId: head,
+          localSnapshotContent: '{"local":true}',
+          forceLocal: true,
+        },
+      },
+    });
+
+    expect(overwritten.headCommitId).not.toBe(head);
+    expect(countParents(testDbRef.db!, overwritten.headCommitId!)).toBe(2);
+    expect(fileStoreMocks.lastWriteContent).toBe('{"local":true}');
+    expect(getDocument(created.documentId).content).toBe('{"local":true}');
+  });
+
+  it("forceLocal：非 owner 即使有编辑权也 403", () => {
+    const created = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "force-local-forbidden.md",
+      content: '{"base":true}',
+      domainId: "default",
+    });
+    insertDocumentInvite(testDbRef.db!, created.documentId, INVITED_EDITOR, "edit");
+    const base = created.headCommitId!;
+    const remote = updateDocument({
+      actorVisitorId: OWNER,
+      documentId: created.documentId,
+      content: '{"remote":true}',
+      version: { localBaseCommitId: base },
+    });
+
+    try {
+      updateDocument({
+        actorVisitorId: INVITED_EDITOR,
+        documentId: created.documentId,
+        content: '{"local":true}',
+        version: {
+          localBaseCommitId: base,
+          merge: {
+            remoteCommitId: remote.headCommitId!,
+            localSnapshotContent: '{"local":true}',
+            forceLocal: true,
+          },
+        },
+      });
+      throw new Error("expected FORBIDDEN");
+    } catch (err) {
+      expect(err).toBeInstanceOf(DocumentError);
+      expect((err as DocumentError).code).toBe("FORBIDDEN");
+      expect((err as DocumentError).status).toBe(403);
+    }
   });
 });
 

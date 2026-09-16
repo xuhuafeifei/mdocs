@@ -47,6 +47,11 @@ export interface PublishMergeContext {
   remoteCommitId: string;
   /** r_local 快照正文；格式与顶层 content 相同，由 contentFormat 统一转换 */
   localSnapshotContent?: string;
+  /**
+   * owner 强制以本地正文为工作区（假 merge：DAG 仍双亲，blob = 本地）。
+   * 非 owner 传此字段 → 403。
+   */
+  forceLocal?: boolean;
 }
 
 /** 发布时的版本语义（乐观锁 / 合并） */

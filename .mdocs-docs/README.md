@@ -36,6 +36,7 @@
 
 | 需求夹 | 说明 |
 |--------|------|
+| `conflict-force-overwrite` | **已同意**：冲突时 owner 强制覆盖（merge 通道 + 正文=本地）— [需求分析](./requirements/conflict-force-overwrite/需求分析.md) · [设计契约](./requirements/conflict-force-overwrite/设计契约.md) |
 | `agent-chat-mermaid` | **已同意**：Ask 聊天气泡 mermaid 默认渲染、可切代码；只存源码前端翻译 — [需求分析](./requirements/agent-chat-mermaid/需求分析.md) · [设计契约](./requirements/agent-chat-mermaid/设计契约.md) |
 | `mdocs-cli-graph` | **已同意**：CLI `graph get/analyze/task` + URL 纠偏；域图显式 `--domain` — [需求分析](./requirements/mdocs-cli-graph/需求分析.md) · [设计契约](./requirements/mdocs-cli-graph/设计契约.md) |
 | `android-webview-shell` | **已同意** Android 侧载 APK，自填服务器 URL — [需求分析](./requirements/android-webview-shell/需求分析.md) · [设计契约](./requirements/android-webview-shell/设计契约.md) · [代码索引](./requirements/android-webview-shell/代码索引.md) |

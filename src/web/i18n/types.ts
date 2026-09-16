@@ -368,6 +368,9 @@ export type TranslationKey =
   | "myDocumentsColUpdated"
   | "myDocumentsColCreated"
   | "myDocumentsNoMatch"
+  | "myDocumentsPrev"
+  | "myDocumentsNext"
+  | "myDocumentsPageInfo"
   // Agent model config
   | "agentConfig"
   | "agentConfigDesc"

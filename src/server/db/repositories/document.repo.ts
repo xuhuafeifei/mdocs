@@ -100,9 +100,50 @@ export interface DocumentWithDomain {
   permission: number;
 }
 
-export function listDocumentsByVisitor(db: Database.Database, visitorId: string): DocumentWithDomain[] {
+export interface DocumentWithDomain {
+  documentId: string;
+  domainId: string;
+  relativePath: string;
+  displayName: string;
+  createdAt: string;
+  updatedAt: string;
+  permission: number;
+}
+
+export interface PaginatedDocuments {
+  items: DocumentWithDomain[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+/**
+ * 列出指定访客创建的所有文档，支持分页，按更新时间倒序排列。
+ *
+ * @param db - better-sqlite3 数据库实例
+ * @param visitorId - 访客 ID
+ * @param offset - 分页偏移量，默认 0
+ * @param limit - 每页条数，默认 20，最大 100
+ * @returns 分页后的文档列表及总数
+ */
+export function listDocumentsByVisitor(
+  db: Database.Database,
+  visitorId: string,
+  offset = 0,
+  limit = 20,
+): PaginatedDocuments {
+  limit = Math.min(Math.max(limit, 1), 100);
+  offset = Math.max(offset, 0);
+
+  const countRow = db
+    .prepare<string, { c: number }>(
+      `SELECT COUNT(*) as c FROM documents WHERE owner_visitor_id = ?`,
+    )
+    .get(visitorId);
+  const total = countRow?.c ?? 0;
+
   const rows = db
-    .prepare<string, {
+    .prepare<[string, number, number], {
       document_id: string;
       domain_id: string;
       relative_path: string;
@@ -112,19 +153,24 @@ export function listDocumentsByVisitor(db: Database.Database, visitorId: string)
       permission: number;
     }>(
       `SELECT document_id, domain_id, relative_path, display_name, created_at, updated_at, permission
-       FROM documents WHERE owner_visitor_id = ? ORDER BY updated_at DESC`,
+       FROM documents WHERE owner_visitor_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
     )
-    .all(visitorId);
+    .all(visitorId, limit, offset);
 
-  return rows.map((row) => ({
-    documentId: row.document_id,
-    domainId: row.domain_id,
-    relativePath: row.relative_path,
-    displayName: row.display_name,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    permission: row.permission,
-  }));
+  return {
+    items: rows.map((row) => ({
+      documentId: row.document_id,
+      domainId: row.domain_id,
+      relativePath: row.relative_path,
+      displayName: row.display_name,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      permission: row.permission,
+    })),
+    total,
+    offset,
+    limit,
+  };
 }
 
 /**

@@ -14,11 +14,11 @@ const EXEMPT_PATHS = new Set<string>([
 /**
  * Express 身份认证中间件。
  *
- * 支持两种认证方式：
- * 1. Web 端：x-visitor-token 请求头（访客 token）
- * 2. CLI 端：x-cli-token 请求头（CLI token）
+ * 支持三种认证方式，按优先级：
+ * 1. Cookie（浏览器会话）
+ * 2. x-cli-token（外部 Agent）
+ * 3. x-visitor-token header（匿名用户/旧前端）
  *
- * 两种 token 都会被解析为 req.visitor，后续业务逻辑无需区分来源。
  * 对非豁免路径要求至少携带一种有效的令牌。
  *
  * @param req - Express 请求对象
@@ -34,13 +34,13 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  // 非豁免路径：依次尝试访客 token 和 CLI token
+  // 非豁免路径：三种认证方式都不行才拒绝
   const visitor = tryResolveVisitor(req);
   if (!visitor) {
-    // 两种 token 都没提供
-    const hasVisitorToken = !!readVisitorToken(req);
-    const hasCliToken = !!readCliToken(req);
-    if (!hasVisitorToken && !hasCliToken) {
+    const hasCookie = !!readCookieToken(req);
+    const hasCli = !!readCliToken(req);
+    const hasHeader = !!readHeaderToken(req);
+    if (!hasCookie && !hasCli && !hasHeader) {
       res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "missing visitor token" } });
       return;
     }
@@ -55,23 +55,30 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 }
 
 /**
- * 依次尝试通过两种认证方式解析访客。
- * 先尝试 Web 端访客 token，失败后尝试 CLI token。
+ * 依次尝试三种方式解析访客。
+ * 优先级：Cookie > CLI Token > x-visitor-token header
  *
- * @returns 解析到的访客信息，两种方式都失败则返回 null
+ * @returns 解析到的访客信息，全部失败则返回 null
  */
 function tryResolveVisitor(req: Request): VisitorRow | null {
-  // 方式一：Web 端访客 token
-  const visitorToken = readVisitorToken(req);
-  if (visitorToken) {
-    const visitor = resolveVisitorByToken(visitorToken);
+  // 方式一：Cookie（浏览器会话，最稳定）
+  const cookieToken = readCookieToken(req);
+  if (cookieToken) {
+    const visitor = resolveVisitorByToken(cookieToken);
     if (visitor) return visitor;
   }
 
-  // 方式二：CLI token
+  // 方式二：CLI token（外部 Agent）
   const cliToken = readCliToken(req);
   if (cliToken) {
     const visitor = resolveCliVisitor(cliToken);
+    if (visitor) return visitor;
+  }
+
+  // 方式三：x-visitor-token header（匿名用户/旧前端兼容）
+  const headerToken = readHeaderToken(req);
+  if (headerToken) {
+    const visitor = resolveVisitorByToken(headerToken);
     if (visitor) return visitor;
   }
 
@@ -79,18 +86,20 @@ function tryResolveVisitor(req: Request): VisitorRow | null {
 }
 
 /**
- * 从请求头或 Cookie 中读取 Web 端访客令牌。
- *
- * @param req - Express 请求对象
- * @returns 读取到的令牌字符串，不存在或为空时返回 null
+ * 从 Cookie 中读取访客令牌。
  */
-function readVisitorToken(req: Request): string | null {
-  // 优先读请求头（兼容现有前端）
-  const header = req.header("x-visitor-token");
-  if (header && header.trim()) return header.trim();
-  // 其次读 Cookie（支持跨端口共享）
+function readCookieToken(req: Request): string | null {
   const cookie = req.cookies?.visitor_token;
   if (cookie && cookie.trim()) return cookie.trim();
+  return null;
+}
+
+/**
+ * 从 x-visitor-token 请求头中读取访客令牌。
+ */
+function readHeaderToken(req: Request): string | null {
+  const header = req.header("x-visitor-token");
+  if (header && header.trim()) return header.trim();
   return null;
 }
 

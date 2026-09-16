@@ -37,6 +37,7 @@ import {
   type SkillFormCardState,
 } from "./AgentSkillFormCard";
 import { AgentMermaidBlock, extractMermaidFromPre } from "./AgentMermaidBlock";
+import { copyTextToClipboard } from "./copyText";
 
 function nodeText(node: ReactNode): string {
   if (node == null || typeof node === "boolean") return "";
@@ -51,7 +52,8 @@ function nodeText(node: ReactNode): string {
 function MarkdownPreWithCopy(props: { children?: ReactNode }) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
-  const text = nodeText(props.children).replace(/\n$/, "");
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const textFromTree = nodeText(props.children).replace(/\n$/, "");
 
   useEffect(() => {
     return () => {
@@ -59,24 +61,25 @@ function MarkdownPreWithCopy(props: { children?: ReactNode }) {
     };
   }, []);
 
-  async function onCopy() {
+  async function onCopy(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const fromDom = wrapRef.current?.querySelector("pre")?.innerText?.replace(/\n$/, "") ?? "";
+    const text = fromDom || textFromTree;
     if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      if (timerRef.current != null) window.clearTimeout(timerRef.current);
-      timerRef.current = window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* ignore */
-    }
+    const ok = await copyTextToClipboard(text);
+    if (!ok) return;
+    setCopied(true);
+    if (timerRef.current != null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setCopied(false), 1500);
   }
 
   return (
-    <div className="mdocs-agent-panel-md-pre-wrap">
+    <div className="mdocs-agent-panel-md-pre-wrap" ref={wrapRef}>
       <button
         type="button"
         className="mdocs-agent-panel-md-copy"
-        onClick={() => void onCopy()}
+        onClick={(ev) => void onCopy(ev)}
         aria-label={copied ? "已复制" : "复制代码"}
         title={copied ? "已复制" : "复制"}
       >

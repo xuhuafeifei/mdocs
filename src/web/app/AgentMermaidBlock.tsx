@@ -11,6 +11,7 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import { copyTextToClipboard } from "./copyText";
 
 function nodeText(node: ReactNode): string {
   if (node == null || typeof node === "boolean") return "";
@@ -292,14 +293,11 @@ function _AgentMermaidBlock(props: { source: string; codeChildren?: ReactNode })
 
   async function onCopy() {
     if (!source) return;
-    try {
-      await navigator.clipboard.writeText(source);
-      setCopied(true);
-      if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* ignore */
-    }
+    const ok = await copyTextToClipboard(source);
+    if (!ok) return;
+    setCopied(true);
+    if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setCopied(false), 1500);
   }
 
   return (

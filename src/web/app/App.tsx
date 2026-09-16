@@ -238,6 +238,7 @@ export function App() {
   const [editBaseCommitId, setEditBaseCommitId] = useState<string | null>(null);
 
   const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [forceOverwriteBusy, setForceOverwriteBusy] = useState(false);
   const [mergeViewOpen, setMergeViewOpen] = useState(false);
   const [editorDraftExists, setEditorDraftExists] = useState(false);
 
@@ -737,6 +738,7 @@ export function App() {
 
   async function openDocument(docId: string): Promise<void> {
     expectedDocIdRef.current = docId;
+    setView("docs");
     // 切到文档焦点：清图谱焦点
     setFocus({ kind: "document", documentId: docId });
     try {
@@ -915,6 +917,62 @@ export function App() {
       });
     }
     setConflictModalOpen(true);
+  }
+
+  async function handleForceOverwrite(): Promise<void> {
+    if (!activeDocMeta || forceOverwriteBusy) return;
+    if (visitor?.visitorId !== activeDocMeta.ownerVisitorId) return;
+    const ok = window.confirm(t("conflictForceConfirm"));
+    if (!ok) return;
+
+    const documentId = activeDocMeta.documentId;
+    setForceOverwriteBusy(true);
+    try {
+      await getDocumentTaskQueue(documentId).execute(async () => {
+        const draft = await getDraft(documentId);
+        const localBaseCommitId =
+          draft?.conflict?.localBaseCommitId ??
+          draft?.localBaseCommitId ??
+          editBaseCommitId ??
+          activeDocMeta.headCommitId;
+        const remoteCommitId =
+          draft?.conflict?.remoteCommitId ?? mergeConflict?.remoteCommitId;
+        const localContent =
+          draft?.conflict?.localSnapshotContent ??
+          draft?.content ??
+          editorContentRef.current?.content;
+        const displayName =
+          draft?.displayName ??
+          editorContentRef.current?.displayName ??
+          activeDocMeta.displayName;
+
+        if (!localBaseCommitId || !remoteCommitId || localContent == null) {
+          setAlertMessage(t("syncHeadMissing"));
+          throw new Error("missing force overwrite payload");
+        }
+
+        await updateDocumentApi(documentId, {
+          content: localContent,
+          displayName,
+          version: {
+            localBaseCommitId,
+            merge: {
+              remoteCommitId,
+              localSnapshotContent: localContent,
+              forceLocal: true,
+            },
+          },
+        });
+        const updated = await getDocumentApi(documentId);
+        await handleMergeSuccess(updated);
+      });
+    } catch (err) {
+      if (!(err instanceof Error && err.message === "missing force overwrite payload")) {
+        setAlertMessage(translateError(t, err));
+      }
+    } finally {
+      setForceOverwriteBusy(false);
+    }
   }
 
   /**
@@ -1663,6 +1721,12 @@ export function App() {
                 setConflictModalOpen(false);
                 setMergeViewOpen(true);
               }}
+              onForceOverwrite={
+                visitor && activeDocMeta && visitor.visitorId === activeDocMeta.ownerVisitorId
+                  ? () => void handleForceOverwrite()
+                  : undefined
+              }
+              forceBusy={forceOverwriteBusy}
             />
             {mergeViewOpen && activeDocMeta && mergeConflict && (
               <Suspense fallback={<div className="merge-view-loading">{t("mergeLoadingRemote")}</div>}>

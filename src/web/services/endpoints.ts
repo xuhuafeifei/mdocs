@@ -276,7 +276,7 @@ export function getDocumentSyncStatusApi(
   const q = localBaseCommitId
     ? `?localBaseCommitId=${encodeURIComponent(localBaseCommitId)}`
     : "";
-  return api(`/api/documents/${encodeURIComponent(documentId)}/sync-status${q}`);
+  return api(`/api/documents/${encodeURIComponent(documentId)}/sync-status${q}`, { silent: true });
 }
 
 export function getDocumentMergeContextApi(
@@ -549,11 +549,28 @@ export interface MyDocument {
   permission: number;
 }
 
+/** 分页查询结果 */
+export interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
 /**
- * 获取当前访客创建的所有文档。
+ * 获取当前访客创建的所有文档，支持分页。
+ * @param offset - 偏移量，默认 0
+ * @param limit - 每页条数，默认 20，最大 100
  */
-export function fetchMyDocumentsApi(): Promise<MyDocument[]> {
-  return api<MyDocument[]>("/api/visitors/me/documents");
+export function fetchMyDocumentsApi(
+  offset = 0,
+  limit = 20,
+): Promise<PaginatedResult<MyDocument>> {
+  const params = new URLSearchParams({
+    offset: String(offset),
+    limit: String(limit),
+  });
+  return api<PaginatedResult<MyDocument>>(`/api/visitors/me/documents?${params}`);
 }
 
 // ========== 评论 ==========
