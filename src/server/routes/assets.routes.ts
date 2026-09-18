@@ -80,6 +80,36 @@ export function isAllowedAssetUpload(_originalname: string, _mimetype: string): 
   return true;
 }
 
+function sanitizeDownloadName(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const base = raw.replace(/\\/g, "/").split("/").pop()?.replace(/[\r\n"]/g, "").trim() ?? "";
+  if (!base || base === "." || base === "..") return null;
+  return base.slice(0, 180);
+}
+
+function contentDispositionAttachment(filename: string): string {
+  const ascii = filename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+/**
+ * 非图片一律 attachment，避免 WebView 把文件当页面打开。
+ * `requestedName` 来自 `?name=`（编辑器卡片上的原文件名）。
+ */
+export function buildAssetResponseHeaders(
+  ext: string,
+  storedName: string,
+  requestedName?: string,
+): { contentType: string; contentDisposition?: string } {
+  const normalized = ext.toLowerCase();
+  const contentType = HTML_EXT.has(normalized)
+    ? "application/octet-stream"
+    : (CONTENT_TYPE_BY_EXT[normalized] ?? "application/octet-stream");
+  if (IMAGE_EXT.has(normalized)) return { contentType };
+  const filename = sanitizeDownloadName(requestedName) ?? storedName;
+  return { contentType, contentDisposition: contentDispositionAttachment(filename) };
+}
+
 // MIME 类型到扩展名的映射表（远程图片转存）
 const MIME_TO_EXT: Record<string, string> = {
   "image/png": ".png",
@@ -238,16 +268,13 @@ export function serveAssetFile(req: Request, res: Response): void {
     res.status(404).end();
     return;
   }
-  // 根据扩展名推断 Content-Type
   const ext = path.extname(abs).toLowerCase();
-  const ct = HTML_EXT.has(ext)
-    ? "application/octet-stream"
-    : (CONTENT_TYPE_BY_EXT[ext] ?? "application/octet-stream");
-  // zip / 音频 / html / pdf 强制下载（html 不以 text/html 内联，避免 XSS）
-  if (AUDIO_EXT.has(ext) || HTML_EXT.has(ext) || ext === ".zip" || ext === ".pdf") {
-    res.setHeader("Content-Disposition", `attachment; filename="${path.basename(abs)}"`);
+  const requestedName = typeof req.query.name === "string" ? req.query.name : undefined;
+  const headers = buildAssetResponseHeaders(ext, path.basename(abs), requestedName);
+  if (headers.contentDisposition) {
+    res.setHeader("Content-Disposition", headers.contentDisposition);
   }
-  res.setHeader("Content-Type", ct);
+  res.setHeader("Content-Type", headers.contentType);
   res.setHeader("Cache-Control", "public, max-age=86400, immutable");
   fs.createReadStream(abs).pipe(res);
 }

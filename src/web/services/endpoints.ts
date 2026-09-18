@@ -547,6 +547,8 @@ export interface MyDocument {
   createdAt: string;
   updatedAt: string;
   permission: number;
+  creatorVisitorId?: string;
+  creatorName?: string;
 }
 
 /** 分页查询结果 */
@@ -555,6 +557,15 @@ export interface PaginatedResult<T> {
   total: number;
   offset: number;
   limit: number;
+  groups?: { key: string; items: T[] }[];
+}
+
+export interface MyDocumentsQuery {
+  offset?: number;
+  limit?: number;
+  domainId?: string;
+  creatorVisitorId?: string;
+  groupBy?: "domain" | "creator";
 }
 
 /**
@@ -562,14 +573,14 @@ export interface PaginatedResult<T> {
  * @param offset - 偏移量，默认 0
  * @param limit - 每页条数，默认 20，最大 100
  */
-export function fetchMyDocumentsApi(
-  offset = 0,
-  limit = 20,
-): Promise<PaginatedResult<MyDocument>> {
+export function fetchMyDocumentsApi(query: MyDocumentsQuery = {}): Promise<PaginatedResult<MyDocument>> {
   const params = new URLSearchParams({
-    offset: String(offset),
-    limit: String(limit),
+    offset: String(query.offset ?? 0),
+    limit: String(query.limit ?? 20),
   });
+  if (query.domainId) params.set("domainId", query.domainId);
+  if (query.creatorVisitorId) params.set("creatorVisitorId", query.creatorVisitorId);
+  if (query.groupBy) params.set("groupBy", query.groupBy);
   return api<PaginatedResult<MyDocument>>(`/api/visitors/me/documents?${params}`);
 }
 

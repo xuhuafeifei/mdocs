@@ -98,6 +98,8 @@ export interface DocumentWithDomain {
   createdAt: string;
   updatedAt: string;
   permission: number;
+  creatorVisitorId?: string;
+  creatorName?: string;
 }
 
 export interface DocumentWithDomain {
@@ -108,6 +110,8 @@ export interface DocumentWithDomain {
   createdAt: string;
   updatedAt: string;
   permission: number;
+  creatorVisitorId?: string;
+  creatorName?: string;
 }
 
 export interface PaginatedDocuments {
@@ -115,6 +119,16 @@ export interface PaginatedDocuments {
   total: number;
   offset: number;
   limit: number;
+  groups?: { key: string; items: DocumentWithDomain[] }[];
+}
+
+export interface MyDocumentsQuery {
+  offset?: number;
+  limit?: number;
+  domainId?: string;
+  /** 不传则不按创建者再滤。本接口本身已限定 owner = 当前访客。 */
+  creatorVisitorId?: string;
+  groupBy?: "domain" | "creator";
 }
 
 /**
@@ -129,21 +143,27 @@ export interface PaginatedDocuments {
 export function listDocumentsByVisitor(
   db: Database.Database,
   visitorId: string,
-  offset = 0,
-  limit = 20,
+  query: MyDocumentsQuery = {},
 ): PaginatedDocuments {
-  limit = Math.min(Math.max(limit, 1), 100);
-  offset = Math.max(offset, 0);
+  const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
+  const offset = Math.max(query.offset ?? 0, 0);
+  const domainId = query.domainId?.trim() || null;
+  const creatorVisitorId = query.creatorVisitorId?.trim() || null;
+
+  const where = `WHERE d.owner_visitor_id = ?
+    AND (? IS NULL OR d.domain_id = ?)
+    AND (? IS NULL OR d.owner_visitor_id = ?)`;
+  const filterArgs = [visitorId, domainId, domainId, creatorVisitorId, creatorVisitorId] as const;
 
   const countRow = db
-    .prepare<string, { c: number }>(
-      `SELECT COUNT(*) as c FROM documents WHERE owner_visitor_id = ?`,
+    .prepare<(typeof filterArgs)[number], { c: number }>(
+      `SELECT COUNT(*) as c FROM documents d ${where}`,
     )
-    .get(visitorId);
+    .get(...filterArgs);
   const total = countRow?.c ?? 0;
 
   const rows = db
-    .prepare<[string, number, number], {
+    .prepare<Array<(typeof filterArgs)[number] | number>, {
       document_id: string;
       domain_id: string;
       relative_path: string;
@@ -151,26 +171,42 @@ export function listDocumentsByVisitor(
       created_at: string;
       updated_at: string;
       permission: number;
+      owner_visitor_id: string;
+      creator_name: string | null;
     }>(
-      `SELECT document_id, domain_id, relative_path, display_name, created_at, updated_at, permission
-       FROM documents WHERE owner_visitor_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
+      `SELECT d.document_id, d.domain_id, d.relative_path, d.display_name, d.created_at, d.updated_at,
+              d.permission, d.owner_visitor_id, v.visitor_name AS creator_name
+       FROM documents d
+       LEFT JOIN visitors v ON v.visitor_id = d.owner_visitor_id
+       ${where}
+       ORDER BY d.updated_at DESC LIMIT ? OFFSET ?`,
     )
-    .all(visitorId, limit, offset);
+    .all(...filterArgs, limit, offset);
 
-  return {
-    items: rows.map((row) => ({
-      documentId: row.document_id,
-      domainId: row.domain_id,
-      relativePath: row.relative_path,
-      displayName: row.display_name,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      permission: row.permission,
-    })),
-    total,
-    offset,
-    limit,
-  };
+  const items = rows.map((row) => ({
+    documentId: row.document_id,
+    domainId: row.domain_id,
+    relativePath: row.relative_path,
+    displayName: row.display_name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    permission: row.permission,
+    creatorVisitorId: row.owner_visitor_id,
+    creatorName: row.creator_name ?? row.owner_visitor_id,
+  }));
+
+  const result: PaginatedDocuments = { items, total, offset, limit };
+  if (query.groupBy === "domain" || query.groupBy === "creator") {
+    const buckets = new Map<string, typeof items>();
+    for (const item of items) {
+      const key = query.groupBy === "domain" ? item.domainId : (item.creatorVisitorId ?? "");
+      const list = buckets.get(key);
+      if (list) list.push(item);
+      else buckets.set(key, [item]);
+    }
+    result.groups = [...buckets.entries()].map(([key, groupItems]) => ({ key, items: groupItems }));
+  }
+  return result;
 }
 
 /**

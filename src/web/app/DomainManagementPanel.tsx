@@ -20,7 +20,7 @@ import {
   isDomainCreator,
   isDomainStructurallyLocked,
 } from "@shared/domainUi";
-import { translateError } from "./utils";
+import { domainPermissionChange } from "@shared/domainPermissionRank";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 
 export function DomainManagementPanel() {
@@ -214,8 +214,12 @@ export function DomainManagementPanel() {
                   const isBuiltIn = isBuiltInDomainId(d.domainId);
                   // 判断域是否被锁定（有文档时不可修改类型或删除）
                   const locked = isDomainStructurallyLocked(d);
-                  // 锁定时的提示文字
-                  const typeTitle = locked ? t("domainTooltipTypeLocked", { count: String(d.docCount) }) : undefined;
+                  const canUpgrade = domainPermissionChange(d.permission, "public") === "upgrade";
+                  const typeTitle = !canUpgrade
+                    ? t("domainPermissionAlreadyTop")
+                    : locked
+                      ? t("domainTooltipTypeLocked")
+                      : undefined;
                   return (
                     <tr key={d.domainId} className={isBuiltIn ? "mdocs-domain-table-row-builtin" : undefined}>
                       {/* 域名列 */}
@@ -279,16 +283,22 @@ export function DomainManagementPanel() {
                         {!isBuiltIn && isOwner && dm.changeTypeForId === d.domainId && (
                           <div className="mdocs-domain-change-type-panel">
                             <div className="mdocs-domain-permission-select">
-                              {DOMAIN_PERMISSIONS.map((p) => (
+                              {DOMAIN_PERMISSIONS.map((p) => {
+                                const change = domainPermissionChange(d.permission, p);
+                                const blocked = change === "downgrade";
+                                return (
                                 <button
                                   key={p}
                                   type="button"
                                   className={d.permission === p ? "active" : ""}
+                                  disabled={blocked}
+                                  title={blocked ? t("domainPermissionNoDowngrade") : undefined}
                                   onClick={() => void dm.handlePermissionChange(d.domainId, p)}
                                 >
                                   {dm.plabel(p)}
                                 </button>
-                              ))}
+                                );
+                              })}
                             </div>
                             <button type="button" className="secondary" onClick={() => dm.setChangeTypeForId(null)}>
                               {t("cancel")}
@@ -316,12 +326,12 @@ export function DomainManagementPanel() {
                               <button
                                 type="button"
                                 className="secondary"
-                                title={locked ? typeTitle : undefined}
+                                title={typeTitle}
                                 onClick={() => {
                                   dm.setRenamingId(null);
                                   dm.setChangeTypeForId(d.domainId);
                                 }}
-                                disabled={locked}
+                                disabled={!canUpgrade}
                               >
                                 {t("domainChangeType")}
                               </button>

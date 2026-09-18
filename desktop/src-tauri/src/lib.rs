@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use tauri::menu::{MenuBuilder, SubmenuBuilder};
-use tauri::webview::DownloadEvent;
+use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 use url::Url;
 
@@ -55,6 +55,18 @@ fn open_in_browser(url: &str) {
 
 fn origin_of_server(server: &str) -> Option<String> {
     origin_key(&Url::parse(server).ok()?)
+}
+
+fn is_downloadable_asset(url: &Url) -> bool {
+    let path = url.path();
+    if !path.contains("/api/assets/") {
+        return false;
+    }
+    let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    !matches!(
+        ext.as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "ico" | "bmp" | "jfif" | "pjpeg"
+    )
 }
 
 fn navigation_allowed(url: &Url, server: Option<&str>) -> bool {
@@ -194,6 +206,30 @@ pub fn run() {
                 //（表现为「拖文件到文章里没反应、不上传」）。
                 // 编辑器自带 UploadPlugin 已在网页侧处理 drop → handleUpload。
                 .disable_drag_drop_handler()
+                .on_new_window({
+                    let handle_nw = handle_nav.clone();
+                    move |url, _features| {
+                        // 附件卡片是 target=_blank。不接这个回调时 wry 直接拒绝新窗口，点击无反应。
+                        let server = handle_nw
+                            .state::<ShellState>()
+                            .server_url
+                            .lock()
+                            .ok()
+                            .and_then(|g| g.clone());
+                        if is_downloadable_asset(&url) || navigation_allowed(&url, server.as_deref()) {
+                            if let Some(window) = handle_nw.get_webview_window("main") {
+                                let js = format!(
+                                    "window.location.assign({})",
+                                    serde_json::to_string(url.as_str()).unwrap_or_else(|_| "\"\"".into())
+                                );
+                                let _ = window.eval(js);
+                            }
+                        } else if url.scheme() == "http" || url.scheme() == "https" {
+                            open_in_browser(url.as_str());
+                        }
+                        NewWindowResponse::Deny
+                    }
+                })
                 .on_navigation(move |url| {
                     let server = handle_nav
                         .state::<ShellState>()

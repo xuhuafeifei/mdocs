@@ -76,6 +76,7 @@ import {
 import { useAutoPublish } from "./hooks/useAutoPublish";
 import { useDocumentVersion } from "./hooks/useDocumentVersion";
 import { aiWriteResultToHtml, htmlToAiWriteSeed } from "./ai-write/htmlAiWrite";
+import { installAssetLinkDownloads } from "./assetLinkDownload";
 import { FILE_TYPE } from "../../shared/file-types";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 import deepseekLogoUrl from "../assets/deepseek.svg";
@@ -183,6 +184,8 @@ export function App() {
   useEffect(() => {
     if (!isNarrow) setMobileNavOpen(false);
   }, [isNarrow]);
+
+  useEffect(() => installAssetLinkDownloads(), []);
 
   // ---- 评论区展开状态 ----
   const [commentPanelOpen, setCommentPanelOpen] = useState(false);

@@ -16,6 +16,7 @@ import {
 } from "../../db/repositories/document.repo.js";
 import { findVisitorById } from "../../db/repositories/visitor.repo.js";
 import { asToolResult, type ToolDeps } from "./tool-deps.js";
+import { changeDomainPermission, DomainPermissionError } from "../../domains/change-domain-permission.js";
 
 /** 校验：域存在、restricted、且当前访客是创建者 */
 function requireRestrictedDomainAsCreator(domainId: string, actorVisitorId: string) {
@@ -211,6 +212,31 @@ export function addDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
         invalidVisitorIds: invalid,
         memberCount: listDomainMemberIds(db, domainId).length,
       });
+    },
+  };
+}
+
+export function setDomainPermissionTool({ visitorId }: ToolDeps): AgentTool {
+  return {
+    name: "set_domain_permission",
+    label: "升级域权限",
+    description:
+      "修改域权限，只能升级不能下降：private → restricted → public。仅创建者。已有文档仍可升级。相同值视为成功、不改库。",
+    parameters: Type.Object({
+      domainId: Type.String({ description: "域 ID" }),
+      permission: Type.String({ description: "public | restricted | private" }),
+    }),
+    execute: async (_id, params) => {
+      const { domainId: rawId, permission } = params as { domainId: string; permission: string };
+      const domainId = rawId?.trim();
+      if (!domainId) throw new Error("domainId is required");
+      if (!permission?.trim()) throw new Error("permission is required");
+      try {
+        return asToolResult(changeDomainPermission(visitorId, domainId, permission.trim()));
+      } catch (err) {
+        if (err instanceof DomainPermissionError) throw new Error(`${err.code}: ${err.message}`);
+        throw err;
+      }
     },
   };
 }

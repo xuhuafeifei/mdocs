@@ -25,6 +25,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 
+private val IMAGE_EXT = setOf(
+    "png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp", "jfif", "pjpeg",
+)
+
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
@@ -75,25 +79,14 @@ class MainActivity : AppCompatActivity() {
             useWideViewPort = true
             loadWithOverviewMode = true
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            // target=_blank 才会进 onCreateWindow；否则附件点击被丢掉
+            setSupportMultipleWindows(true)
+            javaScriptCanOpenWindowsAutomatically = true
         }
         webView.webViewClient = ShellWebViewClient()
         webView.webChromeClient = ShellChromeClient()
         webView.setDownloadListener { downloadUrl, userAgent, contentDisposition, mimeType, _ ->
-            val request = DownloadManager.Request(Uri.parse(downloadUrl))
-            request.setMimeType(mimeType)
-            request.addRequestHeader("User-Agent", userAgent)
-            val cookie = CookieManager.getInstance().getCookie(downloadUrl)
-            if (!cookie.isNullOrBlank()) {
-                request.addRequestHeader("Cookie", cookie)
-            }
-            request.setNotificationVisibility(
-                DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED,
-            )
-            val name = URLUtil.guessFileName(downloadUrl, contentDisposition, mimeType)
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
-            val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
-            dm.enqueue(request)
-            Toast.makeText(this, getString(R.string.download_started, name), Toast.LENGTH_SHORT).show()
+            enqueueAssetDownload(downloadUrl, userAgent, contentDisposition, mimeType)
         }
         webView.loadUrl(url)
 
@@ -145,6 +138,54 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    private fun isDownloadableAsset(uri: Uri): Boolean {
+        val path = uri.path ?: return false
+        if (!path.contains("/api/assets/")) return false
+        val ext = path.substringAfterLast('.', "").lowercase()
+        return ext !in IMAGE_EXT
+    }
+
+    private fun safeFileName(raw: String): String {
+        val base = raw.substringAfterLast('/').substringAfterLast('\\')
+            .replace(Regex("[\\r\\n\"\\\\]"), "")
+            .trim()
+            .take(180)
+        return if (base.isBlank() || base == "." || base == "..") "download" else base
+    }
+
+    private fun enqueueAssetDownload(
+        downloadUrl: String,
+        userAgent: String?,
+        contentDisposition: String?,
+        mimeType: String?,
+    ) {
+        try {
+            val request = DownloadManager.Request(Uri.parse(downloadUrl))
+            if (!mimeType.isNullOrBlank()) request.setMimeType(mimeType)
+            if (!userAgent.isNullOrBlank()) request.addRequestHeader("User-Agent", userAgent)
+            val cookie = CookieManager.getInstance().getCookie(downloadUrl)
+            if (!cookie.isNullOrBlank()) {
+                request.addRequestHeader("Cookie", cookie)
+            }
+            request.setNotificationVisibility(
+                DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED,
+            )
+            val fromQuery = Uri.parse(downloadUrl).getQueryParameter("name")
+            val name = if (!fromQuery.isNullOrBlank()) {
+                safeFileName(fromQuery)
+            } else {
+                URLUtil.guessFileName(downloadUrl, contentDisposition, mimeType)
+            }
+            request.setTitle(name)
+            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
+            val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+            dm.enqueue(request)
+            Toast.makeText(this, getString(R.string.download_started, name), Toast.LENGTH_SHORT).show()
+        } catch (_: Exception) {
+            Toast.makeText(this, R.string.load_error, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private inner class ShellWebViewClient : WebViewClient() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val uri = request.url
@@ -156,6 +197,10 @@ class MainActivity : AppCompatActivity() {
                 } catch (_: ActivityNotFoundException) {
                     true
                 }
+            }
+            if (request.isForMainFrame && isDownloadableAsset(uri)) {
+                enqueueAssetDownload(uri.toString(), webView.settings.userAgentString, null, null)
+                return true
             }
             if (uri.host != null && uri.host != allowedHost) {
                 startActivity(Intent(Intent.ACTION_VIEW, uri))
@@ -185,6 +230,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     private inner class ShellChromeClient : WebChromeClient() {
+        override fun onCreateWindow(
+            view: WebView,
+            isDialog: Boolean,
+            isUserGesture: Boolean,
+            resultMsg: android.os.Message,
+        ): Boolean {
+            val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
+            val popup = WebView(this@MainActivity)
+            popup.webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(popupView: WebView, request: WebResourceRequest): Boolean {
+                    val target = request.url
+                    if (isDownloadableAsset(target)) {
+                        enqueueAssetDownload(target.toString(), popupView.settings.userAgentString, null, null)
+                    } else if (target.scheme == "http" || target.scheme == "https") {
+                        if (target.host != null && target.host != allowedHost) {
+                            try {
+                                startActivity(Intent(Intent.ACTION_VIEW, target))
+                            } catch (_: ActivityNotFoundException) {
+                            }
+                        } else {
+                            webView.loadUrl(target.toString())
+                        }
+                    }
+                    popupView.destroy()
+                    return true
+                }
+            }
+            transport.webView = popup
+            resultMsg.sendToTarget()
+            return true
+        }
+
         override fun onShowFileChooser(
             webView: WebView,
             callback: ValueCallback<Array<Uri>>,

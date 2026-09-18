@@ -796,10 +796,16 @@ export async function mockRemoveDocumentInvite(documentId: string, targetVisitor
  * @param offset 偏移量
  * @param limit 每页条数
  */
-export async function mockFetchMyDocuments(offset = 0, limit = 20): Promise<PaginatedResult<MyDocument>> {
+export async function mockFetchMyDocuments(
+  offset = 0,
+  limit = 20,
+  query: { domainId?: string; creatorVisitorId?: string; groupBy?: "domain" | "creator" } = {},
+): Promise<PaginatedResult<MyDocument>> {
   const allDocs = await getAllDocuments();
   const allItems = allDocs
     .filter((d) => d.ownerVisitorId === DEMO_VISITOR_ID)
+    .filter((d) => !query.domainId || d.domainId === query.domainId)
+    .filter((d) => !query.creatorVisitorId || d.ownerVisitorId === query.creatorVisitorId)
     .map((d) => ({
       documentId: d.documentId,
       domainId: d.domainId,
@@ -808,8 +814,21 @@ export async function mockFetchMyDocuments(offset = 0, limit = 20): Promise<Pagi
       createdAt: d.createdAt,
       updatedAt: d.updatedAt,
       permission: d.permission,
+      creatorVisitorId: d.ownerVisitorId,
+      creatorName: "demo",
     }));
   const total = allItems.length;
   const items = allItems.slice(offset, offset + limit);
-  return { items, total, offset, limit };
+  const result: PaginatedResult<MyDocument> = { items, total, offset, limit };
+  if (query.groupBy) {
+    const buckets = new Map<string, MyDocument[]>();
+    for (const item of items) {
+      const key = query.groupBy === "domain" ? item.domainId : (item.creatorVisitorId ?? "");
+      const list = buckets.get(key) ?? [];
+      list.push(item);
+      buckets.set(key, list);
+    }
+    result.groups = [...buckets.entries()].map(([key, groupItems]) => ({ key, items: groupItems }));
+  }
+  return result;
 }

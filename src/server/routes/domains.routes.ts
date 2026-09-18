@@ -6,7 +6,6 @@ import {
   listDomains,
   insertDomain,
   updateDomainName,
-  updateDomainPermission,
   deleteDomainRow,
   addDomainMember,
   listDomainMemberIds,
@@ -18,6 +17,7 @@ import {
 } from "../db/repositories/document.repo.js";
 import { findVisitorById } from "../db/repositories/visitor.repo.js";
 import { resolveDomainAccess } from "../access/domain-access.js";
+import { changeDomainPermission, DomainPermissionError } from "../domains/change-domain-permission.js";
 
 /**
  * 规范化请求体中的访客ID数组。
@@ -283,9 +283,9 @@ export function buildDomainsRouter(): Router {
 
   /**
    * PUT /:id/permission
-   * 修改域的访问权限。仅域创建者可操作，且域内不能有文档。
+   * 修改域的访问权限。仅创建者。只能升级（private → restricted → public），不能下降。
+   * 已有文档仍可升级。
    */
-  // change domain permission
   router.put("/:id/permission", (req: Request, res: Response) => {
     if (!req.visitor) {
       res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
@@ -293,28 +293,20 @@ export function buildDomainsRouter(): Router {
     }
     const domainId = req.params.id!;
     const body = (req.body ?? {}) as { permission?: unknown };
-    if (typeof body.permission !== "string" || !["public", "restricted", "private"].includes(body.permission)) {
+    if (typeof body.permission !== "string") {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "invalid permission" } });
       return;
     }
-    const db = getDb();
-    const domain = findDomainById(db, domainId);
-    if (!domain) {
-      res.status(404).json({ error: { code: "NOT_FOUND", message: "domain not found" } });
-      return;
+    try {
+      const data = changeDomainPermission(req.visitor.visitor_id, domainId, body.permission);
+      res.json({ data });
+    } catch (err) {
+      if (err instanceof DomainPermissionError) {
+        res.status(err.status).json({ error: { code: err.code, message: err.message } });
+        return;
+      }
+      throw err;
     }
-    if (domain.creator_visitor_id !== req.visitor.visitor_id) {
-      res.status(403).json({ error: { code: "FORBIDDEN", message: "only the creator can modify this domain" } });
-      return;
-    }
-    // 已有文档的域不允许修改权限
-    const docCount = countDocumentsByDomain(db, domainId);
-    if (docCount > 0) {
-      res.status(400).json({ error: { code: "DOMAIN_HAS_DOCUMENTS", message: "cannot modify domain with documents" } });
-      return;
-    }
-    updateDomainPermission(db, domainId, body.permission);
-    res.json({ data: { domainId, permission: body.permission } });
   });
 
   /**

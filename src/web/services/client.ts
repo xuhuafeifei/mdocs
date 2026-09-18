@@ -326,7 +326,11 @@ async function demoApi<T>(
     const url = new URL(path, window.location.origin);
     const offset = parseInt(url.searchParams.get("offset") || "0", 10);
     const limit = parseInt(url.searchParams.get("limit") || "20", 10);
-    return mockFetchMyDocuments(offset, limit) as unknown as T;
+    const domainId = url.searchParams.get("domainId") || undefined;
+    const creatorVisitorId = url.searchParams.get("creatorVisitorId") || undefined;
+    const groupByRaw = url.searchParams.get("groupBy");
+    const groupBy = groupByRaw === "domain" || groupByRaw === "creator" ? groupByRaw : undefined;
+    return mockFetchMyDocuments(offset, limit, { domainId, creatorVisitorId, groupBy }) as unknown as T;
   }
 
   // ==== 书签 ====

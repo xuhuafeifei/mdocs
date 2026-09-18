@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedAssetUpload } from "./assets.routes.js";
+import { isAllowedAssetUpload, buildAssetResponseHeaders } from "./assets.routes.js";
 
 describe("isAllowedAssetUpload", () => {
   it("allows any file type (no restrictions)", () => {
@@ -27,5 +27,30 @@ describe("isAllowedAssetUpload", () => {
     expect(isAllowedAssetUpload("archive.7z", "application/x-7z-compressed")).toBe(true);
     expect(isAllowedAssetUpload("script.js", "text/javascript")).toBe(true);
     expect(isAllowedAssetUpload("data.json", "application/json")).toBe(true);
+  });
+});
+
+describe("buildAssetResponseHeaders", () => {
+  it("forces attachment for non-images and keeps images inline", () => {
+    const pdf = buildAssetResponseHeaders(".pdf", "id.pdf", "报告.pdf");
+    expect(pdf.contentType).toBe("application/pdf");
+    expect(pdf.contentDisposition).toContain("attachment");
+    expect(pdf.contentDisposition).toContain("filename*=UTF-8''");
+
+    const png = buildAssetResponseHeaders(".png", "id.png");
+    expect(png.contentType).toBe("image/png");
+    expect(png.contentDisposition).toBeUndefined();
+
+    const html = buildAssetResponseHeaders(".html", "id.html");
+    expect(html.contentType).toBe("application/octet-stream");
+    expect(html.contentDisposition).toContain("attachment");
+  });
+
+  it("strips path and header characters from the download name", () => {
+    const headers = buildAssetResponseHeaders(".zip", "id.zip", "../evil\r\n.zip");
+    expect(headers.contentDisposition).toContain('filename="evil.zip"');
+    expect(headers.contentDisposition).not.toContain("\r");
+    const fallback = buildAssetResponseHeaders(".zip", "id.zip", "..");
+    expect(fallback.contentDisposition).toContain('filename="id.zip"');
   });
 });

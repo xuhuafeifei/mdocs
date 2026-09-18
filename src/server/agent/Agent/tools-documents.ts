@@ -4,7 +4,7 @@ import type { TreeNode } from "../../../shared/types/tree.js";
 import { getDb } from "../../db/connection.js";
 import { listDocumentsByVisitor } from "../../db/repositories/document.repo.js";
 import { assertDocumentAccess, DocumentError } from "../../access/access-control.js";
-import { createDocument, getDocument, moveDocument } from "../../documents/document.service.js";
+import { createDocument, addDocumentInvite, getDocument, moveDocument } from "../../documents/document.service.js";
 import { buildDocumentTree } from "../../documents/tree.service.js";
 import { createFolder } from "../../routes/folders.routes.js";
 import { searchDocuments } from "../../search/search.service.js";
@@ -106,15 +106,34 @@ export function listMyDocumentsTool({ visitorId }: ToolDeps): AgentTool {
   return {
     name: "list_my_documents",
     label: "列出我创建的文档",
-    description: "列出当前访客创建的文档（按更新时间倒序）",
-    parameters: Type.Object({}),
-    execute: async () => {
-      const result = listDocumentsByVisitor(getDb(), visitorId);
-      const documents = result.items.slice(0, 50);
+    description: "列出当前访客创建的文档。domainId、creatorVisitorId、groupBy 都可不传。",
+    parameters: Type.Object({
+      domainId: Type.Optional(Type.String({ description: "只看该域，不传则全部" })),
+      creatorVisitorId: Type.Optional(Type.String({ description: "只看该创建者。本工具已限定为当前访客的文档" })),
+      groupBy: Type.Optional(
+        Type.Union([Type.Literal("domain"), Type.Literal("creator")], {
+          description: "按域或创建者分组，不传则平铺",
+        }),
+      ),
+    }),
+    execute: async (_id, params) => {
+      const { domainId, creatorVisitorId, groupBy } = params as {
+        domainId?: string;
+        creatorVisitorId?: string;
+        groupBy?: "domain" | "creator";
+      };
+      const result = listDocumentsByVisitor(getDb(), visitorId, {
+        offset: 0,
+        limit: 50,
+        domainId,
+        creatorVisitorId,
+        groupBy,
+      });
       return asToolResult({
         total: result.total,
-        truncated: result.total > 50,
-        documents,
+        truncated: result.total > result.items.length,
+        documents: result.items,
+        ...(result.groups ? { groups: result.groups } : {}),
       });
     },
   };
@@ -296,6 +315,42 @@ export function moveDocumentTool({ visitorId }: ToolDeps): AgentTool {
         if (err instanceof DocumentError) {
           throw new Error(`${err.code}: ${err.message}`);
         }
+        throw err;
+      }
+    },
+  };
+}
+
+export function inviteDocumentUserTool({ visitorId }: ToolDeps): AgentTool {
+  return {
+    name: "invite_document_user",
+    label: "邀请用户看文档",
+    description:
+      "给一篇文档发邀请。仅文档创建者。permission 为 read 或 edit，不传则 read。域成员不能再被邀请（与域成员互斥）。先用「列出活跃访客」拿 visitorId。",
+    parameters: Type.Object({
+      documentId: Type.String({ description: "文档 ID" }),
+      targetVisitorId: Type.String({ description: "被邀请访客 ID" }),
+      permission: Type.Optional(Type.String({ description: "read | edit，默认 read" })),
+    }),
+    execute: async (_id, params) => {
+      const { documentId: rawDoc, targetVisitorId: rawTarget, permission } = params as {
+        documentId: string;
+        targetVisitorId: string;
+        permission?: string;
+      };
+      const documentId = rawDoc?.trim();
+      const targetVisitorId = rawTarget?.trim();
+      if (!documentId) throw new Error("documentId is required");
+      if (!targetVisitorId) throw new Error("targetVisitorId is required");
+      const targetPermission = permission?.trim() || "read";
+      if (targetPermission !== "read" && targetPermission !== "edit") {
+        throw new Error("permission must be read or edit");
+      }
+      try {
+        addDocumentInvite(visitorId, documentId, targetVisitorId, targetPermission);
+        return asToolResult({ documentId, targetVisitorId, permission: targetPermission });
+      } catch (err) {
+        if (err instanceof DocumentError) throw new Error(`${err.code}: ${err.message}`);
         throw err;
       }
     },

@@ -31,9 +31,11 @@ import {
   removeBookmarkApi,
   setPasswordApi,
   fetchDomainsApi,
+  fetchVisitorsDirectoryApi,
 } from "../services/endpoints";
 import type { Bookmark, MyDocument } from "../services/endpoints";
 import type { DomainSummary } from "../../shared/types/domain";
+import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 
 /**
@@ -143,6 +145,11 @@ export function SettingsPage(props: {
   const [myDocumentSearch, setMyDocumentSearch] = useState("");
   const [myDocPage, setMyDocPage] = useState(0);
   const [myDocTotal, setMyDocTotal] = useState(0);
+  const [myDocDomainId, setMyDocDomainId] = useState("");
+  const [myDocCreatorId, setMyDocCreatorId] = useState("");
+  const [myDocGroupBy, setMyDocGroupBy] = useState<"" | "domain" | "creator">("");
+  const [myDocGroups, setMyDocGroups] = useState<{ key: string; items: MyDocument[] }[] | null>(null);
+  const [visitorOptions, setVisitorOptions] = useState<VisitorDirectoryEntry[]>([]);
   const MY_DOC_PAGE_SIZE = 20;
 
   // ---- 域列表（用于 domainId -> domainName 映射）----
@@ -189,8 +196,11 @@ export function SettingsPage(props: {
     }
     if (tab === "myDocuments") {
       loadMyDocuments();
+      fetchVisitorsDirectoryApi().then((rows) => {
+        if (mountedRef.current) setVisitorOptions(rows);
+      }).catch(() => {});
     }
-  }, [tab]);
+  }, [tab, myDocDomainId, myDocCreatorId, myDocGroupBy]);
 
   // 注意：loadBookmarks / loadMyDocuments 内部已使用 mountedRef 做保护
 
@@ -249,9 +259,16 @@ export function SettingsPage(props: {
   async function loadMyDocuments(page = 0): Promise<void> {
     try {
       setMyDocumentsLoading(true);
-      const result = await fetchMyDocumentsApi(page * MY_DOC_PAGE_SIZE, MY_DOC_PAGE_SIZE);
+      const result = await fetchMyDocumentsApi({
+        offset: page * MY_DOC_PAGE_SIZE,
+        limit: MY_DOC_PAGE_SIZE,
+        domainId: myDocDomainId || undefined,
+        creatorVisitorId: myDocCreatorId || undefined,
+        groupBy: myDocGroupBy || undefined,
+      });
       if (!mountedRef.current) return;
       setMyDocuments(result.items);
+      setMyDocGroups(result.groups ?? null);
       setMyDocTotal(result.total);
       setMyDocPage(page);
     } catch {
@@ -829,6 +846,42 @@ export function SettingsPage(props: {
                   value={myDocumentSearch}
                   onChange={(e) => setMyDocumentSearch(e.target.value)}
                 />
+                <select
+                  className="mdocs-settings-search"
+                  value={myDocDomainId}
+                  aria-label={t("myDocumentsFilterDomain")}
+                  onChange={(e) => setMyDocDomainId(e.target.value)}
+                >
+                  <option value="">{t("myDocumentsFilterAllDomains")}</option>
+                  {domains.map((d) => (
+                    <option key={d.domainId} value={d.domainId}>
+                      {domainNameMap.get(d.domainId) || d.domainName}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="mdocs-settings-search"
+                  value={myDocCreatorId}
+                  aria-label={t("myDocumentsFilterCreator")}
+                  onChange={(e) => setMyDocCreatorId(e.target.value)}
+                >
+                  <option value="">{t("myDocumentsFilterAllCreators")}</option>
+                  {visitorOptions.map((v) => (
+                    <option key={v.visitorId} value={v.visitorId}>
+                      {v.visitorName}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="mdocs-settings-search"
+                  value={myDocGroupBy}
+                  aria-label={t("myDocumentsGroupBy")}
+                  onChange={(e) => setMyDocGroupBy(e.target.value as "" | "domain" | "creator")}
+                >
+                  <option value="">{t("myDocumentsGroupNone")}</option>
+                  <option value="domain">{t("myDocumentsGroupDomain")}</option>
+                  <option value="creator">{t("myDocumentsGroupCreator")}</option>
+                </select>
                 <span className="mdocs-settings-page-info">
                   {t("myDocumentsPageInfo", {
                     current: String(myDocTotalPages > 0 ? myDocPage + 1 : 0),
@@ -854,18 +907,30 @@ export function SettingsPage(props: {
                         <tr>
                           <th>{t("myDocumentsColTitle")}</th>
                           <th>{t("myDocumentsColDomain")}</th>
+                          <th>{t("myDocumentsColCreator")}</th>
                           <th>{t("myDocumentsColUpdated")}</th>
                           <th>{t("myDocumentsColCreated")}</th>
                           <th colSpan={2}></th>
                         </tr>
                       </thead>
                       <tbody>
-                        {myDocuments.map((doc) => (
+                        {(myDocGroups ?? [{ key: "", items: myDocuments }]).flatMap((group) => {
+                          const header = group.key ? (
+                            <tr key={`group-${group.key}`}>
+                              <td colSpan={7} style={{ fontWeight: 600, background: "#fafafa" }}>
+                                {myDocGroupBy === "domain"
+                                  ? (domainNameMap.get(group.key) || group.key)
+                                  : (group.items[0]?.creatorName || group.key)}
+                              </td>
+                            </tr>
+                          ) : null;
+                          const rows = group.items.map((doc) => (
                           <tr key={doc.documentId}>
                             <td style={{ cursor: "pointer", fontWeight: 500 }} onClick={() => props.onOpenDocument(doc.documentId)}>
                               {doc.displayName || doc.relativePath || "Untitled"}
                             </td>
                             <td>{domainNameMap.get(doc.domainId || "") || doc.domainId || "—"}</td>
+                            <td>{doc.creatorName || doc.creatorVisitorId || "—"}</td>
                             <td>{new Date(doc.updatedAt).toLocaleDateString()}</td>
                             <td>{new Date(doc.createdAt).toLocaleDateString()}</td>
                             <td style={{ textAlign: "right" }}>
@@ -887,7 +952,9 @@ export function SettingsPage(props: {
                               </button>
                             </td>
                           </tr>
-                        ))}
+                          ));
+                          return header ? [header, ...rows] : rows;
+                        })}
                       </tbody>
                     </table>
                     </div>
