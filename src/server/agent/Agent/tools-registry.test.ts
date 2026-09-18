@@ -12,7 +12,7 @@ const STRUCTURE_NAMES = [
   "set_domain_permission",
   "search_documents",
   "list_tree",
-  "list_my_documents",
+  "query_my_documents",
   "invite_document_user",
   "get_document",
   "create_document",

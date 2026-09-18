@@ -2980,6 +2980,216 @@
   cursor: not-allowed;
 }
 
+.mdocs-my-docs .mdocs-settings-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.mdocs-my-docs .mdocs-settings-card {
+  padding: 24px 28px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.mdocs-my-docs-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.mdocs-my-docs-search {
+  position: relative;
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.mdocs-my-docs-search svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  color: #9ca3af;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.mdocs-my-docs-search input,
+.mdocs-my-docs-select {
+  height: 36px;
+  margin: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font-size: 13px;
+  outline: none;
+  box-shadow: none;
+}
+
+.mdocs-my-docs-search input {
+  width: 100%;
+  padding: 0 12px 0 36px;
+}
+
+.mdocs-my-docs-select {
+  flex: 0 0 160px;
+  width: 160px;
+  padding: 0 28px 0 12px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7280' d='M2.2 4.3 6 8l3.8-3.7-.8-.8L6 6.4 3 3.5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.mdocs-my-docs-search input:focus,
+.mdocs-my-docs-select:focus,
+.mdocs-my-docs-search input:focus-visible,
+.mdocs-my-docs-select:focus-visible {
+  border-color: #10b981;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
+}
+
+.mdocs-my-docs .mdocs-settings-table thead th {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #4b5563;
+  background: #f9fafb;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.mdocs-my-docs .mdocs-settings-table tbody td {
+  padding: 8px 12px;
+  color: #6b7280;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.mdocs-my-docs .mdocs-settings-table tbody tr:hover td {
+  background: #f3f4f6;
+}
+
+.mdocs-my-docs-title {
+  color: #111827;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mdocs-my-docs-date {
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mdocs-my-docs-group td {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+  background: #f9fafb;
+}
+
+.mdocs-my-docs-group:hover td {
+  background: #f9fafb;
+}
+
+.mdocs-my-docs-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.mdocs-my-docs-actions button.ghost.small {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #6b7280;
+  background: transparent;
+  border-color: transparent;
+}
+
+.mdocs-my-docs-actions button.ghost.small:hover {
+  color: #111827;
+  background: #f3f4f6;
+  border-color: transparent;
+}
+
+.mdocs-my-docs-actions button.primary.small {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: #10b981;
+  border-color: #10b981;
+}
+
+.mdocs-my-docs-actions button.primary.small:hover {
+  background: #059669;
+  border-color: #059669;
+}
+
+.mdocs-my-docs-empty {
+  padding: 40px 0;
+  text-align: center;
+  color: #9ca3af;
+}
+
+.mdocs-my-docs-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.mdocs-my-docs-footer .mdocs-settings-pagination {
+  padding: 0;
+  justify-content: flex-end;
+}
+
+.mdocs-my-docs-footer button.secondary {
+  border-color: #e5e7eb;
+  color: #4b5563;
+  background: #fff;
+}
+
+.mdocs-my-docs-footer button.secondary:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.mdocs-my-docs-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.mdocs-my-docs-jump input {
+  width: 56px;
+  height: 28px;
+  margin: 0;
+  padding: 0 6px;
+  text-align: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #111827;
+}
+
+.mdocs-my-docs-jump input:focus,
+.mdocs-my-docs-jump input:focus-visible {
+  border-color: #10b981;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
+}
+
 button.small {
   padding: 6px 12px;
   font-size: 12px;
@@ -5160,6 +5370,16 @@ strong.label {
   .mdocs-layout--settings .mdocs-settings-card {
     padding: 16px;
     border-radius: 10px;
+  }
+
+  .mdocs-my-docs .mdocs-settings-card {
+    padding: 16px;
+  }
+
+  .mdocs-my-docs-select {
+    flex: 1 1 140px;
+    width: auto;
+    min-width: 0;
   }
 
   .mdocs-layout--settings .mdocs-settings-table-wrap {

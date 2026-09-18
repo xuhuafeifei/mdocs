@@ -7,7 +7,7 @@
  * 4. 保存与发布（自动同步开关、未发布草稿列表）
  */
 import { useEffect, useRef, useState } from "react";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { useI18n } from "../i18n";
 import { isDemoMode } from "../services/client";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -47,6 +47,14 @@ function getBool(key: string, def: boolean): boolean {
   if (v === null) return def;
   // localStorage 只存储字符串，"true" 表示 true，其他表示 false
   return v === "true";
+}
+
+function formatDocDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
 }
 
 type SettingsTab = "general" | "bookmarks" | "myDocuments" | "domainManagement" | "memberTemplates" | "savePublish" | "agentConfig";
@@ -144,6 +152,7 @@ export function SettingsPage(props: {
   const [myDocumentsLoading, setMyDocumentsLoading] = useState(false);
   const [myDocumentSearch, setMyDocumentSearch] = useState("");
   const [myDocPage, setMyDocPage] = useState(0);
+  const [myDocJump, setMyDocJump] = useState("1");
   const [myDocTotal, setMyDocTotal] = useState(0);
   const [myDocDomainId, setMyDocDomainId] = useState("");
   const [myDocCreatorId, setMyDocCreatorId] = useState("");
@@ -271,6 +280,7 @@ export function SettingsPage(props: {
       setMyDocGroups(result.groups ?? null);
       setMyDocTotal(result.total);
       setMyDocPage(page);
+      setMyDocJump(String(page + 1));
     } catch {
       // 加载失败忽略
     } finally {
@@ -832,22 +842,23 @@ export function SettingsPage(props: {
               </div>
             </div>
         ) : tab === "myDocuments" ? (
-          // ---- 我的文章 Tab ----
-          <div className="mdocs-settings">
+          <div className="mdocs-settings mdocs-my-docs">
             <div className="mdocs-settings-header">
               <h2 className="mdocs-settings-title">{t("myDocuments")}</h2>
             </div>
             <div className="mdocs-settings-card">
-              <div className="mdocs-settings-table-toolbar">
-                <input
-                  type="text"
-                  className="mdocs-settings-search"
-                  placeholder="搜索文章…"
-                  value={myDocumentSearch}
-                  onChange={(e) => setMyDocumentSearch(e.target.value)}
-                />
+              <div className="mdocs-my-docs-toolbar">
+                <div className="mdocs-my-docs-search">
+                  <Search size={16} strokeWidth={2} aria-hidden="true" />
+                  <input
+                    type="text"
+                    placeholder="搜索文章…"
+                    value={myDocumentSearch}
+                    onChange={(e) => setMyDocumentSearch(e.target.value)}
+                  />
+                </div>
                 <select
-                  className="mdocs-settings-search"
+                  className="mdocs-my-docs-select"
                   value={myDocDomainId}
                   aria-label={t("myDocumentsFilterDomain")}
                   onChange={(e) => setMyDocDomainId(e.target.value)}
@@ -860,7 +871,7 @@ export function SettingsPage(props: {
                   ))}
                 </select>
                 <select
-                  className="mdocs-settings-search"
+                  className="mdocs-my-docs-select"
                   value={myDocCreatorId}
                   aria-label={t("myDocumentsFilterCreator")}
                   onChange={(e) => setMyDocCreatorId(e.target.value)}
@@ -873,7 +884,7 @@ export function SettingsPage(props: {
                   ))}
                 </select>
                 <select
-                  className="mdocs-settings-search"
+                  className="mdocs-my-docs-select"
                   value={myDocGroupBy}
                   aria-label={t("myDocumentsGroupBy")}
                   onChange={(e) => setMyDocGroupBy(e.target.value as "" | "domain" | "creator")}
@@ -882,22 +893,13 @@ export function SettingsPage(props: {
                   <option value="domain">{t("myDocumentsGroupDomain")}</option>
                   <option value="creator">{t("myDocumentsGroupCreator")}</option>
                 </select>
-                <span className="mdocs-settings-page-info">
-                  {t("myDocumentsPageInfo", {
-                    current: String(myDocTotalPages > 0 ? myDocPage + 1 : 0),
-                    total: String(myDocTotalPages),
-                    count: String(myDocTotal),
-                  })}
-                </span>
               </div>
               {myDocumentsLoading ? (
-                <div style={{ textAlign: "center", padding: "40px 0" }}>
-                  {t("loading")}
-                </div>
+                <div className="mdocs-my-docs-empty">{t("loading")}</div>
               ) : (
                 <>
                   {myDocuments.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "40px 0", opacity: 0.6 }}>
+                    <div className="mdocs-my-docs-empty">
                       {myDocumentSearch ? t("myDocumentsNoMatch") : t("myDocumentsEmpty")}
                     </div>
                   ) : (
@@ -910,14 +912,14 @@ export function SettingsPage(props: {
                           <th>{t("myDocumentsColCreator")}</th>
                           <th>{t("myDocumentsColUpdated")}</th>
                           <th>{t("myDocumentsColCreated")}</th>
-                          <th colSpan={2}></th>
+                          <th></th>
                         </tr>
                       </thead>
                       <tbody>
                         {(myDocGroups ?? [{ key: "", items: myDocuments }]).flatMap((group) => {
                           const header = group.key ? (
-                            <tr key={`group-${group.key}`}>
-                              <td colSpan={7} style={{ fontWeight: 600, background: "#fafafa" }}>
+                            <tr key={`group-${group.key}`} className="mdocs-my-docs-group">
+                              <td colSpan={6}>
                                 {myDocGroupBy === "domain"
                                   ? (domainNameMap.get(group.key) || group.key)
                                   : (group.items[0]?.creatorName || group.key)}
@@ -926,23 +928,21 @@ export function SettingsPage(props: {
                           ) : null;
                           const rows = group.items.map((doc) => (
                           <tr key={doc.documentId}>
-                            <td style={{ cursor: "pointer", fontWeight: 500 }} onClick={() => props.onOpenDocument(doc.documentId)}>
+                            <td className="mdocs-my-docs-title" onClick={() => props.onOpenDocument(doc.documentId)}>
                               {doc.displayName || doc.relativePath || "Untitled"}
                             </td>
                             <td>{domainNameMap.get(doc.domainId || "") || doc.domainId || "—"}</td>
                             <td>{doc.creatorName || doc.creatorVisitorId || "—"}</td>
-                            <td>{new Date(doc.updatedAt).toLocaleDateString()}</td>
-                            <td>{new Date(doc.createdAt).toLocaleDateString()}</td>
-                            <td style={{ textAlign: "right" }}>
+                            <td className="mdocs-my-docs-date">{formatDocDate(doc.updatedAt)}</td>
+                            <td className="mdocs-my-docs-date">{formatDocDate(doc.createdAt)}</td>
+                            <td className="mdocs-my-docs-actions">
                               <button
                                 type="button"
-                                className="secondary small"
+                                className="ghost small"
                                 onClick={() => handleOpenInviteModal(doc.documentId)}
                               >
                                 {t("docInfoInviteMember")}
                               </button>
-                            </td>
-                            <td style={{ textAlign: "right", paddingLeft: 0 }}>
                               <button
                                 type="button"
                                 className="primary small"
@@ -959,27 +959,61 @@ export function SettingsPage(props: {
                     </table>
                     </div>
                   )}
-                  {/* 分页控件 */}
-                  {myDocTotalPages > 1 && (
-                    <div className="mdocs-settings-pagination">
-                      <button
-                        type="button"
-                        className="secondary small"
-                        disabled={myDocPage <= 0}
-                        onClick={() => loadMyDocuments(myDocPage - 1)}
+                  <div className="mdocs-my-docs-footer">
+                    <span className="mdocs-settings-page-info">
+                      {t("myDocumentsPageInfo", {
+                        current: String(myDocTotalPages > 0 ? myDocPage + 1 : 0),
+                        total: String(myDocTotalPages),
+                        count: String(myDocTotal),
+                      })}
+                    </span>
+                    {myDocTotalPages > 1 && (
+                      <form
+                        className="mdocs-my-docs-jump"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const n = Number.parseInt(myDocJump, 10);
+                          if (!Number.isFinite(n)) return;
+                          const page = Math.min(Math.max(n, 1), myDocTotalPages) - 1;
+                          if (page !== myDocPage) void loadMyDocuments(page);
+                        }}
                       >
-                        {t("myDocumentsPrev")}
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary small"
-                        disabled={myDocPage >= myDocTotalPages - 1}
-                        onClick={() => loadMyDocuments(myDocPage + 1)}
-                      >
-                        {t("myDocumentsNext")}
-                      </button>
-                    </div>
-                  )}
+                        <span>{t("myDocumentsJumpTo")}</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          max={myDocTotalPages}
+                          aria-label={t("myDocumentsJumpTo")}
+                          value={myDocJump}
+                          onChange={(e) => setMyDocJump(e.target.value)}
+                        />
+                        <button type="submit" className="secondary small">
+                          {t("myDocumentsJump")}
+                        </button>
+                      </form>
+                    )}
+                    {myDocTotalPages > 1 && (
+                      <div className="mdocs-settings-pagination">
+                        <button
+                          type="button"
+                          className="secondary small"
+                          disabled={myDocPage <= 0}
+                          onClick={() => loadMyDocuments(myDocPage - 1)}
+                        >
+                          {t("myDocumentsPrev")}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary small"
+                          disabled={myDocPage >= myDocTotalPages - 1}
+                          onClick={() => loadMyDocuments(myDocPage + 1)}
+                        >
+                          {t("myDocumentsNext")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>

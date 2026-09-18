@@ -67,7 +67,7 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
       return;
     }
 
-    if (event.toolName === "list_my_documents") {
+    if (event.toolName === "query_my_documents") {
       const documents =
         (details?.documents as
           | Array<{

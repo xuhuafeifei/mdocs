@@ -181,7 +181,7 @@ export const en: Record<TranslationKey, string> = {
   domainChangeType: "Change type",
   domainPermissionNoDowngrade: "Permission cannot be made more private.",
   domainPermissionAlreadyTop: "Already the most open permission.",
-  domainNotModifiable: "—",
+  domainNotModifiable: "System preset, cannot be changed",
   domainTooltipTypeLocked: "With documents, permission can only become more open.",
   deleteDomainConfirmDetail:
     "Delete domain «{{name}}»? All {{count}} document(s) in it will be permanently removed.",
@@ -388,6 +388,8 @@ export const en: Record<TranslationKey, string> = {
   myDocumentsNoMatch: "No matching documents",
   myDocumentsPrev: "Previous",
   myDocumentsNext: "Next",
+  myDocumentsJumpTo: "Go to",
+  myDocumentsJump: "Go",
   myDocumentsPageInfo: "Page {{current}}/{{total}}, {{count}} total",
   agentConfig: "AI",
   agentConfigDesc: "Configure DeepSeek for mdocs 智能助手. Only you can use this key.",

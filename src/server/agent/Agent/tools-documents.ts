@@ -56,7 +56,8 @@ export function searchDocumentsTool({ visitorId }: ToolDeps): AgentTool {
   return {
     name: "search_documents",
     label: "搜索文档",
-    description: "全文搜索当前访客可读文档",
+    description:
+      "全文搜索当前访客可读文档（跨域内容检索）。要按「我创建的文章」筛选/翻页请用 query_my_documents。",
     parameters: Type.Object({
       query: Type.String({ description: "搜索词" }),
       domainId: Type.Optional(Type.String({ description: "域 ID，可选" })),
@@ -102,36 +103,45 @@ export function listTreeTool({ visitorId }: ToolDeps): AgentTool {
   };
 }
 
-export function listMyDocumentsTool({ visitorId }: ToolDeps): AgentTool {
+export function queryMyDocumentsTool({ visitorId }: ToolDeps): AgentTool {
   return {
-    name: "list_my_documents",
-    label: "列出我创建的文档",
-    description: "列出当前访客创建的文档。domainId、creatorVisitorId、groupBy 都可不传。",
+    name: "query_my_documents",
+    label: "查询我的文章",
+    description:
+      "列出当前访客创建的文档（与设置页「我的文章」同一接口）。可按 domainId、creatorVisitorId 筛选，按 domain/creator 分组；用 offset/limit 翻页。要全文检索可读文档请用 search_documents。",
     parameters: Type.Object({
       domainId: Type.Optional(Type.String({ description: "只看该域，不传则全部" })),
-      creatorVisitorId: Type.Optional(Type.String({ description: "只看该创建者。本工具已限定为当前访客的文档" })),
+      creatorVisitorId: Type.Optional(
+        Type.String({ description: "只看该创建者。本工具已限定为当前访客创建的文档，筛他人通常为空" }),
+      ),
       groupBy: Type.Optional(
         Type.Union([Type.Literal("domain"), Type.Literal("creator")], {
-          description: "按域或创建者分组，不传则平铺",
+          description: "按域或创建者分组（仅当前页），不传则平铺",
         }),
       ),
+      offset: Type.Optional(Type.Number({ description: "分页偏移，默认 0" })),
+      limit: Type.Optional(Type.Number({ description: "每页条数，默认 20，最大 100" })),
     }),
     execute: async (_id, params) => {
-      const { domainId, creatorVisitorId, groupBy } = params as {
+      const { domainId, creatorVisitorId, groupBy, offset, limit } = params as {
         domainId?: string;
         creatorVisitorId?: string;
         groupBy?: "domain" | "creator";
+        offset?: number;
+        limit?: number;
       };
       const result = listDocumentsByVisitor(getDb(), visitorId, {
-        offset: 0,
-        limit: 50,
+        offset: Math.max(Math.floor(offset ?? 0), 0),
+        limit: Math.min(Math.max(Math.floor(limit ?? 20), 1), 100),
         domainId,
         creatorVisitorId,
         groupBy,
       });
       return asToolResult({
         total: result.total,
-        truncated: result.total > result.items.length,
+        offset: result.offset,
+        limit: result.limit,
+        hasMore: result.offset + result.items.length < result.total,
         documents: result.items,
         ...(result.groups ? { groups: result.groups } : {}),
       });

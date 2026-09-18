@@ -381,6 +381,8 @@ export type TranslationKey =
   | "myDocumentsNoMatch"
   | "myDocumentsPrev"
   | "myDocumentsNext"
+  | "myDocumentsJumpTo"
+  | "myDocumentsJump"
   | "myDocumentsPageInfo"
   // Agent model config
   | "agentConfig"

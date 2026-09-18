@@ -4,7 +4,8 @@
  * 支持：创建新域、搜索/过滤域列表、重命名、修改权限、删除域。
  * 受限域支持通过弹窗管理成员（访客选择器）。
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import { useDomainManagement } from "./hooks/useDomainManagement";
 import {
@@ -19,6 +20,7 @@ import {
   isBuiltInDomainId,
   isDomainCreator,
   isDomainStructurallyLocked,
+  type DomainPermissionValue,
 } from "@shared/domainUi";
 import { domainPermissionChange } from "@shared/domainPermissionRank";
 import { VisitorPickerModal } from "./VisitorPickerModal";
@@ -34,6 +36,8 @@ export function DomainManagementPanel() {
 
   // ---- 导入成员后的提示横幅（成功/失败） ----
   const [importBanner, setImportBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [typeDraft, setTypeDraft] = useState<DomainPermissionValue | "">("");
+  const typePanelRef = useRef<HTMLDivElement>(null);
 
   // ---- 成员管理弹窗状态 ----
   const [memberModal, setMemberModal] = useState<{
@@ -61,6 +65,17 @@ export function DomainManagementPanel() {
   useEffect(() => {
     void loadTemplates();
   }, [loadTemplates]);
+
+  useEffect(() => {
+    if (!dm.changeTypeForId) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!typePanelRef.current?.contains(event.target as Node)) {
+        dm.setChangeTypeForId(null);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [dm.changeTypeForId, dm.setChangeTypeForId]);
 
   /**
    * 打开成员管理弹窗：加载该域的现有成员列表作为初始已选项。
@@ -259,12 +274,6 @@ export function DomainManagementPanel() {
                           <span className="mdocs-domain-permission-badge" data-permission={d.permission}>
                             {dm.domainTypeLabel(d, isBuiltIn)}
                           </span>
-                          {/* 锁定图标 */}
-                          {locked && !isBuiltIn && (
-                            <span className="mdocs-domain-type-lock" aria-hidden="true">
-                              &#128274;
-                            </span>
-                          )}
                         </span>
                       </td>
                       {/* 文档数量列 */}
@@ -281,39 +290,61 @@ export function DomainManagementPanel() {
                         )}
                         {/* 修改权限面板 */}
                         {!isBuiltIn && isOwner && dm.changeTypeForId === d.domainId && (
-                          <div className="mdocs-domain-change-type-panel">
-                            <div className="mdocs-domain-permission-select">
+                          <div className="mdocs-domain-change-type-panel" ref={typePanelRef}>
+                            <div className="mdocs-domain-type-segment" role="radiogroup" aria-label={t("domainChangeType")}>
                               {DOMAIN_PERMISSIONS.map((p) => {
                                 const change = domainPermissionChange(d.permission, p);
                                 const blocked = change === "downgrade";
                                 return (
-                                <button
-                                  key={p}
-                                  type="button"
-                                  className={d.permission === p ? "active" : ""}
-                                  disabled={blocked}
-                                  title={blocked ? t("domainPermissionNoDowngrade") : undefined}
-                                  onClick={() => void dm.handlePermissionChange(d.domainId, p)}
-                                >
-                                  {dm.plabel(p)}
-                                </button>
+                                  <span key={p} title={blocked ? t("domainPermissionNoDowngrade") : undefined}>
+                                    <button
+                                      type="button"
+                                      role="radio"
+                                      aria-checked={typeDraft === p}
+                                      className={typeDraft === p ? "active" : ""}
+                                      disabled={blocked}
+                                      onClick={() => setTypeDraft(p)}
+                                    >
+                                      {dm.plabel(p)}
+                                    </button>
+                                  </span>
                                 );
                               })}
                             </div>
-                            <button type="button" className="secondary" onClick={() => dm.setChangeTypeForId(null)}>
-                              {t("cancel")}
+                            <button
+                              type="button"
+                              className="mdocs-domain-type-icon confirm"
+                              aria-label={t("save")}
+                              disabled={typeDraft === "" || typeDraft === d.permission}
+                              onClick={() => {
+                                if (typeDraft && typeDraft !== d.permission) void dm.handlePermissionChange(d.domainId, typeDraft);
+                              }}
+                            >
+                              <Check size={14} strokeWidth={2.5} />
+                            </button>
+                            <button
+                              type="button"
+                              className="mdocs-domain-type-icon cancel"
+                              aria-label={t("cancel")}
+                              onClick={() => dm.setChangeTypeForId(null)}
+                            >
+                              <X size={14} strokeWidth={2.5} />
                             </button>
                           </div>
                         )}
-                        {/* 操作按钮组：重命名、改类型、删除、管理成员 */}
                         {!isBuiltIn &&
                           isOwner &&
                           dm.renamingId !== d.domainId &&
                           dm.changeTypeForId !== d.domainId && (
                             <div className="mdocs-domain-action-buttons">
+                              {d.permission === "restricted" && (
+                                <button type="button" className="mdocs-domain-action mdocs-domain-action--primary" onClick={() => void openMemberModal(d)}>
+                                  {t("domainMembersManageButton")}
+                                </button>
+                              )}
                               <button
                                 type="button"
-                                className="secondary"
+                                className="mdocs-domain-action"
                                 title={locked ? t("domainLocked") : undefined}
                                 onClick={() => {
                                   dm.setChangeTypeForId(null);
@@ -325,10 +356,11 @@ export function DomainManagementPanel() {
                               </button>
                               <button
                                 type="button"
-                                className="secondary"
+                                className="mdocs-domain-action"
                                 title={typeTitle}
                                 onClick={() => {
                                   dm.setRenamingId(null);
+                                  setTypeDraft(d.permission);
                                   dm.setChangeTypeForId(d.domainId);
                                 }}
                                 disabled={!canUpgrade}
@@ -337,19 +369,13 @@ export function DomainManagementPanel() {
                               </button>
                               <button
                                 type="button"
-                                className="secondary"
+                                className="mdocs-domain-action mdocs-domain-action--danger"
                                 title={locked ? t("domainLocked") : undefined}
                                 onClick={() => void dm.handleDelete(d)}
                                 disabled={locked}
                               >
                                 {t("deleteDomain")}
                               </button>
-                              {/* 受限域显示成员管理按钮 */}
-                              {d.permission === "restricted" && !isBuiltIn && (
-                                <button type="button" className="secondary" onClick={() => void openMemberModal(d)}>
-                                  {t("domainMembersManageButton")}
-                                </button>
-                              )}
                             </div>
                           )}
                       </td>
