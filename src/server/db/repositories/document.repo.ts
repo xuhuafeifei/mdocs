@@ -153,10 +153,16 @@ export function listDocumentsByVisitor(
   const where = `WHERE d.owner_visitor_id = ?
     AND (? IS NULL OR d.domain_id = ?)
     AND (? IS NULL OR d.owner_visitor_id = ?)`;
-  const filterArgs = [visitorId, domainId, domainId, creatorVisitorId, creatorVisitorId] as const;
+  const filterArgs: [string, string | null, string | null, string | null, string | null] = [
+    visitorId,
+    domainId,
+    domainId,
+    creatorVisitorId,
+    creatorVisitorId,
+  ];
 
   const countRow = db
-    .prepare<(typeof filterArgs)[number], { c: number }>(
+    .prepare<typeof filterArgs, { c: number }>(
       `SELECT COUNT(*) as c FROM documents d ${where}`,
     )
     .get(...filterArgs);
