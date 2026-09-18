@@ -93,7 +93,8 @@ function contentDispositionAttachment(filename: string): string {
 }
 
 /**
- * 非图片一律 attachment，避免 WebView 把文件当页面打开。
+ * 非图片：强制 octet-stream + attachment。
+ * WKWebView 会对可预览 MIME（pdf/音频等）在页内打开；octet-stream 才会走下载回调。
  * `requestedName` 来自 `?name=`（编辑器卡片上的原文件名）。
  */
 export function buildAssetResponseHeaders(
@@ -102,12 +103,14 @@ export function buildAssetResponseHeaders(
   requestedName?: string,
 ): { contentType: string; contentDisposition?: string } {
   const normalized = ext.toLowerCase();
-  const contentType = HTML_EXT.has(normalized)
-    ? "application/octet-stream"
-    : (CONTENT_TYPE_BY_EXT[normalized] ?? "application/octet-stream");
-  if (IMAGE_EXT.has(normalized)) return { contentType };
+  if (IMAGE_EXT.has(normalized)) {
+    return { contentType: CONTENT_TYPE_BY_EXT[normalized] ?? "application/octet-stream" };
+  }
   const filename = sanitizeDownloadName(requestedName) ?? storedName;
-  return { contentType, contentDisposition: contentDispositionAttachment(filename) };
+  return {
+    contentType: "application/octet-stream",
+    contentDisposition: contentDispositionAttachment(filename),
+  };
 }
 
 // MIME 类型到扩展名的映射表（远程图片转存）

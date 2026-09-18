@@ -18,6 +18,7 @@ export const MDOCS_UPDATE_PACKAGE = "@fgbg/mdocs";
 type PackageJson = {
   name?: string;
   version?: string;
+  bin?: string | Record<string, string>;
 };
 
 function log(msg: string): void {
@@ -143,6 +144,17 @@ function overlayPackage(pkgRoot: string, extractedPackageDir: string): void {
   }
 }
 
+/** tarball / git 里 bin 常是 644；覆盖后必须补执行位，否则全局 mdocs 变成 Permission denied。 */
+export function chmodPackageBins(pkgRoot: string): void {
+  const bin = readPackageJson(pkgRoot).bin;
+  const rels = !bin ? [] : typeof bin === "string" ? [bin] : Object.values(bin);
+  for (const rel of rels) {
+    const file = path.join(pkgRoot, rel);
+    if (!fs.existsSync(file)) continue;
+    fs.chmodSync(file, 0o755);
+  }
+}
+
 /** 只补差量依赖：不删 node_modules，prefer-offline 优先用本地缓存 */
 function installDepsPreferOffline(pkgRoot: string): void {
   log("安装/同步依赖（--prefer-offline，保留已有 node_modules）…");
@@ -200,6 +212,7 @@ export function runSelfUpdate(): void {
 
     log("原地覆盖包文件（保留 node_modules）…");
     overlayPackage(pkgRoot, inner);
+    chmodPackageBins(pkgRoot);
     installDepsPreferOffline(pkgRoot);
 
     const after = readPackageJson(pkgRoot);

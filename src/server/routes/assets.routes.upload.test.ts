@@ -31,9 +31,9 @@ describe("isAllowedAssetUpload", () => {
 });
 
 describe("buildAssetResponseHeaders", () => {
-  it("forces attachment for non-images and keeps images inline", () => {
+  it("forces octet-stream + attachment for non-images and keeps images inline", () => {
     const pdf = buildAssetResponseHeaders(".pdf", "id.pdf", "报告.pdf");
-    expect(pdf.contentType).toBe("application/pdf");
+    expect(pdf.contentType).toBe("application/octet-stream");
     expect(pdf.contentDisposition).toContain("attachment");
     expect(pdf.contentDisposition).toContain("filename*=UTF-8''");
 

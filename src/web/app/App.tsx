@@ -1567,7 +1567,7 @@ export function App() {
                         onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
                         commentPanelOpen={commentPanelOpen}
                         commentCount={commentCount}
-                        onAiWrite={() => void openAiWriteForCurrentDoc()}
+                        onAiWrite={isNarrow ? undefined : () => void openAiWriteForCurrentDoc()}
                         onShowToast={setMessage}
                         readerChrome={isNarrow}
                         onOpenMobileNav={() => setMobileNavOpen(true)}
@@ -1638,7 +1638,7 @@ export function App() {
                       onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
                       commentPanelOpen={commentPanelOpen}
                       commentCount={commentCount}
-                      onAiWrite={() => void openAiWriteForCurrentDoc()}
+                      onAiWrite={isNarrow ? undefined : () => void openAiWriteForCurrentDoc()}
                       readerChrome={isNarrow}
                       onOpenMobileNav={() => setMobileNavOpen(true)}
                     />
@@ -1683,7 +1683,7 @@ export function App() {
                     <Folder size={16} strokeWidth={1.5} />
                     {t("newFolder")}
                   </button>
-                  {!isDemoMode() ? (
+                  {!isDemoMode() && !isNarrow ? (
                     <button type="button" className="secondary" onClick={() => openAiWriteBlank()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <img src={deepseekLogoUrl} alt="" width={16} height={16} style={{ display: "block" }} />
                       AI 帮写
@@ -2156,7 +2156,9 @@ export function App() {
                 }}
                 onTreeChanged={() => void refreshTree()}
                 onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
-                onOpenCoding={(payload) => void openAiWriteForDocument(payload)}
+                onOpenCoding={
+                  isNarrow ? undefined : (payload) => void openAiWriteForDocument(payload)
+                }
               />
             </Suspense>
           ) : null}

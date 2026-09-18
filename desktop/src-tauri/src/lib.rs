@@ -210,13 +210,19 @@ pub fn run() {
                     let handle_nw = handle_nav.clone();
                     move |url, _features| {
                         // 附件卡片是 target=_blank。不接这个回调时 wry 直接拒绝新窗口，点击无反应。
+                        // 可下载附件交给系统浏览器（保留 download / Content-Disposition）；
+                        // 同源普通链接仍在主窗口打开；外链走系统浏览器。
+                        if is_downloadable_asset(&url) {
+                            open_in_browser(url.as_str());
+                            return NewWindowResponse::Deny;
+                        }
                         let server = handle_nw
                             .state::<ShellState>()
                             .server_url
                             .lock()
                             .ok()
                             .and_then(|g| g.clone());
-                        if is_downloadable_asset(&url) || navigation_allowed(&url, server.as_deref()) {
+                        if navigation_allowed(&url, server.as_deref()) {
                             if let Some(window) = handle_nw.get_webview_window("main") {
                                 let js = format!(
                                     "window.location.assign({})",
@@ -231,6 +237,12 @@ pub fn run() {
                     }
                 })
                 .on_navigation(move |url| {
+                    if is_downloadable_asset(url) {
+                        // 网页侧拦截后会 location.assign；在壳内导航会丢掉 download 属性。
+                        // 改交给系统浏览器下载。
+                        open_in_browser(url.as_str());
+                        return false;
+                    }
                     let server = handle_nav
                         .state::<ShellState>()
                         .server_url
