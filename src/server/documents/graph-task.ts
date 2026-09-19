@@ -177,7 +177,7 @@ async function runDomainGraph(
   const db = getDb();
   const domain = findDomainById(db, payload.targetId);
   if (!domain) {
-    throw new Error(`域不存在：${payload.targetId}`);
+    throw new Error(`工作空间不存在：${payload.targetId}`);
   }
 
   // 域下 parent_id 为空的一级节点（排除图谱隐藏文件）

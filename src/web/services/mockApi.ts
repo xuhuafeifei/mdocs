@@ -249,7 +249,7 @@ export async function mockCreateDocument(input: {
         throw new ApiRequestError(400, "INVALID_PARENT", "无效的父节点或父节点不是文件夹");
       }
       if (parent.domainId !== domainId) {
-        throw new ApiRequestError(403, "FORBIDDEN", "不能跨域创建文档");
+        throw new ApiRequestError(403, "FORBIDDEN", "不能跨工作空间创建文档");
       }
       relativePath = `${parent.relativePath}/${normalisedFile}`;
       parentIdResolved = input.parentId;
@@ -379,7 +379,7 @@ export async function mockMoveDocument(
       throw new ApiRequestError(400, "INVALID_PARENT", "无效的父节点或父节点不是文件夹");
     }
     if (parent.domainId !== existing.domainId) {
-      throw new ApiRequestError(400, "CROSS_DOMAIN", "不能跨域移动文档");
+      throw new ApiRequestError(400, "CROSS_DOMAIN", "不能跨工作空间移动文档");
     }
     newParentId = parentId;
     const parentPath = parent.relativePath.endsWith("/")
@@ -480,7 +480,7 @@ export async function mockCreateFolder(input: {
         throw new ApiRequestError(404, "INVALID_PARENT", "父目录不存在");
       }
       if (parent.domainId !== domainId) {
-        throw new ApiRequestError(403, "FORBIDDEN", "不能跨域创建目录");
+        throw new ApiRequestError(403, "FORBIDDEN", "不能跨工作空间创建目录");
       }
       normalizedPath = `${parent.relativePath}/${storageName}`;
       parentFolderId = input.parentId;

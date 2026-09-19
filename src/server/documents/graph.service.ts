@@ -123,7 +123,7 @@ export async function buildDomainGraph(
   const db = getDb();
   const domain = findDomainById(db, domainId);
   if (!domain) {
-    throw new Error(`域不存在：${domainId}`);
+    throw new Error(`工作空间不存在：${domainId}`);
   }
   const ownerVisitorId = domain.creator_visitor_id;
   const deps = createGraphDeps(agentConfig, domainId, ownerVisitorId);

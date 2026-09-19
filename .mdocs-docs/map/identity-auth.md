@@ -3,6 +3,17 @@
 人读长文：[`../archive/auth-and-access-control.md`](../archive/auth-and-access-control.md)  
 决策：[`../decisions/001-visitor-identity.md`](../decisions/001-visitor-identity.md)、[`008-visitor-name-unique-and-migrate-by-name.md`](../decisions/008-visitor-name-unique-and-migrate-by-name.md)、[`011-permission-visibility-no-folder-invite.md`](../decisions/011-permission-visibility-no-folder-invite.md)
 
+### 用语：工作空间 / domain
+
+- **关键词**：`工作空间` `Workspace` `domain_id` `个人域` `localizeDomainName`
+- **结论**：对人说 **工作空间**。表、字段、API、错误码、`--domain` 仍叫 domain。库存个人空间名后缀仍是「个人域」，展示换成「个人工作空间」。旧契约里的「域」不回溯改写。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `.mdocs-docs/requirements/workspace-wording-start-writing/设计契约.md` | 概念分层 |
+  | `src/web/app/utils.ts` | `localizeDomainName` |
+  | `src/shared/personalDomain.ts` | `PERSONAL_DOMAIN_NAME_SUFFIX` |
+
 ### 访客注册 / Token
 
 - **关键词**：`visitor` `x-visitor-token` `SHA-256` `register`

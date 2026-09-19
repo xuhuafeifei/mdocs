@@ -35,8 +35,8 @@ function requireRestrictedDomainAsCreator(domainId: string, actorVisitorId: stri
 export function listDomainsTool({ visitorId }: ToolDeps): AgentTool {
   return {
     name: "list_domains",
-    label: "列出可见域",
-    description: "列出当前访客可见域（domainId/domainName/permission/docCount）",
+    label: "列出可见工作空间",
+    description: "列出当前访客可见工作空间（domainId/domainName/permission/docCount）",
     parameters: Type.Object({}),
     execute: async () => {
       const db = getDb();
@@ -66,10 +66,10 @@ export function listDomainsTool({ visitorId }: ToolDeps): AgentTool {
 export function createDomainTool({ visitorId }: ToolDeps): AgentTool {
   return {
     name: "create_domain",
-    label: "创建域",
-    description: "创建域（permission: public/restricted/private，默认 restricted）",
+    label: "创建工作空间",
+    description: "创建工作空间（permission: public/restricted/private，默认 restricted）",
     parameters: Type.Object({
-      domainName: Type.String({ description: "域名" }),
+      domainName: Type.String({ description: "工作空间名称" }),
       permission: Type.Optional(
         Type.String({ description: "public | restricted | private" }),
       ),
@@ -119,11 +119,11 @@ export function createDomainTool({ visitorId }: ToolDeps): AgentTool {
 export function listDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
   return {
     name: "list_domain_members",
-    label: "列出域成员",
+    label: "列出工作空间成员",
     description:
-      "列出 restricted 域的成员（仅域创建者可用）。返回 visitorId / visitorName / missing / disabled。",
+      "列出 restricted 工作空间的成员（仅创建者可用）。返回 visitorId / visitorName / missing / disabled。",
     parameters: Type.Object({
-      domainId: Type.String({ description: "域 ID" }),
+      domainId: Type.String({ description: "工作空间 ID" }),
     }),
     execute: async (_id, params) => {
       const domainId = (params as { domainId: string }).domainId?.trim();
@@ -155,11 +155,11 @@ export function listDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
 export function addDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
   return {
     name: "add_domain_members",
-    label: "添加域成员",
+    label: "添加工作空间成员",
     description:
-      "向 restricted 域追加成员（仅域创建者可用；不会清空现有成员）。visitorIds 来自「列出活跃访客」。创建者始终保留。",
+      "向 restricted 工作空间追加成员（仅创建者可用；不会清空现有成员）。visitorIds 来自「列出活跃访客」。创建者始终保留。",
     parameters: Type.Object({
-      domainId: Type.String({ description: "域 ID" }),
+      domainId: Type.String({ description: "工作空间 ID" }),
       visitorIds: Type.Array(Type.String({ description: "要添加的访客 ID" }), {
         description: "访客 ID 数组",
       }),
@@ -219,11 +219,11 @@ export function addDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
 export function setDomainPermissionTool({ visitorId }: ToolDeps): AgentTool {
   return {
     name: "set_domain_permission",
-    label: "升级域权限",
+    label: "升级工作空间权限",
     description:
-      "修改域权限，只能升级不能下降：private → restricted → public。仅创建者。已有文档仍可升级。相同值视为成功、不改库。",
+      "修改工作空间权限，只能升级不能下降：private → restricted → public。仅创建者。已有文档仍可升级。相同值视为成功、不改库。",
     parameters: Type.Object({
-      domainId: Type.String({ description: "域 ID" }),
+      domainId: Type.String({ description: "工作空间 ID" }),
       permission: Type.String({ description: "public | restricted | private" }),
     }),
     execute: async (_id, params) => {

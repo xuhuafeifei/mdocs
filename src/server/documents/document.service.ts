@@ -244,7 +244,7 @@ export function createDocument(params: {
 
   const domainRow = findDomainById(db, domainId);
   if (!domainRow) {
-    throw new DocumentError("DOMAIN_NOT_FOUND", "域不存在", 404);
+    throw new DocumentError("DOMAIN_NOT_FOUND", "工作空间不存在", 404);
   }
   const access = resolveDomainAccess(
     db,
@@ -253,7 +253,7 @@ export function createDocument(params: {
     params.actorVisitorId,
   );
   if (access.kind !== "full") {
-    throw new DocumentError("FORBIDDEN", "无权在该域创建文档", 403);
+    throw new DocumentError("FORBIDDEN", "无权在该工作空间创建文档", 403);
   }
 
   // 自动计算 relativePath
@@ -301,7 +301,7 @@ export function createDocument(params: {
     if (!validateDomainPermission(domainRow.permission, params.permission)) {
       throw new DocumentError(
         "INVALID_PERMISSION",
-        `域类型"${domainRow.permission}"不允许权限值 ${params.permission}`,
+        `工作空间类型"${domainRow.permission}"不允许权限值 ${params.permission}`,
         400,
       );
     }
@@ -468,7 +468,7 @@ export function updateDocument(params: {
   ) {
     throw new DocumentError(
       "INVALID_PERMISSION",
-      `域类型"${domainPermission}"不允许权限值 ${params.permission}`,
+      `工作空间类型"${domainPermission}"不允许权限值 ${params.permission}`,
       400,
     );
   }
@@ -673,7 +673,7 @@ export function moveDocument(params: {
       );
     }
     if (parentDoc.domain_id !== row.domain_id) {
-      throw new DocumentError("CROSS_DOMAIN", "不能跨域移动文档", 400);
+      throw new DocumentError("CROSS_DOMAIN", "不能跨工作空间移动文档", 400);
     }
     newParentId = targetParent;
     const parentPath = parentDoc.relative_path.endsWith("/")
@@ -862,7 +862,7 @@ export function addDocumentInvite(
   if (domain && isDomainMember(db, domain.domain_id, targetVisitorId)) {
     throw new DocumentError(
       "BAD_REQUEST",
-      "该访客已是域成员，无需邀请；邀请与域成员互斥",
+      "该访客已是工作空间成员，无需邀请；邀请与工作空间成员互斥",
       400,
     );
   }

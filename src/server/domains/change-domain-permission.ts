@@ -34,7 +34,7 @@ export function changeDomainPermission(
   if (change === "downgrade") {
     throw new DomainPermissionError(
       "DOMAIN_PERMISSION_DOWNGRADE",
-      "域权限只能升级（private → restricted → public），不能下降",
+      "工作空间权限只能升级（private → restricted → public），不能下降",
       400,
     );
   }

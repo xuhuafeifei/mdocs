@@ -2,8 +2,7 @@
  * 文档树右键上下文菜单
  * 在侧边栏树节点上右键时弹出，支持：
  * 1. 在当前位置新建文档
- * 2. 在当前位置新建文件夹
- * 3. 删除文档（文件夹不可删除）
+ * 2. 删除文档（文件夹不可删除）
  * 4. 复制 documentId
  * 5. 复制页面 URL
  * 点击外部或按 Escape 自动关闭。
@@ -20,7 +19,6 @@ export function TreeContextMenu(props: {
   parentPath: string;
   onClose: () => void;
   onCreateChild: (parentPath: string) => void;
-  onCreateFolder: (parentPath: string) => void;
   onDeleteDocument: (node: Extract<TreeNode, { type: "document" }>) => void;
   onDeleteFolder: (node: Extract<TreeNode, { type: "folder" }>) => void;
 }) {
@@ -63,12 +61,6 @@ export function TreeContextMenu(props: {
       : t("newDocAtRoot")
     : t("newDocBeside");
 
-  const folderLabel = isFolder
-    ? folderHuman
-      ? t("newFolderIn", { name: folderHuman })
-      : t("newFolderAtRoot")
-    : t("newFolderBeside");
-
   /** 节点自身的 documentId（文档与文件夹都有） */
   const nodeId = props.node.documentId;
   /**
@@ -97,17 +89,6 @@ export function TreeContextMenu(props: {
         }}
       >
         {createLabel}
-      </button>
-      <button
-        type="button"
-        className="mdocs-context-item"
-        onClick={() => {
-          const parent = isFolder ? props.node.path : props.parentPath;
-          props.onCreateFolder(parent);
-          props.onClose();
-        }}
-      >
-        {folderLabel}
       </button>
       <div className="mdocs-context-divider" />
       <button

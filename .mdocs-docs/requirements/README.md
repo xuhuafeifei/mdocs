@@ -6,7 +6,7 @@
 
 | 夹 | 入口 |
 |----|------|
-| [domain-permission-and-doc-table](./domain-permission-and-doc-table/设计契约.md) | **已同意**：域权限只升不降；我的文章按域/创建者筛选分组；对应 Agent tools |
+| [workspace-wording-start-writing](./workspace-wording-start-writing/设计契约.md) | **已同意**：对人叫工作空间，实现仍叫 domain；空态「开始写作」+「AI 帮写」 |
 | [conflict-force-overwrite](./conflict-force-overwrite/需求分析.md) | **已同意**：冲突时 owner 强制覆盖（假 merge，正文=本地） |
 | [android-webview-shell](./android-webview-shell/设计契约.md) | **已同意**：Android 侧载 APK，用户自填 mdocs 地址 |
 | [desktop-webview-shell](./desktop-webview-shell/设计契约.md) | **已同意**：Tauri 2 桌面壳（Mac + Windows），用户自填 mdocs 地址 |

@@ -36,6 +36,7 @@
 
 | 需求夹 | 说明 |
 |--------|------|
+| `workspace-wording-start-writing` | **已同意**：对人叫工作空间，实现仍叫 domain；空态「开始写作」+「AI 帮写」；去掉新建文件夹入口 — [需求分析](./requirements/workspace-wording-start-writing/需求分析.md) · [设计契约](./requirements/workspace-wording-start-writing/设计契约.md) · [代码索引](./requirements/workspace-wording-start-writing/代码索引.md) |
 | `conflict-force-overwrite` | **已同意**：冲突时 owner 强制覆盖（merge 通道 + 正文=本地）— [需求分析](./requirements/conflict-force-overwrite/需求分析.md) · [设计契约](./requirements/conflict-force-overwrite/设计契约.md) |
 | `agent-chat-mermaid` | **已同意**：Ask 聊天气泡 mermaid 默认渲染、可切代码；只存源码前端翻译 — [需求分析](./requirements/agent-chat-mermaid/需求分析.md) · [设计契约](./requirements/agent-chat-mermaid/设计契约.md) |
 | `domain-permission-and-doc-table` | **已同意**：域权限只升不降；我的文章按域/创建者筛选分组；Agent 可升级域、筛文章、邀请看文档 — [设计契约](./requirements/domain-permission-and-doc-table/设计契约.md) |

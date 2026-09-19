@@ -17,7 +17,7 @@
 | **AI 双模式** | **智能助手**：答疑、搜文、结构操作、有条件全文覆写（低交互），帮你省操作时间。**帮写**：左聊右 Diff、按段接受后再写回（高交互），精细控制每一段文字。 |
 | **Agent 开发闭环** | CLI Token + [mdocs-cli](https://github.com/xuhuafeifei/mdocs-cli) Skills：在 Cursor / Claude 里搜索、读写知识库；`mdocs-dev` / `diagram` 把契约与 Mermaid 落进仓库，减少决策不落盘与知识漂移。 |
 | **本地私有** | 单进程，SQLite + 磁盘文件，无外部 DB / 缓存 / 队列。 |
-| **无账户协作** | 访客即身份；域隔离 + 文档级邀请，从私有到开放按需放开。 |
+| **无账户协作** | 访客即身份；工作空间 + 文档级邀请，从私有到开放按需放开。 |
 | **双模编辑与草稿** | Markdown + 富文本工具栏；Meta2d / Mermaid / Markmap；本地草稿自动保存，空闲可同步云端。 |
 
 <p align="center">
@@ -74,13 +74,13 @@ DeepSeek API Key 在设置页配置（按访客隔离）：
 
 详见：[Agent 开发闭环](https://xuhuafeifei.github.io/mdocs-site/docs/usage/agent-dev-loop.html) · [CLI Token](https://xuhuafeifei.github.io/mdocs-site/docs/usage/cli-token.html)
 
-### 编辑、域与协作
+### 编辑与协作
 
-斜杠菜单插入 Meta2d / Markmap 等；域管理、评论、收藏等能力齐全。
+斜杠菜单插入 Meta2d / Markmap 等；工作空间、评论、收藏等能力齐全。
 
 <p align="center">
   <img src="docs/screenshots/slash-menu.png" alt="斜杠菜单" width="420" />
-  <img src="docs/screenshots/domain-manager.png" alt="域管理" width="420" />
+  <img src="docs/screenshots/domain-manager.png" alt="工作空间" width="420" />
 </p>
 
 <p align="center">
@@ -114,7 +114,7 @@ mdocs update
 
 ```
 src/
-  server/    Express API、Agent、文档/域服务、CLI
+  server/    Express API、Agent、文档与工作空间、CLI
   web/       Vite + React 前端
   shared/    两侧共用类型与路径工具
 ```

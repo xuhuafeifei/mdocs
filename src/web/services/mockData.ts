@@ -32,7 +32,7 @@ export const DEMO_VISITOR: VisitorPublic = {
 export const DEMO_DOMAINS: DomainSummary[] = [
   {
     domainId: "default",
-    domainName: "默认域",
+    domainName: "默认工作空间",
     permission: "public",
     creatorVisitorId: DEMO_VISITOR_ID,
     docCount: 3,

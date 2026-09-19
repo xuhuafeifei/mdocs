@@ -4,7 +4,7 @@
 
 ### App shell / 路由
 
-- **关键词**：`App` `DocumentTree` `DocumentEditor` `react-router` `mdocs-shell` `mdocs-sidebar-list`
+- **关键词**：`App` `DocumentTree` `开始写作` `工作空间` `react-router` `mdocs-shell` `mdocs-sidebar-list`
 - **定位**：
   | 路径 | 符号 |
   |------|------|

@@ -147,7 +147,7 @@ type ChatMessage = {
   blocks?: AssistantBlock[];
 };
 
-const SUGGESTIONS = ["如何发布文档？", "草稿是什么？", "如何创建域？"];
+const SUGGESTIONS = ["如何发布文档？", "草稿是什么？", "如何创建工作空间？"];
 
 function toChatMessages(
   sessionId: string,

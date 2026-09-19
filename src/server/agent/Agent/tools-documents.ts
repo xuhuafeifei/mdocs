@@ -57,10 +57,10 @@ export function searchDocumentsTool({ visitorId }: ToolDeps): AgentTool {
     name: "search_documents",
     label: "搜索文档",
     description:
-      "全文搜索当前访客可读文档（跨域内容检索）。要按「我创建的文章」筛选/翻页请用 query_my_documents。",
+      "全文搜索当前访客可读文档（跨工作空间内容检索）。要按「我创建的文章」筛选/翻页请用 query_my_documents。",
     parameters: Type.Object({
       query: Type.String({ description: "搜索词" }),
-      domainId: Type.Optional(Type.String({ description: "域 ID，可选" })),
+      domainId: Type.Optional(Type.String({ description: "工作空间 ID，可选" })),
       topN: Type.Optional(Type.Number({ description: "返回条数，默认 10，最大 30" })),
     }),
     execute: async (_id, params) => {
@@ -86,10 +86,10 @@ export function searchDocumentsTool({ visitorId }: ToolDeps): AgentTool {
 export function listTreeTool({ visitorId }: ToolDeps): AgentTool {
   return {
     name: "list_tree",
-    label: "列出域树",
-    description: "列出域内可见文档树（扁平，最多 80 项）",
+    label: "列出目录",
+    description: "列出工作空间内可见文档树（扁平，最多 80 项）",
     parameters: Type.Object({
-      domainId: Type.Optional(Type.String({ description: "域 ID，可选" })),
+      domainId: Type.Optional(Type.String({ description: "工作空间 ID，可选" })),
     }),
     execute: async (_id, params) => {
       const domainId = (params as { domainId?: string }).domainId?.trim() || undefined;
@@ -110,13 +110,13 @@ export function queryMyDocumentsTool({ visitorId }: ToolDeps): AgentTool {
     description:
       "列出当前访客创建的文档（与设置页「我的文章」同一接口）。可按 domainId、creatorVisitorId 筛选，按 domain/creator 分组；用 offset/limit 翻页。要全文检索可读文档请用 search_documents。",
     parameters: Type.Object({
-      domainId: Type.Optional(Type.String({ description: "只看该域，不传则全部" })),
+      domainId: Type.Optional(Type.String({ description: "只看该工作空间，不传则全部" })),
       creatorVisitorId: Type.Optional(
         Type.String({ description: "只看该创建者。本工具已限定为当前访客创建的文档，筛他人通常为空" }),
       ),
       groupBy: Type.Optional(
         Type.Union([Type.Literal("domain"), Type.Literal("creator")], {
-          description: "按域或创建者分组（仅当前页），不传则平铺",
+          description: "按工作空间或创建者分组（仅当前页），不传则平铺",
         }),
       ),
       offset: Type.Optional(Type.Number({ description: "分页偏移，默认 0" })),
@@ -213,7 +213,7 @@ export function createDocumentTool({ visitorId }: ToolDeps): AgentTool {
         description: "文件名；Markdown 可不带后缀，HTML 建议 untitled.html 或传 fileType=html",
       }),
       displayName: Type.Optional(Type.String({ description: "展示名，可选" })),
-      domainId: Type.Optional(Type.String({ description: "域 ID，可选" })),
+      domainId: Type.Optional(Type.String({ description: "工作空间 ID，可选" })),
       parentId: Type.Optional(Type.String({ description: "父目录 documentId，可选" })),
       fileType: Type.Optional(
         Type.Union([Type.Literal("md"), Type.Literal("html")], {
@@ -264,7 +264,7 @@ export function createFolderTool({ visitorId }: ToolDeps): AgentTool {
     description: "创建文件夹，可选传入 parentId/domainId/description",
     parameters: Type.Object({
       name: Type.String({ description: "文件夹名" }),
-      domainId: Type.Optional(Type.String({ description: "域 ID，可选" })),
+      domainId: Type.Optional(Type.String({ description: "工作空间 ID，可选" })),
       parentId: Type.Optional(Type.String({ description: "父目录 documentId，可选" })),
       description: Type.Optional(Type.String({ description: "目录描述 Markdown，可选" })),
     }),
@@ -293,11 +293,11 @@ export function moveDocumentTool({ visitorId }: ToolDeps): AgentTool {
     name: "move_document",
     label: "移动文档",
     description:
-      "将文档移到同域另一文件夹，或移到域根。仅文档创建者可成功。parentId 为文件夹 documentId；不传或传 null 表示移到域根。目标路径已有同名文件会失败。不移动文件夹。",
+      "将文档移到同一工作空间的另一文件夹，或移到工作空间根目录。仅文档创建者可成功。parentId 为文件夹 documentId；不传或传 null 表示移到根目录。目标路径已有同名文件会失败。不移动文件夹。",
     parameters: Type.Object({
       documentId: Type.String({ description: "要移动的文档 documentId" }),
       parentId: Type.Optional(
-        Type.String({ description: "目标文件夹 documentId；不传则移到域根" }),
+        Type.String({ description: "目标文件夹 documentId；不传则移到工作空间根目录" }),
       ),
     }),
     execute: async (_id, params) => {
@@ -336,7 +336,7 @@ export function inviteDocumentUserTool({ visitorId }: ToolDeps): AgentTool {
     name: "invite_document_user",
     label: "邀请用户看文档",
     description:
-      "给一篇文档发邀请。仅文档创建者。permission 为 read 或 edit，不传则 read。域成员不能再被邀请（与域成员互斥）。先用「列出活跃访客」拿 visitorId。",
+      "给一篇文档发邀请。仅文档创建者。permission 为 read 或 edit，不传则 read。工作空间成员不能再被邀请（与成员互斥）。先用「列出活跃访客」拿 visitorId。",
     parameters: Type.Object({
       documentId: Type.String({ description: "文档 ID" }),
       targetVisitorId: Type.String({ description: "被邀请访客 ID" }),

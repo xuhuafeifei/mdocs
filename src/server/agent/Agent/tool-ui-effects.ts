@@ -120,7 +120,7 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
         .filter((r) => r.documentId);
       onEvent({
         type: "document_table",
-        title: `域树（${rows.length}${details?.truncated ? "+" : ""}）`,
+        title: `目录（${rows.length}${details?.truncated ? "+" : ""}）`,
         rows,
       });
       return;

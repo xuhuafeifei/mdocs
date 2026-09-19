@@ -102,12 +102,12 @@ export function createFolder(params: {
 
   const domainRow = findDomainById(db, domainId);
   if (!domainRow) {
-    throw new DocumentError("DOMAIN_NOT_FOUND", "域不存在", 404);
+    throw new DocumentError("DOMAIN_NOT_FOUND", "工作空间不存在", 404);
   }
 
   const access = resolveDomainAccess(db, domainRow, domainId, params.actorVisitorId);
   if (access.kind !== "full") {
-    throw new DocumentError("FORBIDDEN", "无权在该域创建目录", 403);
+    throw new DocumentError("FORBIDDEN", "无权在该工作空间创建目录", 403);
   }
 
   // 规范化目录名（空格转下划线等），用于 relative_path
@@ -124,7 +124,7 @@ export function createFolder(params: {
       throw new DocumentError("INVALID_PARENT", "父目录不存在", 404);
     }
     if (parent.domain_id !== domainId) {
-      throw new DocumentError("FORBIDDEN", "不能跨域创建目录", 403);
+      throw new DocumentError("FORBIDDEN", "不能跨工作空间创建目录", 403);
     }
     normalizedPath = `${parent.relative_path}/${storageName}`;
   } else {
@@ -150,7 +150,7 @@ export function createFolder(params: {
   let permission: number;
   if (params.permission !== undefined) {
     if (!validateDomainPermission(domainRow.permission, params.permission)) {
-      throw new DocumentError("INVALID_PERMISSION", `域类型不允许该权限值`, 400);
+      throw new DocumentError("INVALID_PERMISSION", `工作空间类型不允许该权限值`, 400);
     }
     permission = params.permission;
   } else {
