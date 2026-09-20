@@ -18,7 +18,7 @@
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/web/storage/drafts.ts` | 草稿 CRUD |
+  | `src/web/storage/drafts.ts` | 草稿 CRUD；`subscribeDraftPresence` |
   | `src/web/app/hooks/useAutoSave.ts` | 防抖保存 |
   | `src/web/app/hooks/useAutoPublish.ts` | 自动发布 |
   | `src/web/app/hooks/usePublishGuard.ts` | 发布冲突 |

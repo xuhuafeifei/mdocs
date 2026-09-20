@@ -36,7 +36,7 @@
   |------|------|
   | `src/web/app/hooks/useAutoSave.ts` | 自动保存 |
   | `src/web/app/hooks/useAutoPublish.ts` | 自动发布 |
-  | `src/web/storage/drafts.ts` | `saveDraft` / `getDraft`；`contentKind` lexical\|html |
+  | `src/web/storage/drafts.ts` | `saveDraft` / `getDraft` / `subscribeDraftPresence`；`contentKind` lexical\|html |
 
 ### 异步卸载保护（可复用）
 

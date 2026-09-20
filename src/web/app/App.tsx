@@ -476,12 +476,6 @@ export function App() {
     const isHtml = targetFileType === FILE_TYPE.HTML;
 
     if (result.documentId) {
-      const ok = window.confirm("将把帮写结果写入当前文档的本地草稿（不会自动发布）。继续？");
-      if (!ok) {
-        const err = new Error("cancelled");
-        (err as Error & { silent?: boolean }).silent = true;
-        throw err;
-      }
       const meta = activeDocMeta?.documentId === result.documentId ? activeDocMeta : null;
       let draftContent: string;
       if (isHtml) {
@@ -1553,6 +1547,7 @@ export function App() {
                           setEditorContent((prev) => (prev ? { ...prev, content: c } : prev));
                         }}
                         onDraftExistsChange={setEditorDraftExists}
+                        hasLocalDraft={editorDraftExists}
                         onPublish={publishDocument}
                         syncBehind={syncBehind}
                         onSyncClick={() => void handleSyncClick()}
@@ -1616,6 +1611,7 @@ export function App() {
                       syncBehind={syncBehind}
                       onSyncClick={() => void handleSyncClick()}
                       onDraftExistsChange={setEditorDraftExists}
+                      hasLocalDraft={editorDraftExists}
                       onConflictModalRequest={() => setConflictModalOpen(true)}
                       onMergeRequest={() => setMergeViewOpen(true)}
                       canManageInvites={Boolean(visitor && visitor.visitorId === activeDocMeta.ownerVisitorId)}

@@ -5196,6 +5196,15 @@ strong.label {
     flex-shrink: 0;
   }
 
+  .mdocs-reader-sync-btn {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 8px;
+  }
+
   .mdocs-reader-more-menu {
     position: relative;
     flex-shrink: 0;

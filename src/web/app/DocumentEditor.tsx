@@ -150,6 +150,8 @@ interface DocumentEditorProps {
   syncBehind?: boolean;
   onSyncClick?: () => void;
   onDraftExistsChange?: (exists: boolean) => void;
+  /** 打开时 App 已知的未发布草稿，避免顶栏先闪「已发布」 */
+  hasLocalDraft?: boolean;
   canManageInvites?: boolean;
   onConflictModalRequest?: () => void;
   onMergeRequest?: () => void;
@@ -307,6 +309,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       ownerVisitorId: props.meta.ownerVisitorId,
       domainId: props.meta.domainId,
     },
+    seedDraftExists: props.hasLocalDraft,
   });
 
   useEffect(() => {

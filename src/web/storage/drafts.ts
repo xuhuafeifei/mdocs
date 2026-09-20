@@ -11,6 +11,28 @@ const DB_NAME = "mdocs-drafts";
 const DB_VERSION = 5;
 const STORE = "drafts";
 
+let draftPresenceGen = 0;
+const draftPresenceListeners = new Set<(documentId: string, exists: boolean) => void>();
+
+/** 草稿写入或删除后通知。顶栏不要等下次打开文档才改「编辑中 / 已发布」。 */
+export function subscribeDraftPresence(
+  listener: (documentId: string, exists: boolean) => void,
+): () => void {
+  draftPresenceListeners.add(listener);
+  return () => {
+    draftPresenceListeners.delete(listener);
+  };
+}
+
+export function draftPresenceGeneration(): number {
+  return draftPresenceGen;
+}
+
+function notifyDraftPresence(documentId: string, exists: boolean): void {
+  draftPresenceGen += 1;
+  for (const listener of draftPresenceListeners) listener(documentId, exists);
+}
+
 export type DraftContentKind = "lexical" | "html";
 
 /**
@@ -228,7 +250,10 @@ export async function saveDraft(doc: DraftRecord): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
     tx.objectStore(STORE).put(sanitized);
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => {
+      notifyDraftPresence(sanitized.documentId, !sanitized.published);
+      resolve();
+    };
     tx.onerror = () => reject(tx.error);
   });
 }
@@ -248,7 +273,10 @@ export async function deleteDraft(documentId: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
     tx.objectStore(STORE).delete(documentId);
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => {
+      notifyDraftPresence(documentId, false);
+      resolve();
+    };
     tx.onerror = () => reject(tx.error);
   });
 }
@@ -269,7 +297,10 @@ export async function deleteDraftIfUnchanged(
         return;
       }
       store.delete(documentId);
-      tx.oncomplete = () => resolve(true);
+      tx.oncomplete = () => {
+        notifyDraftPresence(documentId, false);
+        resolve(true);
+      };
       tx.onerror = () => reject(tx.error);
     };
     getReq.onerror = () => reject(getReq.error);

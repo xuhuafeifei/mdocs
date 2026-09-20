@@ -17,7 +17,12 @@ import { useI18n } from "../i18n";
 import { localizeDomainName } from "./utils";
 import { DocChrome } from "./DocChrome";
 import { getDocumentTaskQueue } from "./documentTaskQueue";
-import { upsertContentDraft } from "../storage/drafts";
+import {
+  draftPresenceGeneration,
+  getDraft,
+  subscribeDraftPresence,
+  upsertContentDraft,
+} from "../storage/drafts";
 import {
   addBookmarkApi,
   addDocumentInviteApi,
@@ -49,6 +54,8 @@ interface HtmlEditorProps {
     permission?: number,
   ) => Promise<void>;
   onDraftExistsChange?: (exists: boolean) => void;
+  /** 打开时 App 已知的未发布草稿，避免顶栏先闪「已发布」 */
+  hasLocalDraft?: boolean;
   syncBehind?: boolean;
   onSyncClick?: () => void;
   onDelete: () => Promise<void>;
@@ -70,7 +77,7 @@ export function HtmlEditor(props: HtmlEditorProps) {
   const [displayName, setDisplayName] = useState(props.initialDisplayName);
   const [previewMode, setPreviewMode] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [draftExists, setDraftExists] = useState(false);
+  const [draftExists, setDraftExists] = useState(props.hasLocalDraft ?? false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [bookmarkBusy, setBookmarkBusy] = useState(false);
   const [showDocInfoMenu, setShowDocInfoMenu] = useState(false);
@@ -130,6 +137,28 @@ export function HtmlEditor(props: HtmlEditorProps) {
       mounted = false;
     };
   }, [documentId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const seen = draftPresenceGeneration();
+    getDraft(documentId).then((draft) => {
+      if (cancelled || draftPresenceGeneration() !== seen) return;
+      const exists = Boolean(draft && !draft.published);
+      setDraftExists(exists);
+      props.onDraftExistsChange?.(exists);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [documentId, props.onDraftExistsChange]);
+
+  useEffect(() => {
+    return subscribeDraftPresence((id, exists) => {
+      if (id !== documentId) return;
+      setDraftExists(exists);
+      props.onDraftExistsChange?.(exists);
+    });
+  }, [documentId, props.onDraftExistsChange]);
 
   useEffect(() => {
     setPermissionDraft(props.meta.permission as DocumentPermissionValue);

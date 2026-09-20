@@ -26,6 +26,7 @@ import {
 } from "../AgentChoiceCard";
 import { AiWriteMarkdownPane } from "./AiWriteMarkdownPane";
 import { computeLineHunks } from "./markdown-hunks";
+import { ConfirmDialog } from "../ConfirmDialog";
 
 /** 助手时间线：思考流 + 正文 + 工具用途说明（不展示英文 tool name） */
 type AssistantBlock =
@@ -156,6 +157,13 @@ export function AiWriteWorkbench(props: {
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyComplete, setBusyComplete] = useState(false);
+  const [confirmAsk, setConfirmAsk] = useState<{
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    danger: boolean;
+  } | null>(null);
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -452,13 +460,39 @@ export function AiWriteWorkbench(props: {
     }
   }
 
+  function askConfirm(opts: {
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }): Promise<boolean> {
+    return new Promise((resolve) => {
+      confirmResolveRef.current = resolve;
+      setConfirmAsk({
+        message: opts.message,
+        confirmLabel: opts.confirmLabel ?? "确定",
+        cancelLabel: opts.cancelLabel ?? "返回",
+        danger: opts.danger ?? false,
+      });
+    });
+  }
+
+  function settleConfirm(ok: boolean) {
+    const resolve = confirmResolveRef.current;
+    confirmResolveRef.current = null;
+    setConfirmAsk(null);
+    resolve?.(ok);
+  }
+
   async function finish() {
+    const ok = await askConfirm({
+      message: "是否回写",
+      confirmLabel: "确认",
+      cancelLabel: "返回",
+    });
+    if (!ok) return;
     let md = currentMd;
     if (pendingHunks.length > 0) {
-      const ok = window.confirm(
-        `还有 ${pendingHunks.length} 段未审阅，将全部接受后写回。继续？`,
-      );
-      if (!ok) return;
       md = proposedMd ?? currentMd;
       setCurrentMd(md);
       setProposedMd(null);
@@ -492,9 +526,13 @@ export function AiWriteWorkbench(props: {
     }
   }
 
-  function onCancel() {
+  async function onCancel() {
     if (currentMd !== baseMd || proposedMd != null) {
-      const ok = window.confirm("取消帮写？未写回的修改将丢失。");
+      const ok = await askConfirm({
+        message: "取消帮写？未写回的修改将丢失。",
+        confirmLabel: "放弃修改",
+        danger: true,
+      });
       if (!ok) return;
     }
     abortRef.current?.abort();
@@ -515,14 +553,14 @@ export function AiWriteWorkbench(props: {
           />
         </div>
         <div className="mdocs-ai-write-header-actions">
-          <button type="button" onClick={onCancel} disabled={busyComplete}>
+          <button type="button" onClick={() => void onCancel()} disabled={busyComplete || confirmAsk != null}>
             取消
           </button>
           <button
             type="button"
             className="mdocs-ai-write-primary"
             onClick={() => void finish()}
-            disabled={busyComplete}
+            disabled={busyComplete || confirmAsk != null}
           >
             {busyComplete ? "写回中…" : "完成并写回"}
           </button>
@@ -794,6 +832,16 @@ export function AiWriteWorkbench(props: {
           onProposedChange={setProposedMd}
         />
       </div>
+      {confirmAsk ? (
+        <ConfirmDialog
+          message={confirmAsk.message}
+          confirmLabel={confirmAsk.confirmLabel}
+          cancelLabel={confirmAsk.cancelLabel}
+          danger={confirmAsk.danger}
+          onConfirm={() => settleConfirm(true)}
+          onCancel={() => settleConfirm(false)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { IEditor } from "@lobehub/editor";
 import { getDocumentTaskQueue } from "../documentTaskQueue";
-import { deleteDraft, getDraft, upsertContentDraft } from "../../storage/drafts";
+import { deleteDraft, draftPresenceGeneration, getDraft, subscribeDraftPresence, upsertContentDraft } from "../../storage/drafts";
 
 interface UseAutoSaveOptions {
   editor: IEditor | null;
@@ -26,6 +26,8 @@ interface UseAutoSaveOptions {
     ownerVisitorId: string;
     domainId: string;
   };
+  /** 打开这篇时父组件已经知道有没有未发布草稿，避免第一帧闪「已发布」 */
+  seedDraftExists?: boolean;
 }
 
 const MAX_DATASOURCE_WAIT_FRAMES = 48;
@@ -55,12 +57,13 @@ export function useAutoSave({
   enabled = true,
   localBaseCommitIdAtEditStart,
   snapshotMeta,
+  seedDraftExists = false,
 }: UseAutoSaveOptions) {
   // ---- 状态：内容是否有未保存的变更 ----
   const [isDirty, setIsDirty] = useState(false);
 
-  // ---- 状态：IndexedDB 中是否已有该文档的草稿 ----
-  const [draftExists, setDraftExists] = useState(false);
+  // ---- 状态：IndexedDB 中是否已有该文档的未发布草稿 ----
+  const [draftExists, setDraftExists] = useState(seedDraftExists);
 
   // ---- 状态：上次保存的时间戳 ----
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -142,28 +145,35 @@ export function useAutoSave({
    * 切换文档时检查 IndexedDB 中是否已有草稿，恢复对应状态。
    */
   useEffect(() => {
-    // 用于防止组件卸载后执行 setState
     let cancelled = false;
-    // 从 IndexedDB 读取该文档的草稿
+    const seen = draftPresenceGeneration();
     getDraft(documentId).then((draft) => {
-      // 如果组件已卸载，忽略结果
       if (cancelled) return;
-      if (draft) {
-        // 有草稿：更新 UI 状态，标记草稿存在
-        setDraftExists(true);
+      if (draftPresenceGeneration() !== seen) return;
+      const exists = Boolean(draft && !draft.published);
+      setDraftExists(exists);
+      if (exists && draft) {
         setLastSavedAt(draft.updatedAt);
-        draftCurrentRef.current = true; // draft matches loaded state
+        draftCurrentRef.current = true;
       } else {
-        // 无草稿：重置所有状态
-        setDraftExists(false);
         setLastSavedAt(null);
         draftCurrentRef.current = false;
         dirtyRef.current = false;
       }
     });
-    // 清理函数：组件卸载或 documentId 变化时标记为已取消
     return () => { cancelled = true; };
   }, [documentId]);
+
+  useEffect(() => {
+    return subscribeDraftPresence((id, exists) => {
+      if (id !== documentIdRef.current) return;
+      setDraftExists(exists);
+      if (!exists) {
+        setLastSavedAt(null);
+        draftCurrentRef.current = false;
+      }
+    });
+  }, []);
 
   /**
    * 注册 Lexical 更新监听器（afterDelay 模式）。

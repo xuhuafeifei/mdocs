@@ -151,6 +151,19 @@ export function DocChrome(props: DocChromeProps) {
         </button>
       ) : null;
 
+    const syncBtn = props.onSyncClick ? (
+      <button
+        type="button"
+        className={
+          "mdocs-sync-btn mdocs-reader-sync-btn" + (props.syncBehind ? " behind" : "")
+        }
+        aria-label={props.syncBehind ? t("syncBehindHint") : t("syncPull")}
+        onClick={() => void props.onSyncClick?.()}
+      >
+        <RefreshCw size={16} strokeWidth={1.75} />
+      </button>
+    ) : null;
+
     const moreMenu =
       props.readerMoreMenu != null ? (
         <div ref={props.readerMoreMenuRef} className="mdocs-reader-more-menu">
@@ -176,6 +189,7 @@ export function DocChrome(props: DocChromeProps) {
           {leading}
           {domainSelect}
           {props.leadingExtra}
+          {syncBtn}
           {publishBtn}
           {moreMenu}
           {props.trailingExtra}
@@ -188,6 +202,7 @@ export function DocChrome(props: DocChromeProps) {
       <div className={toolbarClass + " mdocs-editor-toolbar--stacked"} style={toolbarStyle}>
         <div className="mdocs-reader-top-row">
           {leading}
+          {syncBtn}
           <button
             type="button"
             className="mdocs-reader-expand-btn"

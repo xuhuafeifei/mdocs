@@ -55,7 +55,7 @@
 | `knowledge-graph` | 知识图谱（历史已同意）— [需求分析](./requirements/knowledge-graph/需求分析.md) · [设计契约](./requirements/knowledge-graph/设计契约.md)；分层展开 [layered-view](./requirements/knowledge-graph/设计契约-layered-view.md)；**增量已同意** 访问门禁 — [graph-access](./requirements/knowledge-graph/设计契约-graph-access.md)；**增量草案** 单一焦点 — [single-focus](./requirements/knowledge-graph/设计契约-single-focus.md)；**工具栏重构已落地** 左右分区 / 手机端 ⋯ 收纳 |
 | `graph-cache-dirty` | **已同意**：图谱缓存 dirty / 发布变化率 / 异步 lifecycle（无 bus）— [需求分析](./requirements/graph-cache-dirty/需求分析.md) · [设计契约](./requirements/graph-cache-dirty/设计契约.md) · [代码索引](./requirements/graph-cache-dirty/代码索引.md) |
 | `bookmarks` | 文档收藏 |
-| `auto-save-draft` | 自动保存草稿 |
+| `auto-save-draft` | **已同意**：顶栏「编辑中 / 已发布」只跟未发布本地草稿，写入或删除后同一轮更新 — [需求分析](./requirements/auto-save-draft/需求分析.md) · [设计契约](./requirements/auto-save-draft/设计契约.md) |
 | `recovery-code` | 恢复码 |
 | `draft-copy-preview` | 草稿副本与预览 |
 | `draft-publish-recovery` | 发布失败恢复 |
