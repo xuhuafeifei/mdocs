@@ -32,6 +32,9 @@ export type TranslationKey =
   | "visitorIdNotice"
   // Sidebar / tree
   | "newDocument"
+  | "startWriting"
+  | "newArticle"
+  | "newDirectory"
   | "newFolder"
   | "noDocumentsYet"
   | "collapseFolder"

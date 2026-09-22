@@ -140,16 +140,17 @@ button.secondary:focus-visible {
   box-shadow: 0 0 0 3px var(--mdocs-accent-ring);
 }
 
-/* Danger — solid red */
+/* Danger — outline by default; solid fill only on hover so label stays readable */
 button.danger {
-  background: var(--mdocs-error);
+  background: transparent;
   border-color: var(--mdocs-error);
-  color: #ffffff;
+  color: var(--mdocs-error-text, var(--mdocs-error));
 }
 
 button.danger:hover {
-  background: #d32f2f;
-  border-color: #d32f2f;
+  background: var(--mdocs-error-soft);
+  border-color: var(--mdocs-error);
+  color: var(--mdocs-error-text, #c62828);
 }
 
 button.danger:focus-visible {

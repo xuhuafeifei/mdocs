@@ -67,3 +67,12 @@ export function resolveDomainAccess(
 export function canEnterDomainTree(access: DomainAccess): boolean {
   return access.kind !== "none";
 }
+
+/**
+ * 能否读/生成该域图谱。
+ * 只认协作身份 full；viaDocumentInvites（只借单篇正文）不授图谱。
+ * 见 `.mdocs-docs/requirements/knowledge-graph/设计契约-graph-access.md`。
+ */
+export function canAccessGraph(access: DomainAccess): boolean {
+  return access.kind === "full";
+}

@@ -224,8 +224,7 @@ function buildTreeNodeForDoc(doc: DocumentRow, visitorId?: string): TreeNode {
  * FolderSubtreeNode[] → TreeNode[] 转换。
  * buildFolderSubtree 返回的是精简结构，这里补全 graph 模块需要的字段。
  *
- * 注意：path 字段暂时用 id 代替，因为 graph 核心模块主要用 documentId，
- * path 只是展示用，不影响核心逻辑。
+ * title 已是目录/文章的 display_name。path 只用于进度文案，不能填 document id。
  */
 function subtreeNodesToTreeNodes(nodes: FolderSubtreeNode[]): TreeNode[] {
   return nodes.map((n): TreeNode => {
@@ -233,7 +232,7 @@ function subtreeNodesToTreeNodes(nodes: FolderSubtreeNode[]): TreeNode[] {
       return {
         type: "folder",
         name: n.title,
-        path: n.id,
+        path: n.title,
         documentId: n.id,
         children: subtreeNodesToTreeNodes(n.children),
       };
@@ -241,7 +240,7 @@ function subtreeNodesToTreeNodes(nodes: FolderSubtreeNode[]): TreeNode[] {
     return {
       type: "document",
       name: n.title,
-      path: n.id,
+      path: n.title,
       documentId: n.id,
       displayName: n.title,
       ownerVisitorId: "",

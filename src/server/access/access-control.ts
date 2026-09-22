@@ -21,6 +21,8 @@ import { getDb } from "../db/connection.js";
 import { findDocumentById, findDocumentInvite } from "../db/repositories/document.repo.js";
 import { findDomainById, isDomainMember as checkDomainMember } from "../db/repositories/domain.repo.js";
 import type { DocumentRow } from "../db/repositories/document.repo.js";
+import { isGraphFileType } from "../../shared/file-types.js";
+import { canAccessGraph, resolveDomainAccess } from "./domain-access.js";
 // ============================================================
 //  通用错误类型
 // ============================================================
@@ -241,11 +243,35 @@ export function assertDocumentAccess(
   const isMember = !!(visitorId && domain && checkDomainMember(db, domain.domain_id, visitorId));
   const domainInfo: DomainAccessInfo = { domainPermission, isDomainMember: isMember };
 
+  // 图谱缓存：隐藏文件 permission/owner 不作鉴权依据。
+  // 能读图 = 域协作 full（能进工作空间协作）；单篇 invite 不授图谱。
+  if (action === "read" && isGraphFileType(row.file_type)) {
+    assertGraphAccess(row.domain_id, visitorId);
+    return;
+  }
+
   if (action === "read" && !canReadDocument(row, visitorId, domainInfo)) {
     throw new DocumentError("FORBIDDEN", "无权读取此文档", 403);
   }
   if (action === "edit" && !canEditDocument(row, visitorId, domainInfo)) {
     throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
+  }
+}
+
+/**
+ * 图谱读/生成门禁：须 resolveDomainAccess.kind === "full"。
+ * private/restricted 下 viaDocumentInvites 一律 403。
+ */
+export function assertGraphAccess(domainId: string, visitorId: string | null): void {
+  const db = getDb();
+  const domain = findDomainById(db, domainId);
+  const access = resolveDomainAccess(db, domain ?? undefined, domainId, visitorId);
+  if (!canAccessGraph(access)) {
+    const message =
+      domain?.permission === "private"
+        ? "私有工作空间仅主人可访问图谱"
+        : "请成为工作空间成员后再访问图谱";
+    throw new DocumentError("GRAPH_FORBIDDEN", message, 403);
   }
 }
 

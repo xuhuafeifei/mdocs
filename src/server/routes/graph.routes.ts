@@ -14,8 +14,6 @@
  */
 import { Router, type Request, type Response } from "express";
 import {
-  buildDomainGraph,
-  buildGraphByDocId,
   getDomainGraph,
   getGraphByFolderId,
 } from "../documents/graph.service.js";
@@ -25,6 +23,7 @@ import { findDocumentById } from "../db/repositories/document.repo.js";
 import { getDb } from "../db/connection.js";
 import { taskQueue } from "../task-queue/index.js";
 import { FILE_TYPE } from "../../shared/file-types.js";
+import { assertGraphAccess, DocumentError } from "../access/access-control.js";
 import "../documents/graph-task.js"; // 副作用导入，注册图谱任务
 
 const router = Router();
@@ -35,6 +34,14 @@ class AiNotConfiguredError extends Error {
   constructor() {
     super("请先配置 AI 模型后再生成图谱");
   }
+}
+
+function sendGraphError(res: Response, err: unknown): boolean {
+  if (err instanceof DocumentError) {
+    res.status(err.status).json({ error: { code: err.code, message: err.message } });
+    return true;
+  }
+  return false;
 }
 
 /** 优先用当前访客默认 AI 配置；未配置时再读服务端环境变量（兼容旧部署） */
@@ -76,6 +83,12 @@ router.get("/tasks/:taskId", (req: Request, res: Response) => {
 
 router.get("/domain/:domainId", (req: Request, res: Response) => {
   const { domainId } = req.params as { domainId: string };
+  try {
+    assertGraphAccess(domainId, req.visitor?.visitor_id ?? null);
+  } catch (err) {
+    if (sendGraphError(res, err)) return;
+    throw err;
+  }
   const graph = getDomainGraph(domainId);
   res.json({ data: graph });
 });
@@ -84,6 +97,7 @@ router.post("/domain/:domainId/analyze", (req: Request, res: Response) => {
   const { domainId } = req.params as { domainId: string };
 
   try {
+    assertGraphAccess(domainId, req.visitor?.visitor_id ?? null);
     const agentConfig = getAgentConfig(req);
     const result = taskQueue.enqueue("graph-generate", {
       type: "domain",
@@ -94,6 +108,7 @@ router.post("/domain/:domainId/analyze", (req: Request, res: Response) => {
     });
     res.json({ data: result });
   } catch (err) {
+    if (sendGraphError(res, err)) return;
     if (err instanceof AiNotConfiguredError) {
       res.status(400).json({ error: { code: err.code, message: err.message } });
       return;
@@ -108,6 +123,18 @@ router.post("/domain/:domainId/analyze", (req: Request, res: Response) => {
 
 router.get("/:folderId", (req: Request, res: Response) => {
   const { folderId } = req.params as { folderId: string };
+  const db = getDb();
+  const folder = findDocumentById(db, folderId);
+  if (!folder) {
+    res.status(404).json({ error: { message: "目录不存在" } });
+    return;
+  }
+  try {
+    assertGraphAccess(folder.domain_id, req.visitor?.visitor_id ?? null);
+  } catch (err) {
+    if (sendGraphError(res, err)) return;
+    throw err;
+  }
   const graph = getGraphByFolderId(folderId);
   res.json({ data: graph });
 });
@@ -123,6 +150,7 @@ router.post("/:folderId/analyze", (req: Request, res: Response) => {
   }
 
   try {
+    assertGraphAccess(folder.domain_id, req.visitor?.visitor_id ?? null);
     const agentConfig = getAgentConfig(req);
     // DB 里目录是 FILE_TYPE.FOLDER === "dir"，不是字面量 "folder"
     const result = taskQueue.enqueue("graph-generate", {
@@ -134,6 +162,7 @@ router.post("/:folderId/analyze", (req: Request, res: Response) => {
     });
     res.json({ data: result });
   } catch (err) {
+    if (sendGraphError(res, err)) return;
     if (err instanceof AiNotConfiguredError) {
       res.status(400).json({ error: { code: err.code, message: err.message } });
       return;

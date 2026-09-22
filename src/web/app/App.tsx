@@ -9,7 +9,7 @@
  * 6. 全局消息提示与冲突处理
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Code, Code2, File, FileText, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
+import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -805,6 +805,7 @@ export function App() {
     createModalBusy,
     createModalInputRef,
     openNewDocumentModal,
+    openNewFolderModal,
     submitCreateModal,
   } = useCreateModal({
     tree,
@@ -1350,15 +1351,15 @@ export function App() {
             </header>
 
             {/* 新建文档/文件夹图标 */}
-            <div className="mdocs-sidebar-actions" ref={createDropdownRef} style={{ position: "relative" }}>
-              <span
-                className="mdocs-sidebar-icon mdocs-tooltip"
-                data-tooltip={t("newDocument")}
+            <div className="mdocs-sidebar-actions" ref={createDropdownRef}>
+              <button
+                type="button"
+                className="mdocs-sidebar-create-btn"
                 onClick={() => setCreateDropdownOpen((v) => !v)}
-                style={{ color: "var(--mdocs-accent)" }}
               >
-                <File size={20} />
-              </span>
+                <FileText size={15} strokeWidth={1.75} />
+                {t("newArticle")}
+              </button>
               {createDropdownOpen && (
                 <div className="mdocs-create-dropdown">
                   <button type="button" className="mdocs-create-dropdown-item" onClick={() => { setCreateDropdownOpen(false); openNewDocumentModal(); }}>
@@ -1371,8 +1372,19 @@ export function App() {
                   </button>
                 </div>
               )}
-              <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip="知识图谱" onClick={() => openGraph(currentDomainId, "知识图谱", "domain")} style={{ marginLeft: 8 }}>
-                <Network size={20} strokeWidth={1.75} />
+              <button
+                type="button"
+                className="mdocs-sidebar-create-btn"
+                onClick={() => {
+                  setCreateDropdownOpen(false);
+                  openNewFolderModal();
+                }}
+              >
+                <FolderPlus size={15} strokeWidth={1.75} />
+                {t("newDirectory")}
+              </button>
+              <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip="知识图谱" onClick={() => openGraph(currentDomainId, "知识图谱", "domain")}>
+                <Network size={18} strokeWidth={1.75} />
               </span>
             </div>
 
@@ -1669,7 +1681,7 @@ export function App() {
                 <div className="mdocs-welcome-actions">
                   <button type="button" className="primary" onClick={() => openNewDocumentModal()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <File size={16} strokeWidth={1.5} />
-                    {t("newDocument")}
+                    {t("startWriting")}
                   </button>
                   {!isDemoMode() && !isNarrow ? (
                     <button type="button" className="secondary" onClick={() => openAiWriteBlank()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1963,6 +1975,7 @@ export function App() {
               parentPath={menu.parentPath}
               onClose={() => setMenu(null)}
               onCreateChild={(parent) => openNewDocumentModal(parent)}
+              onCreateFolder={(parent) => openNewFolderModal(parent)}
               onDeleteDocument={(doc) => requestDeleteDocument(doc.documentId, doc.path)}
               onDeleteFolder={(folder) => requestDeleteFolder(folder.documentId, folder.folderDisplayName || folder.name)}
             />

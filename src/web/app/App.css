@@ -145,15 +145,35 @@
 }
 
 .mdocs-sidebar-actions {
-  padding: 4px 16px 4px 24px;
+  padding: 8px 12px 8px 16px;
   display: flex;
   flex-direction: row;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 0 0 auto;
   border-bottom: 1px solid var(--mdocs-border);
   position: relative;
+}
+
+.mdocs-sidebar-create-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--mdocs-border);
+  border-radius: 6px;
+  background: var(--mdocs-bg);
+  color: var(--mdocs-text);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mdocs-sidebar-create-btn:hover {
+  border-color: var(--mdocs-accent);
+  color: var(--mdocs-accent);
 }
 
 /* 新建文档下拉菜单 */

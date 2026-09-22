@@ -35,6 +35,9 @@ export const en: Record<TranslationKey, string> = {
   visitorIdNotice: "your visitor id is {{id}}, save it for recovery",
   // Sidebar / tree
   newDocument: "Start writing",
+  startWriting: "Start writing",
+  newArticle: "New article",
+  newDirectory: "New folder",
   newFolder: "New folder",
   noDocumentsYet: "no documents yet",
   collapseFolder: "Collapse folder",

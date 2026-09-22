@@ -35,6 +35,9 @@ export const zh: Record<TranslationKey, string> = {
   visitorIdNotice: "您的访客 ID 是 {{id}}，请保存以便恢复",
   // Sidebar / tree
   newDocument: "开始写作",
+  startWriting: "开始写作",
+  newArticle: "新建文章",
+  newDirectory: "新建目录",
   newFolder: "新建文件夹",
   noDocumentsYet: "暂无文档",
   collapseFolder: "收起文件夹",

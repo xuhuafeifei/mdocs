@@ -258,7 +258,7 @@ export function AgentConfigPanel() {
     <div className="mdocs-agent-config-panel">
       <div className="mdocs-settings-header">
         <h2 className="mdocs-settings-title">{t("agentConfig")}</h2>
-        {!loading && !showForm ? (
+        {!loading ? (
           <button type="button" className="secondary" onClick={startCreate}>
             添加配置
           </button>
@@ -266,7 +266,7 @@ export function AgentConfigPanel() {
       </div>
 
       <div className="mdocs-settings-cards">
-        {!loading && configs.length > 0 && !showForm ? (
+        {!loading && configs.length > 0 ? (
           <div className="mdocs-settings-card mdocs-agent-config-card">
             <p className="mdocs-agent-config-lead">选择默认配置后，智能助手与帮写将使用该模型。</p>
             <ul className="mdocs-agent-config-list">
@@ -314,7 +314,8 @@ export function AgentConfigPanel() {
         {showForm ? (
           <div className="mdocs-settings-card mdocs-agent-config-card">
             <p className="mdocs-agent-config-lead">
-              {formMode === "create" ? "新建模型配置" : "编辑模型配置"}
+              {formMode === "create" ? "新建模型配置。" : "编辑模型配置。"}
+              可以保存多套，勾选一条作为默认。智能助手和帮写使用默认那套。
             </p>
             <div className="mdocs-agent-form">
               <div className="mdocs-agent-kind-tabs" role="tablist" aria-label="配置方式">

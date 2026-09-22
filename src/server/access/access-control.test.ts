@@ -336,3 +336,92 @@ describe("assertDocumentAccess", () => {
     expect(() => assertDocumentAccess("test-doc", OWNER, "edit")).not.toThrow();
   });
 });
+
+describe("assertDocumentAccess graph cache", () => {
+  function seedGraphFile(domainPermission: string, domainId = "graph-domain") {
+    const db = testDbRef.db!;
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO domains (domain_id, domain_name, creator_visitor_id, created_at, updated_at, permission)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(domainId, "图谱域", "system", now, now, domainPermission);
+    db.prepare(
+      `INSERT INTO documents
+       (document_id, domain_id, relative_path, display_name, owner_visitor_id,
+        created_by, updated_by, content_hash, created_at, updated_at, permission, file_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      `${domainId}.graph-file`,
+      domainId,
+      "___graph___.json",
+      "___graph___.json",
+      "system",
+      "system",
+      "system",
+      "abc",
+      now,
+      now,
+      1,
+      "graph_file",
+    );
+  }
+
+  it("公开工作空间：非属主可读域图谱（permission=1 且 owner=system）", () => {
+    seedGraphFile("public", "default");
+    expect(() => assertDocumentAccess("default.graph-file", OTHER, "read")).not.toThrow();
+  });
+
+  it("公开工作空间：域图谱仍不可通过文档写权限改", () => {
+    seedGraphFile("public", "default");
+    expect(() => assertDocumentAccess("default.graph-file", OTHER, "edit")).toThrow(DocumentError);
+  });
+
+  it("私人工作空间：外人不可读图谱缓存", () => {
+    seedGraphFile("private", OWNER);
+    expect(() => assertDocumentAccess(`${OWNER}.graph-file`, OTHER, "read")).toThrow(DocumentError);
+  });
+
+  it("受限工作空间：仅 invite 不可读图谱（不授协作 full）", () => {
+    seedGraphFile("restricted", "restricted-graph");
+    const db = testDbRef.db!;
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO documents
+       (document_id, domain_id, relative_path, display_name, owner_visitor_id,
+        created_by, updated_by, content_hash, created_at, updated_at, permission)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "invited-doc",
+      "restricted-graph",
+      "invited.md",
+      "invited",
+      "system",
+      "system",
+      "system",
+      "abc",
+      now,
+      now,
+      1,
+    );
+    db.prepare(
+      `INSERT INTO document_invites (document_id, visitor_id, permission)
+       VALUES (?, ?, ?)`,
+    ).run("invited-doc", OTHER, "read");
+    expect(() => assertDocumentAccess("restricted-graph.graph-file", OTHER, "read")).toThrow(
+      DocumentError,
+    );
+  });
+
+  it("受限工作空间：成员可读图谱", () => {
+    seedGraphFile("restricted", "restricted-graph-member");
+    const db = testDbRef.db!;
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO domain_members (domain_id, visitor_id, joined_at)
+       VALUES (?, ?, ?)`,
+    ).run("restricted-graph-member", OTHER, now);
+    expect(() =>
+      assertDocumentAccess("restricted-graph-member.graph-file", OTHER, "read"),
+    ).not.toThrow();
+  });
+});

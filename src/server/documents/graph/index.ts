@@ -202,7 +202,8 @@ async function buildFolderGraph(
     childGraphs.push(await buildGraphWithCtx(child, deps, options, ctx));
   }
 
-  const folderPath = folderNode.path || folderNode.name;
+  // 进度文案给人看：name 已是 display_name（子目录的 path 曾被填成 document id）
+  const folderPath = folderNode.name || folderNode.path;
   await ctx.onFolderPhase?.({
     phase: "induce",
     folderId: folderNode.documentId,
