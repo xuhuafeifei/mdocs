@@ -4,20 +4,21 @@
 
 ### App shell / 路由
 
-- **关键词**：`App` `DocumentTree` `开始写作` `工作空间` `react-router` `mdocs-shell` `mdocs-sidebar-list`
+- **关键词**：`App` `DocumentTree` `开始写作` `工作空间` `react-router` `mdocs-shell` `mdocs-sidebar-list` `DocSearchOverlay` `⌘K`
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `src/web/main.tsx` | 挂载 |
-  | `src/web/app/App.tsx` | 主壳 / `openDocument`；悬浮层在 shell **外** |
-  | `src/web/app/App.css` | `.mdocs-shell` `.mdocs-sidebar` `.mdocs-sidebar-list` |
+  | `src/web/app/App.tsx` | 主壳 / `openDocument`；悬浮层在 shell **外**；侧栏搜索 + ⌘K |
+  | `src/web/app/DocSearchOverlay.tsx` | 当前域文档搜索浮层 |
+  | `src/web/app/App.css` | `.mdocs-shell` `.mdocs-sidebar` `.mdocs-sidebar-list` `.mdocs-doc-search-*` |
   | `src/web/app/DocumentTree.tsx` | 文档树根节点 = `.mdocs-sidebar-list` |
   | `src/web/app/DocumentEditor.tsx` | 编辑器容器 |
   | `src/web/app/DocChrome.tsx` | 文档顶栏（桌面+reader）；`aiWrite`/`comments` |
   | `src/web/app/HtmlEditor.tsx` | HTML 预览/编辑（sandbox iframe） |
   | `src/web/app/MergeView.tsx` | 冲突 merge；`fileType` → raw-text 管道 |
 - **布局约定**：shell 只承载 layout；侧栏头尾 `flex: 0 0 auto`，仅 list `overflow-y: auto`（见 [`../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md`](../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md)）
-- **需求**：同域拖拽移动见 [`../requirements/document-move/`](../requirements/document-move/)（已同意）；HTML 文档见 [`../requirements/html-documents/`](../requirements/html-documents/)
+- **需求**：同域拖拽移动见 [`../requirements/document-move/`](../requirements/document-move/)（已同意）；HTML 文档见 [`../requirements/html-documents/`](../requirements/html-documents/)；文章搜索浮层见 [`../requirements/search-title-index/`](../requirements/search-title-index/)
 
 ### API 客户端
 

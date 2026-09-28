@@ -409,5 +409,12 @@ export const en: Record<TranslationKey, string> = {
   agentConfigHideKey: "Hide API Key",
   agentFabOpen: "Open mdocs 智能助手",
   agentFabReset: "Reset position",
+  docSearch: "Search documents",
+  docSearchTitle: "Search this workspace",
+  docSearchPlaceholder: "Search titles or body…",
+  docSearchEmptyHint: "Type to search the current workspace",
+  docSearchNoResults: "No matching documents",
+  docSearchNoDomain: "Select a workspace first",
+  docSearchFailed: "Search failed",
   logout: "Sign out",
 };

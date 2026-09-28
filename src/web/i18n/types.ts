@@ -403,5 +403,13 @@ export type TranslationKey =
   | "agentConfigHideKey"
   | "agentFabOpen"
   | "agentFabReset"
+  // Doc search overlay
+  | "docSearch"
+  | "docSearchTitle"
+  | "docSearchPlaceholder"
+  | "docSearchEmptyHint"
+  | "docSearchNoResults"
+  | "docSearchNoDomain"
+  | "docSearchFailed"
   // Logout
   | "logout";

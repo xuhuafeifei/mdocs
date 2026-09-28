@@ -56,7 +56,13 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
         .map((r) => ({
           documentId: String(r.documentId ?? "").trim(),
           title: String(r.displayName ?? "").trim() || "未命名文档",
-          summary: String(r.snippet ?? "").trim(),
+          summary: [
+            String(r.ownerVisitorName ?? "").trim(),
+            String(r.updatedAt ?? "").trim(),
+            String(r.snippet ?? "").trim(),
+          ]
+            .filter(Boolean)
+            .join(" · "),
         }))
         .filter((r) => r.documentId);
       onEvent({

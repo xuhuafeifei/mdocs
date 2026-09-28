@@ -9,7 +9,7 @@
  * 6. 全局消息提示与冲突处理
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
+import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Search, Star } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -51,6 +51,7 @@ import { DomainSelect } from "./DomainSelect";
 import { AgentFab, agentPanelAnchorStyle, useAgentFabPosition } from "./AgentFab";
 import { MessageDialog } from "./MessageDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { DocSearchOverlay } from "./DocSearchOverlay";
 import { useCreateModal } from "./hooks/useCreateModal";
 import { useIsNarrowViewport } from "./hooks/useIsNarrowViewport";
 import { ConflictModal } from "./ConflictModal";
@@ -825,6 +826,20 @@ export function App() {
   // ---- 退出确认弹窗 ----
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  // ---- 文档搜索浮层 ----
+  const [docSearchOpen, setDocSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (!(ev.metaKey || ev.ctrlKey) || ev.key.toLowerCase() !== "k") return;
+      // 输入框内仍允许唤起（覆盖浏览器默认）
+      ev.preventDefault();
+      setDocSearchOpen(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // ---- 收藏列表弹窗 ----
   const [showBookmarksDialog, setShowBookmarksDialog] = useState(false);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
@@ -1383,6 +1398,9 @@ export function App() {
                 <FolderPlus size={15} strokeWidth={1.75} />
                 {t("newDirectory")}
               </button>
+              <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip={t("docSearch")} onClick={() => setDocSearchOpen(true)}>
+                <Search size={18} strokeWidth={1.75} />
+              </span>
               <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip="知识图谱" onClick={() => openGraph(currentDomainId, "知识图谱", "domain")}>
                 <Network size={18} strokeWidth={1.75} />
               </span>
@@ -1520,7 +1538,7 @@ export function App() {
                 name={focus.name}
                 onClose={closeGraph}
                 onOpenDocument={(docId) => {
-                  void openDocument(docId);
+                  void guardNavigate(() => navigate(`/doc/${docId}`));
                 }}
               />
             ) : activeDocMeta && editorContent && editorContent.documentId === activeDocMeta.documentId ? (
@@ -2180,6 +2198,17 @@ export function App() {
           />
         </Suspense>
       ) : null}
+
+      <DocSearchOverlay
+        open={docSearchOpen}
+        domainId={currentDomainId || null}
+        onClose={() => setDocSearchOpen(false)}
+        onOpenDocument={(docId) => {
+          if (isNarrow) setMobileNavOpen(false);
+          setView("docs");
+          void guardNavigate(() => navigate(`/doc/${docId}`));
+        }}
+      />
     </div>
   );
 }

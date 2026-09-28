@@ -80,12 +80,14 @@
 
 ### 搜索
 
-- **关键词**：`FTS5` `search` `index`
+- **关键词**：`FTS5` `search` `index` `title` `display_name` `bm25` `documents_fts_title`
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/server/search/document-index-manager.ts` | 索引管理 |
-  | `src/server/search/search.service.ts` | 检索 |
+  | `src/server/search/document-index-manager.ts` | 正文+标题索引维护；`removeIndex` / `rebuildDocument` |
+  | `src/server/search/search.service.ts` | 两路 MATCH → 合并打分 → `canReadDocument` |
+  | `src/server/db/schema.ts` | `documents_fts` / `documents_fts_title` + rowid；升级标 dirty |
+  | `.mdocs-docs/requirements/search-title-index/` | 标题独立索引需求（已实现） |
 
 ### 域 / CLI / 迁移
 

@@ -1070,10 +1070,16 @@ export function GraphPage({ scope, resourceId, name, onOpenDocument, onClose }: 
                   return;
                 }
               }
-              setSelectedNode(node.__raw as GraphNode);
+              const raw = node.__raw as GraphNode;
+              setSelectedNode(raw);
               // 单击展开；已展开则只开详情，避免看详情时被收起
               if (childCount > 0 && !node.__expanded) {
                 toggleNodeExpand(String(node.id));
+              }
+              // doc 节点 = 文章知识块：直接进入来源文章
+              if (raw?.type === "doc") {
+                const docId = raw.sources?.[0]?.documentId?.trim();
+                if (docId) onOpenDocument(docId);
               }
             }}
             onNodeHover={(node: any) => {

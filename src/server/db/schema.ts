@@ -137,6 +137,20 @@ const SCHEMA_STATEMENTS: string[] = [
     permission UNINDEXED,
     tokenize='unicode61'
   )`,
+  `CREATE TABLE IF NOT EXISTS documents_fts_title_rowid (
+    document_id TEXT PRIMARY KEY,
+    fts_rowid INTEGER NOT NULL
+  )`,
+  `CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts_title USING fts5(
+    title,
+    document_id UNINDEXED,
+    display_name UNINDEXED,
+    relative_path UNINDEXED,
+    domain_id UNINDEXED,
+    owner_visitor_id UNINDEXED,
+    permission UNINDEXED,
+    tokenize='unicode61'
+  )`,
   `CREATE TABLE IF NOT EXISTS cli_tokens (
     token_id TEXT PRIMARY KEY,
     visitor_id TEXT NOT NULL,
@@ -209,6 +223,7 @@ export function applySchema(db: Database.Database): void {
     migrateDocumentsTable(db);
     migrateDocumentsDirty(db);
     migrateDocumentsHeadCommit(db);
+    migrateDocumentsTitleFts(db);
     backfillFolderDescHeadCommits(db);
     migrateVisitorsRecoveryCode(db);
     migrateVisitorsPasswordHash(db);
@@ -353,6 +368,24 @@ function migrateDocumentsDirty(db: Database.Database): void {
   const names = documentColumnNames(db);
   if (names.has("is_dirty")) return;
   db.exec(`ALTER TABLE documents ADD COLUMN is_dirty INTEGER NOT NULL DEFAULT 1`);
+}
+
+/**
+ * 标题 FTS 表已由 SCHEMA_STATEMENTS 的 CREATE IF NOT EXISTS 建好。
+ * 升级库：若 title 映射为空但已有干净 md 文档，说明旧索引只有正文路，整批标 dirty 以便补建标题索引。
+ */
+function migrateDocumentsTitleFts(db: Database.Database): void {
+  const titleCount = (
+    db.prepare(`SELECT COUNT(*) AS c FROM documents_fts_title_rowid`).get() as { c: number }
+  ).c;
+  if (titleCount > 0) return;
+  const cleanMd = (
+    db
+      .prepare(`SELECT COUNT(*) AS c FROM documents WHERE file_type = 'md' AND is_dirty = 0`)
+      .get() as { c: number }
+  ).c;
+  if (cleanMd === 0) return;
+  db.prepare(`UPDATE documents SET is_dirty = 1 WHERE file_type = 'md'`).run();
 }
 
 /** 为 documents 表添加 head_commit_id 列（若不存在）。 */

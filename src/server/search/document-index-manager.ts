@@ -4,6 +4,7 @@
  * 职责：
  * - 标记 dirty：文档创建/更新时将 is_dirty=1
  * - 定时重建：扫描 is_dirty=1 的文档，读取 .md 文件内容，从 Lexical JSON 提取纯文本后写入 FTS5
+ * - 同步维护正文索引 documents_fts 与标题索引 documents_fts_title
  * - 外部触发：导出 rebuildAllDirty() 供路由或其他模块主动调用
  * - 乐观锁：通过 updated_at 防止 rebuild 期间并发更新导致的索引覆盖
  * - 内存锁：Set<documentId> 防止 timer 与外部触发同时重建同一文档
@@ -86,21 +87,14 @@ export function markDirty(documentId: string): void {
 }
 
 /**
- * 从全文索引中移除文档。
+ * 从全文索引中移除文档（正文 + 标题两路）。
  * 文档删除时调用。
  */
 export function removeIndex(documentId: string): void {
   const db = getDb();
   try {
-    // 查 FTS rowid 映射
-    const mapRow = db
-      .prepare(`SELECT fts_rowid FROM documents_fts_rowid WHERE document_id = ?`)
-      .get(documentId) as { fts_rowid: number } | undefined;
-    if (mapRow) {
-      // FTS5 删除语法：INSERT INTO table(table, rowid) VALUES('delete', ?)
-      db.prepare(`INSERT INTO documents_fts(documents_fts, rowid) VALUES('delete', ?)`).run(mapRow.fts_rowid);
-      db.prepare(`DELETE FROM documents_fts_rowid WHERE document_id = ?`).run(documentId);
-    }
+    deleteFtsRow(db, "documents_fts", "documents_fts_rowid", documentId);
+    deleteFtsRow(db, "documents_fts_title", "documents_fts_title_rowid", documentId);
   } catch {
     // 忽略索引删除错误，不影响文档删除的主流程
     // 索引不一致问题会在下次 rebuildAllDirty 时自动修复
@@ -133,21 +127,12 @@ export async function rebuildAllDirty(): Promise<number> {
 }
 
 /**
- * 重建单篇文档的全文索引。
+ * 重建单篇文档的全文索引（正文 + 标题）。
  *
  * 乐观锁流程：
  * 1. 记录当前 updated_at（版本号）
  * 2. 读取磁盘文件内容
- * 3. 删除旧 FTS 条目 → 插入新 FTS 条目
- * 4. 用 updated_at 条件清除 is_dirty，若不匹配说明索引期间文档被更新，保留 dirty
- */
-/**
- * 重建单篇文档的全文索引。
- *
- * 乐观锁流程：
- * 1. 记录当前 updated_at（版本号）
- * 2. 读取磁盘文件内容
- * 3. 删除旧 FTS 条目 → 插入新 FTS 条目
+ * 3. 删除旧 FTS 条目 → 插入新 FTS 条目（两路）
  * 4. 用 updated_at 条件清除 is_dirty，若不匹配说明索引期间文档被更新，保留 dirty
  */
 export function rebuildDocument(documentId: string): void {
@@ -175,24 +160,11 @@ export function rebuildDocument(documentId: string): void {
   // ---- 读取磁盘文件内容 ---- 从 Lexical JSON 中提取纯文本用于 FTS5 索引
   const { content } = readDocument(doc.domain_id, doc.relative_path);
   const plainText = extractLexicalText(content);
+  const titleTokens = tokenizeForSearch(doc.display_name || "");
 
-  // ---- 重建 FTS 条目 ----
-  // 1. 删除旧条目（含映射表记录）
-  const oldMap = db
-    .prepare(`SELECT fts_rowid FROM documents_fts_rowid WHERE document_id = ?`)
-    .get(documentId) as { fts_rowid: number } | undefined;
-  if (oldMap) {
-    try {
-      // FTS5 删除语法：INSERT INTO table(table, rowid) VALUES('delete', ?)
-      db.prepare(`INSERT INTO documents_fts(documents_fts, rowid) VALUES('delete', ?)`).run(oldMap.fts_rowid);
-    } catch {
-      // 忽略删除失败
-    }
-    db.prepare(`DELETE FROM documents_fts_rowid WHERE document_id = ?`).run(documentId);
-  }
-
-  // 2. 插入新条目
-  const result = db
+  // ---- 重建正文 FTS ----
+  deleteFtsRow(db, "documents_fts", "documents_fts_rowid", documentId);
+  const bodyResult = db
     .prepare(
       `INSERT INTO documents_fts(content, document_id, display_name, relative_path, domain_id, owner_visitor_id, permission)
        VALUES(?, ?, ?, ?, ?, ?, ?)`,
@@ -206,10 +178,29 @@ export function rebuildDocument(documentId: string): void {
       doc.owner_visitor_id,
       doc.permission,
     );
-  // 记录 rowid 映射，用于后续删除/更新
   db.prepare(
     `INSERT INTO documents_fts_rowid(document_id, fts_rowid) VALUES(?, ?)`,
-  ).run(documentId, result.lastInsertRowid);
+  ).run(documentId, bodyResult.lastInsertRowid);
+
+  // ---- 重建标题 FTS ----
+  deleteFtsRow(db, "documents_fts_title", "documents_fts_title_rowid", documentId);
+  const titleResult = db
+    .prepare(
+      `INSERT INTO documents_fts_title(title, document_id, display_name, relative_path, domain_id, owner_visitor_id, permission)
+       VALUES(?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      titleTokens,
+      documentId,
+      doc.display_name,
+      doc.relative_path,
+      doc.domain_id,
+      doc.owner_visitor_id,
+      doc.permission,
+    );
+  db.prepare(
+    `INSERT INTO documents_fts_title_rowid(document_id, fts_rowid) VALUES(?, ?)`,
+  ).run(documentId, titleResult.lastInsertRowid);
 
   // ---- 乐观锁：确认文档未在索引期间被更新 ----
   const changed = db
@@ -222,6 +213,25 @@ export function rebuildDocument(documentId: string): void {
   if (changed.changes === 0) {
     log.debug("index rebuild skipped for %s: document was concurrently updated", documentId);
   }
+}
+
+function deleteFtsRow(
+  db: ReturnType<typeof getDb>,
+  ftsTable: "documents_fts" | "documents_fts_title",
+  mapTable: "documents_fts_rowid" | "documents_fts_title_rowid",
+  documentId: string,
+): void {
+  const mapRow = db
+    .prepare(`SELECT fts_rowid FROM ${mapTable} WHERE document_id = ?`)
+    .get(documentId) as { fts_rowid: number } | undefined;
+  if (!mapRow) return;
+  try {
+    // 直接按 rowid 删除（FTS5 的 VALUES('delete', rowid) 在部分环境会 SQL logic error）
+    db.prepare(`DELETE FROM ${ftsTable} WHERE rowid = ?`).run(mapRow.fts_rowid);
+  } catch {
+    // 忽略删除失败
+  }
+  db.prepare(`DELETE FROM ${mapTable} WHERE document_id = ?`).run(documentId);
 }
 
 // ============================================================

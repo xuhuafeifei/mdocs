@@ -472,6 +472,8 @@ export interface SearchResult {
   domainId: string;
   snippet: string;
   bm25Score: number;
+  ownerVisitorName: string;
+  updatedAt: string;
 }
 
 /**

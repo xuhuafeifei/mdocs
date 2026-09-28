@@ -405,5 +405,12 @@ export const zh: Record<TranslationKey, string> = {
   agentConfigHideKey: "隐藏 API Key",
   agentFabOpen: "打开 mdocs 智能助手",
   agentFabReset: "重置位置",
+  docSearch: "搜索文档",
+  docSearchTitle: "搜索当前工作空间",
+  docSearchPlaceholder: "搜索标题或正文…",
+  docSearchEmptyHint: "输入关键词搜索当前工作空间",
+  docSearchNoResults: "没有匹配的文档",
+  docSearchNoDomain: "请先选择工作空间",
+  docSearchFailed: "搜索失败",
   logout: "退出登录",
 };
