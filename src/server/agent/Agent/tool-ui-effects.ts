@@ -50,6 +50,8 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
               documentId?: string;
               displayName?: string;
               snippet?: string;
+              ownerVisitorName?: string;
+              updatedAt?: string;
             }>
           | undefined) ?? [];
       const rows = results
