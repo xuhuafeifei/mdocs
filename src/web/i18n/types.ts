@@ -410,6 +410,8 @@ export type TranslationKey =
   | "embeddingIndexGoPage"
   | "embeddingIndexRefresh"
   | "embeddingIndexSearchPlaceholder"
+  | "embeddingIndexSearchSemanticPlaceholder"
+  | "embeddingIndexStatusBuiltUnknown"
   | "embeddingIndexRebuildSelected"
   | "embeddingIndexRebuilding"
   | "embeddingIndexRebuildResult"
@@ -421,6 +423,7 @@ export type TranslationKey =
   | "embeddingIndexColBuiltAt"
   | "embeddingIndexColDocUpdated"
   | "embeddingIndexStatusReady"
+  | "embeddingIndexStatusBuiltUnknown"
   | "embeddingIndexStatusMissing"
   // Agent model config
   | "agentConfig"
