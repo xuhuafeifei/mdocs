@@ -74,9 +74,15 @@ export async function upsertDocumentEmbeddings(params: {
   documentId: string;
   domainId: string;
   plainText: string;
+  /** 日志用短标题，可选 */
+  label?: string;
 }): Promise<void> {
+  const label = params.label?.trim() || params.documentId;
   try {
-    if (!isEmbeddingReady()) return;
+    if (!isEmbeddingReady()) {
+      log.info("semantic build skip %s: model not ready", label);
+      return;
+    }
 
     const chunks = chunkPlainText(params.plainText);
     const db = getDb();
@@ -84,22 +90,33 @@ export async function upsertDocumentEmbeddings(params: {
 
     if (chunks.length === 0) {
       deleteEmbeddingChunks(db, params.documentId);
+      log.info("semantic build %s: empty text, cleared chunks", label);
       return;
     }
 
+    log.info("semantic build start %s: %d chunks", label, chunks.length);
+    const t0 = Date.now();
     const rows: Array<{ index: number; text: string; embedding: Buffer }> = [];
     for (let i = 0; i < chunks.length; i++) {
       const text = chunks[i]!;
+      const chunkT0 = Date.now();
       const vec = await embedText(text, "document");
       if (!vec) {
-        log.warn("skip embedding chunk %s#%d: embed returned null", params.documentId, i);
+        log.warn("semantic build abort %s: chunk %d/%d embed returned null", label, i + 1, chunks.length);
         return; // 半态不如整篇跳过；下次 dirty/补扫再试
       }
       if (vec.length < EMBEDDING_DIM) {
-        log.warn("skip embedding: dim %d < %d", vec.length, EMBEDDING_DIM);
+        log.warn("semantic build abort %s: dim %d < %d", label, vec.length, EMBEDDING_DIM);
         return;
       }
       rows.push({ index: i, text: text.slice(0, 240), embedding: float32ToBlob(vec) });
+      log.info(
+        "semantic build %s: chunk %d/%d ok (%dms)",
+        label,
+        i + 1,
+        chunks.length,
+        Date.now() - chunkT0,
+      );
     }
 
     const tx = db.transaction(() => {
@@ -113,10 +130,11 @@ export async function upsertDocumentEmbeddings(params: {
       }
     });
     tx();
+    log.info("semantic build done %s: %d chunks in %dms", label, rows.length, Date.now() - t0);
   } catch (err) {
     log.warn(
-      "upsertDocumentEmbeddings failed for %s: %s",
-      params.documentId,
+      "semantic build failed %s: %s",
+      label,
       err instanceof Error ? err.message : String(err),
     );
   }

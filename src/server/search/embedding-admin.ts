@@ -148,6 +148,7 @@ export async function rebuildEmbeddingIndex(params: {
   const failed: Array<{ documentId: string; reason: string }> = [];
 
   if (!modelReady) {
+    log.warn("semantic rebuild batch aborted: embedding model not ready");
     for (const id of params.documentIds) {
       failed.push({ documentId: id, reason: "embedding model not ready" });
     }
@@ -157,7 +158,11 @@ export async function rebuildEmbeddingIndex(params: {
   const db = getDb();
   const ids = Array.from(new Set(params.documentIds.filter(Boolean))).slice(0, 100);
 
-  for (const documentId of ids) {
+  log.info("semantic rebuild batch start: %d document(s)", ids.length);
+  const batchT0 = Date.now();
+
+  for (let i = 0; i < ids.length; i++) {
+    const documentId = ids[i]!;
     try {
       const row = db
         .prepare(
@@ -178,6 +183,7 @@ export async function rebuildEmbeddingIndex(params: {
         | undefined;
 
       if (!row || row.file_type !== "md") {
+        log.info("semantic rebuild %d/%d skip %s: not md", i + 1, ids.length, documentId);
         skipped.push(documentId);
         continue;
       }
@@ -207,24 +213,35 @@ export async function rebuildEmbeddingIndex(params: {
         parent_id: null,
       };
       if (!canReadDocument(docRow, params.visitorId, domainInfo)) {
+        log.info("semantic rebuild %d/%d skip %s: no read access", i + 1, ids.length, row.display_name || documentId);
         skipped.push(documentId);
         continue;
       }
 
+      const label = row.display_name || row.relative_path || documentId;
+      log.info("semantic rebuild %d/%d begin %s", i + 1, ids.length, label);
       const { content } = readDocument(row.domain_id, row.relative_path);
       const plainText = extractLexicalPlainText(content);
       await upsertDocumentEmbeddings({
         documentId,
         domainId: row.domain_id,
         plainText,
+        label,
       });
       ok.push(documentId);
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      log.warn("rebuild embedding failed for %s: %s", documentId, reason);
+      log.warn("semantic rebuild %d/%d failed %s: %s", i + 1, ids.length, documentId, reason);
       failed.push({ documentId, reason });
     }
   }
 
+  log.info(
+    "semantic rebuild batch done: ok=%d skipped=%d failed=%d (%dms)",
+    ok.length,
+    skipped.length,
+    failed.length,
+    Date.now() - batchT0,
+  );
   return { modelReady, ok, skipped, failed };
 }

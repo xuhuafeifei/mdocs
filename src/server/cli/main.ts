@@ -53,7 +53,7 @@ function printUsage(): void {
       "Notes:",
       "  version also accepts -v / --version.",
       "  update uses https://registry.npmmirror.com for @fgbg/mdocs only;",
-      "  keeps existing node_modules and runs npm install --prefer-offline.",
+      "  keeps existing node_modules and runs npm install to sync new deps.",
       "  visitor list defaults to --active (only enabled visitors).",
       "  For migrate, OLD/NEW can be either visitor ID (UUID) or visitor name.",
       "  Either --dry-run or --confirm must be supplied.",

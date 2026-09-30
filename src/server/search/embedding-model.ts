@@ -61,8 +61,14 @@ export function isEmbeddingReady(): boolean {
 /**
  * 启动旁挂：缺文件则后台下载，再尝试 load。绝不阻塞 listen。
  * 就绪后补扫无向量块的文档。
+ * 设 MDOCS_DISABLE_EMBEDDING=1 可整路关闭（小内存机器推荐）。
  */
 export function ensureLocalEmbeddingModel(): void {
+  if (isEmbeddingDisabledByEnv()) {
+    disabled = true;
+    log.info("embedding disabled via MDOCS_DISABLE_EMBEDDING (keyword FTS only)");
+    return;
+  }
   void (async () => {
     try {
       await ensureModelFileOnDisk();
@@ -78,6 +84,11 @@ export function ensureLocalEmbeddingModel(): void {
       );
     }
   })();
+}
+
+function isEmbeddingDisabledByEnv(): boolean {
+  const v = process.env.MDOCS_DISABLE_EMBEDDING?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
 }
 
 async function ensureModelFileOnDisk(): Promise<void> {
@@ -166,7 +177,7 @@ async function downloadModelFile(): Promise<void> {
 }
 
 async function getEmbeddingContext(): Promise<EmbeddingContext | null> {
-  if (disabled) return null;
+  if (disabled || isEmbeddingDisabledByEnv()) return null;
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
     if (!isEmbeddingModelFilePresent()) {
@@ -184,10 +195,20 @@ async function getEmbeddingContext(): Promise<EmbeddingContext | null> {
     } catch (err) {
       disabled = true;
       ready = false;
-      log.warn(
-        "embedding model load failed; semantic search disabled: %s",
-        err instanceof Error ? err.message : String(err),
-      );
+      const msg = err instanceof Error ? err.message : String(err);
+      const missing =
+        /Cannot find package ['"]node-llama-cpp['"]/i.test(msg) ||
+        /Cannot find module ['"]node-llama-cpp['"]/i.test(msg);
+      if (missing) {
+        log.warn(
+          "semantic search disabled: dependency node-llama-cpp is not installed under this mdocs package. " +
+            "Re-run a full install (e.g. npm install -g @fgbg/mdocs@latest) or in the package root: npm install node-llama-cpp@3.22.1 --omit=dev. " +
+            "Keyword FTS search still works. (%s)",
+          msg,
+        );
+      } else {
+        log.warn("embedding model load failed; semantic search disabled: %s", msg);
+      }
       return null;
     }
   })();

@@ -89,6 +89,7 @@ function scheduleFtsIfNeeded(fileType: string, documentId: string): void {
           documentId,
           domainId: plain.domainId,
           plainText: plain.plainText,
+          label: plain.displayName || plain.relativePath || documentId,
         });
       }
     } catch {

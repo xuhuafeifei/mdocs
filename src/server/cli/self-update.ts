@@ -1,5 +1,5 @@
 /**
- * 全局安装原地升级：淘宝 npmmirror 拉最新包，保留 node_modules，npm --prefer-offline 补差量。
+ * 全局安装原地升级：淘宝 npmmirror 拉最新包，保留 node_modules，再 npm install 同步新依赖。
  *
  * 查版本 / pack 必须绕开本机 npm cache：`--prefer-online` 仍可能命中旧 packument，
  * 因此这两步使用临时空 `--cache` 目录。
@@ -155,14 +155,14 @@ export function chmodPackageBins(pkgRoot: string): void {
   }
 }
 
-/** 只补差量依赖：不删 node_modules，prefer-offline 优先用本地缓存 */
+/** 只补差量依赖：不删 node_modules；新依赖（如 node-llama-cpp）必须装上 */
 function installDepsPreferOffline(pkgRoot: string): void {
-  log("安装/同步依赖（--prefer-offline，保留已有 node_modules）…");
+  log("安装/同步依赖（保留已有 node_modules）…");
+  // 不用 --prefer-offline：新增原生依赖未进本地缓存时会漏装，语义索引会报 Cannot find package
   const r = npm(
     [
       "install",
       "--omit=dev",
-      "--prefer-offline",
       "--no-audit",
       "--no-fund",
       "--legacy-peer-deps",
@@ -174,6 +174,44 @@ function installDepsPreferOffline(pkgRoot: string): void {
     fail(`npm install 失败：${r.stderr || r.stdout}`);
   }
   if (r.stdout) log(r.stdout);
+  ensureListedDependency(pkgRoot, "node-llama-cpp");
+}
+
+/**
+ * 关键依赖若仍缺失（native 构建失败或镜像缺包），再单独装一次并打警告，不整次 update 失败。
+ */
+function ensureListedDependency(pkgRoot: string, depName: string): void {
+  const pkg = readPackageJson(pkgRoot) as PackageJson & {
+    dependencies?: Record<string, string>;
+  };
+  const range = pkg.dependencies?.[depName];
+  if (!range) return;
+
+  const local = path.join(pkgRoot, "node_modules", ...depName.split("/"));
+  if (fs.existsSync(path.join(local, "package.json"))) return;
+
+  log(`缺少 ${depName}，尝试单独安装 ${depName}@${range} …`);
+  const r = npm(
+    [
+      "install",
+      `${depName}@${range}`,
+      "--omit=dev",
+      "--no-audit",
+      "--no-fund",
+      "--legacy-peer-deps",
+      `--registry=${MDOCS_UPDATE_REGISTRY}`,
+    ],
+    pkgRoot,
+  );
+  if (r.status !== 0 || !fs.existsSync(path.join(local, "package.json"))) {
+    process.stderr.write(
+      `mdocs update: 警告 — ${depName} 仍未安装成功（语义搜索将不可用；关键词搜索不受影响）。\n` +
+        `  可手动：cd ${pkgRoot} && npm install ${depName}@${range} --omit=dev\n` +
+        `  ${r.stderr || r.stdout || ""}\n`,
+    );
+    return;
+  }
+  log(`${depName} 已安装`);
 }
 
 /**

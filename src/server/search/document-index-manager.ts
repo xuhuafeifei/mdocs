@@ -107,14 +107,22 @@ export async function backfillMissingEmbeddings(limit = 40): Promise<number> {
     .all(limit) as Array<{ document_id: string; domain_id: string; relative_path: string }>;
 
   let n = 0;
-  for (const row of rows) {
+  if (rows.length === 0) {
+    log.info("embedding backfill: nothing to do");
+    return 0;
+  }
+  log.info("embedding backfill start: %d documents", rows.length);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
     try {
+      log.info("embedding backfill doc %d/%d: %s", i + 1, rows.length, row.relative_path || row.document_id);
       const { content } = readDocument(row.domain_id, row.relative_path);
       const plainText = extractLexicalPlainText(content);
       await upsertDocumentEmbeddings({
         documentId: row.document_id,
         domainId: row.domain_id,
         plainText,
+        label: row.relative_path || row.document_id,
       });
       n += 1;
     } catch (err) {
@@ -125,7 +133,7 @@ export async function backfillMissingEmbeddings(limit = 40): Promise<number> {
       );
     }
   }
-  if (n > 0) log.info("embedding backfill wrote %d documents", n);
+  log.info("embedding backfill finished: wrote %d / %d", n, rows.length);
   return n;
 }
 
@@ -169,6 +177,7 @@ export async function rebuildAllDirty(): Promise<number> {
           documentId: document_id,
           domainId: plain.domainId,
           plainText: plain.plainText,
+          label: plain.displayName || plain.relativePath || document_id,
         });
       }
       count += 1;
@@ -192,7 +201,12 @@ export async function rebuildAllDirty(): Promise<number> {
  *
  * @returns 未分词纯文本 + domain，供语义索引尽力写入；文档不存在时返回 null
  */
-export function rebuildDocument(documentId: string): { domainId: string; plainText: string } | null {
+export function rebuildDocument(documentId: string): {
+  domainId: string;
+  plainText: string;
+  displayName: string;
+  relativePath: string;
+} | null {
   const db = getDb();
 
   // ---- 获取文档元数据 ----
@@ -272,7 +286,12 @@ export function rebuildDocument(documentId: string): { domainId: string; plainTe
     log.debug("index rebuild skipped for %s: document was concurrently updated", documentId);
   }
 
-  return { domainId: doc.domain_id, plainText: rawPlain };
+  return {
+    domainId: doc.domain_id,
+    plainText: rawPlain,
+    displayName: doc.display_name,
+    relativePath: doc.relative_path,
+  };
 }
 
 function deleteFtsRow(
