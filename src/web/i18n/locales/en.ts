@@ -415,6 +415,7 @@ export const en: Record<TranslationKey, string> = {
   embeddingIndexPageSize: "Per page",
   embeddingIndexGoPage: "Page",
   embeddingIndexRefresh: "Refresh",
+  embeddingIndexSearchPlaceholder: "Search title / path / ID…",
   embeddingIndexRebuildSelected: "Rebuild selected ({{count}})",
   embeddingIndexRebuilding: "Rebuilding…",
   embeddingIndexRebuildResult: "Done: ok {{ok}}, skipped {{skipped}}, failed {{failed}}",

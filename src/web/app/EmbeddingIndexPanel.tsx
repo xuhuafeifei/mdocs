@@ -3,7 +3,7 @@
  * antd 单独 ConfigProvider，对齐 mdocs 绿色主题（勿吃 lobe 默认黑/蓝）。
  */
 import { useEffect, useMemo, useState } from "react";
-import { Button, ConfigProvider, InputNumber, Space, Table, Tag, theme as antdTheme } from "antd";
+import { Button, ConfigProvider, Input, InputNumber, Space, Table, Tag, theme as antdTheme } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import { useI18n } from "../i18n";
 import {
@@ -71,6 +71,7 @@ export function EmbeddingIndexPanel(props: {
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState("");
   const [pagination, setPagination] = useState<TablePaginationConfig>({
     current: 1,
     pageSize: 20,
@@ -109,6 +110,23 @@ export function EmbeddingIndexPanel(props: {
     }
     return Array.from(map.entries()).map(([value, text]) => ({ text, value }));
   }, [items, lang, t]);
+
+  /** 文章查询：按标题 / 路径即时过滤（与列筛选同在客户端，叠加生效） */
+  const visibleItems = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((row) =>
+      (row.displayName || "").toLowerCase().includes(q) ||
+      (row.relativePath || "").toLowerCase().includes(q) ||
+      row.documentId.toLowerCase().includes(q),
+    );
+  }, [items, searchText]);
+
+  // 搜索词变化 → 计数同步 + 回到第一页（列筛选的总数仍由 Table onChange 回写）
+  useEffect(() => {
+    setFilteredTotal(visibleItems.length);
+    setPagination((p) => ({ ...p, current: 1 }));
+  }, [visibleItems.length]);
 
   const columns: ColumnsType<EmbeddingIndexRow> = useMemo(
     () => [
@@ -238,6 +256,15 @@ export function EmbeddingIndexPanel(props: {
           </p>
 
           <Space wrap style={{ marginBottom: 12 }}>
+            <Input.Search
+              allowClear
+              placeholder={t("embeddingIndexSearchPlaceholder")}
+              aria-label={t("embeddingIndexSearchPlaceholder")}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              style={{ width: 240 }}
+              disabled={loading || rebuilding}
+            />
             <Button onClick={() => void load()} disabled={loading || rebuilding}>
               {t("embeddingIndexRefresh")}
             </Button>
@@ -257,7 +284,7 @@ export function EmbeddingIndexPanel(props: {
           {(() => {
             const pageSize = Number(pagination.pageSize) || 20;
             const current = Number(pagination.current) || 1;
-            const total = filteredTotal || items.length;
+            const total = filteredTotal;
             const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
 
             return (
@@ -266,7 +293,7 @@ export function EmbeddingIndexPanel(props: {
                 rowKey="documentId"
                 loading={loading}
                 columns={columns}
-                dataSource={items}
+                dataSource={visibleItems}
                 rowSelection={{
                   selectedRowKeys: selectedKeys,
                   onChange: (keys) => setSelectedKeys(keys),
@@ -297,7 +324,9 @@ export function EmbeddingIndexPanel(props: {
                   });
                 }}
                 locale={{
-                  emptyText: t("embeddingIndexEmpty"),
+                  emptyText: searchText.trim()
+                    ? t("myDocumentsNoMatch")
+                    : t("embeddingIndexEmpty"),
                   filterReset: t("embeddingIndexFilterReset"),
                   filterConfirm: t("embeddingIndexFilterOk"),
                 }}

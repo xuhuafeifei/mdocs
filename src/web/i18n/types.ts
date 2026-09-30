@@ -409,6 +409,7 @@ export type TranslationKey =
   | "embeddingIndexPageSize"
   | "embeddingIndexGoPage"
   | "embeddingIndexRefresh"
+  | "embeddingIndexSearchPlaceholder"
   | "embeddingIndexRebuildSelected"
   | "embeddingIndexRebuilding"
   | "embeddingIndexRebuildResult"

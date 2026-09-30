@@ -411,6 +411,7 @@ export const zh: Record<TranslationKey, string> = {
   embeddingIndexPageSize: "每页",
   embeddingIndexGoPage: "页码",
   embeddingIndexRefresh: "刷新",
+  embeddingIndexSearchPlaceholder: "搜索文章标题 / 路径 / ID…",
   embeddingIndexRebuildSelected: "重建所选 ({{count}})",
   embeddingIndexRebuilding: "重建中…",
   embeddingIndexRebuildResult: "完成：成功 {{ok}}，跳过 {{skipped}}，失败 {{failed}}",
