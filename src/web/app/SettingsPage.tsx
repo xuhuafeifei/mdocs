@@ -17,6 +17,7 @@ import { DomainManagementPanel } from "./DomainManagementPanel";
 import { MemberTemplatesPanel } from "./MemberTemplatesPanel";
 import { AgentConfigPanel } from "./AgentConfigPanel";
 import { AgentUserSkillsPanel } from "./AgentUserSkillsPanel";
+import { EmbeddingIndexPanel } from "./EmbeddingIndexPanel";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 import { useIsNarrowViewport } from "./hooks/useIsNarrowViewport";
 import {
@@ -32,8 +33,9 @@ import {
   setPasswordApi,
   fetchDomainsApi,
   fetchVisitorsDirectoryApi,
+  searchDocumentsApi,
 } from "../services/endpoints";
-import type { Bookmark, MyDocument } from "../services/endpoints";
+import type { Bookmark, MyDocument, SearchMode, SearchResult } from "../services/endpoints";
 import type { DomainSummary } from "../../shared/types/domain";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import mdocsLogo from "../assets/mdocs-logo.svg";
@@ -57,7 +59,7 @@ function formatDocDate(iso: string): string {
   return `${d.getFullYear()}-${month}-${day}`;
 }
 
-type SettingsTab = "general" | "bookmarks" | "myDocuments" | "domainManagement" | "memberTemplates" | "savePublish" | "agentConfig";
+type SettingsTab = "general" | "bookmarks" | "myDocuments" | "embeddingIndex" | "domainManagement" | "memberTemplates" | "savePublish" | "agentConfig";
 
 export function SettingsPage(props: {
   onBack: () => void;
@@ -105,13 +107,15 @@ export function SettingsPage(props: {
         ? t("bookmarkTitle")
         : tab === "myDocuments"
           ? t("myDocuments")
-          : tab === "domainManagement"
-            ? t("domainManagement")
-            : tab === "memberTemplates"
-              ? t("memberTemplates")
-              : tab === "agentConfig"
-                ? t("agentConfig")
-                : t("saveAndPublish");
+          : tab === "embeddingIndex"
+            ? t("embeddingIndex")
+            : tab === "domainManagement"
+              ? t("domainManagement")
+              : tab === "memberTemplates"
+                ? t("memberTemplates")
+                : tab === "agentConfig"
+                  ? t("agentConfig")
+                  : t("saveAndPublish");
 
   // ---- CLI Token 相关状态 ----
   // CLI Token 列表
@@ -151,6 +155,9 @@ export function SettingsPage(props: {
   const [myDocuments, setMyDocuments] = useState<MyDocument[]>([]);
   const [myDocumentsLoading, setMyDocumentsLoading] = useState(false);
   const [myDocumentSearch, setMyDocumentSearch] = useState("");
+  const [myDocSearchMode, setMyDocSearchMode] = useState<SearchMode>("auto");
+  const [myDocSearchResults, setMyDocSearchResults] = useState<SearchResult[] | null>(null);
+  const [myDocSearchReady, setMyDocSearchReady] = useState(true);
   const [myDocPage, setMyDocPage] = useState(0);
   const [myDocJump, setMyDocJump] = useState("1");
   const [myDocTotal, setMyDocTotal] = useState(0);
@@ -159,7 +166,10 @@ export function SettingsPage(props: {
   const [myDocGroupBy, setMyDocGroupBy] = useState<"" | "domain" | "creator">("");
   const [myDocGroups, setMyDocGroups] = useState<{ key: string; items: MyDocument[] }[] | null>(null);
   const [visitorOptions, setVisitorOptions] = useState<VisitorDirectoryEntry[]>([]);
+  const myDocSearchSeq = useRef(0);
   const MY_DOC_PAGE_SIZE = 20;
+  /** 搜索态：非空搜索词生效，表格渲染搜索结果而非分页列表 */
+  const myDocSearchActive = myDocSearchResults !== null;
 
   // ---- 域列表（用于 domainId -> domainName 映射）----
   const [domains, setDomains] = useState<DomainSummary[]>([]);
@@ -210,6 +220,42 @@ export function SettingsPage(props: {
       }).catch(() => {});
     }
   }, [tab, myDocDomainId, myDocCreatorId, myDocGroupBy]);
+
+  /**
+   * 我的文章搜索：防抖 300ms 接 POST /search。
+   * 有词 → 结果集渲染；清空 → 恢复分页列表。搜索不限定创建者（D2）。
+   */
+  useEffect(() => {
+    if (tab !== "myDocuments") return;
+    const q = myDocumentSearch.trim();
+    if (!q) {
+      myDocSearchSeq.current += 1;
+      setMyDocSearchResults(null);
+      setMyDocSearchReady(true);
+      return;
+    }
+    const seq = ++myDocSearchSeq.current;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await searchDocumentsApi({
+            query: q,
+            mode: myDocSearchMode,
+            domainId: myDocDomainId || undefined,
+            topN: 50,
+          });
+          if (!mountedRef.current || seq !== myDocSearchSeq.current) return;
+          setMyDocSearchResults(res.results);
+          setMyDocSearchReady(res.modelReady);
+        } catch {
+          if (!mountedRef.current || seq !== myDocSearchSeq.current) return;
+          setMyDocSearchResults([]);
+          setMyDocSearchReady(true);
+        }
+      })();
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [tab, myDocumentSearch, myDocSearchMode, myDocDomainId]);
 
   // 注意：loadBookmarks / loadMyDocuments 内部已使用 mountedRef 做保护
 
@@ -484,6 +530,12 @@ export function SettingsPage(props: {
             onClick={() => selectTab("myDocuments")}
           >
             {t("myDocuments")}
+          </div>
+          <div
+            className={"mdocs-config-item" + (tab === "embeddingIndex" ? " active" : "")}
+            onClick={() => selectTab("embeddingIndex")}
+          >
+            {t("embeddingIndex")}
           </div>
           {/* 域管理 Tab */}
           <div
@@ -872,30 +924,99 @@ export function SettingsPage(props: {
                 </select>
                 <select
                   className="mdocs-my-docs-select"
-                  value={myDocCreatorId}
-                  aria-label={t("myDocumentsFilterCreator")}
-                  onChange={(e) => setMyDocCreatorId(e.target.value)}
+                  value={myDocSearchMode}
+                  aria-label={t("myDocumentsSearchMode")}
+                  onChange={(e) => setMyDocSearchMode(e.target.value as SearchMode)}
                 >
-                  <option value="">{t("myDocumentsFilterAllCreators")}</option>
-                  {visitorOptions.map((v) => (
-                    <option key={v.visitorId} value={v.visitorId}>
-                      {v.visitorName}
-                    </option>
-                  ))}
+                  <option value="auto">{t("myDocumentsModeAuto")}</option>
+                  <option value="keyword">{t("myDocumentsModeKeyword")}</option>
+                  <option value="semantic">{t("myDocumentsModeSemantic")}</option>
                 </select>
-                <select
-                  className="mdocs-my-docs-select"
-                  value={myDocGroupBy}
-                  aria-label={t("myDocumentsGroupBy")}
-                  onChange={(e) => setMyDocGroupBy(e.target.value as "" | "domain" | "creator")}
-                >
-                  <option value="">{t("myDocumentsGroupNone")}</option>
-                  <option value="domain">{t("myDocumentsGroupDomain")}</option>
-                  <option value="creator">{t("myDocumentsGroupCreator")}</option>
-                </select>
+                {!myDocSearchActive && (
+                  <select
+                    className="mdocs-my-docs-select"
+                    value={myDocCreatorId}
+                    aria-label={t("myDocumentsFilterCreator")}
+                    onChange={(e) => setMyDocCreatorId(e.target.value)}
+                  >
+                    <option value="">{t("myDocumentsFilterAllCreators")}</option>
+                    {visitorOptions.map((v) => (
+                      <option key={v.visitorId} value={v.visitorId}>
+                        {v.visitorName}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {!myDocSearchActive && (
+                  <select
+                    className="mdocs-my-docs-select"
+                    value={myDocGroupBy}
+                    aria-label={t("myDocumentsGroupBy")}
+                    onChange={(e) => setMyDocGroupBy(e.target.value as "" | "domain" | "creator")}
+                  >
+                    <option value="">{t("myDocumentsGroupNone")}</option>
+                    <option value="domain">{t("myDocumentsGroupDomain")}</option>
+                    <option value="creator">{t("myDocumentsGroupCreator")}</option>
+                  </select>
+                )}
               </div>
-              {myDocumentsLoading ? (
+              {myDocumentsLoading && !myDocSearchActive ? (
                 <div className="mdocs-my-docs-empty">{t("loading")}</div>
+              ) : myDocSearchActive ? (
+                <>
+                  {myDocSearchResults!.length === 0 ? (
+                    <div className="mdocs-my-docs-empty">
+                      {myDocSearchMode === "semantic" && !myDocSearchReady
+                        ? t("myDocumentsSemanticNotReady")
+                        : t("myDocumentsNoMatch")}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mdocs-my-docs-search-meta">
+                        {t("myDocumentsResultCount", { count: String(myDocSearchResults!.length) })}
+                        {myDocSearchMode === "semantic" && !myDocSearchReady
+                          ? ` · ${t("myDocumentsSemanticNotReadyShort")}`
+                          : ""}
+                      </div>
+                      <div className="mdocs-settings-table-wrap">
+                        <table className="mdocs-settings-table">
+                          <thead>
+                            <tr>
+                              <th>{t("myDocumentsColTitle")}</th>
+                              <th>{t("myDocumentsColDomain")}</th>
+                              <th>{t("myDocumentsColCreator")}</th>
+                              <th>{t("myDocumentsColUpdated")}</th>
+                              <th>{t("myDocumentsColCreated")}</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {myDocSearchResults!.map((doc) => (
+                              <tr key={doc.documentId}>
+                                <td className="mdocs-my-docs-title" onClick={() => props.onOpenDocument(doc.documentId)}>
+                                  {doc.displayName || doc.relativePath || "Untitled"}
+                                </td>
+                                <td>{domainNameMap.get(doc.domainId || "") || doc.domainId || "—"}</td>
+                                <td>{doc.ownerVisitorName || "—"}</td>
+                                <td className="mdocs-my-docs-date">{formatDocDate(doc.updatedAt)}</td>
+                                <td className="mdocs-my-docs-date">{doc.createdAt ? formatDocDate(doc.createdAt) : "—"}</td>
+                                <td className="mdocs-my-docs-actions">
+                                  <button
+                                    type="button"
+                                    className="primary small"
+                                    onClick={() => props.onOpenDocument(doc.documentId)}
+                                  >
+                                    {t("bookmarkOpen")}
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                </>
               ) : (
                 <>
                   {myDocuments.length === 0 ? (
@@ -959,6 +1080,7 @@ export function SettingsPage(props: {
                     </table>
                     </div>
                   )}
+                  {!myDocSearchActive && (
                   <div className="mdocs-my-docs-footer">
                     <span className="mdocs-settings-page-info">
                       {t("myDocumentsPageInfo", {
@@ -1014,10 +1136,13 @@ export function SettingsPage(props: {
                       </div>
                     )}
                   </div>
+                  )}
                 </>
               )}
             </div>
           </div>
+        ) : tab === "embeddingIndex" ? (
+          <EmbeddingIndexPanel onOpenDocument={props.onOpenDocument} />
         ) : tab === "domainManagement" ? (
           // ---- 域管理 Tab ----
           <DomainManagementPanel />

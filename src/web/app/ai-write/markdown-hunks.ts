@@ -115,3 +115,93 @@ export function rejectHunkFromProposed(proposedText: string, hunk: MdHunk): stri
     ...lines.slice(hunk.newEnd),
   ]);
 }
+
+/** 冻结布局上的分段（与 AiWriteMarkdownPane 同构） */
+export type MdInlineSeg =
+  | { kind: "same"; lines: string[]; key: string }
+  | { kind: "hunk"; hunk: MdHunk; hunkIndex: number; key: string };
+
+function mergeAdjacentSame(segs: MdInlineSeg[]): MdInlineSeg[] {
+  const out: MdInlineSeg[] = [];
+  for (const seg of segs) {
+    const prev = out[out.length - 1];
+    if (seg.kind === "same" && prev?.kind === "same") {
+      out[out.length - 1] = {
+        kind: "same",
+        lines: [...prev.lines, ...seg.lines],
+        key: prev.key,
+      };
+    } else {
+      out.push(seg);
+    }
+  }
+  return out;
+}
+
+function renumberHunkIndices(segs: MdInlineSeg[]): MdInlineSeg[] {
+  let hi = 0;
+  return segs.map((seg) => {
+    if (seg.kind !== "hunk") return seg;
+    const next = { ...seg, hunkIndex: hi, key: `h-${seg.hunk.id}-${hi}` };
+    hi += 1;
+    return next;
+  });
+}
+
+/**
+ * 拒绝某一 hunk：就地变成 same（用 oldLines），不重跑 LCS。
+ * 避免长文/重复空行时 Myers 重排成「上半全同、下半一大块」。
+ */
+export function rejectHunkInSegments(segs: MdInlineSeg[], hunkId: string): MdInlineSeg[] {
+  const next = segs.map((seg) => {
+    if (seg.kind !== "hunk" || seg.hunk.id !== hunkId) return seg;
+    return {
+      kind: "same" as const,
+      lines: seg.hunk.oldLines.slice(),
+      key: `s-rej-${seg.hunk.id}`,
+    };
+  });
+  return renumberHunkIndices(mergeAdjacentSame(next));
+}
+
+/**
+ * 接受某一 hunk：就地变成 same（用生效后的 newLines），并平移后续 hunk 的 old 行号。
+ */
+export function acceptHunkInSegments(
+  segs: MdInlineSeg[],
+  hunkId: string,
+  effectiveNewLines: string[],
+): MdInlineSeg[] {
+  let delta = 0;
+  let found = false;
+  const next: MdInlineSeg[] = [];
+  for (const seg of segs) {
+    if (seg.kind === "same") {
+      next.push(seg);
+      continue;
+    }
+    if (seg.hunk.id === hunkId) {
+      found = true;
+      delta = effectiveNewLines.length - seg.hunk.oldLines.length;
+      next.push({
+        kind: "same",
+        lines: effectiveNewLines.slice(),
+        key: `s-acc-${seg.hunk.id}`,
+      });
+      continue;
+    }
+    if (!found || delta === 0) {
+      next.push(seg);
+      continue;
+    }
+    next.push({
+      ...seg,
+      hunk: {
+        ...seg.hunk,
+        oldStart: seg.hunk.oldStart + delta,
+        oldEnd: seg.hunk.oldEnd + delta,
+      },
+    });
+  }
+  return renumberHunkIndices(mergeAdjacentSame(next));
+}

@@ -19,6 +19,7 @@ import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.
 import { buildAgentRouter } from "./routes/agent.routes.js";
 import { buildGraphRouter } from "./routes/graph.routes.js";
 import { startIndexTimer } from "./search/document-index-manager.js";
+import { ensureLocalEmbeddingModel } from "./search/embedding-model.js";
 import { useLogger } from "./logger/logger.js";
 
 const log = useLogger("app");
@@ -33,6 +34,8 @@ export function buildApp(): Application {
   getDb();
   // 启动 FTS5 全文索引定时重建
   startIndexTimer();
+  // 本地 embedding 模型：后台确保文件并 load，不阻塞 listen
+  ensureLocalEmbeddingModel();
 
   const app = express();
   app.disable("x-powered-by");

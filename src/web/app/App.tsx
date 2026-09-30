@@ -2201,7 +2201,8 @@ export function App() {
 
       <DocSearchOverlay
         open={docSearchOpen}
-        domainId={currentDomainId || null}
+        domains={domains}
+        onDomainsChange={setDomains}
         onClose={() => setDocSearchOpen(false)}
         onOpenDocument={(docId) => {
           if (isNarrow) setMobileNavOpen(false);

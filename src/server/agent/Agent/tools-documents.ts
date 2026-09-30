@@ -7,7 +7,9 @@ import { assertDocumentAccess, DocumentError } from "../../access/access-control
 import { createDocument, addDocumentInvite, getDocument, moveDocument } from "../../documents/document.service.js";
 import { buildDocumentTree } from "../../documents/tree.service.js";
 import { createFolder } from "../../routes/folders.routes.js";
-import { searchDocuments } from "../../search/search.service.js";
+import { searchDocuments, tokenizeQuery, type SearchMode } from "../../search/search.service.js";
+import { listEmbeddingIndex, rebuildEmbeddingIndex } from "../../search/embedding-admin.js";
+import { isEmbeddingReady } from "../../search/embedding-model.js";
 import { asToolResult, type ToolDeps } from "./tool-deps.js";
 import { FILE_TYPE } from "../../../shared/file-types.js";
 import { treeIncludeTypes } from "../../../shared/file-type-policy.js";
@@ -57,28 +59,85 @@ export function searchDocumentsTool({ visitorId }: ToolDeps): AgentTool {
     name: "search_documents",
     label: "搜索文档",
     description:
-      "全文搜索当前访客可读文档（跨工作空间内容检索）。要按「我创建的文章」筛选/翻页请用 query_my_documents。",
+      "全文搜索当前访客可读文档（跨工作空间内容检索）。mode 控制检索路：auto（默认，关键词+语义混合）、keyword（仅关键词 FTS）、semantic（仅语义近邻，模型未就绪返回空）。要按「我创建的文章」筛选/翻页请用 query_my_documents。",
     parameters: Type.Object({
       query: Type.String({ description: "搜索词" }),
+      mode: Type.Optional(
+        Type.Union([Type.Literal("auto"), Type.Literal("keyword"), Type.Literal("semantic")], {
+          description: "检索模式，默认 auto；语义命中可补关键词盲区",
+        }),
+      ),
       domainId: Type.Optional(Type.String({ description: "工作空间 ID，可选" })),
       topN: Type.Optional(Type.Number({ description: "返回条数，默认 10，最大 30" })),
     }),
     execute: async (_id, params) => {
-      const { query, domainId, topN } = params as {
+      const { query, mode, domainId, topN } = params as {
         query: string;
+        mode?: SearchMode;
         domainId?: string;
         topN?: number;
       };
       const q = query?.trim();
       if (!q) throw new Error("query is required");
       const limit = Math.min(Math.max(Math.floor(topN ?? 10), 1), 30);
-      const results = searchDocuments({
+      const results = await searchDocuments({
         query: q,
         visitorId,
         domainId: domainId?.trim() || undefined,
         topN: limit,
+        mode,
       });
-      return asToolResult({ query: q, results });
+      return asToolResult({
+        query: q,
+        mode: mode ?? "auto",
+        modelReady: isEmbeddingReady(),
+        tokens: tokenizeQuery(q),
+        results,
+      });
+    },
+  };
+}
+
+/** 语义索引状态：哪些可读文档已建/未建向量块 */
+export function listSemanticIndexTool({ visitorId }: ToolDeps): AgentTool {
+  return {
+    name: "list_semantic_index",
+    label: "查语义索引状态",
+    description:
+      "列出当前访客可读 md 文档的语义索引状态（chunk 数、上次构建时间），用于判断哪些文档还没建语义索引。modelReady=false 表示语义模型未就绪。",
+    parameters: Type.Object({
+      domainId: Type.Optional(Type.String({ description: "工作空间 ID，可选" })),
+    }),
+    execute: async (_id, params) => {
+      const domainId = (params as { domainId?: string }).domainId?.trim() || undefined;
+      const data = listEmbeddingIndex({ visitorId, domainId });
+      return asToolResult(data);
+    },
+  };
+}
+
+/** 语义索引构建：可读即可索引，不可读 skipped */
+export function rebuildSemanticIndexTool({ visitorId }: ToolDeps): AgentTool {
+  return {
+    name: "rebuild_semantic_index",
+    label: "重建语义索引",
+    description:
+      "对指定文档尽力重建语义向量索引（模型未就绪则全部 failed）。权限与读取一致：可读即可索引，无读权限的文档进 skipped。最多 100 篇。",
+    parameters: Type.Object({
+      documentIds: Type.Array(Type.String(), {
+        description: "要重建的 documentId 列表（最多 100）",
+      }),
+    }),
+    execute: async (_id, params) => {
+      const { documentIds } = params as { documentIds?: unknown };
+      if (!Array.isArray(documentIds) || documentIds.length === 0) {
+        throw new Error("documentIds (non-empty string[]) is required");
+      }
+      const data = await rebuildEmbeddingIndex({
+        visitorId,
+        documentIds: documentIds as string[],
+      });
+      return asToolResult(data);
     },
   };
 }

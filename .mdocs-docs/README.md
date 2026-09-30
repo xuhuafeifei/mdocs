@@ -36,7 +36,9 @@
 
 | 需求夹 | 说明 |
 |--------|------|
+| `search-query-modes` | **已实现**：搜索模式入参（关键词/语义/默认、限域）+ 我的文章表格接真实查询 + 语义索引 Agent 工具（查询/构建/状态）；可读即可索引 — [需求分析](./requirements/search-query-modes/需求分析.md) · [设计契约](./requirements/search-query-modes/设计契约.md) · [代码索引](./requirements/search-query-modes/代码索引.md) |
 | `search-title-index` | **已实现**：标题独立索引 + 两路召回合并；侧栏/⌘K 浮层 — [需求分析](./requirements/search-title-index/需求分析.md) · [设计契约](./requirements/search-title-index/设计契约.md) |
+| `search-embedding` | **已实现**：本地 nomic 语义索引 + 与文章检索同构构建；异步下 GGUF；失败不挡 FTS — [需求分析](./requirements/search-embedding/需求分析.md) · [设计契约](./requirements/search-embedding/设计契约.md) · [代码索引](./requirements/search-embedding/代码索引.md) |
 | `workspace-wording-start-writing` | **已同意**：对人叫工作空间；主页「开始写作」引流；侧栏保留「新建文章」「新建目录」 — [需求分析](./requirements/workspace-wording-start-writing/需求分析.md) · [设计契约](./requirements/workspace-wording-start-writing/设计契约.md) · [代码索引](./requirements/workspace-wording-start-writing/代码索引.md) |
 | `conflict-force-overwrite` | **已同意**：冲突时 owner 强制覆盖（merge 通道 + 正文=本地）— [需求分析](./requirements/conflict-force-overwrite/需求分析.md) · [设计契约](./requirements/conflict-force-overwrite/设计契约.md) |
 | `agent-chat-mermaid` | **已同意**：Ask 聊天气泡 mermaid 默认渲染、可切代码；只存源码前端翻译 — [需求分析](./requirements/agent-chat-mermaid/需求分析.md) · [设计契约](./requirements/agent-chat-mermaid/设计契约.md) |

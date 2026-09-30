@@ -70,6 +70,13 @@ vi.mock("../logger/logger.js", () => ({
   }),
 }));
 
+/** 本文件测 FTS；语义路 no-op，避免拉 GGUF */
+vi.mock("./embedding-store.js", () => ({
+  deleteEmbeddingChunks: () => {},
+  upsertDocumentEmbeddings: async () => {},
+  querySemanticNeighbors: async () => [],
+}));
+
 function insertFtsDoc(opts: {
   documentId: string;
   domainId: string;
@@ -158,6 +165,7 @@ describe("Search functionality", () => {
     db.exec("DELETE FROM documents_fts_rowid");
     db.exec("DELETE FROM documents_fts_title");
     db.exec("DELETE FROM documents_fts_title_rowid");
+    db.exec("DELETE FROM document_embedding_chunks");
     db.exec("DELETE FROM audit_logs");
     db.exec("DELETE FROM document_invites");
     contentByPath.clear();
@@ -175,7 +183,7 @@ describe("Search functionality", () => {
 
     await rebuildAllDirty();
 
-    const results = searchDocuments({
+    const results = await searchDocuments({
       query: "测试",
       visitorId: "test-actor",
       domainId: "default",
@@ -203,7 +211,7 @@ describe("Search functionality", () => {
 
     await rebuildAllDirty();
 
-    const results = searchDocuments({
+    const results = await searchDocuments({
       query: "不存在的术语",
       visitorId: "test-actor",
       domainId: "default",
@@ -213,7 +221,7 @@ describe("Search functionality", () => {
     expect(results).toEqual([]);
   });
 
-  it("title-only hit ranks and returns displayName snippet", () => {
+  it("title-only hit ranks and returns displayName snippet", async () => {
     insertFtsDoc({
       documentId: "title-only",
       domainId: "default",
@@ -225,7 +233,7 @@ describe("Search functionality", () => {
       body: "完全无关的正文内容",
     });
 
-    const results = searchDocuments({
+    const results = await searchDocuments({
       query: "恢复码",
       visitorId: "anyone",
       domainId: "default",
@@ -236,7 +244,7 @@ describe("Search functionality", () => {
     expect(results[0]!.snippet).toBe("恢复码说明");
   });
 
-  it("body-only hit still works", () => {
+  it("body-only hit still works", async () => {
     insertFtsDoc({
       documentId: "body-only",
       domainId: "default",
@@ -248,7 +256,7 @@ describe("Search functionality", () => {
       body: "文中提到了向量检索算法",
     });
 
-    const results = searchDocuments({
+    const results = await searchDocuments({
       query: "向量检索",
       visitorId: "anyone",
       domainId: "default",
@@ -257,7 +265,7 @@ describe("Search functionality", () => {
     expect(results.map((r) => r.documentId)).toEqual(["body-only"]);
   });
 
-  it("title strong hit ranks above body weak hit", () => {
+  it("title strong hit ranks above body weak hit", async () => {
     insertFtsDoc({
       documentId: "by-title",
       domainId: "default",
@@ -279,7 +287,7 @@ describe("Search functionality", () => {
       body: "这里偶尔提到恢复码一次而已",
     });
 
-    const results = searchDocuments({
+    const results = await searchDocuments({
       query: "恢复码",
       visitorId: "anyone",
       domainId: "default",
@@ -289,7 +297,7 @@ describe("Search functionality", () => {
     expect(results[0]!.bm25Score).toBeGreaterThan(results[1]!.bm25Score);
   });
 
-  it("domainId filters both title and body paths", () => {
+  it("domainId filters both title and body paths", async () => {
     insertFtsDoc({
       documentId: "in-a",
       domainId: "default",
@@ -318,7 +326,7 @@ describe("Search functionality", () => {
       body: "共享词正文",
     });
 
-    const results = searchDocuments({
+    const results = await searchDocuments({
       query: "共享词",
       visitorId: "anyone",
       domainId: "default",
@@ -327,7 +335,7 @@ describe("Search functionality", () => {
     expect(results.map((r) => r.documentId)).toEqual(["in-a"]);
   });
 
-  it("private docs are filtered by canReadDocument", () => {
+  it("private docs are filtered by canReadDocument", async () => {
     const now = new Date().toISOString();
     testDbRef.db!.prepare(
       `INSERT INTO domains (domain_id, domain_name, creator_visitor_id, created_at, updated_at, permission)
@@ -346,11 +354,11 @@ describe("Search functionality", () => {
     });
 
     expect(
-      searchDocuments({ query: "恢复码", visitorId: "stranger", domainId: "priv-domain" }),
+      await searchDocuments({ query: "恢复码", visitorId: "stranger", domainId: "priv-domain" }),
     ).toEqual([]);
 
     expect(
-      searchDocuments({ query: "恢复码", visitorId: "owner-a", domainId: "priv-domain" }).map(
+      (await searchDocuments({ query: "恢复码", visitorId: "owner-a", domainId: "priv-domain" })).map(
         (r) => r.documentId,
       ),
     ).toEqual(["secret"]);
@@ -369,7 +377,7 @@ describe("Search functionality", () => {
 
     await rebuildAllDirty();
     expect(
-      searchDocuments({ query: "旧标题词", visitorId: "test-actor", domainId: "default" }),
+      await searchDocuments({ query: "旧标题词", visitorId: "test-actor", domainId: "default" }),
     ).toHaveLength(1);
 
     testDbRef.db!.prepare(
@@ -379,10 +387,10 @@ describe("Search functionality", () => {
     rebuildDocument(created.documentId);
 
     expect(
-      searchDocuments({ query: "旧标题词", visitorId: "test-actor", domainId: "default" }),
+      await searchDocuments({ query: "旧标题词", visitorId: "test-actor", domainId: "default" }),
     ).toEqual([]);
     expect(
-      searchDocuments({ query: "新标题词", visitorId: "test-actor", domainId: "default" }).map(
+      (await searchDocuments({ query: "新标题词", visitorId: "test-actor", domainId: "default" })).map(
         (r) => r.documentId,
       ),
     ).toEqual([created.documentId]);
@@ -406,7 +414,7 @@ describe("Search functionality", () => {
     testDbRef.db!.prepare(`DELETE FROM documents WHERE document_id = ?`).run(created.documentId);
 
     expect(
-      searchDocuments({ query: "xyzabc", visitorId: "test-actor", domainId: "default" }),
+      await searchDocuments({ query: "xyzabc", visitorId: "test-actor", domainId: "default" }),
     ).toEqual([]);
   });
 });

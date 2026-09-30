@@ -56,6 +56,7 @@ import {
   removeIndex,
   rebuildDocument,
 } from "../search/document-index-manager.js";
+import { upsertDocumentEmbeddings } from "../search/embedding-store.js";
 import type {
   DocumentDetail,
   DocumentMergeContext,
@@ -82,7 +83,14 @@ function scheduleFtsIfNeeded(fileType: string, documentId: string): void {
   markDirty(documentId);
   process.nextTick(() => {
     try {
-      rebuildDocument(documentId);
+      const plain = rebuildDocument(documentId);
+      if (plain) {
+        void upsertDocumentEmbeddings({
+          documentId,
+          domainId: plain.domainId,
+          plainText: plain.plainText,
+        });
+      }
     } catch {
       // 定时器会再扫 dirty
     }

@@ -20,9 +20,11 @@ import {
   createFolderTool,
   getDocumentTool,
   inviteDocumentUserTool,
+  listSemanticIndexTool,
   queryMyDocumentsTool,
   listTreeTool,
   moveDocumentTool,
+  rebuildSemanticIndexTool,
   searchDocumentsTool,
 } from "./tools-documents.js";
 import { askUserChoiceTool } from "./tools-choice.js";
@@ -51,6 +53,8 @@ export function accountTools(deps: ToolDeps): AgentTool[] {
     searchDocumentsTool(deps),
     listTreeTool(deps),
     queryMyDocumentsTool(deps),
+    listSemanticIndexTool(deps),
+    rebuildSemanticIndexTool(deps),
     inviteDocumentUserTool(deps),
     getDocumentTool(deps),
     createDocumentTool(deps),

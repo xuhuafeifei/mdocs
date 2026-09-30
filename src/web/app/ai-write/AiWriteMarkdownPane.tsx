@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { acceptHunk, computeLineHunks, type MdHunk } from "./markdown-hunks";
+import {
+  acceptHunk,
+  acceptHunkInSegments,
+  computeLineHunks,
+  rejectHunkInSegments,
+  type MdHunk,
+  type MdInlineSeg,
+} from "./markdown-hunks";
 
-type InlineSeg =
-  | { kind: "same"; lines: string[]; key: string }
-  | { kind: "hunk"; hunk: MdHunk; hunkIndex: number; key: string };
+type InlineSeg = MdInlineSeg;
 
 type DiffEdits = {
   sameTexts: string[];
@@ -103,8 +108,8 @@ function EditableBlock(props: {
  * 右侧：有 pending hunk 且非流式 → 强制 inline diff（可改 proposedMd，红删只读）；
  * 无 hunk 或流式中 → 源码编 currentMd。写回仍只交 currentMd。
  *
- * 手改 blur 只 flush 提案文本，**冻结**当前分段布局，避免 LCS 重算把 diff 打成「上删下增」。
- * 接受 / 拒绝 / 新提案到达后再重算布局。
+ * 手改 blur / 接受 / 拒绝：只改冻结分段或提案文本，**不**重跑 LCS。
+ * 仅「新提案到达 / 进入审阅」时 computeLineHunks 重建布局，避免打成「上同下巨变」。
  */
 export function AiWriteMarkdownPane(props: {
   currentMd: string;
@@ -213,21 +218,34 @@ export function AiWriteMarkdownPane(props: {
     );
     if (!seg) return;
     const editedNew = editsRef.current.newTexts[seg.hunkIndex];
-    const effective: MdHunk = {
-      ...h,
-      newLines: editedNew != null ? splitLines(editedNew) : h.newLines,
-    };
+    const effectiveNew =
+      editedNew != null ? splitLines(editedNew) : h.newLines.slice();
+    const effective: MdHunk = { ...h, newLines: effectiveNew };
     const flushed = readFlushedProposed();
     dirtyRef.current = false;
-    skipRelayoutRef.current = false;
     if (flushed === props.currentMd) {
+      skipRelayoutRef.current = false;
+      setReviewSegments([]);
       props.onProposedChange(null);
       return;
     }
     const nextCurrent = acceptHunk(props.currentMd, effective);
+    const nextSegs = acceptHunkInSegments(
+      reviewSegmentsRef.current,
+      h.id,
+      effectiveNew,
+    );
+    const stillHasHunk = nextSegs.some((s) => s.kind === "hunk");
+    skipRelayoutRef.current = true;
+    setReviewSegments(nextSegs);
+    setEdits(initEditsFromSegments(nextSegs));
     props.onCurrentChange(nextCurrent);
-    if (flushed === nextCurrent) props.onProposedChange(null);
-    else props.onProposedChange(flushed);
+    if (!stillHasHunk || flushed === nextCurrent) {
+      skipRelayoutRef.current = false;
+      props.onProposedChange(null);
+    } else {
+      props.onProposedChange(flushed);
+    }
   }
 
   function onReject(h: MdHunk) {
@@ -242,10 +260,18 @@ export function AiWriteMarkdownPane(props: {
     };
     nextEdits.newTexts[seg.hunkIndex] = joinLines(h.oldLines);
     const nextProposed = rebuildProposedFromEdits(reviewSegmentsRef.current, nextEdits);
+    const nextSegs = rejectHunkInSegments(reviewSegmentsRef.current, h.id);
+    const stillHasHunk = nextSegs.some((s) => s.kind === "hunk");
     dirtyRef.current = false;
-    skipRelayoutRef.current = false;
-    if (nextProposed === props.currentMd) props.onProposedChange(null);
-    else props.onProposedChange(nextProposed);
+    skipRelayoutRef.current = true;
+    setReviewSegments(nextSegs);
+    setEdits(initEditsFromSegments(nextSegs));
+    if (!stillHasHunk || nextProposed === props.currentMd) {
+      skipRelayoutRef.current = false;
+      props.onProposedChange(null);
+    } else {
+      props.onProposedChange(nextProposed);
+    }
   }
 
   function acceptAll() {

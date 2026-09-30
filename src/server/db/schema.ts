@@ -206,6 +206,17 @@ const SCHEMA_STATEMENTS: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_agent_user_skills_owner ON agent_user_skills (owner_visitor_id)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_user_skills_owner_name ON agent_user_skills (owner_visitor_id, name)`,
+  `CREATE TABLE IF NOT EXISTS document_embedding_chunks (
+    document_id TEXT NOT NULL,
+    domain_id TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    text TEXT NOT NULL DEFAULT '',
+    embedding BLOB NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (document_id, chunk_index)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_embedding_chunks_domain ON document_embedding_chunks (domain_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_embedding_chunks_document ON document_embedding_chunks (document_id)`,
 ];
 
 

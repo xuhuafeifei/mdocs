@@ -14,6 +14,8 @@ import { dict } from "@node-rs/jieba/dict.js";
 import { getDb } from "../db/connection.js";
 import { readDocument } from "../storage/file-store.js";
 import { useLogger } from "../logger/logger.js";
+import { deleteEmbeddingChunks, upsertDocumentEmbeddings } from "./embedding-store.js";
+import { isEmbeddingReady } from "./embedding-model.js";
 
 /** 递归遍历 Lexical JSON 的最大深度，防止爆栈 */
 const MAX_LEXICAL_DEPTH = 40;
@@ -87,7 +89,48 @@ export function markDirty(documentId: string): void {
 }
 
 /**
- * 从全文索引中移除文档（正文 + 标题两路）。
+ * 模型就绪后补扫：已有 FTS、尚无向量块的 md（限量，简单优先）。
+ */
+export async function backfillMissingEmbeddings(limit = 40): Promise<number> {
+  if (!isEmbeddingReady()) return 0;
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT d.document_id, d.domain_id, d.relative_path
+       FROM documents d
+       WHERE d.file_type = 'md'
+         AND NOT EXISTS (
+           SELECT 1 FROM document_embedding_chunks c WHERE c.document_id = d.document_id
+         )
+       LIMIT ?`,
+    )
+    .all(limit) as Array<{ document_id: string; domain_id: string; relative_path: string }>;
+
+  let n = 0;
+  for (const row of rows) {
+    try {
+      const { content } = readDocument(row.domain_id, row.relative_path);
+      const plainText = extractLexicalPlainText(content);
+      await upsertDocumentEmbeddings({
+        documentId: row.document_id,
+        domainId: row.domain_id,
+        plainText,
+      });
+      n += 1;
+    } catch (err) {
+      log.warn(
+        "embedding backfill failed for %s: %s",
+        row.document_id,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+  if (n > 0) log.info("embedding backfill wrote %d documents", n);
+  return n;
+}
+
+/**
+ * 从全文索引中移除文档（正文 + 标题两路 + 语义块）。
  * 文档删除时调用。
  */
 export function removeIndex(documentId: string): void {
@@ -95,6 +138,7 @@ export function removeIndex(documentId: string): void {
   try {
     deleteFtsRow(db, "documents_fts", "documents_fts_rowid", documentId);
     deleteFtsRow(db, "documents_fts_title", "documents_fts_title_rowid", documentId);
+    deleteEmbeddingChunks(db, documentId);
   } catch {
     // 忽略索引删除错误，不影响文档删除的主流程
     // 索引不一致问题会在下次 rebuildAllDirty 时自动修复
@@ -117,10 +161,21 @@ export async function rebuildAllDirty(): Promise<number> {
     // 跳过正在被其他流程重建的文档
     if (BUILDING.has(document_id)) continue;
     try {
-      rebuildDocument(document_id);
+      BUILDING.add(document_id);
+      const plain = rebuildDocument(document_id);
+      if (plain) {
+        // 语义尽力更新；失败不影响 FTS / is_dirty 已清的状态
+        await upsertDocumentEmbeddings({
+          documentId: document_id,
+          domainId: plain.domainId,
+          plainText: plain.plainText,
+        });
+      }
       count += 1;
     } catch (err) {
       log.warn("rebuild failed for %s: %s", document_id, err instanceof Error ? err.message : String(err));
+    } finally {
+      BUILDING.delete(document_id);
     }
   }
   return count;
@@ -134,8 +189,10 @@ export async function rebuildAllDirty(): Promise<number> {
  * 2. 读取磁盘文件内容
  * 3. 删除旧 FTS 条目 → 插入新 FTS 条目（两路）
  * 4. 用 updated_at 条件清除 is_dirty，若不匹配说明索引期间文档被更新，保留 dirty
+ *
+ * @returns 未分词纯文本 + domain，供语义索引尽力写入；文档不存在时返回 null
  */
-export function rebuildDocument(documentId: string): void {
+export function rebuildDocument(documentId: string): { domainId: string; plainText: string } | null {
   const db = getDb();
 
   // ---- 获取文档元数据 ----
@@ -152,14 +209,15 @@ export function rebuildDocument(documentId: string): void {
     permission: number;
     updated_at: string;
   } | undefined;
-  if (!doc) return;
+  if (!doc) return null;
 
   // 记录本次索引的版本
   const version = doc.updated_at;
 
-  // ---- 读取磁盘文件内容 ---- 从 Lexical JSON 中提取纯文本用于 FTS5 索引
+  // ---- 读取磁盘文件内容 ---- Lexical 抽字：FTS 用分词版，语义用原文
   const { content } = readDocument(doc.domain_id, doc.relative_path);
-  const plainText = extractLexicalText(content);
+  const rawPlain = extractLexicalPlainText(content);
+  const plainText = tokenizeForSearch(rawPlain);
   const titleTokens = tokenizeForSearch(doc.display_name || "");
 
   // ---- 重建正文 FTS ----
@@ -213,6 +271,8 @@ export function rebuildDocument(documentId: string): void {
   if (changed.changes === 0) {
     log.debug("index rebuild skipped for %s: document was concurrently updated", documentId);
   }
+
+  return { domainId: doc.domain_id, plainText: rawPlain };
 }
 
 function deleteFtsRow(
@@ -239,35 +299,24 @@ function deleteFtsRow(
 // ============================================================
 
 /**
- * 从文件原始内容中提取用于 FTS5 索引的纯文本。
- *
- * mdocs 文档以 Lexical 编辑器的 JSON 格式存储，如果直接索引原始 JSON，
- * 会污染索引（如 children、format、direction 等元数据键名）。
- *
- * 本函数尝试将内容解析为 Lexical JSON：
- * - 解析成功 → 递归遍历 children 树，收集 type="text" 节点的 text 字段
- * - 解析失败 → 返回原文（兼容非 Lexical 格式的老数据、Markdown 文件）
- *
- * 提取的文本通过 Jieba 搜索引擎模式分词，使中文关键词可被 FTS5 正确匹配。
- * 递归深度上限 40 层，防止恶意构造的超深 JSON 导致爆栈。
+ * 从文件原始内容提取未分词纯文本（Lexical 抽字 / 非 JSON 原文）。
+ * FTS 再 jieba；语义索引直接用此原文切块。
  */
-function extractLexicalText(rawContent: string): string {
+export function extractLexicalPlainText(rawContent: string): string {
   let doc: unknown;
   try {
     doc = JSON.parse(rawContent);
   } catch {
-    // 非 JSON 格式（老数据、纯 Markdown 等），分词后用于索引
-    return tokenizeForSearch(rawContent);
+    return rawContent;
   }
 
-  // 必须是对象且有 root 节点，才是 Lexical JSON
   if (!doc || typeof doc !== "object" || !("root" in doc)) {
-    return tokenizeForSearch(rawContent);
+    return rawContent;
   }
 
   const parts: string[] = [];
   collectLexicalText((doc as { root: unknown }).root, parts, 0);
-  return tokenizeForSearch(parts.join(""));
+  return parts.join("");
 }
 
 /**

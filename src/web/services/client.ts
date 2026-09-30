@@ -261,6 +261,12 @@ async function demoApi<T>(
   if (path === "/api/documents/search" && method === "POST") {
     return [] as unknown as T;
   }
+  if (path.startsWith("/api/documents/embedding-index") && method === "GET") {
+    return { modelReady: false, items: [] } as unknown as T;
+  }
+  if (path === "/api/documents/embedding-rebuild" && method === "POST") {
+    return { modelReady: false, ok: [], skipped: [], failed: [] } as unknown as T;
+  }
 
   // ==== 设置页相关 API（返回空数据，让 UI 展示"无数据"状态） ====
 

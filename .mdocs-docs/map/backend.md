@@ -80,14 +80,20 @@
 
 ### 搜索
 
-- **关键词**：`FTS5` `search` `index` `title` `display_name` `bm25` `documents_fts_title`
+- **关键词**：`FTS5` `search` `index` `title` `display_name` `bm25` `documents_fts_title` `embedding` `nomic` `semantic` `search mode` `keyword` `rebuild_semantic_index`
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/server/search/document-index-manager.ts` | 正文+标题索引维护；`removeIndex` / `rebuildDocument` |
-  | `src/server/search/search.service.ts` | 两路 MATCH → 合并打分 → `canReadDocument` |
-  | `src/server/db/schema.ts` | `documents_fts` / `documents_fts_title` + rowid；升级标 dirty |
+  | `src/server/search/document-index-manager.ts` | 正文+标题索引；语义尽力更新；`removeIndex` / `rebuildDocument` / `backfillMissingEmbeddings` |
+  | `src/server/search/search.service.ts` | `SearchMode`（auto/keyword/semantic）；两路 MATCH → 可选语义近邻 → 合并 → `canReadDocument` |
+  | `src/server/routes/documents.routes.ts` | `POST /search`（mode 入参，返回 `{results, modelReady}`）；`GET /embedding-index`；`POST /embedding-rebuild` |
+  | `src/server/agent/Agent/tools-documents.ts` | `searchDocumentsTool`（mode）；`listSemanticIndexTool`；`rebuildSemanticIndexTool`（可读即可索引） |
+  | `src/server/search/embedding-model.ts` | 本地 GGUF 下载/load/`embedText` |
+  | `src/server/search/embedding-store.ts` | chunk 写入与 cosine 近邻 |
+  | `src/server/db/schema.ts` | `documents_fts*` + `document_embedding_chunks` |
   | `.mdocs-docs/requirements/search-title-index/` | 标题独立索引需求（已实现） |
+  | `.mdocs-docs/requirements/search-embedding/` | 本地语义索引（已实现） |
+  | `.mdocs-docs/requirements/search-query-modes/` | 检索模式入参 + 表格接查询 + 语义 Agent 工具（已实现） |
 
 ### 域 / CLI / 迁移
 

@@ -18,7 +18,9 @@ import {
 } from "../documents/document.service.js";
 import { findDomainByName } from "../db/repositories/domain.repo.js";
 import { getDb } from "../db/connection.js";
-import { searchDocuments } from "../search/search.service.js";
+import { searchDocuments, tokenizeQuery } from "../search/search.service.js";
+import { listEmbeddingIndex, rebuildEmbeddingIndex } from "../search/embedding-admin.js";
+import { isEmbeddingReady } from "../search/embedding-model.js";
 import { requireDocumentAccess, requireDocumentOwner } from "../middleware/document-auth.middleware.js";
 import { StoragePathError } from "../storage/paths.js";
 import type { PublishVersionContext } from "../../shared/types/document.js";
@@ -158,6 +160,37 @@ export function buildDocumentsRouter(): Router {
     } catch (err) {
       respondError(res, err, "documents-route.convert");
     }
+  });
+
+  /**
+   * GET /embedding-index
+   * 当前访客可读的 md 文档语义索引状态（含上次构建时间）。
+   * query: domainId? 可选限定域
+   */
+  router.get("/embedding-index", (req: Request, res: Response) => {
+    const visitorId = req.visitor?.visitor_id ?? null;
+    const domainId = typeof req.query.domainId === "string" ? req.query.domainId : undefined;
+    const data = listEmbeddingIndex({ visitorId, domainId });
+    res.json({ data });
+  });
+
+  /**
+   * POST /embedding-rebuild
+   * 对勾选的 documentIds 尽力重建语义索引。
+   * body: { documentIds: string[] }
+   */
+  router.post("/embedding-rebuild", async (req: Request, res: Response) => {
+    const visitorId = req.visitor?.visitor_id ?? null;
+    const body = (req.body ?? {}) as { documentIds?: unknown };
+    if (!Array.isArray(body.documentIds) || body.documentIds.some((x) => typeof x !== "string")) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "documentIds string[] required" } });
+      return;
+    }
+    const data = await rebuildEmbeddingIndex({
+      visitorId,
+      documentIds: body.documentIds as string[],
+    });
+    res.json({ data });
   });
 
   /**
@@ -408,28 +441,36 @@ export function buildDocumentsRouter(): Router {
 
   /**
    * POST /search
-   * 全文检索文档。支持关键词搜索，结果按 BM25 相关性排序，
+   * 全文检索文档。结果按相关性排序，
    * 自动过滤当前访客无权阅读的文档。
    *
    * 请求体字段：
    * - query: string     必填，搜索关键词
    * - domainId?: string  可选，限定搜索域
    * - topN?: number     可选，返回数量，默认 10
+   * - mode?: string     可选，检索模式：auto（默认，FTS+语义混合）/ keyword（仅关键词）/ semantic（仅语义）
+   *
+   * 响应：{ results: SearchResult[], modelReady: boolean, tokens: string[] }
+   *      modelReady = 语义模型是否可用；tokens = 查询分词（供前端命中高亮）
    */
-  router.post("/search", (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as { query?: unknown; domainId?: unknown; topN?: unknown };
+  router.post("/search", async (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as { query?: unknown; domainId?: unknown; topN?: unknown; mode?: unknown };
     if (typeof body.query !== "string" || !body.query.trim()) {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "query is required" } });
       return;
     }
     const visitorId = req.visitor?.visitor_id ?? null;
-    const results = searchDocuments({
+    const mode =
+      body.mode === "keyword" || body.mode === "semantic" ? body.mode : ("auto" as const);
+    const results = await searchDocuments({
       query: body.query,
       visitorId,
       domainId: typeof body.domainId === "string" ? body.domainId : undefined,
       topN: typeof body.topN === "number" ? body.topN : undefined,
+      mode,
     });
-    res.json({ data: results });
+    // 分词结果供前端高亮（与 FTS MATCH 同一套 jieba 切词）
+    res.json({ data: { results, modelReady: isEmbeddingReady(), tokens: tokenizeQuery(body.query) } });
   });
 
   /**

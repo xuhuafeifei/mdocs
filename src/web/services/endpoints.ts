@@ -464,6 +464,9 @@ export function revokeCliTokenApi(tokenId: string): Promise<void> {
   });
 }
 
+/** 检索模式：auto = 混合（默认）；keyword = 仅关键词；semantic = 仅语义 */
+export type SearchMode = "auto" | "keyword" | "semantic";
+
 /** 搜索结果条目 */
 export interface SearchResult {
   documentId: string;
@@ -474,6 +477,19 @@ export interface SearchResult {
   bm25Score: number;
   ownerVisitorName: string;
   updatedAt: string;
+  createdAt?: string;
+  /** 命中来源明细（"凭什么定位到这篇"）：标题 / 正文 / 语义 */
+  titleHit?: boolean;
+  bodyHit?: boolean;
+  semanticHit?: boolean;
+}
+
+/** 搜索响应（含语义模型可用性与查询分词，用于未就绪提示与命中高亮） */
+export interface SearchResponse {
+  results: SearchResult[];
+  modelReady: boolean;
+  /** 查询分词（与服务端 FTS MATCH 同一套 jieba），供前端高亮 */
+  tokens?: string[];
 }
 
 /**
@@ -481,12 +497,44 @@ export interface SearchResult {
  */
 export function searchDocumentsApi(input: {
   query: string;
+  mode?: SearchMode;
   domainId?: string;
   topN?: number;
-}): Promise<SearchResult[]> {
-  return api<SearchResult[]>("/api/documents/search", {
+}): Promise<SearchResponse> {
+  return api<SearchResponse>("/api/documents/search", {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+/** 语义索引管理列表行 */
+export interface EmbeddingIndexRow {
+  documentId: string;
+  displayName: string;
+  relativePath: string;
+  domainId: string;
+  domainName: string;
+  chunkCount: number;
+  embeddingUpdatedAt: string | null;
+  documentUpdatedAt: string;
+}
+
+export function fetchEmbeddingIndexApi(input?: {
+  domainId?: string;
+}): Promise<{ modelReady: boolean; items: EmbeddingIndexRow[] }> {
+  const qs = input?.domainId ? `?domainId=${encodeURIComponent(input.domainId)}` : "";
+  return api<{ modelReady: boolean; items: EmbeddingIndexRow[] }>(`/api/documents/embedding-index${qs}`);
+}
+
+export function rebuildEmbeddingIndexApi(documentIds: string[]): Promise<{
+  modelReady: boolean;
+  ok: string[];
+  skipped: string[];
+  failed: Array<{ documentId: string; reason: string }>;
+}> {
+  return api("/api/documents/embedding-rebuild", {
+    method: "POST",
+    body: JSON.stringify({ documentIds }),
   });
 }
 

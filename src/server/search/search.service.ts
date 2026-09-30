@@ -3,7 +3,8 @@
  *
  * 职责：
  * - 解析用户搜索查询，在标题 / 正文两路 FTS5 索引中执行 BM25 关键词匹配
- * - 按 document_id 合并打分（标题权重高于正文）
+ * - 尽力补充本地 embedding 语义近邻（模型未就绪 / 失败则跳过）
+ * - 按 document_id 合并打分（标题权重高于正文；语义低于标题）
  * - 按 domain 过滤并应用权限模型过滤可见文档
  * - 返回排序后的匹配结果
  */
@@ -15,6 +16,7 @@ import { findDomainById, isDomainMember } from "../db/repositories/domain.repo.j
 import { canReadDocument } from "../access/access-control.js";
 import type { DocumentRow } from "../db/repositories/document.repo.js";
 import type { DomainAccessInfo } from "../access/access-control.js";
+import { querySemanticNeighbors } from "./embedding-store.js";
 
 /** 与索引写入侧一致：查询也先 jieba，再交给 FTS5 */
 const JIEBA = Jieba.withDict(dict);
@@ -23,6 +25,11 @@ const JIEBA = Jieba.withDict(dict);
 const W_TITLE = 3.0;
 /** 正文命中权重 */
 const W_BODY = 1.0;
+/** 仅语义命中时的权重（低于标题） */
+const W_SEMANTIC = 0.8;
+
+/** 检索模式：auto = FTS+语义混合（默认）；keyword = 仅关键词；semantic = 仅语义 */
+export type SearchMode = "auto" | "keyword" | "semantic";
 
 export interface SearchResult {
   documentId: string;
@@ -30,40 +37,70 @@ export interface SearchResult {
   relativePath: string;
   domainId: string;
   snippet: string;
-  /** 合并后的排序分（越大越相关；语义已从「正文 bm25」改为两路加权分） */
+  /** 合并后的排序分（越大越相关） */
   bm25Score: number;
   /** 文档所有者展示名 */
   ownerVisitorName: string;
   /** 最后修改时间（ISO） */
   updatedAt: string;
+  /** 创建时间（ISO） */
+  createdAt?: string;
+  /** 可选：命中来源 */
+  matchSource?: "fts" | "semantic" | "both";
+  /** 命中来源明细：标题 / 正文 / 语义（供前端标注"凭什么命中"） */
+  titleHit?: boolean;
+  bodyHit?: boolean;
+  semanticHit?: boolean;
 }
 
 /**
- * 在全文索引中搜索文档。
- *
- * 流程：
- * 1. 标题索引 MATCH → 正文索引 MATCH
- * 2. 按 document_id 合并，final = W_TITLE * title_rank + W_BODY * body_rank
- * 3. 按 domainId 过滤（若传入，已在 SQL 下推）
- * 4. 对每个匹配文档执行 canReadDocument 权限检查
- * 5. 截取 topN 条结果
- *
- * @param visitorId 当前访客 ID（未登录为 null）
+ * 查询分词：与索引写入/FTS MATCH 同一套 jieba 切词。
+ * 供前端在标题/摘要中做命中高亮。
  */
-export function searchDocuments(params: {
+export function tokenizeQuery(query: string): string[] {
+  const trimmed = query.trim().replace(/"/g, "");
+  if (!trimmed) return [];
+  const words = JIEBA.cutForSearch(trimmed, true)
+    .map((w) => w.trim())
+    .filter((w) => w.length > 0);
+  return Array.from(new Set(words));
+}
+
+function escapeFts5Query(query: string): string {
+  return tokenizeQuery(query).map((w) => `"${w}"`).join(" ");
+}
+
+/**
+ * 在全文索引中搜索文档（按 mode 选择检索路）。
+ */
+export async function searchDocuments(params: {
   query: string;
   visitorId: string | null;
   domainId?: string;
   topN?: number;
-}): SearchResult[] {
+  mode?: SearchMode;
+}): Promise<SearchResult[]> {
   const db = getDb();
   const topN = params.topN ?? 10;
+  const mode: SearchMode =
+    params.mode === "keyword" || params.mode === "semantic" ? params.mode : "auto";
 
-  // 标题路少取一些即可；正文路多取供权限过滤后仍够
-  const titleRows = queryTitleFts(db, params.query, topN * 2, params.domainId);
-  const bodyRows = queryBodyFts(db, params.query, topN * 4, params.domainId);
-
-  const merged = mergeFtsHits(titleRows, bodyRows);
+  let merged: MergedHit[];
+  if (mode === "semantic") {
+    // 仅语义：不查 FTS；模型未就绪时 trySemanticHits 返回空
+    const semanticHits = await trySemanticHits(params.query, params.domainId, topN * 3);
+    merged = mergeFtsAndSemantic([], semanticHits);
+  } else {
+    const titleRows = queryTitleFts(db, params.query, topN * 2, params.domainId);
+    const bodyRows = queryBodyFts(db, params.query, topN * 4, params.domainId);
+    const ftsMerged = mergeFtsHits(titleRows, bodyRows);
+    if (mode === "keyword") {
+      merged = ftsMerged;
+    } else {
+      const semanticHits = await trySemanticHits(params.query, params.domainId, topN * 3);
+      merged = mergeFtsAndSemantic(ftsMerged, semanticHits);
+    }
+  }
   if (merged.length === 0) return [];
 
   const metaById = loadDocumentSearchMeta(
@@ -71,7 +108,9 @@ export function searchDocuments(params: {
     merged.map((r) => r.document_id),
   );
 
-  // ---- 权限过滤 ----
+  // 语义-only 命中可能缺少 FTS 里的 display/path；从主表补
+  fillMissingDocFields(db, merged);
+
   const domainIds = Array.from(new Set(merged.map((r) => r.domain_id)));
   const domainCache = new Map<string, { permission: string } | null>();
   for (const did of domainIds) {
@@ -107,7 +146,7 @@ export function searchDocuments(params: {
     const snippet =
       row.bodyContent.length > 0
         ? extractSnippet(row.bodyContent, params.query, 200)
-        : row.display_name || "标题命中";
+        : row.semanticSnippet || row.display_name || "标题命中";
 
     const meta = metaById.get(row.document_id);
 
@@ -120,6 +159,11 @@ export function searchDocuments(params: {
       bm25Score: row.finalScore,
       ownerVisitorName: meta?.ownerVisitorName ?? "",
       updatedAt: meta?.updatedAt ?? "",
+      createdAt: meta?.createdAt,
+      matchSource: row.matchSource,
+      titleHit: row.titleHit,
+      bodyHit: row.bodyHit,
+      semanticHit: row.semanticHit,
     });
 
     if (results.length >= topN) break;
@@ -128,19 +172,37 @@ export function searchDocuments(params: {
   return results;
 }
 
-/** 从主表批量取作者名与更新时间（不冗余进 FTS） */
+async function trySemanticHits(
+  query: string,
+  domainId: string | undefined,
+  topK: number,
+): Promise<Array<{ document_id: string; domain_id: string; score: number; snippet: string }>> {
+  try {
+    const hits = await querySemanticNeighbors({ query, domainId, topK });
+    return hits.map((h) => ({
+      document_id: h.documentId,
+      domain_id: h.domainId,
+      score: h.score,
+      snippet: h.snippet,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** 从主表批量取作者名与更新/创建时间（不冗余进 FTS） */
 function loadDocumentSearchMeta(
   db: Database.Database,
   documentIds: string[],
-): Map<string, { ownerVisitorName: string; updatedAt: string }> {
-  const out = new Map<string, { ownerVisitorName: string; updatedAt: string }>();
+): Map<string, { ownerVisitorName: string; updatedAt: string; createdAt: string }> {
+  const out = new Map<string, { ownerVisitorName: string; updatedAt: string; createdAt: string }>();
   const ids = Array.from(new Set(documentIds.filter(Boolean)));
   if (ids.length === 0) return out;
 
   const placeholders = ids.map(() => "?").join(",");
   const rows = db
     .prepare(
-      `SELECT d.document_id, d.updated_at,
+      `SELECT d.document_id, d.updated_at, d.created_at,
               COALESCE(v.visitor_name, '') AS owner_visitor_name
        FROM documents d
        LEFT JOIN visitors v ON v.visitor_id = d.owner_visitor_id
@@ -149,6 +211,7 @@ function loadDocumentSearchMeta(
     .all(...ids) as Array<{
     document_id: string;
     updated_at: string;
+    created_at: string;
     owner_visitor_name: string;
   }>;
 
@@ -156,9 +219,40 @@ function loadDocumentSearchMeta(
     out.set(row.document_id, {
       ownerVisitorName: row.owner_visitor_name,
       updatedAt: row.updated_at,
+      createdAt: row.created_at,
     });
   }
   return out;
+}
+
+function fillMissingDocFields(db: Database.Database, merged: MergedHit[]): void {
+  const need = merged.filter((r) => !r.display_name || !r.relative_path || !r.owner_visitor_id);
+  if (need.length === 0) return;
+  const ids = need.map((r) => r.document_id);
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = db
+    .prepare(
+      `SELECT document_id, display_name, relative_path, domain_id, owner_visitor_id, permission
+       FROM documents WHERE document_id IN (${placeholders})`,
+    )
+    .all(...ids) as Array<{
+    document_id: string;
+    display_name: string;
+    relative_path: string;
+    domain_id: string;
+    owner_visitor_id: string;
+    permission: number;
+  }>;
+  const byId = new Map(rows.map((r) => [r.document_id, r]));
+  for (const hit of need) {
+    const row = byId.get(hit.document_id);
+    if (!row) continue;
+    hit.display_name = hit.display_name || row.display_name;
+    hit.relative_path = hit.relative_path || row.relative_path;
+    hit.domain_id = hit.domain_id || row.domain_id;
+    hit.owner_visitor_id = hit.owner_visitor_id || row.owner_visitor_id;
+    hit.permission = hit.permission || row.permission;
+  }
 }
 
 interface FtsHitPayload {
@@ -183,12 +277,16 @@ interface MergedHit {
   owner_visitor_id: string;
   permission: number;
   bodyContent: string;
+  semanticSnippet: string;
   finalScore: number;
+  titleHit: boolean;
+  bodyHit: boolean;
+  semanticHit: boolean;
+  matchSource: "fts" | "semantic" | "both";
 }
 
 /**
  * FTS5 bm25：越小（越负）越好。映射到 (0, 1]，越大越好。
- * 使用 sigmoid，避免负分被 max(0,·) 压扁成同一档。
  */
 function rankFromBm25(bm25: number): number {
   return 1 / (1 + Math.exp(bm25));
@@ -255,9 +353,52 @@ function mergeFtsHits(titleRows: FtsHitPayload[], bodyRows: BodyFtsHit[]): Merge
       owner_visitor_id: row.owner_visitor_id,
       permission: row.permission,
       bodyContent: row.bodyContent,
+      semanticSnippet: "",
       finalScore: W_TITLE * row.titleRank + W_BODY * row.bodyRank,
+      titleHit: row.titleRank > 0,
+      bodyHit: row.bodyRank > 0,
+      semanticHit: false,
+      matchSource: "fts" as const,
     }))
     .sort((a, b) => b.finalScore - a.finalScore);
+}
+
+function mergeFtsAndSemantic(
+  fts: MergedHit[],
+  semantic: Array<{ document_id: string; domain_id: string; score: number; snippet: string }>,
+): MergedHit[] {
+  const map = new Map<string, MergedHit>();
+  for (const row of fts) {
+    map.set(row.document_id, { ...row });
+  }
+
+  for (const hit of semantic) {
+    const existing = map.get(hit.document_id);
+    if (existing) {
+      existing.matchSource = "both";
+      existing.semanticHit = true;
+      if (!existing.semanticSnippet) existing.semanticSnippet = hit.snippet;
+      // FTS 分保留；不抬升语义以免压过标题命中
+    } else {
+      map.set(hit.document_id, {
+        document_id: hit.document_id,
+        display_name: "",
+        relative_path: "",
+        domain_id: hit.domain_id,
+        owner_visitor_id: "",
+        permission: 1,
+        bodyContent: "",
+        semanticSnippet: hit.snippet,
+        finalScore: W_SEMANTIC * Math.max(0, hit.score),
+        titleHit: false,
+        bodyHit: false,
+        semanticHit: true,
+        matchSource: "semantic",
+      });
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.finalScore - a.finalScore);
 }
 
 function queryTitleFts(
@@ -312,36 +453,10 @@ function queryBodyFts(
       )
       .all(...params) as BodyFtsHit[];
   } catch {
-    // FTS5 语法异常或表尚未就绪时返回空（降级：标题路仍可能有结果）
     return [];
   }
 }
 
-/**
- * 将用户查询分词并转义为 FTS5 MATCH 表达式。
- *
- * 索引写入侧对中文做了 jieba cutForSearch；查询必须同样分词，否则整句
- * `"恢复码"` 无法命中已拆成 `恢复` / `码` 的索引。
- * 每个 token 用双引号包裹，避免 FTS5 特殊字符被解释为操作符。
- */
-function escapeFts5Query(query: string): string {
-  const trimmed = query.trim().replace(/"/g, "");
-  if (!trimmed) return "";
-  const words = JIEBA.cutForSearch(trimmed, true)
-    .map((w) => w.trim())
-    .filter((w) => w.length > 0);
-  if (words.length === 0) return "";
-  // 去重：cutForSearch 会产出重叠 token
-  return Array.from(new Set(words)).map((w) => `"${w}"`).join(" ");
-}
-
-/**
- * 从文档内容中提取包含查询词的片段。
- *
- * @param text 文档全文（索引侧可能是分词后文本）
- * @param query 用户查询
- * @param maxLen 片段最大长度，默认 200 字符
- */
 function extractSnippet(text: string, query: string, maxLen = 200): string {
   if (text.length <= maxLen) return text;
 
@@ -350,7 +465,6 @@ function extractSnippet(text: string, query: string, maxLen = 200): string {
   const idx = lowerText.indexOf(lowerQuery);
 
   if (idx === -1) {
-    // 未找到精确匹配（FTS 可能匹配了词干变体），返回开头
     return text.slice(0, maxLen) + "…";
   }
 

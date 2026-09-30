@@ -13,6 +13,8 @@ const STRUCTURE_NAMES = [
   "search_documents",
   "list_tree",
   "query_my_documents",
+  "list_semantic_index",
+  "rebuild_semantic_index",
   "invite_document_user",
   "get_document",
   "create_document",
