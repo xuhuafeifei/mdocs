@@ -52,8 +52,9 @@ export function getConfig(): AppConfig {
   const port = process.env.MDOCS_PORT ? Number(process.env.MDOCS_PORT) : 4000;
 
   // 组装日志配置
+  // 文件默认只落 error+（省盘）；控制台仍默认 info 便于开发。可用 MDOCS_LOG_LEVEL 覆盖。
   const logging: LoggingConfig = {
-    level: parseLevel(process.env.MDOCS_LOG_LEVEL, "info"),
+    level: parseLevel(process.env.MDOCS_LOG_LEVEL, "error"),
     consoleLevel: parseLevel(process.env.MDOCS_CONSOLE_LEVEL, "info"),
     consoleStyle: parseStyle(process.env.MDOCS_CONSOLE_STYLE, "pretty"),
     retentionDays: Number(process.env.MDOCS_LOG_RETENTION_DAYS ?? 14),

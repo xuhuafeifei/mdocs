@@ -13,6 +13,16 @@ function start(): void {
   const cfg = getConfig();
   const app = buildApp();
 
+  process.on("uncaughtException", (err) => {
+    log.error("uncaughtException: %s", err instanceof Error ? err.stack ?? err.message : String(err));
+  });
+  process.on("unhandledRejection", (reason) => {
+    log.error(
+      "unhandledRejection: %s",
+      reason instanceof Error ? reason.stack ?? reason.message : String(reason),
+    );
+  });
+
   // 启动监听，绑定到配置指定的 host 与 port
   const server = app.listen(cfg.port, cfg.host, () => {
     log.info("mdocs listening on http://%s:%d", cfg.host, cfg.port);

@@ -52,6 +52,7 @@
 | `agent-run-refactor` | Phase 1–3 已落地：SSE / tools template·registry / pi-run — [需求分析](./requirements/agent-run-refactor/需求分析.md) · [设计契约](./requirements/agent-run-refactor/设计契约.md) · [代码索引](./requirements/agent-run-refactor/代码索引.md) |
 | `agent-normal-coding-modes` | **已同意**：含增量「inline diff 可编辑提案」— [需求分析](./requirements/agent-normal-coding-modes/需求分析.md) · [设计契约](./requirements/agent-normal-coding-modes/设计契约.md) |
 | `onboarding-ai` | **已同意**：上手 Agent — [需求分析](./requirements/onboarding-ai/需求分析.md) · [设计契约](./requirements/onboarding-ai/设计契约.md) · [后端设计](./requirements/onboarding-ai/后端设计.md) |
+| `agent-session-meta-integrity` | **草案**：session.json 锁/原子写/读失败恢复 + `mdocs agent session repair` — [需求分析](./requirements/agent-session-meta-integrity/需求分析.md) · [设计契约](./requirements/agent-session-meta-integrity/设计契约.md) |
 | `document-move` | **已同意**：同域拖拽移动文档 — [需求分析](./requirements/document-move/需求分析.md) · [设计契约](./requirements/document-move/设计契约.md) · [代码索引](./requirements/document-move/代码索引.md) |
 | `merge-inline-ui` | **已同意**：冲突 Merge 单栏 inline（接收/拒绝 · 全部用我的/别人的）— [需求分析](./requirements/merge-inline-ui/需求分析.md) · [设计契约](./requirements/merge-inline-ui/设计契约.md) |
 | `agent-mobile-context` | **已同意**：手机助手全屏；Ask 注入当前域/文 id；**增量** PC 全屏切换 — [需求分析](./requirements/agent-mobile-context/需求分析.md) · [设计契约](./requirements/agent-mobile-context/设计契约.md) · [PC 全屏](./requirements/agent-mobile-context/设计契约-pc-fullscreen.md) |
@@ -63,7 +64,8 @@
 | `draft-copy-preview` | 草稿副本与预览 |
 | `draft-publish-recovery` | 发布失败恢复 |
 | `comments-panel` | 评论区布局 / 拖拽（两篇契约） |
-| `doc-info-menu` | 文档信息菜单与图标 |
+| `doc-info-menu` | 文档信息菜单与图标；**增量已同意** 纯文字符数 — [设计契约-char-count](./requirements/doc-info-menu/设计契约-char-count.md) |
+| `server-file-logging` | **已同意**：文件日志（默认 error 落盘，无前台）— [设计契约](./requirements/server-file-logging/设计契约.md) |
 | `editor-content-width` | 编辑区宽度溢出 |
 
 ## 目录约定

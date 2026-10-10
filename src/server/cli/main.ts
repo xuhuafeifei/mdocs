@@ -12,6 +12,8 @@ import {
   type MigrationResult,
 } from "../migrations/visitor-migration.service.js";
 import { resolveInstalledPackageRoot, runSelfUpdate } from "./self-update.js";
+import { repairAgentSessionsUnderDataDir } from "../agent/Agent/session-manager.js";
+import { useLogger } from "../logger/logger.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -49,6 +51,7 @@ function printUsage(): void {
       "  mdocs update                   Upgrade in-place from npmmirror (keep node_modules)",
       "  mdocs visitor list [--active|--disabled|--all]",
       "  mdocs visitor migrate --from OLD --to NEW [--dry-run] [--confirm]",
+      "  mdocs agent session repair [--visitor ID|name] [--kind normal|coding|all] [--dry-run|--confirm]",
       "",
       "Notes:",
       "  version also accepts -v / --version.",
@@ -58,6 +61,7 @@ function printUsage(): void {
       "  For migrate, OLD/NEW can be either visitor ID (UUID) or visitor name.",
       "  Either --dry-run or --confirm must be supplied.",
       "  --confirm performs the migration inside a transaction and makes a backup first.",
+      "  agent session repair rebuilds session.json from orphan *.jsonl (does not delete transcripts).",
       "",
     ].join("\n"),
   );
@@ -90,6 +94,10 @@ async function main(): Promise<void> {
     runVisitorMigrate(parseFlags(rest));
     return;
   }
+  if (command === "agent" && sub === "session" && rest[0] === "repair") {
+    void runAgentSessionRepair(parseFlags(rest.slice(1)));
+    return;
+  }
   printUsage();
   process.exit(1);
 }
@@ -113,12 +121,25 @@ function printVersion(): void {
 
 /** 启动 HTTP 服务器。 */
 function startServer(): void {
+  const log = useLogger("cli-server");
   const cfg = getConfig();
   const app = buildApp();
+
+  process.on("uncaughtException", (err) => {
+    log.error("uncaughtException: %s", err instanceof Error ? err.stack ?? err.message : String(err));
+  });
+  process.on("unhandledRejection", (reason) => {
+    log.error(
+      "unhandledRejection: %s",
+      reason instanceof Error ? reason.stack ?? reason.message : String(reason),
+    );
+  });
+
   const server = app.listen(cfg.port, cfg.host, () => {
     process.stdout.write(`mdocs listening on http://${cfg.host}:${cfg.port}\n`);
   });
   server.on("error", (err) => {
+    log.error("server error: %s", err instanceof Error ? err.message : String(err));
     process.stderr.write(`server error: ${err instanceof Error ? err.message : String(err)}\n`);
     process.exit(1);
   });
@@ -195,6 +216,64 @@ function runVisitorMigrate(flags: Flags): void {
       process.exit(3);
     }
     process.stderr.write(`unexpected error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(4);
+  }
+}
+
+/**
+ * 修复 agent session.json：把磁盘上有、索引里没有的 *.jsonl 补回 sessions[]。
+ * 默认扫全部 tenant；可 --visitor 限定；须 --dry-run 或 --confirm。
+ */
+async function runAgentSessionRepair(flags: Flags): Promise<void> {
+  const dryRun = flags["dry-run"] === true;
+  const confirm = flags.confirm === true;
+  if (!dryRun && !confirm) {
+    process.stderr.write("must pass --dry-run or --confirm\n");
+    process.exit(2);
+  }
+  const kindRaw = typeof flags.kind === "string" ? flags.kind : "all";
+  if (kindRaw !== "all" && kindRaw !== "normal" && kindRaw !== "coding") {
+    process.stderr.write("--kind must be normal|coding|all\n");
+    process.exit(2);
+  }
+  let visitorId: string | undefined;
+  if (typeof flags.visitor === "string" && flags.visitor.trim()) {
+    try {
+      visitorId = resolveVisitor(flags.visitor.trim()).visitorId;
+    } catch (err) {
+      // 允许直接传 UUID 目录名（访客已删但仍有 tenant 目录）
+      const raw = flags.visitor.trim();
+      if (/^[0-9a-f-]{36}$/i.test(raw)) {
+        visitorId = raw;
+      } else if (err instanceof MigrationError) {
+        process.stderr.write(`repair error: ${err.code} ${err.message}\n`);
+        process.exit(3);
+      } else {
+        throw err;
+      }
+    }
+  }
+  try {
+    const rows = await repairAgentSessionsUnderDataDir({
+      visitorId,
+      kind: kindRaw,
+      dryRun,
+    });
+    const header = dryRun ? "dry-run" : "executed";
+    process.stdout.write(`agent session repair ${header}\n`);
+    if (rows.length === 0) {
+      process.stdout.write("  (no tenant session dirs)\n");
+      return;
+    }
+    for (const r of rows) {
+      process.stdout.write(
+        `  ${r.visitorId}\t${r.kind}\tbefore=${r.before}\tafter=${r.after}\tadded=${r.added}\t${r.sessionDir}\n`,
+      );
+    }
+  } catch (err) {
+    process.stderr.write(
+      `unexpected error: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
     process.exit(4);
   }
 }

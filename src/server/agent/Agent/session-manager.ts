@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { getConfig } from "../../config/index.js";
+import { atomicWriteJson, withSessionMetaLock } from "./session-meta-lock.js";
 
 export type AgentSessionRole = "user" | "assistant";
 
@@ -148,7 +149,170 @@ export class AgentSessionManager {
   }
 
   private async writeMeta(meta: SessionMeta): Promise<void> {
-    await fs.promises.writeFile(this.metaPath, JSON.stringify(meta, null, 2), "utf8");
+    await atomicWriteJson(this.metaPath, meta);
+  }
+
+  /**
+   * 从目录内 *.jsonl 重建 sessions 列表（不删文件）。
+   * 用于 meta 损坏 / 被写成只剩一条时的恢复。
+   */
+  async scanTranscriptEntries(): Promise<SessionMetaEntry[]> {
+    await this.ensureSessionDir();
+    let names: string[] = [];
+    try {
+      names = await fs.promises.readdir(this.sessionDir);
+    } catch {
+      return [];
+    }
+    const out: SessionMetaEntry[] = [];
+    for (const name of names) {
+      if (!name.endsWith(".jsonl")) continue;
+      const id = name.slice(0, -".jsonl".length);
+      if (!isSessionId(id)) continue;
+      const full = this.jsonlPath(id);
+      let updatedAt = nowIso();
+      try {
+        const st = await fs.promises.stat(full);
+        updatedAt = st.mtime.toISOString();
+      } catch {
+        /* ignore */
+      }
+      const title = await this.peekTitleFromTranscript(id);
+      out.push({ id, title, updatedAt });
+    }
+    return out;
+  }
+
+  private async peekTitleFromTranscript(sessionId: string): Promise<string | undefined> {
+    try {
+      const txt = await fs.promises.readFile(this.jsonlPath(sessionId), "utf8");
+      for (const line of txt.split("\n")) {
+        const t = line.trim();
+        if (!t) continue;
+        try {
+          const row = JSON.parse(t) as { role?: unknown; content?: unknown };
+          if (row.role === "user" && typeof row.content === "string" && row.content.trim()) {
+            return titleFromUserContent(row.content);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return undefined;
+  }
+
+  /** readMeta 失败或 sessions 空时，用磁盘 jsonl 拼一份可用 meta（不写盘）。 */
+  private async recoverMetaFromDisk(
+    preferLastOpened?: string | null,
+  ): Promise<SessionMeta | null> {
+    const scanned = await this.scanTranscriptEntries();
+    if (scanned.length === 0) return null;
+    const prefer =
+      preferLastOpened && isSessionId(preferLastOpened) && scanned.some((s) => s.id === preferLastOpened)
+        ? preferLastOpened
+        : scanned.slice().sort((a, b) => (a.updatedAt! < b.updatedAt! ? 1 : -1))[0]!.id;
+    return {
+      lastOpenedSessionId: prefer,
+      sessions: scanned,
+      lastOpenedByDocument: {},
+    };
+  }
+
+  /**
+   * Manager 公开方法级串行入口（队列 key = metaPath）。
+   * 所有会动磁盘会话状态的路径只应通过这里，禁止队外裸写。
+   */
+  private runSerialized<T>(fn: () => Promise<T>): Promise<T> {
+    return withSessionMetaLock(this.metaPath, fn);
+  }
+
+  /**
+   * 已在 runSerialized 内：读改写 meta。
+   * read 失败时先从 jsonl 恢复，避免再写成「只剩当前一条」。
+   */
+  private async mutateMetaUnlocked(
+    mutator: (meta: SessionMeta) => void | Promise<void>,
+  ): Promise<SessionMeta> {
+    let meta = await this.readMeta();
+    if (!meta) {
+      meta =
+        (await this.recoverMetaFromDisk()) ?? {
+          lastOpenedSessionId: "",
+          sessions: [],
+          lastOpenedByDocument: {},
+        };
+    }
+    await mutator(meta);
+    if (!meta.lastOpenedSessionId || !isSessionId(meta.lastOpenedSessionId)) {
+      const fallback = meta.sessions[0]?.id ?? randomUUID();
+      meta.lastOpenedSessionId = fallback;
+      this.ensureSessionEntry(meta, fallback, { touchUpdatedAt: false });
+    }
+    await this.writeMeta(meta);
+    return meta;
+  }
+
+  /**
+   * 把磁盘上有 jsonl、但 meta.sessions 里没有的条目补回去。
+   * @returns 补入条数
+   */
+  async repairMetaFromDisk(opts?: { dryRun?: boolean }): Promise<{
+    before: number;
+    after: number;
+    added: number;
+    sessionDir: string;
+    dryRun: boolean;
+  }> {
+    const dryRun = opts?.dryRun === true;
+    await this.ensureSessionDir();
+    return this.runSerialized(async () => {
+      const existing = await this.readMeta();
+      const scanned = await this.scanTranscriptEntries();
+      const byId = new Map<string, SessionMetaEntry>();
+      for (const s of existing?.sessions ?? []) byId.set(s.id, { ...s });
+      let added = 0;
+      for (const s of scanned) {
+        if (byId.has(s.id)) {
+          const cur = byId.get(s.id)!;
+          if (!cur.title?.trim() && s.title) cur.title = s.title;
+          if (!cur.updatedAt && s.updatedAt) cur.updatedAt = s.updatedAt;
+          continue;
+        }
+        byId.set(s.id, s);
+        added += 1;
+      }
+      const sessions = Array.from(byId.values());
+      const lastOpened =
+        existing?.lastOpenedSessionId && byId.has(existing.lastOpenedSessionId)
+          ? existing.lastOpenedSessionId
+          : sessions.slice().sort((a, b) => ((a.updatedAt ?? "") < (b.updatedAt ?? "") ? 1 : -1))[0]
+              ?.id ?? randomUUID();
+      if (sessions.length === 0) {
+        return {
+          before: existing?.sessions.length ?? 0,
+          after: 0,
+          added: 0,
+          sessionDir: this.sessionDir,
+          dryRun,
+        };
+      }
+      const next: SessionMeta = {
+        lastOpenedSessionId: lastOpened,
+        sessions,
+        lastOpenedByDocument: existing?.lastOpenedByDocument,
+      };
+      if (!dryRun) await this.writeMeta(next);
+      return {
+        before: existing?.sessions.length ?? 0,
+        after: sessions.length,
+        added,
+        sessionDir: this.sessionDir,
+        dryRun,
+      };
+    });
   }
 
   private ensureSessionEntry(
@@ -252,92 +416,89 @@ export class AgentSessionManager {
     }
   }
 
+  /** 已在 runSerialized 内：确保 lastOpened。 */
+  private async ensureLastOpenedUnlocked(documentId?: string | null): Promise<string> {
+    if (this.kind !== "coding") {
+      const meta = await this.mutateMetaUnlocked((m) => {
+        if (!m.lastOpenedSessionId || !isSessionId(m.lastOpenedSessionId)) {
+          const sessionId = m.sessions[0]?.id ?? randomUUID();
+          m.lastOpenedSessionId = sessionId;
+          this.ensureSessionEntry(m, sessionId, { touchUpdatedAt: false });
+          return;
+        }
+        this.ensureSessionEntry(m, m.lastOpenedSessionId, { touchUpdatedAt: false });
+      });
+      this.cachedSessionId = meta.lastOpenedSessionId;
+      return meta.lastOpenedSessionId;
+    }
+
+    const key = docScopeKey(documentId);
+    const meta = await this.mutateMetaUnlocked((m) => {
+      const scoped = this.filterByDocument(m.sessions, documentId);
+      const mapped = m.lastOpenedByDocument?.[key];
+      const mappedOk =
+        mapped && isSessionId(mapped) && scoped.some((s) => s.id === mapped);
+
+      if (mappedOk) {
+        m.lastOpenedSessionId = mapped!;
+        this.ensureSessionEntry(m, mapped!, { touchUpdatedAt: false });
+        return;
+      }
+
+      if (scoped[0]) {
+        const sessionId = scoped[0].id;
+        m.lastOpenedSessionId = sessionId;
+        this.setLastOpenedForDoc(m, documentId, sessionId);
+        return;
+      }
+
+      const sessionId = randomUUID();
+      m.lastOpenedSessionId = sessionId;
+      this.ensureSessionEntry(m, sessionId, {
+        touchUpdatedAt: true,
+        documentId: documentId?.trim() ? documentId.trim() : null,
+      });
+      this.setLastOpenedForDoc(m, documentId, sessionId);
+    });
+    this.cachedSessionId = meta.lastOpenedSessionId;
+    return meta.lastOpenedSessionId;
+  }
+
   /**
    * 确保有可用 lastOpened。
    * coding + documentId：按文档维度；normal：全局 lastOpened。
    */
   async ensureLastOpened(documentId?: string | null): Promise<string> {
     await this.ensureSessionDir();
-
-    if (this.kind !== "coding") {
-      if (this.cachedSessionId) return this.cachedSessionId;
-      const meta = await this.readMeta();
-      if (!meta) {
-        const sessionId = randomUUID();
-        await this.writeMeta({
-          lastOpenedSessionId: sessionId,
-          sessions: [{ id: sessionId, updatedAt: nowIso() }],
-        });
-        this.cachedSessionId = sessionId;
-        return sessionId;
-      }
-      this.ensureSessionEntry(meta, meta.lastOpenedSessionId, { touchUpdatedAt: false });
-      await this.writeMeta(meta);
-      this.cachedSessionId = meta.lastOpenedSessionId;
-      return meta.lastOpenedSessionId;
-    }
-
-    const key = docScopeKey(documentId);
-    const meta = (await this.readMeta()) ?? {
-      lastOpenedSessionId: "",
-      sessions: [],
-      lastOpenedByDocument: {},
-    };
-    const scoped = this.filterByDocument(meta.sessions, documentId);
-    const mapped = meta.lastOpenedByDocument?.[key];
-    const mappedOk =
-      mapped &&
-      isSessionId(mapped) &&
-      scoped.some((s) => s.id === mapped);
-
-    if (mappedOk) {
-      meta.lastOpenedSessionId = mapped!;
-      this.ensureSessionEntry(meta, mapped!, { touchUpdatedAt: false });
-      await this.writeMeta(meta);
-      this.cachedSessionId = mapped!;
-      return mapped!;
-    }
-
-    if (scoped[0]) {
-      const sessionId = scoped[0].id;
-      meta.lastOpenedSessionId = sessionId;
-      this.setLastOpenedForDoc(meta, documentId, sessionId);
-      await this.writeMeta(meta);
-      this.cachedSessionId = sessionId;
-      return sessionId;
-    }
-
-    const sessionId = randomUUID();
-    meta.lastOpenedSessionId = sessionId;
-    this.ensureSessionEntry(meta, sessionId, {
-      touchUpdatedAt: true,
-      documentId: documentId?.trim() ? documentId.trim() : null,
-    });
-    this.setLastOpenedForDoc(meta, documentId, sessionId);
-    await this.writeMeta(meta);
-    this.cachedSessionId = sessionId;
-    return sessionId;
+    if (this.kind !== "coding" && this.cachedSessionId) return this.cachedSessionId;
+    return this.runSerialized(() => this.ensureLastOpenedUnlocked(documentId));
   }
 
   async listSessions(documentId?: string | null): Promise<{
     lastOpenedSessionId: string;
     sessions: AgentSessionSummary[];
   }> {
-    const lastOpenedSessionId = await this.ensureLastOpened(documentId);
-    const meta = (await this.readMeta())!;
-    const scoped = this.filterByDocument(meta.sessions, documentId);
-    return {
-      lastOpenedSessionId,
-      sessions: this.sortSummaries(scoped),
-    };
+    await this.ensureSessionDir();
+    return this.runSerialized(async () => {
+      const lastOpenedSessionId = await this.ensureLastOpenedUnlocked(documentId);
+      const meta = await this.readMeta();
+      const scoped = this.filterByDocument(meta?.sessions ?? [], documentId);
+      return {
+        lastOpenedSessionId,
+        sessions: this.sortSummaries(scoped),
+      };
+    });
   }
 
   async loadLastOpenedMessages(documentId?: string | null): Promise<{
     sessionId: string;
     messages: AgentSessionMessage[];
   }> {
-    const sessionId = await this.ensureLastOpened(documentId);
-    return { sessionId, messages: await this.loadTranscript(sessionId) };
+    await this.ensureSessionDir();
+    return this.runSerialized(async () => {
+      const sessionId = await this.ensureLastOpenedUnlocked(documentId);
+      return { sessionId, messages: await this.loadTranscript(sessionId) };
+    });
   }
 
   /** 新建空会话并设为该文档（或空白桶）的 lastOpened */
@@ -347,29 +508,27 @@ export class AgentSessionManager {
   }> {
     await this.ensureSessionDir();
     const sessionId = randomUUID();
-    const meta = (await this.readMeta()) ?? {
-      lastOpenedSessionId: sessionId,
-      sessions: [],
-      lastOpenedByDocument: {},
-    };
-    meta.lastOpenedSessionId = sessionId;
     const doc =
       this.kind === "coding"
         ? documentId?.trim()
           ? documentId.trim()
           : null
         : undefined;
-    this.ensureSessionEntry(meta, sessionId, {
-      title: "新会话",
-      touchUpdatedAt: true,
-      documentId: doc,
+    return this.runSerialized(async () => {
+      await this.mutateMetaUnlocked((meta) => {
+        meta.lastOpenedSessionId = sessionId;
+        this.ensureSessionEntry(meta, sessionId, {
+          title: "新会话",
+          touchUpdatedAt: true,
+          documentId: doc,
+        });
+        if (this.kind === "coding") {
+          this.setLastOpenedForDoc(meta, documentId, sessionId);
+        }
+      });
+      this.cachedSessionId = sessionId;
+      return { sessionId, messages: [] };
     });
-    if (this.kind === "coding") {
-      this.setLastOpenedForDoc(meta, documentId, sessionId);
-    }
-    await this.writeMeta(meta);
-    this.cachedSessionId = sessionId;
-    return { sessionId, messages: [] };
   }
 
   /** 切换 lastOpened；coding 时可校验属于同一 documentId */
@@ -382,29 +541,30 @@ export class AgentSessionManager {
   }> {
     if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
     await this.ensureSessionDir();
-    const meta = await this.readMeta();
-    const inMeta = Boolean(meta?.sessions.some((s) => s.id === sessionId));
-    const hasFile = fs.existsSync(this.jsonlPath(sessionId));
-    if (!inMeta && !hasFile) throw new Error("session_not_found");
 
-    const next = meta ?? { lastOpenedSessionId: sessionId, sessions: [], lastOpenedByDocument: {} };
-    const entry = next.sessions.find((s) => s.id === sessionId);
+    return this.runSerialized(async () => {
+      await this.mutateMetaUnlocked((meta) => {
+        const inMeta = meta.sessions.some((s) => s.id === sessionId);
+        const hasFile = fs.existsSync(this.jsonlPath(sessionId));
+        if (!inMeta && !hasFile) throw new Error("session_not_found");
 
-    if (this.kind === "coding" && documentId !== undefined) {
-      const want = docScopeKey(documentId);
-      const have = entry ? entryDocKey(entry) : CODING_BLANK_DOC_KEY;
-      if (want !== have) throw new Error("session_document_mismatch");
-    }
+        const entry = meta.sessions.find((s) => s.id === sessionId);
+        if (this.kind === "coding" && documentId !== undefined) {
+          const want = docScopeKey(documentId);
+          const have = entry ? entryDocKey(entry) : CODING_BLANK_DOC_KEY;
+          if (want !== have) throw new Error("session_document_mismatch");
+        }
 
-    next.lastOpenedSessionId = sessionId;
-    this.ensureSessionEntry(next, sessionId, { touchUpdatedAt: true });
-    if (this.kind === "coding") {
-      const bindDoc = entry?.documentId ?? (documentId !== undefined ? documentId : null);
-      this.setLastOpenedForDoc(next, bindDoc, sessionId);
-    }
-    await this.writeMeta(next);
-    this.cachedSessionId = sessionId;
-    return { sessionId, messages: await this.loadTranscript(sessionId) };
+        meta.lastOpenedSessionId = sessionId;
+        this.ensureSessionEntry(meta, sessionId, { touchUpdatedAt: true });
+        if (this.kind === "coding") {
+          const bindDoc = entry?.documentId ?? (documentId !== undefined ? documentId : null);
+          this.setLastOpenedForDoc(meta, bindDoc, sessionId);
+        }
+      });
+      this.cachedSessionId = sessionId;
+      return { sessionId, messages: await this.loadTranscript(sessionId) };
+    });
   }
 
   /**
@@ -420,55 +580,49 @@ export class AgentSessionManager {
     if (!doc) throw new Error("document_id_required");
 
     await this.ensureSessionDir();
-    const meta = (await this.readMeta()) ?? {
-      lastOpenedSessionId: sessionId,
-      sessions: [],
-      lastOpenedByDocument: {},
-    };
-    const inMeta = meta.sessions.some((s) => s.id === sessionId);
-    const hasFile = fs.existsSync(this.jsonlPath(sessionId));
-    if (!inMeta && !hasFile) throw new Error("session_not_found");
+    return this.runSerialized(async () => {
+      await this.mutateMetaUnlocked((meta) => {
+        const inMeta = meta.sessions.some((s) => s.id === sessionId);
+        const hasFile = fs.existsSync(this.jsonlPath(sessionId));
+        if (!inMeta && !hasFile) throw new Error("session_not_found");
 
-    this.ensureSessionEntry(meta, sessionId, {
-      documentId: doc,
-      touchUpdatedAt: true,
+        this.ensureSessionEntry(meta, sessionId, {
+          documentId: doc,
+          touchUpdatedAt: true,
+        });
+        meta.lastOpenedSessionId = sessionId;
+        this.setLastOpenedForDoc(meta, doc, sessionId);
+        if (meta.lastOpenedByDocument?.[CODING_BLANK_DOC_KEY] === sessionId) {
+          delete meta.lastOpenedByDocument[CODING_BLANK_DOC_KEY];
+        }
+      });
+      this.cachedSessionId = sessionId;
+      return { sessionId, documentId: doc };
     });
-    meta.lastOpenedSessionId = sessionId;
-    this.setLastOpenedForDoc(meta, doc, sessionId);
-    // 从空白桶 lastOpened 清掉自己（若仍指向本 session）
-    if (meta.lastOpenedByDocument?.[CODING_BLANK_DOC_KEY] === sessionId) {
-      delete meta.lastOpenedByDocument[CODING_BLANK_DOC_KEY];
-    }
-    await this.writeMeta(meta);
-    this.cachedSessionId = sessionId;
-    return { sessionId, documentId: doc };
   }
 
-  private async touchLastOpened(
+  private async touchLastOpenedUnlocked(
     sessionId: string,
     patch?: { titleIfEmpty?: string },
   ): Promise<void> {
-    const meta = (await this.readMeta()) ?? {
-      lastOpenedSessionId: sessionId,
-      sessions: [],
-      lastOpenedByDocument: {},
-    };
-    meta.lastOpenedSessionId = sessionId;
-    const existing = meta.sessions.find((s) => s.id === sessionId);
-    const needTitle =
-      patch?.titleIfEmpty &&
-      !(existing?.title && existing.title.trim() && existing.title !== "新会话");
-    this.ensureSessionEntry(meta, sessionId, {
-      title: needTitle ? patch!.titleIfEmpty : undefined,
-      touchUpdatedAt: true,
+    await this.mutateMetaUnlocked((meta) => {
+      meta.lastOpenedSessionId = sessionId;
+      const existing = meta.sessions.find((s) => s.id === sessionId);
+      const needTitle =
+        patch?.titleIfEmpty &&
+        !(existing?.title && existing.title.trim() && existing.title !== "新会话");
+      this.ensureSessionEntry(meta, sessionId, {
+        title: needTitle ? patch!.titleIfEmpty : undefined,
+        touchUpdatedAt: true,
+      });
+      if (this.kind === "coding") {
+        this.setLastOpenedForDoc(meta, existing?.documentId ?? null, sessionId);
+      }
     });
-    if (this.kind === "coding") {
-      this.setLastOpenedForDoc(meta, existing?.documentId ?? null, sessionId);
-    }
-    await this.writeMeta(meta);
     this.cachedSessionId = sessionId;
   }
 
+  /** jsonl append + touch meta 同一 Manager 队列任务。 */
   async appendUser(
     sessionId: string,
     content: string,
@@ -482,22 +636,28 @@ export class AgentSessionManager {
       : [];
     const row: Record<string, unknown> = { role: "user", content, ts: nowIso() };
     if (names.length > 0) row.skillNames = names;
-    await fs.promises.appendFile(
-      this.jsonlPath(sessionId),
-      JSON.stringify(row) + "\n",
-      "utf8",
-    );
-    await this.touchLastOpened(sessionId, { titleIfEmpty: titleFromUserContent(content) });
+    await this.runSerialized(async () => {
+      await fs.promises.appendFile(
+        this.jsonlPath(sessionId),
+        JSON.stringify(row) + "\n",
+        "utf8",
+      );
+      await this.touchLastOpenedUnlocked(sessionId, {
+        titleIfEmpty: titleFromUserContent(content),
+      });
+    });
   }
 
   async appendAssistant(sessionId: string, content: string): Promise<void> {
     if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
-    await fs.promises.appendFile(
-      this.jsonlPath(sessionId),
-      JSON.stringify({ role: "assistant", content, ts: nowIso() }) + "\n",
-      "utf8",
-    );
-    await this.touchLastOpened(sessionId);
+    await this.runSerialized(async () => {
+      await fs.promises.appendFile(
+        this.jsonlPath(sessionId),
+        JSON.stringify({ role: "assistant", content, ts: nowIso() }) + "\n",
+        "utf8",
+      );
+      await this.touchLastOpenedUnlocked(sessionId);
+    });
   }
 }
 
@@ -557,4 +717,80 @@ export async function bindCodingSessionDocumentForApi(
     sessionId,
     documentId,
   );
+}
+
+export type AgentSessionRepairRow = {
+  visitorId: string;
+  kind: AgentSessionKind;
+  sessionDir: string;
+  before: number;
+  after: number;
+  added: number;
+  dryRun: boolean;
+};
+
+/** 修复单个访客的 normal / coding session meta（按 kind）。 */
+export async function repairAgentSessionsForVisitor(params: {
+  visitorId: string;
+  kind?: AgentSessionKind | "all";
+  dryRun: boolean;
+}): Promise<AgentSessionRepairRow[]> {
+  const kinds: AgentSessionKind[] =
+    params.kind === "coding"
+      ? ["coding"]
+      : params.kind === "normal"
+        ? ["normal"]
+        : ["normal", "coding"];
+  const rows: AgentSessionRepairRow[] = [];
+  for (const kind of kinds) {
+    const mgr = new AgentSessionManager(params.visitorId, { kind });
+    const r = await mgr.repairMetaFromDisk({ dryRun: params.dryRun });
+    rows.push({
+      visitorId: params.visitorId,
+      kind,
+      sessionDir: r.sessionDir,
+      before: r.before,
+      after: r.after,
+      added: r.added,
+      dryRun: r.dryRun,
+    });
+  }
+  return rows;
+}
+
+/** 扫描 dataDir/tenant/*，修复全部（或指定）访客的 session 索引。 */
+export async function repairAgentSessionsUnderDataDir(params: {
+  visitorId?: string;
+  kind?: AgentSessionKind | "all";
+  dryRun: boolean;
+}): Promise<AgentSessionRepairRow[]> {
+  const { dataDir } = getConfig();
+  const tenantRoot = path.join(dataDir, "tenant");
+  let visitorIds: string[] = [];
+  if (params.visitorId) {
+    visitorIds = [params.visitorId];
+  } else {
+    try {
+      visitorIds = (await fs.promises.readdir(tenantRoot)).filter((name) => {
+        try {
+          return fs.statSync(path.join(tenantRoot, name)).isDirectory();
+        } catch {
+          return false;
+        }
+      });
+    } catch {
+      return [];
+    }
+  }
+  const out: AgentSessionRepairRow[] = [];
+  for (const visitorId of visitorIds) {
+    out.push(
+      ...(await repairAgentSessionsForVisitor({
+        visitorId,
+        kind: params.kind ?? "all",
+        dryRun: params.dryRun,
+      })),
+    );
+  }
+  return out;
 }

@@ -344,6 +344,7 @@ export const zh: Record<TranslationKey, string> = {
   docInfoCreator: "创建者",
   docInfoCreatedAt: "创建时间",
   docInfoSize: "大小",
+  docInfoCharCount: "字符数",
   docInfoUpdatedAt: "上次编辑",
   docInfoChangePermission: "修改文章权限",
   docInfoInviteMember: "邀请成员",

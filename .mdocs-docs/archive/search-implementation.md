@@ -51,7 +51,7 @@
 | `embedding` | Float32×768 BLOB（nomic） |
 | `updated_at` | ISO |
 
-模型文件：`~/.fgbg/shared/embedding/nomic-embed-text-v1.5.Q4_K_M.gguf`（可用 `MDOCS_EMBEDDING_DIR` 改目录）。启动时异步 `ensureLocalEmbeddingModel`；未就绪则搜索等同纯 FTS。
+模型文件：`~/.mdocs/embedding/nomic-embed-text-v1.5.Q4_K_M.gguf`（随 `MDOCS_DATA_DIR`；可用 `MDOCS_EMBEDDING_DIR` 改目录；旧 `~/.fgbg/shared/embedding/` 仅 load 回退）。启动时异步 `ensureLocalEmbeddingModel`；未就绪则搜索等同纯 FTS。
 
 ## 召回
 

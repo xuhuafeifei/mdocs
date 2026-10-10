@@ -348,6 +348,7 @@ export const en: Record<TranslationKey, string> = {
   docInfoCreator: "Creator",
   docInfoCreatedAt: "Created",
   docInfoSize: "Size",
+  docInfoCharCount: "Characters",
   docInfoUpdatedAt: "Last edited",
   docInfoChangePermission: "Change permission",
   docInfoInviteMember: "Invite members",

@@ -8,6 +8,7 @@ import http from "node:http";
 import https from "node:https";
 import os from "node:os";
 import path from "node:path";
+import { getConfig } from "../config/index.js";
 import { useLogger } from "../logger/logger.js";
 
 const log = useLogger("embedding-model");
@@ -19,6 +20,9 @@ export const EMBEDDING_DIM = 768;
 /** HuggingFace 官方 resolve URL（契约：固定 URL，不绑可配置 CDN） */
 const MODEL_DOWNLOAD_URL =
   "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf";
+
+/** 旧默认目录（仅作已下载文件回退，新下载不再写入） */
+const LEGACY_EMBEDDING_DIR = path.join(os.homedir(), ".fgbg", "shared", "embedding");
 
 const DOC_PREFIX = "search_document: ";
 const QUERY_PREFIX = "search_query: ";
@@ -33,24 +37,43 @@ let ready = false;
 /** 已判定不可用（缺依赖 / load 失败），本进程内不再重试 load */
 let disabled = false;
 
-/** 模型目录：MDOCS_EMBEDDING_DIR 或 ~/.fgbg/shared/embedding */
-export function getEmbeddingModelDir(): string {
-  const override = process.env.MDOCS_EMBEDDING_DIR?.trim();
-  if (override) return path.resolve(override);
-  return path.join(os.homedir(), ".fgbg", "shared", "embedding");
-}
-
-export function getEmbeddingModelPath(): string {
-  return path.join(getEmbeddingModelDir(), EMBEDDING_MODEL_FILENAME);
-}
-
-export function isEmbeddingModelFilePresent(): boolean {
+function isUsableModelFile(filePath: string): boolean {
   try {
-    const st = fs.statSync(getEmbeddingModelPath());
+    const st = fs.statSync(filePath);
     return st.isFile() && st.size > 0;
   } catch {
     return false;
   }
+}
+
+/** 模型目录：MDOCS_EMBEDDING_DIR 或 {MDOCS_DATA_DIR|~/.mdocs}/embedding */
+export function getEmbeddingModelDir(): string {
+  const override = process.env.MDOCS_EMBEDDING_DIR?.trim();
+  if (override) return path.resolve(override);
+  return path.join(getConfig().dataDir, "embedding");
+}
+
+/** 下载目标路径（始终在 getEmbeddingModelDir 下） */
+export function getEmbeddingModelDownloadPath(): string {
+  return path.join(getEmbeddingModelDir(), EMBEDDING_MODEL_FILENAME);
+}
+
+/**
+ * 实际 load 用的模型路径：优先新目录；未设置 MDOCS_EMBEDDING_DIR 时
+ * 若新目录尚无文件则回退旧路径 ~/.fgbg/shared/embedding/（避免已下载用户再下一次）。
+ */
+export function getEmbeddingModelPath(): string {
+  const preferred = getEmbeddingModelDownloadPath();
+  if (isUsableModelFile(preferred)) return preferred;
+  if (!process.env.MDOCS_EMBEDDING_DIR?.trim()) {
+    const legacy = path.join(LEGACY_EMBEDDING_DIR, EMBEDDING_MODEL_FILENAME);
+    if (isUsableModelFile(legacy)) return legacy;
+  }
+  return preferred;
+}
+
+export function isEmbeddingModelFilePresent(): boolean {
+  return isUsableModelFile(getEmbeddingModelPath());
 }
 
 /** 进程内是否已成功 load 过模型 */
@@ -106,7 +129,7 @@ async function ensureModelFileOnDisk(): Promise<void> {
 async function downloadModelFile(): Promise<void> {
   const dir = getEmbeddingModelDir();
   await fsp.mkdir(dir, { recursive: true });
-  const dest = getEmbeddingModelPath();
+  const dest = getEmbeddingModelDownloadPath();
   const tmp = `${dest}.partial`;
 
   log.info("embedding model missing; downloading %s → %s", MODEL_DOWNLOAD_URL, dest);

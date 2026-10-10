@@ -34,6 +34,7 @@ import {
 } from "../services/endpoints";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { VisitorPickerModal } from "./VisitorPickerModal";
+import { countDocumentPlainChars } from "./docPlainCharCount";
 import "./HtmlEditor.css";
 
 interface HtmlEditorProps {
@@ -90,6 +91,8 @@ export function HtmlEditor(props: HtmlEditorProps) {
   const [permissionBusy, setPermissionBusy] = useState(false);
   const [showInvitePicker, setShowInvitePicker] = useState(false);
   const [existingInvites, setExistingInvites] = useState<Map<string, string>>(new Map());
+  const [plainCharCount, setPlainCharCount] = useState<number | null>(null);
+  const plainCharGenRef = useRef(0);
 
   const docInfoMenuRef = useRef<HTMLDivElement>(null);
   const readerMoreMenuRef = useRef<HTMLDivElement>(null);
@@ -178,6 +181,31 @@ export function HtmlEditor(props: HtmlEditorProps) {
     }
     return () => document.removeEventListener("mousedown", onDown);
   }, [showDocInfoMenu, showReaderMoreMenu]);
+
+  useEffect(() => {
+    if (!showDocInfoMenu && !showReaderMoreMenu) return;
+    const gen = ++plainCharGenRef.current;
+    setPlainCharCount(null);
+    const run = () => {
+      if (gen !== plainCharGenRef.current) return;
+      try {
+        const n = countDocumentPlainChars("html", contentRef.current || "");
+        if (gen === plainCharGenRef.current) setPlainCharCount(n);
+      } catch {
+        if (gen === plainCharGenRef.current) setPlainCharCount(0);
+      }
+    };
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(run);
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = window.setTimeout(run, 0);
+    return () => window.clearTimeout(t);
+  }, [showDocInfoMenu, showReaderMoreMenu, content, documentId, props.contentRevision]);
 
   const persistDraft = useCallback(async () => {
     await getDocumentTaskQueue(documentId).execute(() =>
@@ -352,6 +380,10 @@ export function HtmlEditor(props: HtmlEditorProps) {
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
             <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoSize")}</span>
             <span>{formatFileSize(new Blob([content]).size)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCharCount")}</span>
+            <span>{plainCharCount === null ? "…" : plainCharCount.toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoUpdatedAt")}</span>

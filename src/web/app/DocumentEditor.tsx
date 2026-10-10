@@ -65,6 +65,7 @@ import { usePublishGuard } from "./hooks/usePublishGuard";
 import { localizeDomainName } from "./utils";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { VisitorPickerModal } from "./VisitorPickerModal";
+import { countDocumentPlainChars } from "./docPlainCharCount";
 
 function safeLexicalJsonString(editor: IEditor): string | null {
   try {
@@ -193,6 +194,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [existingInvites, setExistingInvites] = useState<Map<string, string>>(new Map());
   const [inviteBusy, setInviteBusy] = useState(false);
+  /** 文档信息「字符数」；null = 计算中 */
+  const [plainCharCount, setPlainCharCount] = useState<number | null>(null);
+  const plainCharGenRef = useRef(0);
 
   // ---- 点击菜单外部自动关闭 ----
   useEffect(() => {
@@ -268,6 +272,48 @@ export function DocumentEditor(props: DocumentEditorProps) {
     const id = requestAnimationFrame(() => setEditorSurfaceReady(true));
     return () => cancelAnimationFrame(id);
   }, [props.meta.documentId]);
+
+  // ---- 打开文档信息时异步统计纯文字符数（忽略 md 语法）----
+  useEffect(() => {
+    if (!showDocInfoMenu && !showReaderMoreMenu) return;
+    const gen = ++plainCharGenRef.current;
+    setPlainCharCount(null);
+    const run = () => {
+      if (gen !== plainCharGenRef.current) return;
+      try {
+        let sample = props.initialContent || "";
+        if (editor) {
+          try {
+            const md = editor.getDocument("markdown");
+            if (typeof md === "string") sample = md;
+          } catch {
+            /* 降级 initialContent */
+          }
+        }
+        const n = countDocumentPlainChars("md", sample);
+        if (gen === plainCharGenRef.current) setPlainCharCount(n);
+      } catch {
+        if (gen === plainCharGenRef.current) setPlainCharCount(0);
+      }
+    };
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(run);
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = window.setTimeout(run, 0);
+    return () => window.clearTimeout(t);
+  }, [
+    showDocInfoMenu,
+    showReaderMoreMenu,
+    editor,
+    props.initialContent,
+    props.meta.documentId,
+    props.contentRevision,
+  ]);
 
   /**
    * 检测传入内容是 Lexical JSON 还是原始 Markdown。
@@ -897,6 +943,10 @@ export function DocumentEditor(props: DocumentEditorProps) {
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
             <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoSize")}</span>
             <span>{formatFileSize(new Blob([props.initialContent]).size)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCharCount")}</span>
+            <span>{plainCharCount === null ? "…" : plainCharCount.toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoUpdatedAt")}</span>

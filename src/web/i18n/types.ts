@@ -341,6 +341,7 @@ export type TranslationKey =
   | "docInfoCreator"
   | "docInfoCreatedAt"
   | "docInfoSize"
+  | "docInfoCharCount"
   | "docInfoUpdatedAt"
   | "docInfoChangePermission"
   | "docInfoInviteMember"
