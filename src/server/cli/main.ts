@@ -1,21 +1,6 @@
-import { buildApp } from "../app.js";
-import { getConfig } from "../config/index.js";
-import { getDb } from "../db/connection.js";
-import {
-  findVisitorById,
-  findVisitorByName,
-} from "../db/repositories/visitor.repo.js";
-import { listAllVisitors } from "../identity/visitor.service.js";
-import {
-  migrateVisitor,
-  MigrationError,
-  type MigrationResult,
-} from "../migrations/visitor-migration.service.js";
-import { resolveInstalledPackageRoot, runSelfUpdate } from "./self-update.js";
-import { repairAgentSessionsUnderDataDir } from "../agent/Agent/session-manager.js";
-import { useLogger } from "../logger/logger.js";
 import fs from "node:fs";
 import path from "node:path";
+import { resolveInstalledPackageRoot, runSelfUpdate } from "./self-update.js";
 
 type Flags = Record<string, string | boolean>;
 
@@ -48,15 +33,16 @@ function printUsage(): void {
       "  mdocs                          Start server",
       "  mdocs start                    Start server",
       "  mdocs version                  Print installed version",
-      "  mdocs update                   Upgrade in-place from npmmirror (keep node_modules)",
+      "  mdocs update [--source taobao|npm] [--registry URL]",
       "  mdocs visitor list [--active|--disabled|--all]",
       "  mdocs visitor migrate --from OLD --to NEW [--dry-run] [--confirm]",
       "  mdocs agent session repair [--visitor ID|name] [--kind normal|coding|all] [--dry-run|--confirm]",
       "",
       "Notes:",
       "  version also accepts -v / --version.",
-      "  update uses https://registry.npmmirror.com for @fgbg/mdocs only;",
-      "  keeps existing node_modules and runs npm install to sync new deps.",
+      "  update upgrades @fgbg/mdocs in-place (keeps node_modules, then npm install + rebuild natives).",
+      "  update default --source=taobao (https://registry.npmmirror.com);",
+      "  use --source npm for registry.npmjs.org, or --registry <url> for a custom registry.",
       "  visitor list defaults to --active (only enabled visitors).",
       "  For migrate, OLD/NEW can be either visitor ID (UUID) or visitor name.",
       "  Either --dry-run or --confirm must be supplied.",
@@ -71,11 +57,11 @@ function printUsage(): void {
 async function main(): Promise<void> {
   const [command, sub, ...rest] = process.argv.slice(2);
   if (!command) {
-    startServer();
+    await startServer();
     return;
   }
   if (command === "start") {
-    startServer();
+    await startServer();
     return;
   }
   if (command === "version" || command === "-v" || command === "--version") {
@@ -83,19 +69,24 @@ async function main(): Promise<void> {
     return;
   }
   if (command === "update") {
-    runSelfUpdate();
+    // 不加载 server/db：better-sqlite3 半残时仍须能跑 update 自救
+    const flags = parseFlags(rest);
+    const source = typeof flags.source === "string" ? flags.source : undefined;
+    const registry =
+      typeof flags.registry === "string" ? flags.registry : undefined;
+    runSelfUpdate({ source, registry });
     return;
   }
   if (command === "visitor" && sub === "list") {
-    runVisitorList(parseFlags(rest));
+    await runVisitorList(parseFlags(rest));
     return;
   }
   if (command === "visitor" && sub === "migrate") {
-    runVisitorMigrate(parseFlags(rest));
+    await runVisitorMigrate(parseFlags(rest));
     return;
   }
   if (command === "agent" && sub === "session" && rest[0] === "repair") {
-    void runAgentSessionRepair(parseFlags(rest.slice(1)));
+    await runAgentSessionRepair(parseFlags(rest.slice(1)));
     return;
   }
   printUsage();
@@ -120,13 +111,19 @@ function printVersion(): void {
 }
 
 /** 启动 HTTP 服务器。 */
-function startServer(): void {
+async function startServer(): Promise<void> {
+  const { useLogger } = await import("../logger/logger.js");
+  const { getConfig } = await import("../config/index.js");
+  const { buildApp } = await import("../app.js");
   const log = useLogger("cli-server");
   const cfg = getConfig();
   const app = buildApp();
 
   process.on("uncaughtException", (err) => {
-    log.error("uncaughtException: %s", err instanceof Error ? err.stack ?? err.message : String(err));
+    log.error(
+      "uncaughtException: %s",
+      err instanceof Error ? err.stack ?? err.message : String(err),
+    );
   });
   process.on("unhandledRejection", (reason) => {
     log.error(
@@ -140,23 +137,19 @@ function startServer(): void {
   });
   server.on("error", (err) => {
     log.error("server error: %s", err instanceof Error ? err.message : String(err));
-    process.stderr.write(`server error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `server error: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
     process.exit(1);
   });
 }
 
-/** 执行 `visitor list`：查询访客并以 TSV 格式输出。
- *
- * 支持过滤参数：
- *   --active   仅列出启用的访客（默认）
- *   --disabled 仅列出已禁用的访客
- *   --all      列出全部访客
- */
-function runVisitorList(flags: Flags): void {
+/** 执行 `visitor list`：查询访客并以 TSV 格式输出。 */
+async function runVisitorList(flags: Flags): Promise<void> {
+  const { listAllVisitors } = await import("../identity/visitor.service.js");
   let filter: "all" | "active" | "disabled" = "active";
   if (flags.all === true) filter = "all";
   if (flags.disabled === true) filter = "disabled";
-  // --active 显式指定时覆盖
 
   const rows = listAllVisitors(filter);
   for (const row of rows) {
@@ -170,17 +163,25 @@ function runVisitorList(flags: Flags): void {
  * 根据输入字符串解析访客记录：先按 ID 查找，找不到再按名称查找。
  * 只返回未禁用的访客。
  */
-function resolveVisitor(ident: string): { visitorId: string; visitorName: string } {
+async function resolveVisitor(
+  ident: string,
+): Promise<{ visitorId: string; visitorName: string }> {
+  const { getDb } = await import("../db/connection.js");
+  const { findVisitorById, findVisitorByName } = await import(
+    "../db/repositories/visitor.repo.js"
+  );
+  const { MigrationError } = await import(
+    "../migrations/visitor-migration.service.js"
+  );
   const db = getDb();
-  // 先按 ID 查
   let row = findVisitorById(db, ident);
-  // 再按名称查
   if (!row) row = findVisitorByName(db, ident);
-  // 都没找到，抛错
   if (!row) {
-    throw new MigrationError("NOT_FOUND", `visitor "${ident}" not found (tried as ID, then name)`);
+    throw new MigrationError(
+      "NOT_FOUND",
+      `visitor "${ident}" not found (tried as ID, then name)`,
+    );
   }
-  // 检查是否已禁用
   if (row.disabled_at) {
     throw new MigrationError("VISITOR_DISABLED", `visitor "${ident}" is disabled`);
   }
@@ -188,43 +189,57 @@ function resolveVisitor(ident: string): { visitorId: string; visitorName: string
 }
 
 /** 执行 `visitor migrate`：校验参数后调用迁移服务，并输出结果或错误。 */
-function runVisitorMigrate(flags: Flags): void {
+async function runVisitorMigrate(flags: Flags): Promise<void> {
+  const { migrateVisitor, MigrationError } = await import(
+    "../migrations/visitor-migration.service.js"
+  );
+  type MigrationResult = Awaited<ReturnType<typeof migrateVisitor>>;
+
   const fromRaw = typeof flags.from === "string" ? flags.from : "";
   const toRaw = typeof flags.to === "string" ? flags.to : "";
   const dryRun = flags["dry-run"] === true;
   const confirm = flags.confirm === true;
 
-  // 校验必填参数
   if (!fromRaw || !toRaw) {
     process.stderr.write("--from and --to are required\n");
     process.exit(2);
   }
-  // 校验必须指定执行模式
   if (!dryRun && !confirm) {
     process.stderr.write("must pass --dry-run or --confirm\n");
     process.exit(2);
   }
   try {
-    // 智能解析访客（支持 ID 或名称）
-    const from = resolveVisitor(fromRaw);
-    const to = resolveVisitor(toRaw);
-    const result = migrateVisitor({ fromVisitorId: from.visitorId, toVisitorId: to.visitorId, confirm });
-    printMigrationResult(result);
+    const from = await resolveVisitor(fromRaw);
+    const to = await resolveVisitor(toRaw);
+    const result = migrateVisitor({
+      fromVisitorId: from.visitorId,
+      toVisitorId: to.visitorId,
+      confirm,
+    });
+    printMigrationResult(result as MigrationResult);
   } catch (err) {
     if (err instanceof MigrationError) {
       process.stderr.write(`migration error: ${err.code} ${err.message}\n`);
       process.exit(3);
     }
-    process.stderr.write(`unexpected error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `unexpected error: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
     process.exit(4);
   }
 }
 
 /**
  * 修复 agent session.json：把磁盘上有、索引里没有的 *.jsonl 补回 sessions[]。
- * 默认扫全部 tenant；可 --visitor 限定；须 --dry-run 或 --confirm。
  */
 async function runAgentSessionRepair(flags: Flags): Promise<void> {
+  const { repairAgentSessionsUnderDataDir } = await import(
+    "../agent/Agent/session-manager.js"
+  );
+  const { MigrationError } = await import(
+    "../migrations/visitor-migration.service.js"
+  );
+
   const dryRun = flags["dry-run"] === true;
   const confirm = flags.confirm === true;
   if (!dryRun && !confirm) {
@@ -239,9 +254,8 @@ async function runAgentSessionRepair(flags: Flags): Promise<void> {
   let visitorId: string | undefined;
   if (typeof flags.visitor === "string" && flags.visitor.trim()) {
     try {
-      visitorId = resolveVisitor(flags.visitor.trim()).visitorId;
+      visitorId = (await resolveVisitor(flags.visitor.trim())).visitorId;
     } catch (err) {
-      // 允许直接传 UUID 目录名（访客已删但仍有 tenant 目录）
       const raw = flags.visitor.trim();
       if (/^[0-9a-f-]{36}$/i.test(raw)) {
         visitorId = raw;
@@ -279,7 +293,18 @@ async function runAgentSessionRepair(flags: Flags): Promise<void> {
 }
 
 /** 将访客迁移结果格式化为可读文本并输出到标准输出。 */
-function printMigrationResult(result: MigrationResult): void {
+function printMigrationResult(result: {
+  dryRun: boolean;
+  from: { visitor_id: string; visitor_name: string };
+  to: { visitor_id: string; visitor_name: string };
+  impact: {
+    documents_owner: number;
+    documents_created_by: number;
+    documents_updated_by: number;
+    attachments_owner: number;
+  };
+  backupPath?: string | null;
+}): void {
   const header = result.dryRun ? "dry-run" : "executed";
   process.stdout.write(
     [

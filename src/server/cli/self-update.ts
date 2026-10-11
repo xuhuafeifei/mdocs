@@ -1,8 +1,10 @@
 /**
- * 全局安装原地升级：淘宝 npmmirror 拉最新包，保留 node_modules，再 npm install 同步新依赖。
+ * 全局安装原地升级：从选定 npm registry 拉最新包，保留 node_modules，再 npm install 同步新依赖。
  *
  * 查版本 / pack 必须绕开本机 npm cache：`--prefer-online` 仍可能命中旧 packument，
  * 因此这两步使用临时空 `--cache` 目录。
+ *
+ * 默认镜像：淘宝 npmmirror；可用 `--source npm` 或 `--registry <url>` 切换。
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -10,10 +12,28 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** 写死：淘宝 npm 网关 */
-export const MDOCS_UPDATE_REGISTRY = "https://registry.npmmirror.com";
+/** 预置源别名 → registry URL */
+export const MDOCS_UPDATE_SOURCES = {
+  taobao: "https://registry.npmmirror.com",
+  npmmirror: "https://registry.npmmirror.com",
+  npm: "https://registry.npmjs.org",
+  official: "https://registry.npmjs.org",
+} as const;
+
+export type MdocsUpdateSource = keyof typeof MDOCS_UPDATE_SOURCES;
+
+/** @deprecated 使用 MDOCS_UPDATE_SOURCES.taobao；保留兼容旧测试/引用 */
+export const MDOCS_UPDATE_REGISTRY = MDOCS_UPDATE_SOURCES.taobao;
+
 /** 写死：要升级的包名 */
 export const MDOCS_UPDATE_PACKAGE = "@fgbg/mdocs";
+
+export type SelfUpdateOptions = {
+  /** 预置源：taobao（默认）| npm | npmmirror | official */
+  source?: string;
+  /** 自定义 registry URL；若设置则覆盖 --source */
+  registry?: string;
+};
 
 type PackageJson = {
   name?: string;
@@ -28,6 +48,28 @@ function log(msg: string): void {
 function fail(msg: string, code = 1): never {
   process.stderr.write(`mdocs update: ${msg}\n`);
   process.exit(code);
+}
+
+/**
+ * 解析升级用 registry。
+ * 优先级：`--registry` > `--source` > 默认 taobao。
+ */
+export function resolveUpdateRegistry(opts: SelfUpdateOptions = {}): string {
+  const custom = typeof opts.registry === "string" ? opts.registry.trim() : "";
+  if (custom) {
+    if (!/^https?:\/\//i.test(custom)) {
+      fail(`--registry 须为 http(s) URL，收到：${custom}`);
+    }
+    return custom.replace(/\/+$/, "");
+  }
+  const raw = (opts.source ?? "taobao").trim().toLowerCase() || "taobao";
+  const mapped = MDOCS_UPDATE_SOURCES[raw as MdocsUpdateSource];
+  if (!mapped) {
+    fail(
+      `未知 --source「${raw}」。可用：taobao（默认）、npm；或 --registry <url>`,
+    );
+  }
+  return mapped;
 }
 
 /** dist/server/cli/self-update.js → 包根 */
@@ -45,7 +87,7 @@ function readPackageJson(pkgRoot: string): PackageJson {
   return JSON.parse(fs.readFileSync(p, "utf8")) as PackageJson;
 }
 
-/** 开发仓库有 src/，拒绝原地覆盖 */
+/** 开发仓库存在 src/，拒绝原地覆盖 */
 function assertNotDevWorkspace(pkgRoot: string): void {
   if (fs.existsSync(path.join(pkgRoot, "src", "server"))) {
     fail(
@@ -85,32 +127,32 @@ function withFreshNpmCache<T>(fn: (cacheDir: string) => T): T {
   }
 }
 
-function fetchLatestVersion(): string {
+function fetchLatestVersion(registry: string): string {
   return withFreshNpmCache((cacheDir) => {
     const r = npm([
       "view",
       MDOCS_UPDATE_PACKAGE,
       "version",
-      `--registry=${MDOCS_UPDATE_REGISTRY}`,
+      `--registry=${registry}`,
       `--cache=${cacheDir}`,
       "--prefer-online",
       "--fetch-retries=2",
     ]);
     if (r.status !== 0 || !r.stdout) {
-      fail(`无法从 ${MDOCS_UPDATE_REGISTRY} 查询版本：${r.stderr || r.stdout || "empty"}`);
+      fail(`无法从 ${registry} 查询版本：${r.stderr || r.stdout || "empty"}`);
     }
     return r.stdout.split("\n").pop()!.trim();
   });
 }
 
-function packTo(destDir: string, version: string): string {
+function packTo(destDir: string, version: string, registry: string): string {
   fs.mkdirSync(destDir, { recursive: true });
   return withFreshNpmCache((cacheDir) => {
     const r = npm(
       [
         "pack",
         `${MDOCS_UPDATE_PACKAGE}@${version}`,
-        `--registry=${MDOCS_UPDATE_REGISTRY}`,
+        `--registry=${registry}`,
         `--pack-destination=${destDir}`,
         `--cache=${cacheDir}`,
         "--prefer-online",
@@ -156,7 +198,7 @@ export function chmodPackageBins(pkgRoot: string): void {
 }
 
 /** 只补差量依赖：不删 node_modules；新依赖（如 node-llama-cpp）必须装上 */
-function installDepsPreferOffline(pkgRoot: string): void {
+function installDepsPreferOffline(pkgRoot: string, registry: string): void {
   log("安装/同步依赖（保留已有 node_modules）…");
   // 不用 --prefer-offline：新增原生依赖未进本地缓存时会漏装，语义索引会报 Cannot find package
   const r = npm(
@@ -166,7 +208,7 @@ function installDepsPreferOffline(pkgRoot: string): void {
       "--no-audit",
       "--no-fund",
       "--legacy-peer-deps",
-      `--registry=${MDOCS_UPDATE_REGISTRY}`,
+      `--registry=${registry}`,
     ],
     pkgRoot,
   );
@@ -174,13 +216,42 @@ function installDepsPreferOffline(pkgRoot: string): void {
     fail(`npm install 失败：${r.stderr || r.stdout}`);
   }
   if (r.stdout) log(r.stdout);
-  ensureListedDependency(pkgRoot, "node-llama-cpp");
+  ensureListedDependency(pkgRoot, "node-llama-cpp", registry);
+  rebuildNativeAddons(pkgRoot);
+}
+
+/**
+ * 保留 node_modules 时，已存在的 native 包版本若未变，npm 不会重跑 install 脚本，
+ * 容易留下「有 package.json、无 .node」的半残 better-sqlite3（update 后一启动就炸）。
+ */
+function rebuildNativeAddons(pkgRoot: string): void {
+  const natives = ["better-sqlite3", "node-llama-cpp"].filter((name) => {
+    const local = path.join(pkgRoot, "node_modules", ...name.split("/"));
+    return fs.existsSync(path.join(local, "package.json"));
+  });
+  if (natives.length === 0) return;
+
+  log(`重建原生模块：${natives.join(", ")} …`);
+  const r = npm(["rebuild", ...natives, "--omit=dev"], pkgRoot);
+  if (r.status !== 0) {
+    process.stderr.write(
+      `mdocs update: 警告 — npm rebuild 未完全成功（若启动报 bindings 缺失可手动执行）：\n` +
+        `  cd ${pkgRoot} && npm rebuild ${natives.join(" ")}\n` +
+        `  ${r.stderr || r.stdout || ""}\n`,
+    );
+    return;
+  }
+  if (r.stdout) log(r.stdout);
 }
 
 /**
  * 关键依赖若仍缺失（native 构建失败或镜像缺包），再单独装一次并打警告，不整次 update 失败。
  */
-function ensureListedDependency(pkgRoot: string, depName: string): void {
+function ensureListedDependency(
+  pkgRoot: string,
+  depName: string,
+  registry: string,
+): void {
   const pkg = readPackageJson(pkgRoot) as PackageJson & {
     dependencies?: Record<string, string>;
   };
@@ -199,7 +270,7 @@ function ensureListedDependency(pkgRoot: string, depName: string): void {
       "--no-audit",
       "--no-fund",
       "--legacy-peer-deps",
-      `--registry=${MDOCS_UPDATE_REGISTRY}`,
+      `--registry=${registry}`,
     ],
     pkgRoot,
   );
@@ -215,9 +286,10 @@ function ensureListedDependency(pkgRoot: string, depName: string): void {
 }
 
 /**
- * `mdocs update`：从淘宝镜像原地升级当前全局安装。
+ * `mdocs update`：从选定镜像原地升级当前全局安装。
  */
-export function runSelfUpdate(): void {
+export function runSelfUpdate(opts: SelfUpdateOptions = {}): void {
+  const registry = resolveUpdateRegistry(opts);
   const pkgRoot = resolveInstalledPackageRoot();
   assertNotDevWorkspace(pkgRoot);
 
@@ -225,9 +297,9 @@ export function runSelfUpdate(): void {
   const currentVersion = current.version ?? "?";
   log(`当前安装: ${pkgRoot}`);
   log(`当前版本: ${currentVersion}`);
-  log(`镜像:     ${MDOCS_UPDATE_REGISTRY}`);
+  log(`镜像:     ${registry}`);
 
-  const latest = fetchLatestVersion();
+  const latest = fetchLatestVersion(registry);
   log(`最新版本: ${latest}`);
 
   if (latest === currentVersion) {
@@ -238,7 +310,7 @@ export function runSelfUpdate(): void {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "mdocs-update-"));
   try {
     log(`下载 ${MDOCS_UPDATE_PACKAGE}@${latest} …`);
-    const tgz = packTo(work, latest);
+    const tgz = packTo(work, latest, registry);
     const extractDir = path.join(work, "extract");
     fs.mkdirSync(extractDir);
     const tar = spawnSync("tar", ["-xzf", tgz, "-C", extractDir], { encoding: "utf8" });
@@ -251,7 +323,7 @@ export function runSelfUpdate(): void {
     log("原地覆盖包文件（保留 node_modules）…");
     overlayPackage(pkgRoot, inner);
     chmodPackageBins(pkgRoot);
-    installDepsPreferOffline(pkgRoot);
+    installDepsPreferOffline(pkgRoot, registry);
 
     const after = readPackageJson(pkgRoot);
     log(`升级完成: ${currentVersion} → ${after.version ?? latest}`);
