@@ -220,23 +220,40 @@ function installDepsPreferOffline(pkgRoot: string, registry: string): void {
   rebuildNativeAddons(pkgRoot);
 }
 
+/** 用当前 Node 试加载 native 包；能 require 则跳过 rebuild（增量 update 常态）。 */
+function nativeAddonLoadable(pkgRoot: string, depName: string): boolean {
+  const r = spawnSync(
+    process.execPath,
+    ["-e", `require(${JSON.stringify(depName)})`],
+    { cwd: pkgRoot, encoding: "utf8" },
+  );
+  return (r.status ?? 1) === 0;
+}
+
 /**
- * 保留 node_modules 时，已存在的 native 包版本若未变，npm 不会重跑 install 脚本，
- * 容易留下「有 package.json、无 .node」的半残 better-sqlite3（update 后一启动就炸）。
+ * 仅当 native 绑定已坏/缺失时才 rebuild。
+ * 保留 node_modules 的增量 update 下，版本未变时 npm 不会重跑 install 脚本，
+ * 可能留下「有 package.json、无 .node」；正常情况探测通过则零成本跳过。
  */
 function rebuildNativeAddons(pkgRoot: string): void {
-  const natives = ["better-sqlite3", "node-llama-cpp"].filter((name) => {
+  const candidates = ["better-sqlite3", "node-llama-cpp"].filter((name) => {
     const local = path.join(pkgRoot, "node_modules", ...name.split("/"));
     return fs.existsSync(path.join(local, "package.json"));
   });
-  if (natives.length === 0) return;
+  const broken = candidates.filter((name) => !nativeAddonLoadable(pkgRoot, name));
+  if (broken.length === 0) {
+    if (candidates.length > 0) {
+      log(`原生模块正常（${candidates.join(", ")}），跳过 rebuild`);
+    }
+    return;
+  }
 
-  log(`重建原生模块：${natives.join(", ")} …`);
-  const r = npm(["rebuild", ...natives, "--omit=dev"], pkgRoot);
+  log(`检测到原生绑定缺失，重建：${broken.join(", ")} …`);
+  const r = npm(["rebuild", ...broken, "--omit=dev"], pkgRoot);
   if (r.status !== 0) {
     process.stderr.write(
       `mdocs update: 警告 — npm rebuild 未完全成功（若启动报 bindings 缺失可手动执行）：\n` +
-        `  cd ${pkgRoot} && npm rebuild ${natives.join(" ")}\n` +
+        `  cd ${pkgRoot} && npm rebuild ${broken.join(" ")}\n` +
         `  ${r.stderr || r.stdout || ""}\n`,
     );
     return;
