@@ -200,17 +200,22 @@ function normalizeFileName(fileName: string, fileType?: string): string {
   normalized = normalized.replace(/[^\w\u4e00-\u9fa5\-_.]/g, "_");
 
   // 按 fileType 确定目标后缀
-  const ext = fileType === FILE_TYPE.HTML ? ".html" : ".md";
+  const ext =
+    fileType === FILE_TYPE.HTML
+      ? ".html"
+      : fileType === FILE_TYPE.SHEET
+        ? ".sheet"
+        : ".md";
 
   // 确保以正确后缀结尾
   const lower = normalized.toLowerCase();
-  if (!lower.endsWith(".md") && !lower.endsWith(".html")) {
+  if (!lower.endsWith(".md") && !lower.endsWith(".html") && !lower.endsWith(".sheet")) {
     normalized += ext;
   }
 
   // 避免空文件名
   const checkLower = normalized.toLowerCase();
-  if (checkLower === ".md" || checkLower === ".html") {
+  if (checkLower === ".md" || checkLower === ".html" || checkLower === ".sheet") {
     normalized = "untitled" + ext;
   }
 
@@ -235,7 +240,7 @@ export function createDocument(params: {
   if (policy.writeNormalize === "raw" && params.contentFormat === "markdown") {
     throw new DocumentError(
       "BAD_REQUEST",
-      "html 文档不支持 contentFormat=markdown",
+      "raw 文档不支持 contentFormat=markdown",
       400,
     );
   }
@@ -449,7 +454,7 @@ export function updateDocument(params: {
   if (policy.writeNormalize === "raw" && params.contentFormat === "markdown") {
     throw new DocumentError(
       "BAD_REQUEST",
-      "html 文档不支持 contentFormat=markdown",
+      "raw 文档不支持 contentFormat=markdown",
       400,
     );
   }
@@ -754,6 +759,88 @@ export function moveDocument(params: {
       newParentId,
     }),
   );
+
+  return getDocument(params.documentId, params.actorVisitorId);
+}
+
+// ============================================================
+//  重命名文档文件名（同域、同父目录；只改 basename）
+// ============================================================
+
+export function renameDocument(params: {
+  actorVisitorId: string;
+  documentId: string;
+  fileName: string;
+}): DocumentDetail {
+  const db = getDb();
+  const row = findDocumentById(db, params.documentId);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+  if (row.owner_visitor_id !== params.actorVisitorId) {
+    throw new DocumentError("FORBIDDEN", "仅创建者可重命名此文件", 403);
+  }
+  if (!getPolicy(row.file_type as any).movable) {
+    throw new DocumentError("INVALID_TYPE", "该类型文件不支持重命名", 400);
+  }
+  if (!params.fileName?.trim()) {
+    throw new DocumentError("BAD_REQUEST", "fileName is required", 400);
+  }
+
+  const baseName = normalizeFileName(params.fileName, row.file_type);
+  const slash = row.relative_path.lastIndexOf("/");
+  const newRelativePath =
+    slash === -1 ? baseName : `${row.relative_path.slice(0, slash)}/${baseName}`;
+
+  if (newRelativePath === row.relative_path) {
+    return getDocument(params.documentId, params.actorVisitorId);
+  }
+
+  const existing = findDocumentByPath(db, row.domain_id, newRelativePath);
+  if (existing && existing.document_id !== row.document_id) {
+    throw new DocumentError("DOC_EXISTS", "目标位置已存在同名文档", 409);
+  }
+
+  const now = new Date().toISOString();
+  const oldPath = row.relative_path;
+
+  try {
+    renameDocumentFile(row.domain_id, oldPath, newRelativePath);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new DocumentError("STORAGE_ERROR", msg, 500);
+  }
+
+  try {
+    const tx = db.transaction(() => {
+      updateDocumentLocation(db, {
+        documentId: row.document_id,
+        parentId: row.parent_id ?? null,
+        relativePath: newRelativePath,
+        updatedBy: params.actorVisitorId,
+        updatedAt: now,
+      });
+      insertAuditLog(db, {
+        actorVisitorId: params.actorVisitorId,
+        action: "document.rename",
+        targetType: "document",
+        targetId: row.document_id,
+        metadata: {
+          fromRelativePath: oldPath,
+          toRelativePath: newRelativePath,
+        },
+        createdAt: now,
+      });
+    });
+    tx();
+  } catch (err) {
+    try {
+      renameDocumentFile(row.domain_id, newRelativePath, oldPath);
+    } catch {
+      // 回滚失败留给运维；主错误仍抛出
+    }
+    throw err;
+  }
+
+  scheduleFtsIfNeeded(row.file_type, row.document_id);
 
   return getDocument(params.documentId, params.actorVisitorId);
 }

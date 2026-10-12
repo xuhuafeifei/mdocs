@@ -20,6 +20,22 @@ const STRUCTURE_NAMES = [
   "create_document",
   "create_folder",
   "move_document",
+  "rename_document",
+  "sheet_get_schema",
+  "sheet_list_rows",
+  "sheet_set_cells",
+  "sheet_upsert_row",
+  "sheet_insert_rows",
+  "sheet_overwrite",
+  "sheet_rename_column",
+  "sheet_delete_rows",
+  "sheet_delete_columns",
+  "sheet_set_cell_style",
+  "sheet_merge_cells",
+  "sheet_unmerge_cells",
+  "sheet_add_sheet",
+  "sheet_rename_sheet",
+  "sheet_delete_sheet",
 ] as const;
 
 const MANUAL_NAMES = ["mdocs_manual_outline", "mdocs_manual_content"] as const;

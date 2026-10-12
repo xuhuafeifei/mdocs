@@ -1,10 +1,11 @@
-import { ArrowDown, Check, Copy, FileText, History, Maximize2, Minimize2, Network, Plus, X } from "lucide-react";
+import { ArrowDown, Check, ChevronDown, ChevronRight, Copy, FileText, History, Maximize2, Minimize2, Network, Pencil, Pin, Plus, X } from "lucide-react";
 import {
   forwardRef,
   memo,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -20,6 +21,8 @@ import {
   fetchAgentSessionsApi,
   fetchAgentStatusApi,
   openAgentSessionApi,
+  pinAgentSessionApi,
+  renameAgentSessionApi,
   streamAgentChatApi,
   submitAgentChoiceApi,
   expireAgentChoiceApi,
@@ -37,7 +40,10 @@ import {
   type SkillFormCardState,
 } from "./AgentSkillFormCard";
 import { AgentMermaidBlock, extractMermaidFromPre } from "./AgentMermaidBlock";
+import { AgentThinkingFold, sealThinking, useThinkClock } from "./AgentThinkingFold";
 import { copyTextToClipboard } from "./copyText";
+import type { DomainSummary } from "../../shared/types/domain";
+import { DEFAULT_DOMAIN_ID } from "../../shared/domainUi";
 
 function nodeText(node: ReactNode): string {
   if (node == null || typeof node === "boolean") return "";
@@ -115,7 +121,7 @@ const AgentMarkdown = memo(function AgentMarkdown(props: { children: string }) {
 
 /** 当轮流式时间线；不落盘，历史重开无 blocks 则只显示 content */
 type AssistantBlock =
-  | { type: "thinking"; text: string }
+  | { type: "thinking"; text: string; startedAt?: number; endedAt?: number }
   | { type: "text"; text: string }
   | { type: "document_table"; title: string; rows: AgentDocumentTableRow[] }
   | {
@@ -175,7 +181,7 @@ function toChatMessages(
 }
 
 function appendTextDelta(blocks: AssistantBlock[], text: string): AssistantBlock[] {
-  const next = blocks.slice();
+  const next = sealThinking(blocks).slice();
   const last = next[next.length - 1];
   if (last?.type === "text") {
     next[next.length - 1] = { type: "text", text: last.text + text };
@@ -186,12 +192,17 @@ function appendTextDelta(blocks: AssistantBlock[], text: string): AssistantBlock
 }
 
 function appendThinkingDelta(blocks: AssistantBlock[], text: string): AssistantBlock[] {
+  const now = Date.now();
   const next = blocks.slice();
   const last = next[next.length - 1];
-  if (last?.type === "thinking") {
-    next[next.length - 1] = { type: "thinking", text: last.text + text };
+  if (last?.type === "thinking" && !last.endedAt) {
+    next[next.length - 1] = {
+      type: "thinking",
+      text: last.text + text,
+      startedAt: last.startedAt ?? now,
+    };
   } else {
-    next.push({ type: "thinking", text });
+    next.push({ type: "thinking", text, startedAt: now });
   }
   return next;
 }
@@ -478,6 +489,9 @@ export const AgentChatPanel = forwardRef<
     onToggleFullscreen?: () => void;
     /** 当前域 / 打开文，每轮 Ask 作为 references 发给后端 */
     domainId?: string | null;
+    /** 工作空间列表（历史按域分组折叠用） */
+    domains?: DomainSummary[];
+    localizeDomainName?: (name: string) => string;
     documentId?: string | null;
     documentTitle?: string | null;
     documentPath?: string | null;
@@ -497,6 +511,14 @@ export const AgentChatPanel = forwardRef<
       documentId: string;
       displayName: string;
     }) => void | Promise<void>;
+    /** 嵌在帮写左栏：去掉浮层定位和关闭 */
+    embedded?: boolean;
+    mode?: "normal" | "coding";
+    workingMarkdown?: string;
+    baseMarkdown?: string;
+    onMarkdownSet?: (markdown: string) => void;
+    onSendingChange?: (sending: boolean) => void;
+    onSessionId?: (sessionId: string | null) => void;
   }
 >(function AgentChatPanel(props, ref) {
   const {
@@ -507,6 +529,8 @@ export const AgentChatPanel = forwardRef<
     fullscreen,
     onToggleFullscreen,
     domainId,
+    domains = [],
+    localizeDomainName,
     documentId,
     documentTitle,
     documentPath,
@@ -516,9 +540,24 @@ export const AgentChatPanel = forwardRef<
     onTreeChanged,
     onDocumentOverwritten,
     onOpenCoding,
+    embedded = false,
+    mode = "normal",
+    workingMarkdown,
+    baseMarkdown,
+    onMarkdownSet,
+    onSendingChange,
+    onSessionId,
   } = props;
+  const sessionMode = mode === "coding" ? "coding" : "normal";
+  const coding = sessionMode === "coding";
   const userInitial = (visitorName?.trim().charAt(0) || "我").toUpperCase();
   const [historyOpen, setHistoryOpen] = useState(false);
+  /** 历史列表：当前工作空间 / 全部 */
+  const [historyScope, setHistoryScope] = useState<"current" | "all">("current");
+  /** 折叠的工作空间 id；未出现在 map 时：全部模式下仅展开当前空间 */
+  const [domainCollapsed, setDomainCollapsed] = useState<Record<string, boolean>>({});
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -541,6 +580,7 @@ export const AgentChatPanel = forwardRef<
   /** 用户是否贴在底部；上滑阅读时为 false，不再强制滚 */
   const stickToBottomRef = useRef(true);
   const [showJumpBottom, setShowJumpBottom] = useState(false);
+  const thinkNow = useThinkClock(sending);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
@@ -603,7 +643,10 @@ export const AgentChatPanel = forwardRef<
   async function refreshSessions() {
     setSessionsLoading(true);
     try {
-      const list = await fetchAgentSessionsApi();
+      const list = await fetchAgentSessionsApi(
+        sessionMode,
+        coding ? documentId : undefined,
+      );
       setSessions(list.sessions);
       if (!sessionId) setSessionId(list.lastOpenedSessionId);
     } catch {
@@ -632,6 +675,19 @@ export const AgentChatPanel = forwardRef<
       setStatusError(err instanceof Error ? err.message : String(err));
     }
   }
+
+  const onSendingChangeRef = useRef(onSendingChange);
+  onSendingChangeRef.current = onSendingChange;
+  const onSessionIdRef = useRef(onSessionId);
+  onSessionIdRef.current = onSessionId;
+
+  useEffect(() => {
+    onSendingChangeRef.current?.(sending);
+  }, [sending]);
+
+  useEffect(() => {
+    onSessionIdRef.current?.(sessionId);
+  }, [sessionId]);
 
   useEffect(() => {
     if (!open) {
@@ -662,17 +718,24 @@ export const AgentChatPanel = forwardRef<
     };
   }, [open]);
 
+  const sessionScope = coding ? `coding:${documentId ?? ""}` : "normal";
+  const sessionScopeRef = useRef(sessionScope);
+
   useEffect(() => {
     if (!open) return;
+    const scopeChanged = sessionScopeRef.current !== sessionScope;
+    sessionScopeRef.current = sessionScope;
     let cancelled = false;
     void (async () => {
       try {
-        const s = await fetchAgentSessionApi();
+        const s = await fetchAgentSessionApi(
+          sessionMode,
+          coding ? documentId : undefined,
+        );
         if (cancelled) return;
         setSessionId(s.sessionId);
         setMessages((prev) => {
-          // 避免用户刚发送消息时，异步回放覆盖 UI
-          if (prev.length > 0) return prev;
+          if (!scopeChanged && prev.length > 0) return prev;
           return toChatMessages(s.sessionId, s.messages);
         });
       } catch {
@@ -682,7 +745,7 @@ export const AgentChatPanel = forwardRef<
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, sessionScope]);
 
   useEffect(() => {
     if (!open || !historyOpen) return;
@@ -810,13 +873,21 @@ export const AgentChatPanel = forwardRef<
     try {
       let hadError = false;
       await streamAgentChatApi(text, {
+        mode: sessionMode,
         skillNames: selectedSkillNames.length > 0 ? selectedSkillNames : undefined,
-        references: {
-          domainId: domainId?.trim() || undefined,
-          // 文档引用与图谱引用互斥（图谱焦点优先）
-          documentId: !graphRefActive && docRefActive ? documentId!.trim() : undefined,
-          graphFileId: graphRefActive ? graphFileId!.trim() : undefined,
-        },
+        ...(coding
+          ? {
+              documentId: documentId ?? null,
+              workingMarkdown,
+              baseMarkdown,
+            }
+          : {
+              references: {
+                domainId: domainId?.trim() || undefined,
+                documentId: !graphRefActive && docRefActive ? documentId!.trim() : undefined,
+                graphFileId: graphRefActive ? graphFileId!.trim() : undefined,
+              },
+            }),
         signal: ac.signal,
         onEvent: (event) => {
           if (event.type === "text_delta") {
@@ -977,6 +1048,8 @@ export const AgentChatPanel = forwardRef<
                 };
               }),
             );
+          } else if (event.type === "markdown_set") {
+            onMarkdownSet?.(event.markdown);
           } else if (event.type === "tree_changed") {
             void onTreeChanged?.();
           } else if (event.type === "document_overwritten") {
@@ -1008,6 +1081,13 @@ export const AgentChatPanel = forwardRef<
       if (ac.signal.aborted) return;
       setStreamError(err instanceof Error ? err.message : String(err));
     } finally {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId && m.blocks
+            ? { ...m, blocks: sealThinking(m.blocks) }
+            : m,
+        ),
+      );
       if (abortRef.current === ac) abortRef.current = null;
       setSending(false);
     }
@@ -1020,12 +1100,17 @@ export const AgentChatPanel = forwardRef<
     setHistoryOpen(false);
     setSending(false);
     try {
-      const created = await createAgentSessionApi();
+      const created = await createAgentSessionApi(
+        sessionMode,
+        coding ? documentId : undefined,
+        domainId ?? null,
+      );
       setSessionId(created.sessionId);
       setMessages([]);
       setInput("");
       stickToBottomRef.current = true;
       void refreshContextUsage();
+      void refreshSessions();
     } catch (err) {
       setStreamError(err instanceof Error ? err.message : String(err));
     }
@@ -1040,11 +1125,16 @@ export const AgentChatPanel = forwardRef<
     abortRef.current?.abort();
     setStreamError(null);
     try {
-      const opened = await openAgentSessionApi(id);
+      const opened = await openAgentSessionApi(
+        id,
+        sessionMode,
+        coding ? documentId : undefined,
+      );
       setSessionId(opened.sessionId);
       setMessages(toChatMessages(opened.sessionId, opened.messages));
       setInput("");
       setHistoryOpen(false);
+      setRenamingId(null);
       stickToBottomRef.current = true;
       requestAnimationFrame(() => scrollToBottomIfStuck());
       void refreshContextUsage();
@@ -1053,9 +1143,175 @@ export const AgentChatPanel = forwardRef<
     }
   }
 
+  function patchSessionLocal(next: AgentSessionSummary) {
+    setSessions((prev) => {
+      const list = prev.map((s) => (s.id === next.id ? { ...s, ...next } : s));
+      list.sort((a, b) => {
+        const ap = a.pinned === true;
+        const bp = b.pinned === true;
+        if (ap !== bp) return ap ? -1 : 1;
+        return a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0;
+      });
+      return list;
+    });
+  }
+
+  async function onTogglePin(s: AgentSessionSummary) {
+    if (sending) return;
+    try {
+      const next = await pinAgentSessionApi(s.id, !(s.pinned === true), sessionMode);
+      patchSessionLocal(next);
+    } catch (err) {
+      setStreamError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function startRename(s: AgentSessionSummary) {
+    setRenamingId(s.id);
+    setRenameDraft(s.title);
+  }
+
+  async function commitRename(id: string) {
+    const title = renameDraft.trim();
+    setRenamingId(null);
+    if (!title) return;
+    try {
+      const next = await renameAgentSessionApi(id, title, sessionMode);
+      patchSessionLocal(next);
+    } catch (err) {
+      setStreamError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const domainLabel = (id: string) => {
+    const d = domains.find((x) => x.domainId === id);
+    if (!d) return id === DEFAULT_DOMAIN_ID ? "default" : id;
+    return localizeDomainName ? localizeDomainName(d.domainName) : d.domainName;
+  };
+
+  const visibleSessions = useMemo(() => {
+    if (historyScope === "all" || !domainId) return sessions;
+    return sessions.filter(
+      (s) => (s.domainId || DEFAULT_DOMAIN_ID) === domainId,
+    );
+  }, [sessions, historyScope, domainId]);
+
+  const pinnedSessions = useMemo(
+    () => visibleSessions.filter((s) => s.pinned === true),
+    [visibleSessions],
+  );
+
+  /** 按工作空间分组；置顶只是顶栏多一份入口，原分组里仍保留 */
+  const domainGroups = useMemo(() => {
+    const map = new Map<string, AgentSessionSummary[]>();
+    for (const s of visibleSessions) {
+      const key = s.domainId?.trim() || DEFAULT_DOMAIN_ID;
+      const list = map.get(key);
+      if (list) list.push(s);
+      else map.set(key, [s]);
+    }
+    const current = domainId?.trim() || DEFAULT_DOMAIN_ID;
+    return Array.from(map.entries())
+      .map(([id, items]) => ({ id, items, label: domainLabel(id) }))
+      .sort((a, b) => {
+        if (a.id === current) return -1;
+        if (b.id === current) return 1;
+        return a.label.localeCompare(b.label, "zh");
+      });
+  }, [visibleSessions, domains, localizeDomainName, domainId]);
+
+  function isDomainExpanded(id: string): boolean {
+    if (domainCollapsed[id] !== undefined) return !domainCollapsed[id];
+    if (historyScope === "all") {
+      return id === (domainId?.trim() || DEFAULT_DOMAIN_ID);
+    }
+    return true;
+  }
+
+  function toggleDomainFolder(id: string) {
+    setDomainCollapsed((prev) => {
+      const expanded = isDomainExpanded(id);
+      return { ...prev, [id]: expanded };
+    });
+  }
+
   function openDocumentFromTable(documentId: string) {
     if (!documentId || !onOpenDocument) return;
     void onOpenDocument(documentId);
+  }
+
+  function renderHistoryRow(s: AgentSessionSummary) {
+    const renaming = renamingId === s.id;
+    return (
+      <div
+        className={
+          "mdocs-agent-panel-history-item" + (s.id === sessionId ? " active" : "")
+        }
+      >
+        {renaming ? (
+          <input
+            className="mdocs-agent-panel-history-rename"
+            value={renameDraft}
+            autoFocus
+            maxLength={80}
+            aria-label="重命名会话"
+            onChange={(e) => setRenameDraft(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void commitRename(s.id);
+              } else if (e.key === "Escape") {
+                setRenamingId(null);
+              }
+            }}
+            onBlur={() => void commitRename(s.id)}
+          />
+        ) : (
+          <button
+            type="button"
+            className="mdocs-agent-panel-history-open"
+            disabled={sending}
+            onClick={() => void onOpenSession(s.id)}
+          >
+            <span className="mdocs-agent-panel-history-title">{s.title}</span>
+            <span className="mdocs-agent-panel-history-time">
+              {formatSessionTime(s.updatedAt)}
+            </span>
+          </button>
+        )}
+        <div className="mdocs-agent-panel-history-actions">
+          <button
+            type="button"
+            className={
+              "mdocs-agent-panel-history-action" + (s.pinned ? " pinned" : "")
+            }
+            title={s.pinned ? "取消置顶" : "置顶"}
+            aria-label={s.pinned ? "取消置顶" : "置顶"}
+            disabled={sending}
+            onClick={(e) => {
+              e.stopPropagation();
+              void onTogglePin(s);
+            }}
+          >
+            <Pin size={14} strokeWidth={1.8} />
+          </button>
+          <button
+            type="button"
+            className="mdocs-agent-panel-history-action"
+            title="重命名"
+            aria-label="重命名"
+            disabled={sending || renaming}
+            onClick={(e) => {
+              e.stopPropagation();
+              startRename(s);
+            }}
+          >
+            <Pencil size={14} strokeWidth={1.8} />
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (!open) return null;
@@ -1073,17 +1329,28 @@ export const AgentChatPanel = forwardRef<
     <div
       ref={panelRef}
       className={
-        "mdocs-agent-panel" + (fullscreen ? " mdocs-agent-panel--fullscreen" : "")
+        "mdocs-agent-panel" +
+        (embedded
+          ? " mdocs-agent-panel--embedded"
+          : fullscreen
+            ? " mdocs-agent-panel--fullscreen"
+            : "")
       }
-      role="dialog"
-      aria-label="mdocs 智能助手"
-      aria-modal={fullscreen ? true : undefined}
-      style={fullscreen ? undefined : anchorStyle}
+      role={embedded ? undefined : "dialog"}
+      aria-label={embedded ? "对话" : "mdocs 智能助手"}
+      aria-modal={embedded ? undefined : fullscreen ? true : undefined}
+      style={embedded || fullscreen ? undefined : anchorStyle}
     >
       <header className="mdocs-agent-panel-header">
         <div className="mdocs-agent-panel-title">
-          <img src={deepseekLogoUrl} alt="" className="mdocs-agent-panel-title-logo" />
-          <span>mdocs 智能助手</span>
+          {embedded ? (
+            <span>对话</span>
+          ) : (
+            <>
+              <img src={deepseekLogoUrl} alt="" className="mdocs-agent-panel-title-logo" />
+              <span>mdocs 智能助手</span>
+            </>
+          )}
         </div>
         <div className="mdocs-agent-panel-actions">
           <button
@@ -1105,7 +1372,7 @@ export const AgentChatPanel = forwardRef<
           >
             <History size={16} strokeWidth={1.8} />
           </button>
-          {onToggleFullscreen ? (
+          {embedded || !onToggleFullscreen ? null : (
             <button
               type="button"
               className="mdocs-agent-panel-icon-btn"
@@ -1119,16 +1386,18 @@ export const AgentChatPanel = forwardRef<
                 <Maximize2 size={16} strokeWidth={1.8} />
               )}
             </button>
-          ) : null}
-          <button
-            type="button"
-            className="mdocs-agent-panel-icon-btn"
-            title="关闭"
-            aria-label="关闭"
-            onClick={requestClose}
-          >
-            <X size={16} strokeWidth={1.8} />
-          </button>
+          )}
+          {embedded ? null : (
+            <button
+              type="button"
+              className="mdocs-agent-panel-icon-btn"
+              title="关闭"
+              aria-label="关闭"
+              onClick={requestClose}
+            >
+              <X size={16} strokeWidth={1.8} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -1139,9 +1408,38 @@ export const AgentChatPanel = forwardRef<
             <button
               type="button"
               className="mdocs-agent-panel-history-back"
-              onClick={() => setHistoryOpen(false)}
+              onClick={() => {
+                setHistoryOpen(false);
+                setRenamingId(null);
+              }}
             >
               返回对话
+            </button>
+          </div>
+          <div className="mdocs-agent-panel-history-filters" role="tablist" aria-label="按工作空间筛选">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={historyScope === "current"}
+              className={
+                "mdocs-agent-panel-history-filter" +
+                (historyScope === "current" ? " active" : "")
+              }
+              onClick={() => setHistoryScope("current")}
+            >
+              当前工作空间
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={historyScope === "all"}
+              className={
+                "mdocs-agent-panel-history-filter" +
+                (historyScope === "all" ? " active" : "")
+              }
+              onClick={() => setHistoryScope("all")}
+            >
+              全部
             </button>
           </div>
           {sessionsLoading ? (
@@ -1151,27 +1449,49 @@ export const AgentChatPanel = forwardRef<
               <p className="mdocs-agent-panel-history-empty">暂无历史会话</p>
               <p className="mdocs-agent-panel-history-hint">发一条消息后会出现在这里</p>
             </>
+          ) : visibleSessions.length === 0 ? (
+            <p className="mdocs-agent-panel-history-empty">此工作空间暂无会话</p>
           ) : (
-            <ul className="mdocs-agent-panel-history-list">
-              {sessions.map((s) => (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    className={
-                      "mdocs-agent-panel-history-item" +
-                      (s.id === sessionId ? " active" : "")
-                    }
-                    disabled={sending}
-                    onClick={() => void onOpenSession(s.id)}
-                  >
-                    <span className="mdocs-agent-panel-history-title">{s.title}</span>
-                    <span className="mdocs-agent-panel-history-time">
-                      {formatSessionTime(s.updatedAt)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div className="mdocs-agent-panel-history-list">
+              {pinnedSessions.length > 0 ? (
+                <section className="mdocs-agent-panel-history-section">
+                  <div className="mdocs-agent-panel-history-section-label">Pinned</div>
+                  <ul>
+                    {pinnedSessions.map((s) => (
+                      <li key={s.id}>{renderHistoryRow(s)}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              {domainGroups.map((g) => {
+                const expanded = isDomainExpanded(g.id);
+                return (
+                  <section key={g.id} className="mdocs-agent-panel-history-folder">
+                    <button
+                      type="button"
+                      className="mdocs-agent-panel-history-folder-head"
+                      aria-expanded={expanded}
+                      onClick={() => toggleDomainFolder(g.id)}
+                    >
+                      {expanded ? (
+                        <ChevronDown size={14} strokeWidth={1.8} />
+                      ) : (
+                        <ChevronRight size={14} strokeWidth={1.8} />
+                      )}
+                      <span className="mdocs-agent-panel-history-folder-name">{g.label}</span>
+                      <span className="mdocs-agent-panel-history-folder-count">{g.items.length}</span>
+                    </button>
+                    {expanded ? (
+                      <ul>
+                        {g.items.map((s) => (
+                          <li key={s.id}>{renderHistoryRow(s)}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </section>
+                );
+              })}
+            </div>
           )}
         </div>
       ) : (
@@ -1186,7 +1506,9 @@ export const AgentChatPanel = forwardRef<
               <>
                 <p className="mdocs-agent-panel-hello">你好，我是 mdocs 智能助手</p>
                 <p className="mdocs-agent-panel-desc">
-                  我能答疑、搜文档、整理结构，也能帮你写全文；需要精细改稿请点文档顶栏「帮写」。
+                  {coding
+                    ? "描述你想写或改的内容。助手会更新右侧提案；请按段接受或拒绝后完成写回。"
+                    : "我能答疑、搜文档、整理结构，也能帮你写全文；需要精细改稿请点文档顶栏「帮写」。"}
                 </p>
                 {needsApiKey ? (
                   <AgentApiKeyInlineSetup onConfigured={refreshAgentStatus} />
@@ -1234,18 +1556,13 @@ export const AgentChatPanel = forwardRef<
                           <div className="mdocs-agent-panel-timeline">
                             {m.blocks.map((block, bi) => {
                               if (block.type === "thinking") {
-                                if (!block.text) return null;
                                 return (
-                                  <details
+                                  <AgentThinkingFold
                                     key={`${m.id}-th-${bi}`}
-                                    className="mdocs-agent-panel-think-fold"
-                                    open={
-                                      sending && m.id === messages[messages.length - 1]?.id
-                                    }
-                                  >
-                                    <summary>思考中</summary>
-                                    <pre className="mdocs-agent-panel-think-body">{block.text}</pre>
-                                  </details>
+                                    block={block}
+                                    live={sending && !block.endedAt}
+                                    now={thinkNow}
+                                  />
                                 );
                               }
                               if (block.type === "text") {
@@ -1478,7 +1795,7 @@ export const AgentChatPanel = forwardRef<
             disabled={sending || !status?.enabled}
           />
           <div className="mdocs-agent-panel-input-wrap">
-            {graphRefActive ? (
+            {coding ? null : graphRefActive ? (
               <div className="mdocs-agent-doc-ref mdocs-agent-graph-ref">
                 <Network size={15} strokeWidth={1.75} className="mdocs-agent-doc-ref-icon" aria-hidden />
                 <div className="mdocs-agent-doc-ref-text">
@@ -1521,7 +1838,13 @@ export const AgentChatPanel = forwardRef<
             <textarea
               className="mdocs-agent-panel-input"
               rows={2}
-              placeholder={status?.enabled ? "把你的问题告诉我…" : "请先配置 API Key"}
+              placeholder={
+                status?.enabled
+                  ? coding
+                    ? "说说要写什么…"
+                    : "把你的问题告诉我…"
+                  : "请先配置 API Key"
+              }
               value={input}
               disabled={sending || !status?.enabled}
               onChange={(e) => setInput(e.target.value)}

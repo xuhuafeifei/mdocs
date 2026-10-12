@@ -34,23 +34,28 @@ export function parseDisplayNameFolder(raw: string): { ok: true; display: string
 }
 
 /**
- * Validate a markdown filename the user typed (one segment, may omit `.md` before normalise elsewhere).
- * Returns trimmed display filename ending with `.md` or `.html`.
+ * Validate a document filename the user typed (one segment, may omit extension).
+ * Returns trimmed display filename ending with `.md` / `.html` / `.sheet`.
  */
-export function parseDisplayNameMarkdownFile(raw: string): { ok: true; displayFile: string } | { ok: false; message: string } {
+export function parseDisplayNameMarkdownFile(
+  raw: string,
+  defaultExt: ".md" | ".html" | ".sheet" = ".md",
+): { ok: true; displayFile: string } | { ok: false; message: string } {
   let t = raw.trim();
   if (!t) return { ok: false, message: "enter a file name" };
   if (t.includes("/") || t.includes("\\")) return { ok: false, message: "use a file name, not a path" };
   if (t === "." || t === "..") return { ok: false, message: "invalid file name" };
   const lower = t.toLowerCase();
-  if (!lower.endsWith(".md") && !lower.endsWith(".html")) t += ".md";
+  if (!lower.endsWith(".md") && !lower.endsWith(".html") && !lower.endsWith(".sheet")) {
+    t += defaultExt;
+  }
   if (t.length > DISPLAY_FILE_MAX) return { ok: false, message: "file name is too long" };
   return { ok: true, displayFile: t };
 }
 
 /**
  * Normalise every `/`-separated segment for storage (dirs + final file stem).
- * Last segment must end with `.md` or `.html`; extension casing preserved as input segment.
+ * Last segment must end with `.md` / `.html` / `.sheet`; extension casing preserved as input segment.
  */
 export function normaliseRelativePathForStorage(raw: string): string {
   const t = raw.trim().replace(/\\/g, "/");
@@ -67,9 +72,15 @@ export function normaliseRelativePathForStorage(raw: string): string {
   }
   const last = parts[parts.length - 1]!;
   const lower = last.toLowerCase();
-  const ext = lower.endsWith(".html") ? ".html" : lower.endsWith(".md") ? ".md" : null;
+  const ext = lower.endsWith(".html")
+    ? ".html"
+    : lower.endsWith(".sheet")
+      ? ".sheet"
+      : lower.endsWith(".md")
+        ? ".md"
+        : null;
   if (!ext) {
-    throw new DocPathError("document path must end with .md or .html");
+    throw new DocPathError("document path must end with .md, .html, or .sheet");
   }
   const stem = last.slice(0, -ext.length);
   const suffix = last.slice(-ext.length);

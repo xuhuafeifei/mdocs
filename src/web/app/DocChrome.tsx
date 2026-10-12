@@ -3,7 +3,7 @@
  *
  * 帮写 / 评论显隐读 file-type-policy（aiWrite / comments）。
  */
-import { useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { ChevronUp, EllipsisVertical, MessageSquare, PanelLeftOpen, RefreshCw, Star, TextAlignJustify } from "lucide-react";
 import { useI18n } from "../i18n";
 import { localizeDomainName } from "./utils";
@@ -13,6 +13,7 @@ import { FALLBACK_DOMAIN_SUMMARY } from "../services/domainsBootstrap";
 import type { DomainSummary } from "../../shared/types/domain";
 import { getPolicy } from "../../shared/file-type-policy";
 import type { FileType } from "../../shared/file-types";
+import { isPublishHotkey, publishHotkeyLabel } from "./publishHotkey";
 
 export interface DocChromeProps {
   fileType: string;
@@ -82,6 +83,42 @@ export function DocChrome(props: DocChromeProps) {
 
   const domains = props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY];
 
+  /** 桌面端发布快捷键；窄屏 reader 不绑定 */
+  const canPublishHotkey =
+    !props.readerChrome &&
+    Boolean(props.onPublish) &&
+    showDocActions &&
+    !props.busy;
+
+  useEffect(() => {
+    if (!canPublishHotkey) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!isPublishHotkey(e)) return;
+      e.preventDefault();
+      props.onPublish?.();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [canPublishHotkey, props.onPublish]);
+
+  const publishTooltip = !props.readerChrome
+    ? t("publishHotkeyHint", { hotkey: publishHotkeyLabel() })
+    : t("publish");
+
+  const saveStatus = (
+    <span className="mdocs-save-indicator" aria-live="polite">
+      <span
+        className={
+          "mdocs-save-dot " +
+          (props.busy ? "saving" : props.draftExists ? "unsaved" : "saved")
+        }
+      />
+      <span>
+        {props.busy ? t("publishing") : props.draftExists ? t("unsaved") : t("published")}
+      </span>
+    </span>
+  );
+
   const toolbarClass =
     "mdocs-editor-toolbar" +
     (props.readerChrome
@@ -142,6 +179,8 @@ export function DocChrome(props: DocChromeProps) {
           type="button"
           className="primary mdocs-reader-action-btn"
           disabled={props.busy}
+          // 避免按钮获焦后 disabled 时焦点弹回编辑器，触发光标滚入视野
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             if (!props.editing) props.onEnterEdit?.();
             props.onPublish?.();
@@ -316,26 +355,16 @@ export function DocChrome(props: DocChromeProps) {
               <span>{t("syncPull")}</span>
             </button>
           ) : null}
-          {props.editing ? (
+          {showDocActions ? (
             <>
-              {localStorage.getItem("mdocs.autoPublish") !== "true" && (
-                <span className="mdocs-save-indicator">
-                  <span
-                    className={
-                      "mdocs-save-dot " +
-                      (props.busy ? "saving" : props.draftExists ? "unsaved" : "saved")
-                    }
-                  />
-                  <span>
-                    {props.busy ? t("publishing") : props.draftExists ? t("unsaved") : t("published")}
-                  </span>
-                </span>
-              )}
+              {saveStatus}
               {props.onPublish ? (
                 <button
                   type="button"
-                  className="primary"
+                  className="primary mdocs-tooltip mdocs-tooltip-bottom"
                   disabled={props.busy}
+                  data-tooltip={publishTooltip}
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => props.onPublish?.()}
                 >
                   {props.busy ? t("publishing") : t("publish")}
@@ -353,7 +382,7 @@ export function DocChrome(props: DocChromeProps) {
               ) : null}
             </>
           ) : null}
-          {!props.editing && props.canEdit && props.onEnterEdit ? (
+          {!props.editing && props.canEdit && props.onEnterEdit && !props.actionsAlwaysVisible ? (
             <button type="button" className="primary" onClick={() => props.onEnterEdit?.()}>
               {t("edit")}
             </button>

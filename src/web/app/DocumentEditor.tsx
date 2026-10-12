@@ -365,7 +365,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
   // ---- 发布保护：拦截浏览器关闭事件，防止未保存内容丢失 ----
   usePublishGuard({ isDirty: _isDirty, draftExists });
 
-  /** pull / publish 后由 App 递增 contentRevision，将编辑器载入最新 initialContent */
+  /** 仅在文档切换或 App 显式 bump contentRevision（pull / 冲突恢复等）时重载正文；勿依赖 editorSafeContent，避免发布后无意义 setDocument 带动视口跳动 */
   useEffect(() => {
     if (!editor) return;
     try {
@@ -373,7 +373,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
     } catch {
       /* 编辑器暂不可写 */
     }
-  }, [editor, props.meta.documentId, props.contentRevision, editorSafeContent, contentType]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally omit editorSafeContent
+  }, [editor, props.meta.documentId, props.contentRevision, contentType]);
 
   /**
    * 同步编辑器语言与 mdocs 全局语言设置。
@@ -525,6 +526,10 @@ export function DocumentEditor(props: DocumentEditorProps) {
   async function publish(): Promise<void> {
     // 如果没有编辑器实例或没有编辑权限，直接返回
     if (!editor || !props.canEdit) return;
+    const scrollHost = document.querySelector(
+      ".mdocs-editor-scroll-host",
+    ) as HTMLElement | null;
+    const savedScrollTop = scrollHost?.scrollTop ?? null;
     // 标记发布中，禁用发布按钮
     setBusy(true);
     try {
@@ -539,6 +544,13 @@ export function DocumentEditor(props: DocumentEditorProps) {
     } finally {
       // 无论成功失败，都要关闭发布中状态
       setBusy(false);
+      // 发布后若编辑器被重新聚焦，抵消「光标滚入视野」带来的跳转
+      if (scrollHost && savedScrollTop != null) {
+        scrollHost.scrollTop = savedScrollTop;
+        requestAnimationFrame(() => {
+          scrollHost.scrollTop = savedScrollTop;
+        });
+      }
     }
   }
 

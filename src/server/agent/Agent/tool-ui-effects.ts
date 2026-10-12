@@ -8,6 +8,7 @@ const TREE_MUTATING_TOOLS = new Set([
   "create_document",
   "create_folder",
   "move_document",
+  "rename_document",
 ]);
 
 export type ToolExecutionEndLike = {
@@ -178,6 +179,50 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
         toolName: event.toolName,
         text: path ? `已移动「${name}」→ ${path}` : `已移动「${name}」`,
       });
+      return;
+    }
+
+    if (event.toolName === "rename_document") {
+      const name = String(details?.displayName ?? "").trim() || "文档";
+      const path = String(details?.relativePath ?? "").trim();
+      onEvent({
+        type: "tool_notice",
+        toolName: event.toolName,
+        text: path ? `已重命名「${name}」→ ${path}` : `已重命名「${name}」`,
+      });
+      return;
+    }
+
+    if (
+      event.toolName === "sheet_set_cells" ||
+      event.toolName === "sheet_upsert_row" ||
+      event.toolName === "sheet_insert_rows" ||
+      event.toolName === "sheet_overwrite" ||
+      event.toolName === "sheet_rename_column" ||
+      event.toolName === "sheet_delete_rows" ||
+      event.toolName === "sheet_delete_columns" ||
+      event.toolName === "sheet_add_sheet" ||
+      event.toolName === "sheet_rename_sheet" ||
+      event.toolName === "sheet_delete_sheet" ||
+      event.toolName === "sheet_set_cell_style" ||
+      event.toolName === "sheet_merge_cells" ||
+      event.toolName === "sheet_unmerge_cells"
+    ) {
+      const status = String(details?.status ?? "");
+      if (status === "updated") {
+        const name = String(details?.displayName ?? "").trim() || "表格";
+        onEvent({
+          type: "tool_notice",
+          toolName: event.toolName,
+          text: `已更新表格「${name}」`,
+        });
+        const documentId = String(details?.documentId ?? "");
+        const headCommitId = String(details?.headCommitId ?? "");
+        if (documentId && headCommitId) {
+          onEvent({ type: "document_overwritten", documentId, headCommitId });
+        }
+        onEvent({ type: "tree_changed", reason: event.toolName });
+      }
       return;
     }
 

@@ -1,133 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { ArrowDown, History, Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import deepseekLogoUrl from "../../assets/deepseek.svg";
-import {
-  bindCodingSessionDocumentApi,
-  createAgentSessionApi,
-  fetchAgentSessionApi,
-  fetchAgentSessionsApi,
-  fetchAgentStatusApi,
-  openAgentSessionApi,
-  streamAgentChatApi,
-  type AgentSessionSummary,
-  type AgentStatus,
-} from "../../services/endpoints";
-import { AgentSkillRefPicker } from "../AgentSkillRefPicker";
-import { AgentApiKeyInlineSetup } from "../AgentApiKeyInlineSetup";
-import {
-  SkillFormCardBlock,
-  type SkillFormCardState,
-} from "../AgentSkillFormCard";
-import {
-  AgentChoiceCardBlock,
-  type AgentChoiceCardState,
-} from "../AgentChoiceCard";
+import { bindCodingSessionDocumentApi } from "../../services/endpoints";
+import { AgentChatPanel } from "../AgentChatPanel";
 import { AiWriteMarkdownPane } from "./AiWriteMarkdownPane";
 import { computeLineHunks } from "./markdown-hunks";
 import { ConfirmDialog } from "../ConfirmDialog";
 
-/** 助手时间线：思考流 + 正文 + 工具用途说明（不展示英文 tool name） */
-type AssistantBlock =
-  | { type: "thinking"; text: string }
-  | { type: "text"; text: string }
-  | { type: "tool"; text: string }
-  | SkillFormCardState
-  | AgentChoiceCardState;
-
-type ChatLine =
-  | { id: string; role: "user"; content: string; skillNames?: string[] }
-  | { id: string; role: "assistant"; blocks: AssistantBlock[] };
-
-let seq = 0;
-function nextId(prefix: string) {
-  seq += 1;
-  return `${prefix}-${Date.now()}-${seq}`;
-}
-
-function appendTextDelta(blocks: AssistantBlock[], text: string): AssistantBlock[] {
-  const next = blocks.slice();
-  const last = next[next.length - 1];
-  if (last?.type === "text") {
-    next[next.length - 1] = { type: "text", text: last.text + text };
-  } else {
-    next.push({ type: "text", text });
-  }
-  return next;
-}
-
-function appendThinkingDelta(blocks: AssistantBlock[], text: string): AssistantBlock[] {
-  const next = blocks.slice();
-  const last = next[next.length - 1];
-  if (last?.type === "thinking") {
-    next[next.length - 1] = { type: "thinking", text: last.text + text };
-  } else {
-    next.push({ type: "thinking", text });
-  }
-  return next;
-}
-
-function appendTool(blocks: AssistantBlock[], text: string): AssistantBlock[] {
-  const trimmed = text.trim();
-  if (!trimmed) return blocks;
-  return [...blocks, { type: "tool", text: trimmed }];
-}
-
-function hasVisibleAssistant(blocks: AssistantBlock[]): boolean {
-  return blocks.some((b) =>
-    b.type === "text" || b.type === "thinking"
-      ? b.text.length > 0
-      : true,
-  );
-}
-
-function formatSessionTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const now = new Date();
-  const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-  if (sameDay) {
-    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  }
-  return d.toLocaleDateString(undefined, { month: "2-digit", day: "2-digit" });
-}
-
-/** 历史只恢复文本；tool UI 块不落盘 */
-function toChatLines(
-  sessionId: string,
-  messages: {
-    role: "user" | "assistant";
-    content: string;
-    skillNames?: string[];
-    skillIds?: string[];
-  }[],
-): ChatLine[] {
-  return messages.map((m, i) => {
-    const id = `h-${sessionId}-${i}-${m.role}`;
-    if (m.role === "user") {
-      const skillNames =
-        m.skillNames && m.skillNames.length > 0
-          ? m.skillNames
-          : m.skillIds && m.skillIds.length > 0
-            ? m.skillIds
-            : undefined;
-      return { id, role: "user", content: m.content, skillNames };
-    }
-    return {
-      id,
-      role: "assistant",
-      blocks: m.content ? [{ type: "text", text: m.content }] : [],
-    };
-  });
-}
-
 /**
- * 帮写全屏层：左 coding chat（含 session），右 MD + hunk 审阅。
- * Session 与 normal 隔离；历史只回放对话，不恢复右侧稿。
+ * 帮写全屏层：左栏复用智能助手对话面板（mode=coding），右栏 MD + hunk 审阅。
  */
 export function AiWriteWorkbench(props: {
   open: boolean;
@@ -146,15 +26,8 @@ export function AiWriteWorkbench(props: {
   const [proposedMd, setProposedMd] = useState<string | null>(null);
   const [baseMd] = useState(props.initialMarkdown);
   const [title, setTitle] = useState(props.displayName || "未命名");
-  const [messages, setMessages] = useState<ChatLine[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<AgentSessionSummary[]>([]);
-  const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [input, setInput] = useState("");
-  const [selectedSkillNames, setSelectedSkillNames] = useState<string[]>([]);
-  const [sending, setSending] = useState(false);
-  const [status, setStatus] = useState<AgentStatus | null>(null);
+  const [chatSending, setChatSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyComplete, setBusyComplete] = useState(false);
   const [confirmAsk, setConfirmAsk] = useState<{
@@ -164,301 +37,21 @@ export function AiWriteWorkbench(props: {
     danger: boolean;
   } | null>(null);
   const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const stickToBottomRef = useRef(true);
-  const [showJumpBottom, setShowJumpBottom] = useState(false);
-
-  /** 距底部超过该像素时显示「置底」 */
-  const JUMP_BOTTOM_GAP = 120;
-
-  function distanceFromBottom(el: HTMLElement): number {
-    return el.scrollHeight - el.scrollTop - el.clientHeight;
-  }
-
-  function scrollToBottom() {
-    const el = listRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-    setShowJumpBottom(false);
-  }
-
-  function scrollToBottomIfStuck() {
-    if (!stickToBottomRef.current) return;
-    scrollToBottom();
-  }
-
-  function onListScroll() {
-    const el = listRef.current;
-    if (!el) return;
-    const gap = distanceFromBottom(el);
-    stickToBottomRef.current = gap <= 48;
-    setShowJumpBottom(gap > JUMP_BOTTOM_GAP);
-  }
-
-  function jumpToBottom() {
-    stickToBottomRef.current = true;
-    scrollToBottom();
-  }
-
-  useLayoutEffect(() => {
-    if (!props.open) return;
-    scrollToBottomIfStuck();
-    const el = listRef.current;
-    if (!el) return;
-    setShowJumpBottom(distanceFromBottom(el) > JUMP_BOTTOM_GAP);
-  }, [messages, props.open]);
-
-  async function refreshSessions() {
-    setSessionsLoading(true);
-    try {
-      const list = await fetchAgentSessionsApi("coding", props.documentId);
-      setSessions(list.sessions);
-      if (!sessionId) setSessionId(list.lastOpenedSessionId);
-    } catch {
-      /* ignore */
-    } finally {
-      setSessionsLoading(false);
-    }
-  }
-
-  async function refreshAgentStatus() {
-    try {
-      const s = await fetchAgentStatusApi();
-      setStatus(s);
-    } catch {
-      setStatus({ enabled: false, skillsReady: false, model: null });
-    }
-  }
 
   useEffect(() => {
-    if (!props.open) {
-      setHistoryOpen(false);
-      abortRef.current?.abort();
-      return;
-    }
+    if (!props.open) return;
     setCurrentMd(props.initialMarkdown);
     setProposedMd(null);
     setTitle(props.displayName || "未命名");
-    setInput("");
     setError(null);
-    setHistoryOpen(false);
-    let cancelled = false;
-    void (async () => {
-      try {
-        const s = await fetchAgentStatusApi();
-        if (!cancelled) setStatus(s);
-      } catch {
-        if (!cancelled) setStatus({ enabled: false, skillsReady: false, model: null });
-      }
-      try {
-        const sess = await fetchAgentSessionApi("coding", props.documentId);
-        if (cancelled) return;
-        setSessionId(sess.sessionId);
-        setMessages(toChatLines(sess.sessionId, sess.messages));
-      } catch {
-        if (!cancelled) {
-          setSessionId(null);
-          setMessages([]);
-        }
-      }
-      void refreshSessions();
-    })();
-    return () => {
-      cancelled = true;
-    };
   }, [props.open, props.initialMarkdown, props.displayName, props.documentId]);
 
-  useEffect(() => {
-    return () => abortRef.current?.abort();
-  }, []);
-
-  useEffect(() => {
-    if (props.open && historyOpen) void refreshSessions();
-  }, [historyOpen, props.open, props.documentId]);
-
   if (!props.open) return null;
-
-  const needsApiKey = status?.reason === "missing_api_key";
 
   const pendingHunks =
     proposedMd != null && proposedMd !== currentMd
       ? computeLineHunks(currentMd, proposedMd)
       : [];
-
-  async function onNewSession() {
-    if (sending) return;
-    abortRef.current?.abort();
-    setError(null);
-    setHistoryOpen(false);
-    setSending(false);
-    try {
-      const created = await createAgentSessionApi("coding", props.documentId);
-      setSessionId(created.sessionId);
-      setMessages([]);
-      setInput("");
-      void refreshSessions();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function onOpenSession(id: string) {
-    if (sending) return;
-    if (id === sessionId) {
-      setHistoryOpen(false);
-      return;
-    }
-    abortRef.current?.abort();
-    setError(null);
-    try {
-      const opened = await openAgentSessionApi(id, "coding", props.documentId);
-      setSessionId(opened.sessionId);
-      setMessages(toChatLines(opened.sessionId, opened.messages));
-      setInput("");
-      setHistoryOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function send() {
-    const text = input.trim();
-    if (!text || sending) return;
-    if (!status?.enabled) {
-      setError("请先配置 API Key");
-      return;
-    }
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
-    const userId = nextId("u");
-    const asstId = nextId("a");
-    stickToBottomRef.current = true;
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: userId,
-        role: "user",
-        content: text,
-        skillNames: selectedSkillNames.length > 0 ? [...selectedSkillNames] : undefined,
-      },
-      { id: asstId, role: "assistant", blocks: [] },
-    ]);
-    setInput("");
-    setSending(true);
-    setError(null);
-    requestAnimationFrame(() => {
-      scrollToBottom();
-      requestAnimationFrame(scrollToBottom);
-    });
-
-    const patchAssistant = (fn: (blocks: AssistantBlock[]) => AssistantBlock[]) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === asstId && m.role === "assistant" ? { ...m, blocks: fn(m.blocks) } : m,
-        ),
-      );
-    };
-
-    try {
-      let hadError = false;
-      await streamAgentChatApi(text, {
-        mode: "coding",
-        skillNames: selectedSkillNames.length > 0 ? selectedSkillNames : undefined,
-        documentId: props.documentId,
-        workingMarkdown: currentMd,
-        baseMarkdown: baseMd,
-        signal: ac.signal,
-        onEvent: (event) => {
-          if (event.type === "text_delta") {
-            patchAssistant((blocks) => appendTextDelta(blocks, event.text));
-          } else if (event.type === "thinking_delta") {
-            patchAssistant((blocks) => appendThinkingDelta(blocks, event.text));
-          } else if (event.type === "markdown_set") {
-            setProposedMd(event.markdown);
-          } else if (event.type === "tool_notice") {
-            patchAssistant((blocks) => appendTool(blocks, event.text));
-          } else if (event.type === "document_table") {
-            patchAssistant((blocks) => appendTool(blocks, event.title));
-          } else if (event.type === "document_card") {
-            patchAssistant((blocks) =>
-              appendTool(blocks, `读取文档「${event.title}」`),
-            );
-          } else if (event.type === "sources") {
-            if (event.items.length > 0) {
-              patchAssistant((blocks) =>
-                appendTool(blocks, `已阅读 ${event.items.length} 个手册页面`),
-              );
-            }
-          } else if (event.type === "skill_form_card") {
-            patchAssistant((blocks) => [
-              ...blocks,
-              {
-                type: "skill_form_card" as const,
-                requestId: event.requestId,
-                mode: event.mode,
-                title: event.title,
-                currentName: event.currentName,
-                initialName: event.initialName,
-                initialDescription: event.initialDescription,
-                initialBody: event.initialBody,
-                expiresAt: event.expiresAt,
-                status: "open" as const,
-              },
-            ]);
-          } else if (event.type === "choice_card") {
-            stickToBottomRef.current = true;
-            patchAssistant((blocks) => [
-              ...blocks,
-              {
-                type: "choice_card" as const,
-                requestId: event.requestId,
-                title: event.title,
-                options: event.options,
-                expiresAt: event.expiresAt,
-                status: "open" as const,
-              },
-            ]);
-          } else if (event.type === "choice_expired") {
-            patchAssistant((blocks) =>
-              blocks.map((b) =>
-                b.type === "choice_card" &&
-                b.requestId === event.requestId &&
-                b.status === "open"
-                  ? { ...b, status: "expired" as const }
-                  : b,
-              ),
-            );
-          } else if (event.type === "skill_form_expired") {
-            patchAssistant((blocks) =>
-              blocks.map((b) =>
-                b.type === "skill_form_card" &&
-                b.requestId === event.requestId &&
-                b.status === "open"
-                  ? { ...b, status: "expired" as const }
-                  : b,
-              ),
-            );
-          } else if (event.type === "error") {
-            hadError = true;
-            setError(event.message);
-          }
-        },
-      });
-      if (!ac.signal.aborted && !hadError) {
-        setSelectedSkillNames([]);
-      }
-      void refreshSessions();
-    } catch (err) {
-      if (!ac.signal.aborted) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    } finally {
-      if (abortRef.current === ac) abortRef.current = null;
-      setSending(false);
-    }
-  }
 
   function askConfirm(opts: {
     message: string;
@@ -535,7 +128,6 @@ export function AiWriteWorkbench(props: {
       });
       if (!ok) return;
     }
-    abortRef.current?.abort();
     props.onClose();
   }
 
@@ -566,268 +158,26 @@ export function AiWriteWorkbench(props: {
           </button>
         </div>
       </header>
+      {error ? <p className="mdocs-ai-write-error">{error}</p> : null}
       <div className="mdocs-ai-write-body">
         <section className="mdocs-ai-write-chat">
-          <div className="mdocs-ai-write-chat-toolbar">
-            <span className="mdocs-ai-write-chat-toolbar-label">对话</span>
-            <div className="mdocs-ai-write-chat-toolbar-actions">
-              <button
-                type="button"
-                className="mdocs-agent-panel-icon-btn"
-                title="新会话"
-                aria-label="新会话"
-                disabled={sending}
-                onClick={() => void onNewSession()}
-              >
-                <Plus size={16} strokeWidth={1.8} />
-              </button>
-              <button
-                type="button"
-                className={
-                  "mdocs-agent-panel-icon-btn" + (historyOpen ? " active" : "")
-                }
-                title="历史会话"
-                aria-label="历史会话"
-                onClick={() => setHistoryOpen((v) => !v)}
-              >
-                <History size={16} strokeWidth={1.8} />
-              </button>
-            </div>
-          </div>
-
-          {historyOpen ? (
-            <div className="mdocs-ai-write-history mdocs-agent-panel-history">
-              <div className="mdocs-agent-panel-history-head">
-                <span>历史会话</span>
-                <button
-                  type="button"
-                  className="mdocs-agent-panel-history-back"
-                  onClick={() => setHistoryOpen(false)}
-                >
-                  返回对话
-                </button>
-              </div>
-              {sessionsLoading ? (
-                <p className="mdocs-agent-panel-history-hint">加载中…</p>
-              ) : sessions.length === 0 ? (
-                <>
-                  <p className="mdocs-agent-panel-history-empty">暂无历史会话</p>
-                  <p className="mdocs-agent-panel-history-hint">发一条消息后会出现在这里</p>
-                </>
-              ) : (
-                <ul className="mdocs-agent-panel-history-list">
-                  {sessions.map((s) => (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        className={
-                          "mdocs-agent-panel-history-item" +
-                          (s.id === sessionId ? " active" : "")
-                        }
-                        disabled={sending}
-                        onClick={() => void onOpenSession(s.id)}
-                      >
-                        <span className="mdocs-agent-panel-history-title">{s.title}</span>
-                        <span className="mdocs-agent-panel-history-time">
-                          {formatSessionTime(s.updatedAt)}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ) : (
-            <>
-              <div className="mdocs-ai-write-chat-scroll-wrap">
-              <div
-                className="mdocs-ai-write-chat-messages"
-                ref={listRef}
-                onScroll={onListScroll}
-              >
-                {messages.length === 0 ? (
-                  <>
-                    <p className="mdocs-ai-write-hint">
-                      描述你想写或改的内容。助手可读取右侧当前稿与进场快照，再更新提案；请按段接受或拒绝后完成写回。
-                    </p>
-                    {needsApiKey ? (
-                      <AgentApiKeyInlineSetup onConfigured={refreshAgentStatus} />
-                    ) : null}
-                  </>
-                ) : (
-                  messages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={
-                        "mdocs-ai-write-msg" +
-                        (m.role === "user" ? " mdocs-ai-write-msg-user" : "")
-                      }
-                    >
-                      {m.role === "user" ? (
-                        <>
-                          {m.skillNames && m.skillNames.length > 0 ? (
-                            <div className="mdocs-agent-msg-skills">Skill ×{m.skillNames.length}</div>
-                          ) : null}
-                          {m.content}
-                        </>
-                      ) : hasVisibleAssistant(m.blocks) ? (
-                        <div className="mdocs-ai-write-timeline">
-                          {m.blocks.map((block, bi) =>
-                            block.type === "thinking" ? (
-                              block.text ? (
-                                <details
-                                  key={`${m.id}-think-${bi}`}
-                                  className="mdocs-ai-write-thinking"
-                                  open={sending}
-                                >
-                                  <summary>思考中</summary>
-                                  <pre className="mdocs-ai-write-thinking-body">{block.text}</pre>
-                                </details>
-                              ) : null
-                            ) : block.type === "tool" ? (
-                              <p
-                                key={`${m.id}-tool-${bi}`}
-                                className="mdocs-agent-panel-tool-notice"
-                              >
-                                {block.text}
-                              </p>
-                            ) : block.type === "skill_form_card" ? (
-                              <SkillFormCardBlock
-                                key={`${m.id}-sf-${bi}`}
-                                block={block}
-                                onResolved={(requestId, status, submittedName) => {
-                                  setMessages((prev) =>
-                                    prev.map((msg) => {
-                                      if (msg.id !== m.id || msg.role !== "assistant") return msg;
-                                      return {
-                                        ...msg,
-                                        blocks: msg.blocks.map((b) =>
-                                          b.type === "skill_form_card" &&
-                                          b.requestId === requestId
-                                            ? {
-                                                ...b,
-                                                status,
-                                                submittedName:
-                                                  status === "submitted"
-                                                    ? submittedName
-                                                    : b.submittedName,
-                                              }
-                                            : b,
-                                        ),
-                                      };
-                                    }),
-                                  );
-                                }}
-                              />
-                            ) : block.type === "choice_card" ? (
-                              <AgentChoiceCardBlock
-                                key={`${m.id}-ch-${bi}`}
-                                block={block}
-                                onResolved={(requestId, choice, status) => {
-                                  setMessages((prev) =>
-                                    prev.map((msg) => {
-                                      if (msg.id !== m.id || msg.role !== "assistant") return msg;
-                                      return {
-                                        ...msg,
-                                        blocks: msg.blocks.map((b) =>
-                                          b.type === "choice_card" &&
-                                          b.requestId === requestId
-                                            ? {
-                                                ...b,
-                                                status,
-                                                selected:
-                                                  status === "selected" ? choice : b.selected,
-                                              }
-                                            : b,
-                                        ),
-                                      };
-                                    }),
-                                  );
-                                }}
-                              />
-                            ) : block.type === "text" && block.text ? (
-                              <div
-                                key={`${m.id}-text-${bi}`}
-                                className="mdocs-agent-panel-md"
-                              >
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                  {block.text}
-                                </ReactMarkdown>
-                              </div>
-                            ) : null,
-                          )}
-                        </div>
-                      ) : sending ? (
-                        <span className="mdocs-agent-panel-thinking" aria-label="思考中">
-                          <span />
-                          <span />
-                          <span />
-                        </span>
-                      ) : null}
-                    </div>
-                  ))
-                )}
-              </div>
-              {showJumpBottom ? (
-                <button
-                  type="button"
-                  className="mdocs-chat-jump-bottom"
-                  onClick={jumpToBottom}
-                  title="回到底部"
-                  aria-label="回到底部"
-                >
-                  <ArrowDown size={14} strokeWidth={2} aria-hidden />
-                  <span>置底</span>
-                </button>
-              ) : null}
-              </div>
-              {error ? <p className="mdocs-ai-write-error">{error}</p> : null}
-              {needsApiKey && messages.length > 0 ? (
-                <AgentApiKeyInlineSetup onConfigured={refreshAgentStatus} />
-              ) : null}
-              <div className="mdocs-ai-write-input-row">
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-                  <AgentSkillRefPicker
-                    selectedNames={selectedSkillNames}
-                    onChange={setSelectedSkillNames}
-                    disabled={sending || !status?.enabled}
-                  />
-                  <textarea
-                    rows={2}
-                    value={input}
-                    disabled={sending || !status?.enabled}
-                    placeholder={status?.enabled ? "说说要写什么…" : "请先配置 API Key"}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        void send();
-                      }
-                    }}
-                  />
-                </div>
-                <button
-                  type="button"
-                  className={sending ? "mdocs-ai-write-stop" : undefined}
-                  disabled={sending ? false : !status?.enabled}
-                  onClick={() => {
-                    if (sending) {
-                      abortRef.current?.abort();
-                      return;
-                    }
-                    void send();
-                  }}
-                >
-                  {sending ? "停止" : "发送"}
-                </button>
-              </div>
-            </>
-          )}
+          <AgentChatPanel
+            embedded
+            open
+            mode="coding"
+            documentId={props.documentId}
+            workingMarkdown={currentMd}
+            baseMarkdown={baseMd}
+            onMarkdownSet={setProposedMd}
+            onSendingChange={setChatSending}
+            onSessionId={setSessionId}
+            onClose={props.onClose}
+          />
         </section>
         <AiWriteMarkdownPane
           currentMd={currentMd}
           proposedMd={proposedMd}
-          sending={sending}
+          sending={chatSending}
           onCurrentChange={setCurrentMd}
           onProposedChange={setProposedMd}
         />

@@ -95,7 +95,7 @@ export function overwriteDocumentTool({
         const plain = doc.content ?? "";
         const fileType = doc.fileType || FILE_TYPE.DOCUMENT;
 
-        if (!canOverwrite(fileType as any)) {
+        if (!canOverwrite(fileType as any) || fileType === FILE_TYPE.SHEET) {
           return asToolResult({
             status: "rejected",
             documentId,

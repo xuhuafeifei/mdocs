@@ -19,6 +19,10 @@ import { FOLDER_DESC_FILENAME, folderDescPathForFolder } from "../../../shared/f
 import { createDocumentApi, createFolderApi } from "../../services/endpoints";
 import { STORAGE_ERROR_MESSAGE_MAP } from "../../i18n/errors";
 import { translateError, parentDirForCreates } from "../utils";
+import {
+  createEmptySheetDocument,
+  serializeSheetDocument,
+} from "../../../shared/sheetDocument";
 
 /**
  * 构建一个最简的 Lexical JSON 文档，只包含一个 h1 标题节点。
@@ -48,7 +52,7 @@ function buildLexicalJsonHeading(title: string): string {
 }
 
 export type CreateModalState =
-  | { kind: "document"; parentMode: "selection" | "fixed"; parentPath: string; draft: string; fileType: "md" | "html" }
+  | { kind: "document"; parentMode: "selection" | "fixed"; parentPath: string; draft: string; fileType: "md" | "html" | "sheet" }
   | { kind: "folder"; parentMode: "selection" | "fixed"; parentPath: string; draft: string };
 
 /**
@@ -143,18 +147,26 @@ export function useCreateModal(opts: UseCreateModalOpts) {
   /**
    * 打开「新建文档」模态框。若传入 explicitParentPath，则固定父路径不可更改。
    */
-  function openNewDocumentModal(explicitParentPath?: string, fileType: "md" | "html" = "md"): void {
+  function openNewDocumentModal(
+    explicitParentPath?: string,
+    fileType: "md" | "html" | "sheet" = "md",
+  ): void {
     // 判断是否从上下文菜单传入的固定父路径
     const fixed = explicitParentPath !== undefined;
     // 清空之前的错误提示
     setCreateModalError(null);
+    const draft =
+      fileType === "html"
+        ? "untitled.html"
+        : fileType === "sheet"
+          ? "untitled.sheet"
+          : "untitled.md";
     // 设置模态框状态
     setCreateModal({
       kind: "document",
       parentMode: fixed ? "fixed" : "selection",
       parentPath: fixed ? explicitParentPath! : "",
-      // 默认文件名按类型区分
-      draft: fileType === "html" ? "untitled.html" : "untitled.md",
+      draft,
       fileType,
     });
   }
@@ -197,15 +209,19 @@ export function useCreateModal(opts: UseCreateModalOpts) {
       // ========== 新建文档逻辑 ==========
       if (createModal.kind === "document") {
         const fileType = createModal.fileType;
-        // html 文件：直接用原文
-        if (fileType === "html") {
-          const fileParsed = parseDisplayNameMarkdownFile(createModal.draft);
+        // html / sheet：原文落盘（非 Lexical）
+        if (fileType === "html" || fileType === "sheet") {
+          const defaultExt = fileType === "html" ? ".html" : ".sheet";
+          const fileParsed = parseDisplayNameMarkdownFile(createModal.draft, defaultExt);
           if (!fileParsed.ok) {
             setCreateModalError(translateStorageError(t, fileParsed.message));
             return;
           }
           const displayFile = fileParsed.displayFile;
-          const displayTitle = displayFile.replace(/\.html$/i, "").replace(/\.md$/i, "");
+          const displayTitle = displayFile
+            .replace(/\.html$/i, "")
+            .replace(/\.sheet$/i, "")
+            .replace(/\.md$/i, "");
           let relativePath: string;
           try {
             relativePath = normaliseRelativePathForStorage(joinDocPath(effectiveParent, displayFile));
@@ -218,13 +234,17 @@ export function useCreateModal(opts: UseCreateModalOpts) {
             return;
           }
           const parentId = effectiveParent ? findFolderIdByPath(tree, effectiveParent) ?? undefined : undefined;
+          const content =
+            fileType === "sheet"
+              ? serializeSheetDocument(createEmptySheetDocument())
+              : "";
           const doc = await createDocumentApi({
             fileName: displayFile,
             displayName: displayTitle,
-            content: "",
+            content,
             domainId: currentDomainId,
             parentId,
-            fileType: "html",
+            fileType,
           });
           await refreshTree();
           onDocCreated(doc);

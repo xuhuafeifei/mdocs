@@ -109,10 +109,14 @@ export function buildDocumentsRouter(): Router {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "fileName and content are required" } });
       return;
     }
-    // 校验 fileType：仅允许用户创建 md 和 html
+    // 校验 fileType：仅允许用户创建 md / html / sheet
     const rawFileType = body.fileType;
     const fileType =
-      rawFileType === FILE_TYPE.HTML ? FILE_TYPE.HTML : FILE_TYPE.DOCUMENT;
+      rawFileType === FILE_TYPE.HTML
+        ? FILE_TYPE.HTML
+        : rawFileType === FILE_TYPE.SHEET
+          ? FILE_TYPE.SHEET
+          : FILE_TYPE.DOCUMENT;
     try {
       // 调用服务层创建文档，把请求参数映射为服务参数
       const doc = createDocument({

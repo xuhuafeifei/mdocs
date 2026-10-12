@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import compression from "compression";
-import express, { type Application } from "express";
+import express, { type Application, type Response } from "express";
 import cookieParser from "cookie-parser";
 import { getConfig } from "./config/index.js";
 import { getDb } from "./db/connection.js";
@@ -97,21 +97,33 @@ export function buildApp(): Application {
   if (fs.existsSync(cfg.webDistDir)) {
     app.use(compression());
 
+    // 部分环境 mime 库/反代会把 .js 标成 octet-stream，浏览器拒绝 module script
+    const staticOpts = {
+      setHeaders: setWebAssetHeaders,
+    };
+
     const assetsDir = path.join(cfg.webDistDir, "assets");
     if (fs.existsSync(assetsDir)) {
       app.use(
         "/assets",
         express.static(assetsDir, {
+          ...staticOpts,
           maxAge: "1y",
           immutable: true,
         }),
       );
     }
 
-    app.use(express.static(cfg.webDistDir, { maxAge: 0, index: false }));
-    app.get("*", (_req, res) => {
+    app.use(express.static(cfg.webDistDir, { ...staticOpts, maxAge: 0, index: false }));
+    app.get("*", (req, res) => {
+      // 静态资源路径勿回退成 index.html（否则会触发 MIME / 模块加载错误）
+      if (looksLikeStaticAsset(req.path)) {
+        res.status(404).end();
+        return;
+      }
       const indexHtml = path.join(cfg.webDistDir, "index.html");
       if (fs.existsSync(indexHtml)) {
+        res.type("html");
         res.sendFile(indexHtml);
       } else {
         res.status(404).end();
@@ -130,4 +142,37 @@ function ensureRuntimeDirs(): void {
   for (const dir of [cfg.dataDir, cfg.filesDir, cfg.docsDir, cfg.assetsDir, cfg.logsDir]) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
+}
+
+const WEB_ASSET_CONTENT_TYPE: Record<string, string> = {
+  ".js": "application/javascript; charset=UTF-8",
+  ".mjs": "application/javascript; charset=UTF-8",
+  ".css": "text/css; charset=UTF-8",
+  ".wasm": "application/wasm",
+  ".svg": "image/svg+xml",
+  ".json": "application/json; charset=UTF-8",
+  ".map": "application/json; charset=UTF-8",
+  ".html": "text/html; charset=UTF-8",
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
+  ".ttf": "font/ttf",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+};
+
+function setWebAssetHeaders(res: Response, filePath: string): void {
+  const ext = path.extname(filePath).toLowerCase();
+  const ct = WEB_ASSET_CONTENT_TYPE[ext];
+  if (ct) res.setHeader("Content-Type", ct);
+}
+
+function looksLikeStaticAsset(urlPath: string): boolean {
+  return Object.prototype.hasOwnProperty.call(
+    WEB_ASSET_CONTENT_TYPE,
+    path.extname(urlPath).toLowerCase(),
+  );
 }

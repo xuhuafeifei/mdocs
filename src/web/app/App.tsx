@@ -9,7 +9,7 @@
  * 6. 全局消息提示与冲突处理
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Search, Star } from "lucide-react";
+import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Search, Star, Table } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -54,6 +54,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { DocSearchOverlay } from "./DocSearchOverlay";
 import { useCreateModal } from "./hooks/useCreateModal";
 import { useIsNarrowViewport } from "./hooks/useIsNarrowViewport";
+import { useEdgeSwipeOpen } from "./hooks/useEdgeSwipeOpen";
 import { ConflictModal } from "./ConflictModal";
 import { CommentsPanel } from "./CommentsPanel";
 import {
@@ -92,6 +93,9 @@ const DocumentEditor = lazy(() =>
 );
 const HtmlEditor = lazy(() =>
   import("./HtmlEditor").then((m) => ({ default: m.HtmlEditor })),
+);
+const SheetEditor = lazy(() =>
+  import("./SheetEditor").then((m) => ({ default: m.SheetEditor })),
 );
 const SettingsPage = lazy(() =>
   import("./SettingsPage").then((m) => ({ default: m.SettingsPage })),
@@ -330,6 +334,11 @@ export function App() {
   // ---- 当前视图：docs（文档）或 settings（设置） ----
   const [view, setView] = useState<"docs" | "settings">("docs");
 
+  useEdgeSwipeOpen(
+    isNarrow && view === "docs" && !mobileNavOpen,
+    () => setMobileNavOpen(true),
+  );
+
   // ---- 上手助手浮层 ----
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const [agentPanelFullscreen, setAgentPanelFullscreen] = useState(false);
@@ -373,6 +382,7 @@ export function App() {
 
   async function openAiWriteForCurrentDoc(): Promise<void> {
     if (!activeDocMeta || !editorContent) return;
+    if (activeDocMeta.fileType === FILE_TYPE.SHEET) return;
     await saveBeforeNavRef.current?.();
     const isHtml = activeDocMeta.fileType === FILE_TYPE.HTML;
     let markdown = "";
@@ -429,6 +439,7 @@ export function App() {
     try {
       const doc = await getDocumentApi(documentId);
       displayName = doc.displayName?.trim() || displayName;
+      if (doc.fileType === FILE_TYPE.SHEET) return;
       fileType = doc.fileType === FILE_TYPE.HTML ? FILE_TYPE.HTML : FILE_TYPE.DOCUMENT;
       if (fileType === FILE_TYPE.HTML) {
         markdown = htmlToAiWriteSeed(doc.content);
@@ -1385,6 +1396,10 @@ export function App() {
                     <Code size={14} strokeWidth={1.5} />
                     HTML
                   </button>
+                  <button type="button" className="mdocs-create-dropdown-item" onClick={() => { setCreateDropdownOpen(false); openNewDocumentModal(undefined, "sheet"); }}>
+                    <Table size={14} strokeWidth={1.5} />
+                    {t("sheetDocument")}
+                  </button>
                 </div>
               )}
               <button
@@ -1542,7 +1557,7 @@ export function App() {
                 }}
               />
             ) : activeDocMeta && editorContent && editorContent.documentId === activeDocMeta.documentId ? (
-              activeDocMeta.fileType === "html" ? (
+              activeDocMeta.fileType === "html" || activeDocMeta.fileType === "sheet" ? (
                 <div className="mdocs-editor-with-comments">
                   <div className="mdocs-editor-container">
                     <Suspense
@@ -1552,47 +1567,89 @@ export function App() {
                         </div>
                       }
                     >
-                      <HtmlEditor
-                        key={activeDocMeta.documentId}
-                        meta={activeDocMeta}
-                        initialContent={editorContent.content}
-                        initialDisplayName={editorContent.displayName}
-                        contentRevision={contentRevision}
-                        canEdit={Boolean(visitor && (activeDocMeta.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDocMeta.permission) || activeDocMeta.invitedEdit === true))}
-                        domains={domains}
-                        currentDomainId={currentDomainId}
-                        onDomainChange={(domainId) => {
-                          guardNavigate(() => {
-                            localStorage.setItem("mdocs.currentDomainId", domainId);
-                            setCurrentDomainId(domainId);
-                            setActiveDocMeta(null);
-                            setEditorContent(null);
-                            setSelectedCreateParentPath("");
-                            navigate("/");
-                            void refreshTree(domainId);
-                          });
-                        }}
-                        onDomainsChange={setDomains}
-                        onContentChange={(c) => {
-                          setEditorContent((prev) => (prev ? { ...prev, content: c } : prev));
-                        }}
-                        onDraftExistsChange={setEditorDraftExists}
-                        hasLocalDraft={editorDraftExists}
-                        onPublish={publishDocument}
-                        syncBehind={syncBehind}
-                        onSyncClick={() => void handleSyncClick()}
-                        canManageInvites={Boolean(visitor && visitor.visitorId === activeDocMeta.ownerVisitorId)}
-                        onDelete={async () => {
-                          requestDeleteDocument(activeDocMeta.documentId, activeDocMeta.relativePath);
-                        }}
-                        onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
-                        commentPanelOpen={commentPanelOpen}
-                        commentCount={commentCount}
-                        onAiWrite={isNarrow ? undefined : () => void openAiWriteForCurrentDoc()}
-                        onShowToast={setMessage}
-                        readerChrome={isNarrow}
-                        onOpenMobileNav={() => setMobileNavOpen(true)}
-                      />
+                      {activeDocMeta.fileType === "sheet" ? (
+                        <SheetEditor
+                          key={activeDocMeta.documentId}
+                          meta={activeDocMeta}
+                          initialContent={editorContent.content}
+                          initialDisplayName={editorContent.displayName}
+                          contentRevision={contentRevision}
+                          canEdit={Boolean(visitor && (activeDocMeta.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDocMeta.permission) || activeDocMeta.invitedEdit === true))}
+                          domains={domains}
+                          currentDomainId={currentDomainId}
+                          onDomainChange={(domainId) => {
+                            guardNavigate(() => {
+                              localStorage.setItem("mdocs.currentDomainId", domainId);
+                              setCurrentDomainId(domainId);
+                              setActiveDocMeta(null);
+                              setEditorContent(null);
+                              setSelectedCreateParentPath("");
+                              navigate("/");
+                              void refreshTree(domainId);
+                            });
+                          }}
+                          onDomainsChange={setDomains}
+                          onContentChange={(c) => {
+                            setEditorContent((prev) => (prev ? { ...prev, content: c } : prev));
+                          }}
+                          onDraftExistsChange={setEditorDraftExists}
+                          hasLocalDraft={editorDraftExists}
+                          onPublish={publishDocument}
+                          syncBehind={syncBehind}
+                          onSyncClick={() => void handleSyncClick()}
+                          onDelete={async () => {
+                            requestDeleteDocument(activeDocMeta.documentId, activeDocMeta.relativePath);
+                          }}
+                          onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
+                          commentPanelOpen={commentPanelOpen}
+                          commentCount={commentCount}
+                          onShowToast={setMessage}
+                          readerChrome={isNarrow}
+                          onOpenMobileNav={() => setMobileNavOpen(true)}
+                        />
+                      ) : (
+                        <HtmlEditor
+                          key={activeDocMeta.documentId}
+                          meta={activeDocMeta}
+                          initialContent={editorContent.content}
+                          initialDisplayName={editorContent.displayName}
+                          contentRevision={contentRevision}
+                          canEdit={Boolean(visitor && (activeDocMeta.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDocMeta.permission) || activeDocMeta.invitedEdit === true))}
+                          domains={domains}
+                          currentDomainId={currentDomainId}
+                          onDomainChange={(domainId) => {
+                            guardNavigate(() => {
+                              localStorage.setItem("mdocs.currentDomainId", domainId);
+                              setCurrentDomainId(domainId);
+                              setActiveDocMeta(null);
+                              setEditorContent(null);
+                              setSelectedCreateParentPath("");
+                              navigate("/");
+                              void refreshTree(domainId);
+                            });
+                          }}
+                          onDomainsChange={setDomains}
+                          onContentChange={(c) => {
+                            setEditorContent((prev) => (prev ? { ...prev, content: c } : prev));
+                          }}
+                          onDraftExistsChange={setEditorDraftExists}
+                          hasLocalDraft={editorDraftExists}
+                          onPublish={publishDocument}
+                          syncBehind={syncBehind}
+                          onSyncClick={() => void handleSyncClick()}
+                          canManageInvites={Boolean(visitor && visitor.visitorId === activeDocMeta.ownerVisitorId)}
+                          onDelete={async () => {
+                            requestDeleteDocument(activeDocMeta.documentId, activeDocMeta.relativePath);
+                          }}
+                          onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
+                          commentPanelOpen={commentPanelOpen}
+                          commentCount={commentCount}
+                          onAiWrite={isNarrow ? undefined : () => void openAiWriteForCurrentDoc()}
+                          onShowToast={setMessage}
+                          readerChrome={isNarrow}
+                          onOpenMobileNav={() => setMobileNavOpen(true)}
+                        />
+                      )}
                     </Suspense>
                   </div>
                   {commentPanelOpen && (
@@ -2156,6 +2213,8 @@ export function App() {
                   isNarrow ? undefined : () => setAgentPanelFullscreen((v) => !v)
                 }
                 domainId={currentDomainId || null}
+                domains={domains}
+                localizeDomainName={(name) => localizeDomainName(name, lang, t)}
                 documentId={activeDocMeta?.documentId ?? null}
                 documentTitle={activeDocMeta?.displayName ?? null}
                 documentPath={activeDocMeta?.relativePath ?? null}

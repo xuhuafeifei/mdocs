@@ -7,13 +7,45 @@ import {
   chmodPackageBins,
   MDOCS_UPDATE_PACKAGE,
   MDOCS_UPDATE_REGISTRY,
+  MDOCS_UPDATE_SOURCES,
   resolveInstalledPackageRoot,
+  resolveUpdateRegistry,
 } from "./self-update.js";
 
 describe("self-update constants", () => {
-  it("hardcodes npmmirror and package name", () => {
+  it("defaults taobao / npmmirror and package name", () => {
     expect(MDOCS_UPDATE_REGISTRY).toBe("https://registry.npmmirror.com");
+    expect(MDOCS_UPDATE_SOURCES.taobao).toBe(MDOCS_UPDATE_REGISTRY);
+    expect(MDOCS_UPDATE_SOURCES.npm).toBe("https://registry.npmjs.org");
     expect(MDOCS_UPDATE_PACKAGE).toBe("@fgbg/mdocs");
+  });
+});
+
+describe("resolveUpdateRegistry", () => {
+  it("defaults to taobao", () => {
+    expect(resolveUpdateRegistry()).toBe(MDOCS_UPDATE_SOURCES.taobao);
+    expect(resolveUpdateRegistry({})).toBe(MDOCS_UPDATE_SOURCES.taobao);
+  });
+
+  it("maps --source aliases", () => {
+    expect(resolveUpdateRegistry({ source: "npm" })).toBe(
+      MDOCS_UPDATE_SOURCES.npm,
+    );
+    expect(resolveUpdateRegistry({ source: "official" })).toBe(
+      MDOCS_UPDATE_SOURCES.npm,
+    );
+    expect(resolveUpdateRegistry({ source: "npmmirror" })).toBe(
+      MDOCS_UPDATE_SOURCES.taobao,
+    );
+  });
+
+  it("prefers --registry over --source", () => {
+    expect(
+      resolveUpdateRegistry({
+        source: "npm",
+        registry: "https://example.com/npm/",
+      }),
+    ).toBe("https://example.com/npm");
   });
 });
 

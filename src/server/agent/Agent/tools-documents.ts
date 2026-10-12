@@ -4,7 +4,13 @@ import type { TreeNode } from "../../../shared/types/tree.js";
 import { getDb } from "../../db/connection.js";
 import { listDocumentsByVisitor } from "../../db/repositories/document.repo.js";
 import { assertDocumentAccess, DocumentError } from "../../access/access-control.js";
-import { createDocument, addDocumentInvite, getDocument, moveDocument } from "../../documents/document.service.js";
+import {
+  createDocument,
+  addDocumentInvite,
+  getDocument,
+  moveDocument,
+  renameDocument,
+} from "../../documents/document.service.js";
 import { buildDocumentTree } from "../../documents/tree.service.js";
 import { createFolder } from "../../routes/folders.routes.js";
 import { searchDocuments, tokenizeQuery, type SearchMode } from "../../search/search.service.js";
@@ -13,6 +19,10 @@ import { isEmbeddingReady } from "../../search/embedding-model.js";
 import { asToolResult, type ToolDeps } from "./tool-deps.js";
 import { FILE_TYPE } from "../../../shared/file-types.js";
 import { treeIncludeTypes } from "../../../shared/file-type-policy.js";
+import {
+  createEmptySheetDocument,
+  serializeSheetDocument,
+} from "../../../shared/sheetDocument.js";
 
 /** Agent 上下文体积上限；超长正文截断并标注 */
 const GET_DOCUMENT_MAX_CHARS = 50_000;
@@ -266,18 +276,21 @@ export function createDocumentTool({ visitorId }: ToolDeps): AgentTool {
     name: "create_document",
     label: "创建空文档",
     description:
-      "创建空文档（不写正文）。默认 fileType=md（Markdown）。创建 HTML 文档必须传 fileType=html，或 fileName 以 .html 结尾；创建后若要写正文，再调用 overwrite_document。",
+      "创建空文档（不写正文）。默认 fileType=md（Markdown）。HTML 传 fileType=html 或 .html；表格传 fileType=sheet 或 .sheet。md/html 写正文用 overwrite_document；sheet 用 sheet_* 工具。",
     parameters: Type.Object({
       fileName: Type.String({
-        description: "文件名；Markdown 可不带后缀，HTML 建议 untitled.html 或传 fileType=html",
+        description: "文件名；Markdown 可不带后缀；HTML 用 .html；表格用 .sheet",
       }),
       displayName: Type.Optional(Type.String({ description: "展示名，可选" })),
       domainId: Type.Optional(Type.String({ description: "工作空间 ID，可选" })),
       parentId: Type.Optional(Type.String({ description: "父目录 documentId，可选" })),
       fileType: Type.Optional(
-        Type.Union([Type.Literal("md"), Type.Literal("html")], {
-          description: "md=Markdown（默认）；html=HTML 文档",
-        }),
+        Type.Union(
+          [Type.Literal("md"), Type.Literal("html"), Type.Literal("sheet")],
+          {
+            description: "md=Markdown（默认）；html=HTML；sheet=表格",
+          },
+        ),
       ),
     }),
     execute: async (_id, params) => {
@@ -289,17 +302,24 @@ export function createDocumentTool({ visitorId }: ToolDeps): AgentTool {
         fileType?: string;
       };
       if (!fileName?.trim()) throw new Error("fileName is required");
+      const name = fileName.trim();
       const kind =
-        fileType === "html" || /\.html$/i.test(fileName.trim())
-          ? FILE_TYPE.HTML
-          : FILE_TYPE.DOCUMENT;
+        fileType === "sheet" || /\.sheet$/i.test(name)
+          ? FILE_TYPE.SHEET
+          : fileType === "html" || /\.html$/i.test(name)
+            ? FILE_TYPE.HTML
+            : FILE_TYPE.DOCUMENT;
+      const content =
+        kind === FILE_TYPE.SHEET
+          ? serializeSheetDocument(createEmptySheetDocument())
+          : "";
       const doc = createDocument({
         actorVisitorId: visitorId,
-        fileName: fileName.trim(),
+        fileName: name,
         displayName: displayName?.trim() || undefined,
-        content: "",
-        ...(kind === FILE_TYPE.HTML
-          ? { fileType: FILE_TYPE.HTML }
+        content,
+        ...(kind === FILE_TYPE.HTML || kind === FILE_TYPE.SHEET
+          ? { fileType: kind }
           : { contentFormat: "markdown" as const }),
         domainId: domainId?.trim() || undefined,
         parentId: parentId?.trim() || undefined,
@@ -379,6 +399,51 @@ export function moveDocumentTool({ visitorId }: ToolDeps): AgentTool {
           parentId: doc.parentId,
           relativePath: doc.relativePath,
           displayName: doc.displayName,
+        });
+      } catch (err) {
+        if (err instanceof DocumentError) {
+          throw new Error(`${err.code}: ${err.message}`);
+        }
+        throw err;
+      }
+    },
+  };
+}
+
+export function renameDocumentTool({ visitorId }: ToolDeps): AgentTool {
+  return {
+    name: "rename_document",
+    label: "重命名文件",
+    description:
+      "在同一文件夹下改文档文件名（磁盘路径最后一段）。不移动父目录；换文件夹用 move_document。仅文档创建者。Markdown / HTML / 表格可改，文件夹不可。展示名 displayName 不改。",
+    parameters: Type.Object({
+      documentId: Type.String({ description: "要重命名的文档 documentId" }),
+      fileName: Type.String({
+        description: "新文件名；可无路径。后缀会按文档类型规范化（.md / .html / .sheet）",
+      }),
+    }),
+    execute: async (_id, params) => {
+      const { documentId: rawId, fileName: rawName } = params as {
+        documentId: string;
+        fileName: string;
+      };
+      const documentId = rawId?.trim();
+      const fileName = rawName?.trim();
+      if (!documentId) throw new Error("documentId is required");
+      if (!fileName) throw new Error("fileName is required");
+      try {
+        const doc = renameDocument({
+          actorVisitorId: visitorId,
+          documentId,
+          fileName,
+        });
+        return asToolResult({
+          documentId: doc.documentId,
+          domainId: doc.domainId,
+          parentId: doc.parentId,
+          relativePath: doc.relativePath,
+          displayName: doc.displayName,
+          fileType: doc.fileType,
         });
       } catch (err) {
         if (err instanceof DocumentError) {

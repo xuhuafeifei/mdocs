@@ -15,6 +15,8 @@ export const FILE_TYPE = {
   DOCUMENT: 'md',
   /** HTML 文档（文档树中可见） */
   HTML: 'html',
+  /** 表格文档 `.sheet`（JSON 行存储，文档树中可见） */
+  SHEET: 'sheet',
   /** 普通目录（文档树中可见） */
   FOLDER: 'dir',
   /** 目录描述文件 ___desc___.md（文档树中不可见，用于展示目录介绍） */

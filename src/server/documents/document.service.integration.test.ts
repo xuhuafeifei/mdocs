@@ -40,7 +40,7 @@ vi.mock("../storage/file-store.js", () => ({
 }));
 
 import { DocumentError, Permission } from "../access/access-control.js";
-import { createDocument, addDocumentInvite, updateDocument, moveDocument } from "./document.service.js";
+import { createDocument, addDocumentInvite, updateDocument, moveDocument, renameDocument } from "./document.service.js";
 import { findDocumentById } from "../db/repositories/document.repo.js";
 import { findDomainById } from "../db/repositories/domain.repo.js";
 
@@ -479,5 +479,79 @@ describe("moveDocument", () => {
     });
     expect(again.parentId).toBe(folderId);
     expect(again.relativePath).toBe("keep/c.md");
+  });
+});
+
+describe("renameDocument", () => {
+  it("renames basename in folder, keeps parent", () => {
+    const folderId = createFolderInDb("public-domain", "rename-box");
+    const doc = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "old.md",
+      content: "{}",
+      domainId: "public-domain",
+      parentId: folderId,
+    });
+    const renamed = renameDocument({
+      actorVisitorId: OWNER,
+      documentId: doc.documentId,
+      fileName: "new-name",
+    });
+    expect(renamed.parentId).toBe(folderId);
+    expect(renamed.relativePath).toBe("rename-box/new-name.md");
+    expect(renamed.displayName).toBe(doc.displayName);
+  });
+
+  it("idempotent when normalized name unchanged", () => {
+    const doc = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "same-name.md",
+      content: "{}",
+      domainId: "public-domain",
+    });
+    const again = renameDocument({
+      actorVisitorId: OWNER,
+      documentId: doc.documentId,
+      fileName: "same-name.md",
+    });
+    expect(again.relativePath).toBe("same-name.md");
+  });
+
+  it("rejects name conflict", () => {
+    createDocument({
+      actorVisitorId: OWNER,
+      fileName: "taken.md",
+      content: "{}",
+      domainId: "public-domain",
+    });
+    const other = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "other.md",
+      content: "{}",
+      domainId: "public-domain",
+    });
+    expect(() =>
+      renameDocument({
+        actorVisitorId: OWNER,
+        documentId: other.documentId,
+        fileName: "taken.md",
+      }),
+    ).toThrow(DocumentError);
+  });
+
+  it("rejects non-owner", () => {
+    const doc = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "owned.md",
+      content: "{}",
+      domainId: "public-domain",
+    });
+    expect(() =>
+      renameDocument({
+        actorVisitorId: OUTSIDER,
+        documentId: doc.documentId,
+        fileName: "nope.md",
+      }),
+    ).toThrow(DocumentError);
   });
 });

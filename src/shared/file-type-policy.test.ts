@@ -40,12 +40,29 @@ describe("file-type-policy", () => {
       FILE_TYPE.FOLDER_DESC,
     ]);
     expect(treeIncludeTypes()).toContain(FILE_TYPE.HTML);
-    expect(movableDocTypes()).toEqual([FILE_TYPE.DOCUMENT, FILE_TYPE.HTML]);
+    expect(treeIncludeTypes()).toContain(FILE_TYPE.SHEET);
+    expect(movableDocTypes()).toEqual([
+      FILE_TYPE.DOCUMENT,
+      FILE_TYPE.HTML,
+      FILE_TYPE.SHEET,
+    ]);
+  });
+
+  it("sheet：可见、可移动；aiWrite 关；.sheet + raw", () => {
+    const p = getPolicy(FILE_TYPE.SHEET);
+    expect(p.treeVisible).toBe(true);
+    expect(p.movable).toBe(true);
+    expect(p.pathExt).toBe(".sheet");
+    expect(p.writeNormalize).toBe("raw");
+    expect(p.draftKind).toBe("sheet");
+    expect(p.aiWrite).toBe(false);
+    expect(p.comments).toBe(true);
   });
 
   it("isVisibleFileType 读 treeVisible", () => {
     expect(isVisibleFileType(FILE_TYPE.DOCUMENT)).toBe(true);
     expect(isVisibleFileType(FILE_TYPE.HTML)).toBe(true);
+    expect(isVisibleFileType(FILE_TYPE.SHEET)).toBe(true);
     expect(isVisibleFileType(FILE_TYPE.FOLDER)).toBe(true);
     expect(isVisibleFileType(FILE_TYPE.FOLDER_DESC)).toBe(false);
   });

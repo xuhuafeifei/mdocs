@@ -882,6 +882,8 @@ export interface AgentSessionSummary {
   id: string;
   title: string;
   updatedAt: string;
+  domainId?: string | null;
+  pinned?: boolean;
 }
 
 export interface AgentSessionListResponse {
@@ -918,13 +920,37 @@ export function fetchAgentSessionsApi(
 export function createAgentSessionApi(
   mode: "normal" | "coding" = "normal",
   documentId?: string | null,
+  domainId?: string | null,
 ): Promise<AgentSessionResponse> {
   return api<AgentSessionResponse>("/api/agent/sessions", {
     method: "POST",
     body: JSON.stringify({
       mode,
       ...(mode === "coding" ? { documentId: documentId ?? null } : {}),
+      ...(domainId ? { domainId } : {}),
     }),
+  });
+}
+
+export function renameAgentSessionApi(
+  sessionId: string,
+  title: string,
+  mode: "normal" | "coding" = "normal",
+): Promise<AgentSessionSummary> {
+  return api<AgentSessionSummary>("/api/agent/session/rename", {
+    method: "POST",
+    body: JSON.stringify({ sessionId, title, mode }),
+  });
+}
+
+export function pinAgentSessionApi(
+  sessionId: string,
+  pinned: boolean,
+  mode: "normal" | "coding" = "normal",
+): Promise<AgentSessionSummary> {
+  return api<AgentSessionSummary>("/api/agent/session/pin", {
+    method: "POST",
+    body: JSON.stringify({ sessionId, pinned, mode }),
   });
 }
 

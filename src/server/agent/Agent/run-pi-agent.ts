@@ -160,6 +160,12 @@ function bindAgentEvents(opts: {
           const visibleText = extractAssistantVisibleText(event.message);
           if (visibleText) {
             await sessionManager.appendAssistant(sessionId, visibleText);
+          } else if (msg.stopReason === "length") {
+            onEvent({
+              type: "tool_notice",
+              toolName: "agent",
+              text: "⚠️ 模型的思考过程达到了单次输出 Token 上限（8192）已被截断，未生成正文回复。建议在提示词中加上“直接输出结果/直接调用工具，无需长篇思考”。",
+            });
           }
         }
         return;

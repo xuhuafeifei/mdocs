@@ -33,7 +33,7 @@ function notifyDraftPresence(documentId: string, exists: boolean): void {
   for (const listener of draftPresenceListeners) listener(documentId, exists);
 }
 
-export type DraftContentKind = "lexical" | "html";
+export type DraftContentKind = "lexical" | "html" | "sheet";
 
 /**
  * IndexedDB 主键为 `documentId`。

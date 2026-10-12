@@ -16,6 +16,8 @@
   | `src/web/app/DocumentEditor.tsx` | 编辑器容器 |
   | `src/web/app/DocChrome.tsx` | 文档顶栏（桌面+reader）；`aiWrite`/`comments` |
   | `src/web/app/HtmlEditor.tsx` | HTML 预览/编辑（sandbox iframe） |
+  | `src/web/app/SheetEditor.tsx` | `.sheet` 工作簿 UI（多工作表标签；`aiWrite=false`） |
+  | `src/shared/sheetDocument.ts` | workbook JSON（`sheets[]`）/ 行列与表标签 mutate |
   | `src/web/app/MergeView.tsx` | 冲突 merge；`fileType` → raw-text 管道 |
 - **布局约定**：shell 只承载 layout；侧栏头尾 `flex: 0 0 auto`，仅 list `overflow-y: auto`（见 [`../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md`](../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md)）
 - **需求**：同域拖拽移动见 [`../requirements/document-move/`](../requirements/document-move/)（已同意）；HTML 文档见 [`../requirements/html-documents/`](../requirements/html-documents/)；文章搜索浮层见 [`../requirements/search-title-index/`](../requirements/search-title-index/)

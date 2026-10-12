@@ -20,6 +20,7 @@ import { AgentUserSkillsPanel } from "./AgentUserSkillsPanel";
 import { EmbeddingIndexPanel } from "./EmbeddingIndexPanel";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 import { useIsNarrowViewport } from "./hooks/useIsNarrowViewport";
+import { useEdgeSwipeOpen } from "./hooks/useEdgeSwipeOpen";
 import {
   createCliTokenApi,
   generateRecoveryCodeApi,
@@ -71,6 +72,7 @@ export function SettingsPage(props: {
   const { onBack, onPublishDraft } = props;
   const isNarrow = useIsNarrowViewport();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEdgeSwipeOpen(isNarrow && !mobileNavOpen, () => setMobileNavOpen(true));
 
   // 组件挂载状态跟踪，防止卸载后 async setState 导致内存泄漏
   const mountedRef = useRef(true);

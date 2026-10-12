@@ -27,8 +27,13 @@ export function normaliseDocRelativePath(input: string): string {
   if (raw.includes("\\")) throw new DocPathError("use forward slashes");
   if (raw.includes("..")) throw new DocPathError("path must not contain ..");
   const lower = raw.toLowerCase();
-  if (!lower.endsWith(".md") && !lower.endsWith(".html") && !lower.endsWith(".json")) {
-    throw new DocPathError("document path must end with .md, .html, or .json");
+  if (
+    !lower.endsWith(".md") &&
+    !lower.endsWith(".html") &&
+    !lower.endsWith(".json") &&
+    !lower.endsWith(".sheet")
+  ) {
+    throw new DocPathError("document path must end with .md, .html, .json, or .sheet");
   }
   if (!RELATIVE_PATH_RX.test(raw)) {
     throw new DocPathError("path contains unsupported characters");

@@ -5,7 +5,15 @@ import {
   runOnboardingChat,
   type AgentStreamEvent,
 } from "../agent/Agent/run.js";
-import { getAgentSessionForApi, createAgentSessionForApi, listAgentSessionsForApi, openAgentSessionForApi, bindCodingSessionDocumentForApi } from "../agent/Agent/session-manager.js";
+import {
+  getAgentSessionForApi,
+  createAgentSessionForApi,
+  listAgentSessionsForApi,
+  openAgentSessionForApi,
+  bindCodingSessionDocumentForApi,
+  renameAgentSessionForApi,
+  pinAgentSessionForApi,
+} from "../agent/Agent/session-manager.js";
 import { resolveUserChoice, expireUserChoice, cancelUserChoice } from "../agent/Agent/choice-pending.js";
 import {
   resolveSkillForm,
@@ -338,12 +346,84 @@ export function buildAgentRouter(): Router {
       mode === "coding"
         ? parseDocumentId(req.body?.documentId ?? req.query?.documentId)
         : undefined;
+    const domainId =
+      typeof req.body?.domainId === "string" && req.body.domainId.trim()
+        ? req.body.domainId.trim()
+        : null;
     const data = await createAgentSessionForApi(
       req.visitor.visitor_id,
       mode,
       documentId ?? null,
+      domainId,
     );
     res.json({ data });
+  });
+
+  router.post("/session/rename", async (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : "";
+    const title = typeof req.body?.title === "string" ? req.body.title : "";
+    if (!sessionId) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "sessionId is required" } });
+      return;
+    }
+    try {
+      const mode = parseAgentMode(req.body?.mode ?? req.query?.mode);
+      const data = await renameAgentSessionForApi(
+        req.visitor.visitor_id,
+        sessionId,
+        title,
+        mode,
+      );
+      res.json({ data });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "invalid_session_id" || msg === "session_not_found") {
+        res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
+        return;
+      }
+      if (msg === "title_required" || msg === "title_too_long") {
+        res.status(400).json({ error: { code: "BAD_REQUEST", message: msg } });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.post("/session/pin", async (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : "";
+    if (!sessionId) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "sessionId is required" } });
+      return;
+    }
+    if (typeof req.body?.pinned !== "boolean") {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "pinned boolean required" } });
+      return;
+    }
+    try {
+      const mode = parseAgentMode(req.body?.mode ?? req.query?.mode);
+      const data = await pinAgentSessionForApi(
+        req.visitor.visitor_id,
+        sessionId,
+        req.body.pinned,
+        mode,
+      );
+      res.json({ data });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "invalid_session_id" || msg === "session_not_found") {
+        res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
+        return;
+      }
+      throw err;
+    }
   });
 
   router.post("/session/open", async (req, res) => {

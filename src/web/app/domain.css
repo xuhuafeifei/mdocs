@@ -53,12 +53,47 @@
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  min-width: 160px;
+  min-width: 220px;
   padding: 4px;
   z-index: 50;
   display: flex;
   flex-direction: column;
+  gap: 4px;
+}
+
+.mdocs-domain-select-search {
+  flex-shrink: 0;
+  padding: 2px;
+}
+
+.mdocs-domain-select-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--mdocs-border);
+  border-radius: 6px;
+  background: var(--mdocs-bg, var(--mdocs-surface));
+  font-size: 13px;
+  color: var(--mdocs-text);
+  outline: none;
+}
+
+.mdocs-domain-select-search-input:focus {
+  border-color: var(--mdocs-accent);
+}
+
+.mdocs-domain-select-options {
+  display: flex;
+  flex-direction: column;
   gap: 1px;
+  max-height: min(280px, 50vh);
+  overflow-y: auto;
+}
+
+.mdocs-domain-select-empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  text-align: center;
 }
 
 .mdocs-domain-select-option {

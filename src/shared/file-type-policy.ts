@@ -32,7 +32,7 @@ export interface FileTypePolicy {
   /** 写入前规范化方式 */
   writeNormalize: 'md-lexical' | 'raw' | 'none';
   /** 本地草稿类型 */
-  draftKind: 'lexical' | 'html' | 'none';
+  draftKind: 'lexical' | 'html' | 'sheet' | 'none';
   /** merge 管道 */
   mergePipeline: 'lexical-md-bridge' | 'raw-text' | 'none';
   /**
@@ -75,6 +75,21 @@ const POLICY_TABLE: Record<FileType, FileTypePolicy> = {
     draftKind: 'html',
     mergePipeline: 'raw-text',
     aiWrite: true,
+    comments: true,
+  },
+  sheet: {
+    treeVisible: true,
+    treeInclude: true,
+    movable: true,
+    ftsIndex: false,
+    graphExtract: false,
+    graphWalkStruct: false,
+    pathExt: '.sheet',
+    textExtract: 'raw',
+    writeNormalize: 'raw',
+    draftKind: 'sheet',
+    mergePipeline: 'raw-text',
+    aiWrite: false,
     comments: true,
   },
   dir: {

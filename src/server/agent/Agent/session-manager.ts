@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { DEFAULT_DOMAIN_ID } from "../../../shared/domainUi.js";
 import { getConfig } from "../../config/index.js";
 import { atomicWriteJson, withSessionMetaLock } from "./session-meta-lock.js";
 
@@ -20,6 +21,8 @@ export interface AgentSessionSummary {
   title: string;
   updatedAt: string;
   documentId?: string | null;
+  domainId?: string | null;
+  pinned?: boolean;
 }
 
 type SessionMetaEntry = {
@@ -28,6 +31,10 @@ type SessionMetaEntry = {
   updatedAt?: string;
   /** coding：所属文档；缺省/null 视为空白帮写桶 */
   documentId?: string | null;
+  /** 创建时的工作空间；缺省/空在读取时迁为 default */
+  domainId?: string | null;
+  pinned?: boolean;
+  pinnedAt?: string;
 };
 
 type SessionMeta = {
@@ -322,6 +329,9 @@ export class AgentSessionManager {
       title?: string;
       touchUpdatedAt?: boolean;
       documentId?: string | null;
+      domainId?: string | null;
+      pinned?: boolean;
+      pinnedAt?: string | null;
     },
   ): void {
     const idx = meta.sessions.findIndex((s) => s.id === sessionId);
@@ -332,16 +342,35 @@ export class AgentSessionManager {
         title: patch?.title,
         updatedAt: now,
         documentId: patch?.documentId !== undefined ? patch.documentId : undefined,
+        domainId: patch?.domainId !== undefined ? patch.domainId : undefined,
+        pinned: patch?.pinned === true ? true : undefined,
+        pinnedAt:
+          patch?.pinned === true
+            ? patch.pinnedAt ?? now
+            : patch?.pinnedAt !== undefined
+              ? patch.pinnedAt ?? undefined
+              : undefined,
       });
       return;
     }
     const cur = meta.sessions[idx]!;
+    let pinned = cur.pinned;
+    let pinnedAt = cur.pinnedAt;
+    if (patch?.pinned !== undefined) {
+      pinned = patch.pinned ? true : undefined;
+      pinnedAt = patch.pinned ? (patch.pinnedAt ?? now) : undefined;
+    } else if (patch?.pinnedAt !== undefined) {
+      pinnedAt = patch.pinnedAt ?? undefined;
+    }
     meta.sessions[idx] = {
       ...cur,
       title: patch?.title !== undefined ? patch.title : cur.title,
       updatedAt: patch?.touchUpdatedAt === false ? cur.updatedAt ?? now : now,
       documentId:
         patch?.documentId !== undefined ? patch.documentId : cur.documentId,
+      domainId: patch?.domainId !== undefined ? patch.domainId : cur.domainId,
+      pinned,
+      pinnedAt,
     };
   }
 
@@ -359,14 +388,25 @@ export class AgentSessionManager {
   }
 
   private sortSummaries(sessions: SessionMetaEntry[]): AgentSessionSummary[] {
-    return sessions
-      .map((s) => ({
-        id: s.id,
-        title: s.title?.trim() || "新会话",
-        updatedAt: s.updatedAt ?? nowIso(),
-        documentId: s.documentId ?? null,
-      }))
-      .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+    const mapped = sessions.map((s) => ({
+      id: s.id,
+      title: s.title?.trim() || "新会话",
+      updatedAt: s.updatedAt ?? nowIso(),
+      documentId: s.documentId ?? null,
+      domainId: s.domainId ?? null,
+      pinned: s.pinned === true,
+      pinnedAt: s.pinnedAt,
+    }));
+    mapped.sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      if (a.pinned && b.pinned) {
+        const pa = a.pinnedAt ?? a.updatedAt;
+        const pb = b.pinnedAt ?? b.updatedAt;
+        if (pa !== pb) return pa < pb ? 1 : -1;
+      }
+      return a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0;
+    });
+    return mapped.map(({ pinnedAt: _p, ...rest }) => rest);
   }
 
   private filterByDocument(
@@ -474,6 +514,19 @@ export class AgentSessionManager {
     return this.runSerialized(() => this.ensureLastOpenedUnlocked(documentId));
   }
 
+  /** 旧条目无 domainId → 归入 default 工作空间，有改动则写回 */
+  private backfillDefaultDomain(meta: SessionMeta): boolean {
+    let changed = false;
+    for (const s of meta.sessions) {
+      const id = typeof s.domainId === "string" ? s.domainId.trim() : "";
+      if (!id) {
+        s.domainId = DEFAULT_DOMAIN_ID;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
   async listSessions(documentId?: string | null): Promise<{
     lastOpenedSessionId: string;
     sessions: AgentSessionSummary[];
@@ -481,7 +534,10 @@ export class AgentSessionManager {
     await this.ensureSessionDir();
     return this.runSerialized(async () => {
       const lastOpenedSessionId = await this.ensureLastOpenedUnlocked(documentId);
-      const meta = await this.readMeta();
+      let meta = await this.readMeta();
+      if (meta && this.backfillDefaultDomain(meta)) {
+        await this.writeMeta(meta);
+      }
       const scoped = this.filterByDocument(meta?.sessions ?? [], documentId);
       return {
         lastOpenedSessionId,
@@ -502,18 +558,24 @@ export class AgentSessionManager {
   }
 
   /** 新建空会话并设为该文档（或空白桶）的 lastOpened */
-  async createSession(documentId?: string | null): Promise<{
+  async createSession(opts?: {
+    documentId?: string | null;
+    domainId?: string | null;
+  }): Promise<{
     sessionId: string;
     messages: AgentSessionMessage[];
   }> {
     await this.ensureSessionDir();
     const sessionId = randomUUID();
+    const documentId = opts?.documentId;
     const doc =
       this.kind === "coding"
         ? documentId?.trim()
           ? documentId.trim()
           : null
         : undefined;
+    const domainRaw = typeof opts?.domainId === "string" ? opts.domainId.trim() : "";
+    const domainId = domainRaw || DEFAULT_DOMAIN_ID;
     return this.runSerialized(async () => {
       await this.mutateMetaUnlocked((meta) => {
         meta.lastOpenedSessionId = sessionId;
@@ -521,6 +583,7 @@ export class AgentSessionManager {
           title: "新会话",
           touchUpdatedAt: true,
           documentId: doc,
+          domainId,
         });
         if (this.kind === "coding") {
           this.setLastOpenedForDoc(meta, documentId, sessionId);
@@ -528,6 +591,54 @@ export class AgentSessionManager {
       });
       this.cachedSessionId = sessionId;
       return { sessionId, messages: [] };
+    });
+  }
+
+  /** 手动改标题；不 touch updatedAt */
+  async renameSession(sessionId: string, title: string): Promise<AgentSessionSummary> {
+    if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
+    const next = title.trim();
+    if (!next) throw new Error("title_required");
+    if (next.length > 80) throw new Error("title_too_long");
+    await this.ensureSessionDir();
+    return this.runSerialized(async () => {
+      await this.mutateMetaUnlocked((meta) => {
+        const entry = meta.sessions.find((s) => s.id === sessionId);
+        if (!entry && !fs.existsSync(this.jsonlPath(sessionId))) {
+          throw new Error("session_not_found");
+        }
+        this.ensureSessionEntry(meta, sessionId, {
+          title: next,
+          touchUpdatedAt: false,
+        });
+      });
+      const meta = await this.readMeta();
+      const entry = meta?.sessions.find((s) => s.id === sessionId)!;
+      return this.sortSummaries([entry])[0]!;
+    });
+  }
+
+  /** 置顶 / 取消；不 touch updatedAt */
+  async setSessionPinned(
+    sessionId: string,
+    pinned: boolean,
+  ): Promise<AgentSessionSummary> {
+    if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
+    await this.ensureSessionDir();
+    return this.runSerialized(async () => {
+      await this.mutateMetaUnlocked((meta) => {
+        const entry = meta.sessions.find((s) => s.id === sessionId);
+        if (!entry && !fs.existsSync(this.jsonlPath(sessionId))) {
+          throw new Error("session_not_found");
+        }
+        this.ensureSessionEntry(meta, sessionId, {
+          pinned,
+          touchUpdatedAt: false,
+        });
+      });
+      const meta = await this.readMeta();
+      const entry = meta?.sessions.find((s) => s.id === sessionId)!;
+      return this.sortSummaries([entry])[0]!;
     });
   }
 
@@ -690,10 +801,30 @@ export async function createAgentSessionForApi(
   visitorId: string,
   kind: AgentSessionKind = "normal",
   documentId?: string | null,
+  domainId?: string | null,
 ) {
-  return new AgentSessionManager(visitorId, { kind }).createSession(
-    kind === "coding" ? documentId : undefined,
-  );
+  return new AgentSessionManager(visitorId, { kind }).createSession({
+    documentId: kind === "coding" ? documentId : undefined,
+    domainId: domainId ?? null,
+  });
+}
+
+export async function renameAgentSessionForApi(
+  visitorId: string,
+  sessionId: string,
+  title: string,
+  kind: AgentSessionKind = "normal",
+) {
+  return new AgentSessionManager(visitorId, { kind }).renameSession(sessionId, title);
+}
+
+export async function pinAgentSessionForApi(
+  visitorId: string,
+  sessionId: string,
+  pinned: boolean,
+  kind: AgentSessionKind = "normal",
+) {
+  return new AgentSessionManager(visitorId, { kind }).setSessionPinned(sessionId, pinned);
 }
 
 export async function openAgentSessionForApi(

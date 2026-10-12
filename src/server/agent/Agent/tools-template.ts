@@ -25,10 +25,12 @@ import {
   listTreeTool,
   moveDocumentTool,
   rebuildSemanticIndexTool,
+  renameDocumentTool,
   searchDocumentsTool,
 } from "./tools-documents.js";
 import { askUserChoiceTool } from "./tools-choice.js";
 import { overwriteDocumentTool } from "./tools-overwrite.js";
+import { sheetTools } from "./tools-sheet.js";
 import {
   getWorkingDocumentTool,
   setMarkdownDocumentTool,
@@ -60,6 +62,8 @@ export function accountTools(deps: ToolDeps): AgentTool[] {
     createDocumentTool(deps),
     createFolderTool(deps),
     moveDocumentTool(deps),
+    renameDocumentTool(deps),
+    ...sheetTools(deps),
   ];
 }
 

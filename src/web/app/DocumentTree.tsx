@@ -428,7 +428,23 @@ function DocRow(props: {
       }}
     >
       <span className="mdocs-tree-caret-spacer" aria-hidden />
-      <span className={`mdocs-tree-icon${doc.fileType === "html" ? " mdocs-tree-icon-html" : ""}`}>{doc.fileType === "html" ? <span className="mdocs-tree-html-bracket">&lt;/&gt;</span> : "md"}</span>
+      <span
+        className={`mdocs-tree-icon${
+          doc.fileType === "html"
+            ? " mdocs-tree-icon-html"
+            : doc.fileType === "sheet"
+              ? " mdocs-tree-icon-sheet"
+              : ""
+        }`}
+      >
+        {doc.fileType === "html" ? (
+          <span className="mdocs-tree-html-bracket">&lt;/&gt;</span>
+        ) : doc.fileType === "sheet" ? (
+          "sheet"
+        ) : (
+          "md"
+        )}
+      </span>
       <span
         className="mdocs-tree-label"
         title={doc.displayName || doc.name}
