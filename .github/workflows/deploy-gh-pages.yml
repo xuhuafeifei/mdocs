@@ -24,8 +24,8 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          # 与本地一致；workspace allowBuilds 需 pnpm 10+/11
-          version: 11
+          # 与成功 run #179 一致；pnpm 11 在非 TTY CI 易触发 modules 目录清理中断
+          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
