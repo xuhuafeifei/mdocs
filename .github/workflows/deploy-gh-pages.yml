@@ -24,7 +24,8 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          # 与本地一致；workspace allowBuilds 需 pnpm 10+/11
+          version: 11
 
       - name: Setup Node.js
         uses: actions/setup-node@v5

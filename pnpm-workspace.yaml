@@ -1,4 +1,8 @@
 # pnpm v11+：配置迁出 package.json#pnpm，见 https://pnpm.io/settings
+# packages 必填：CI（pnpm 9 action）在 cache 探测时会跑 `pnpm store path`，缺 packages 直接失败
+packages:
+  - "."
+
 allowBuilds:
   "@fgbg/lobe-editor": true
   better-sqlite3: true
