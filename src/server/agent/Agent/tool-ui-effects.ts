@@ -195,8 +195,9 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
 
     if (
       event.toolName === "sheet_set_cells" ||
-      event.toolName === "sheet_upsert_row" ||
-      event.toolName === "sheet_insert_rows" ||
+      event.toolName === "sheet_update_row" ||
+      event.toolName === "sheet_append_rows" ||
+      event.toolName === "sheet_insert_rows_at" ||
       event.toolName === "sheet_overwrite" ||
       event.toolName === "sheet_rename_column" ||
       event.toolName === "sheet_delete_rows" ||

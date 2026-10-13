@@ -864,11 +864,69 @@ export function upsertSheetRow(
   };
 }
 
-/** 表末批量追加行；未知列名在写任何行之前失败。 */
+/** 只更新已有行；rowId 必填且必须存在。新建请用 insertSheetRows（append / after）。 */
+export function updateSheetRow(
+  tab: SheetTab,
+  rowId: string,
+  cells: Record<string, string>,
+): { tab: SheetTab; row: SheetRow } {
+  const id = rowId.trim();
+  if (!id) throw new Error("rowId is required");
+  if (!tab.rows.some((r) => r.id === id)) {
+    throw new Error(`row not found: ${id}`);
+  }
+  const { tab: next, row } = upsertSheetRow(tab, cells, id);
+  return { tab: next, row };
+}
+
+export type InsertSheetRowsOptions = {
+  /** 0-based：在此下标处插入（原该行及之后下移）。缺省 = 表末追加 */
+  atIndex?: number;
+  /** 插在此 rowId 之前（优先于 afterRowId / atIndex） */
+  beforeRowId?: string;
+  /** 插在此 rowId 之后 */
+  afterRowId?: string;
+};
+
+function resolveInsertAtIndex(
+  tab: SheetTab,
+  opts?: InsertSheetRowsOptions,
+): number {
+  if (!opts) return tab.rows.length;
+  const before = opts.beforeRowId?.trim();
+  if (before) {
+    const i = tab.rows.findIndex((r) => r.id === before);
+    if (i < 0) throw new Error(`row not found: ${before}`);
+    return i;
+  }
+  const after = opts.afterRowId?.trim();
+  if (after) {
+    const i = tab.rows.findIndex((r) => r.id === after);
+    if (i < 0) throw new Error(`row not found: ${after}`);
+    return i + 1;
+  }
+  if (opts.atIndex != null) {
+    const n = Math.floor(Number(opts.atIndex));
+    if (!Number.isFinite(n) || n < 0 || n > tab.rows.length) {
+      throw new Error(
+        `atIndex out of range: ${opts.atIndex} (allowed 0..${tab.rows.length})`,
+      );
+    }
+    return n;
+  }
+  return tab.rows.length;
+}
+
+/**
+ * 批量插入行；默认表末追加。
+ * 可用 atIndex / beforeRowId / afterRowId 插到中间。未知列名在写任何行之前失败。
+ * merges 按 rowId 引用，插行不改合并区。
+ */
 export function insertSheetRows(
   tab: SheetTab,
   rows: Array<Record<string, string>>,
-): { tab: SheetTab; rowIds: string[]; inserted: number } {
+  opts?: InsertSheetRowsOptions,
+): { tab: SheetTab; rowIds: string[]; inserted: number; atIndex: number } {
   for (const cells of rows) {
     for (const key of Object.keys(cells)) {
       if (!resolveSheetColumn(tab, key)) {
@@ -876,14 +934,36 @@ export function insertSheetRows(
       }
     }
   }
-  let next = tab;
+  const atIndex = resolveInsertAtIndex(tab, opts);
+  const newRows: SheetRow[] = [];
   const rowIds: string[] = [];
   for (const cells of rows) {
-    const result = upsertSheetRow(next, cells);
-    next = result.tab;
-    rowIds.push(result.row.id);
+    const resolved: Record<string, string> = {};
+    for (const [key, value] of Object.entries(cells)) {
+      const col = resolveSheetColumn(tab, key)!;
+      resolved[col.id] = value;
+    }
+    const cellsFull: Record<string, SheetCell> = {};
+    for (const col of tab.columns) {
+      cellsFull[col.id] = emptySheetCell(resolved[col.id] ?? "");
+    }
+    const row: SheetRow = { id: newId("r"), cells: cellsFull };
+    newRows.push(row);
+    rowIds.push(row.id);
   }
-  return { tab: next, rowIds, inserted: rowIds.length };
+  return {
+    tab: {
+      ...tab,
+      rows: [
+        ...tab.rows.slice(0, atIndex),
+        ...newRows,
+        ...tab.rows.slice(atIndex),
+      ],
+    },
+    rowIds,
+    inserted: rowIds.length,
+    atIndex,
+  };
 }
 
 const OVERWRITE_MAX_COLUMNS = 50;

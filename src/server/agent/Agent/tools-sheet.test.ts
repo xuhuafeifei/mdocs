@@ -41,15 +41,16 @@ import {
   sheetDeleteColumnsTool,
   sheetDeleteRowsTool,
   sheetDeleteSheetTool,
+  sheetAppendRowsTool,
   sheetGetSchemaTool,
-  sheetInsertRowsTool,
+  sheetInsertRowsAtTool,
   sheetListRowsTool,
   sheetMergeCellsTool,
   sheetOverwriteTool,
   sheetRenameColumnTool,
   sheetSetCellsTool,
   sheetUnmergeCellsTool,
-  sheetUpsertRowTool,
+  sheetUpdateRowTool,
 } from "./tools-sheet.js";
 import { FILE_TYPE } from "../../../shared/file-types.js";
 
@@ -138,13 +139,22 @@ describe("sheet agent tools (workbook)", () => {
     expect(setResult.status).toBe("updated");
     expect(setResult.applied).toBe(1);
 
-    const upserted = (await runTool(sheetUpsertRowTool(deps), {
+    const appended = (await runTool(sheetAppendRowsTool(deps), {
       documentId: created.documentId,
       sheet: "欲望",
-      cells: [{ column: "列1", value: "新行" }],
-    })).details as { created: boolean; rowId: string; sheet: { name: string } };
-    expect(upserted.created).toBe(true);
-    expect(upserted.sheet.name).toBe("欲望");
+      rows: [{ cells: [{ column: "列1", value: "新行" }] }],
+    })).details as { inserted: number; rowIds: string[]; sheet: { name: string } };
+    expect(appended.inserted).toBe(1);
+    expect(appended.sheet.name).toBe("欲望");
+
+    const updated = (await runTool(sheetUpdateRowTool(deps), {
+      documentId: created.documentId,
+      sheet: "欲望",
+      rowId: appended.rowIds[0],
+      cells: [{ column: "列1", value: "已改" }],
+    })).details as { rowId: string; cells: Record<string, string> };
+    expect(updated.rowId).toBe(appended.rowIds[0]);
+    expect(updated.cells["列1"]).toBe("已改");
 
     const renamed = (await runTool(sheetRenameColumnTool(deps), {
       documentId: created.documentId,
@@ -157,9 +167,9 @@ describe("sheet agent tools (workbook)", () => {
     const delRow = (await runTool(sheetDeleteRowsTool(deps), {
       documentId: created.documentId,
       sheet: "欲望",
-      rowIds: [upserted.rowId],
+      rowIds: [appended.rowIds[0]],
     })).details as { removed: string[] };
-    expect(delRow.removed).toEqual([upserted.rowId]);
+    expect(delRow.removed).toEqual([appended.rowIds[0]]);
 
     const delCol = (await runTool(sheetDeleteColumnsTool(deps), {
       documentId: created.documentId,
@@ -189,7 +199,7 @@ describe("sheet agent tools (workbook)", () => {
     ).rejects.toThrow(/NOT_A_SHEET/);
   });
 
-  it("insert_rows and overwrite", async () => {
+  it("append_rows / insert_rows_at / overwrite", async () => {
     const created = createSheet();
     const deps = { visitorId: OWNER, onEvent: () => {} };
 
@@ -198,16 +208,44 @@ describe("sheet agent tools (workbook)", () => {
     })).details as { columns: Array<{ name: string }>; rowCount: number };
     const col = schema.columns[0]!.name;
 
-    const inserted = (await runTool(sheetInsertRowsTool(deps), {
+    const appended = (await runTool(sheetAppendRowsTool(deps), {
       documentId: created.documentId,
       rows: [
         { cells: [{ column: col, value: "a" }] },
         { cells: [{ column: col, value: "b" }] },
       ],
-    })).details as { inserted: number; rowIds: string[]; rowCount: number };
-    expect(inserted.inserted).toBe(2);
-    expect(inserted.rowIds).toHaveLength(2);
-    expect(inserted.rowCount).toBe(schema.rowCount + 2);
+    })).details as {
+      inserted: number;
+      rowIds: string[];
+      rowCount: number;
+      atIndex: number;
+    };
+    expect(appended.inserted).toBe(2);
+    expect(appended.rowIds).toHaveLength(2);
+    expect(appended.rowCount).toBe(schema.rowCount + 2);
+    expect(appended.atIndex).toBe(schema.rowCount);
+
+    const listed = (await runTool(sheetListRowsTool(deps), {
+      documentId: created.documentId,
+      limit: 50,
+    })).details as { rows: Array<{ rowId: string }> };
+    const firstId = listed.rows[0]!.rowId;
+    const mid = (await runTool(sheetInsertRowsAtTool(deps), {
+      documentId: created.documentId,
+      afterRowId: firstId,
+      rows: [{ cells: [{ column: col, value: "mid" }] }],
+    })).details as { atIndex: number; rowCount: number; afterRowId: string };
+    expect(mid.afterRowId).toBe(firstId);
+    expect(mid.atIndex).toBe(1);
+    expect(mid.rowCount).toBe(appended.rowCount + 1);
+
+    await expect(
+      runTool(sheetUpdateRowTool(deps), {
+        documentId: created.documentId,
+        rowId: "missing-row",
+        cells: [{ column: col, value: "x" }],
+      }),
+    ).rejects.toThrow(/row not found/);
 
     const overwritten = (await runTool(sheetOverwriteTool(deps), {
       documentId: created.documentId,

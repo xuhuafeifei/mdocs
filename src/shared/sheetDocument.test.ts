@@ -21,6 +21,7 @@ import {
   setSheetCellStyle,
   setSheetCells,
   unmergeSheetCells,
+  updateSheetRow,
   upsertSheetRow,
 } from "./sheetDocument.js";
 
@@ -92,7 +93,7 @@ describe("sheetDocument workbook", () => {
   });
 
   it("insertSheetRows appends and rejects unknown columns", () => {
-    let tab = createEmptySheetDocument({ columnCount: 2, rowCount: 1 }).sheets[0]!;
+    const tab = createEmptySheetDocument({ columnCount: 2, rowCount: 1 }).sheets[0]!;
     const col = tab.columns[0]!;
     const before = tab.rows.length;
     const inserted = insertSheetRows(tab, [
@@ -100,9 +101,33 @@ describe("sheetDocument workbook", () => {
       { [col.name]: "b" },
     ]);
     expect(inserted.inserted).toBe(2);
+    expect(inserted.atIndex).toBe(before);
     expect(inserted.rowIds).toHaveLength(2);
     expect(inserted.tab.rows).toHaveLength(before + 2);
     expect(() => insertSheetRows(tab, [{ 不存在: "x" }])).toThrow(/unknown column/);
+  });
+
+  it("insertSheetRows afterRowId and updateSheetRow", () => {
+    let tab = createEmptySheetDocument({ columnCount: 1, rowCount: 3 }).sheets[0]!;
+    const col = tab.columns[0]!;
+    const [r0, r1, r2] = tab.rows;
+    tab = setSheetCell(tab, r0!.id, col.id, "A");
+    tab = setSheetCell(tab, r1!.id, col.id, "B");
+    tab = setSheetCell(tab, r2!.id, col.id, "C");
+
+    const after = insertSheetRows(tab, [{ [col.name]: "Z" }], {
+      afterRowId: r0!.id,
+    });
+    expect(after.atIndex).toBe(1);
+    expect(
+      after.tab.rows.map((r) => getCellValue(r.cells[col.id])),
+    ).toEqual(["A", "Z", "B", "C"]);
+
+    const updated = updateSheetRow(tab, r1!.id, { [col.name]: "BB" });
+    expect(getCellValue(updated.row.cells[col.id])).toBe("BB");
+    expect(() => updateSheetRow(tab, "missing", { [col.name]: "x" })).toThrow(
+      /row not found/,
+    );
   });
 
   it("overwriteSheetTab replaces columns and rows, keeps sheet id", () => {

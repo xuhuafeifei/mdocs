@@ -27,7 +27,7 @@ import {
   setSheetColumnName,
   sheetRowAsNamedCells,
   unmergeSheetCells,
-  upsertSheetRow,
+  updateSheetRow,
   type SheetCellStyle,
   type SheetDocument,
   type SheetTab,
@@ -38,6 +38,36 @@ const LIST_DEFAULT_LIMIT = 50;
 const LIST_MAX_LIMIT = 100;
 const SET_CELLS_MAX = 200;
 const INSERT_ROWS_MAX = 100;
+
+type RowCellsParam = { cells?: Array<{ column?: string; value?: unknown }> };
+
+function parseNamedCells(
+  cells: Array<{ column?: string; value?: unknown }> | undefined,
+  label = "cells",
+): Record<string, string> {
+  if (!Array.isArray(cells) || cells.length === 0) {
+    throw new Error(`${label} is required`);
+  }
+  const out: Record<string, string> = {};
+  for (const item of cells) {
+    const column = String(item.column ?? "").trim();
+    if (!column) throw new Error(`${label}[].column is required`);
+    out[column] = item.value == null ? "" : String(item.value);
+  }
+  return out;
+}
+
+function parseRowsParam(
+  raw: RowCellsParam[] | undefined,
+): Array<Record<string, string>> {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error("rows is required");
+  }
+  if (raw.length > INSERT_ROWS_MAX) {
+    throw new Error(`rows exceeds max ${INSERT_ROWS_MAX}`);
+  }
+  return raw.map((row, i) => parseNamedCells(row.cells, `rows[${i}].cells`));
+}
 
 const sheetParam = Type.Optional(
   Type.String({
@@ -271,23 +301,31 @@ export function sheetSetCellsTool({ visitorId }: ToolDeps): AgentTool {
   };
 }
 
-export function sheetUpsertRowTool({ visitorId }: ToolDeps): AgentTool {
+const rowCellsSchema = Type.Array(
+  Type.Object({
+    column: Type.String({ description: "列名或 columnId" }),
+    value: Type.String({ description: "单元格文本" }),
+  }),
+  { description: "本行要写入的字段" },
+);
+
+const rowsSchema = Type.Array(
+  Type.Object({ cells: rowCellsSchema }),
+  { description: "行列表（顺序保留）；单次最多 100 行" },
+);
+
+/** 更新已有行（rowId 必填）；新建用 append / insert_at */
+export function sheetUpdateRowTool({ visitorId }: ToolDeps): AgentTool {
   return {
-    name: "sheet_upsert_row",
-    label: "写入表格行",
+    name: "sheet_update_row",
+    label: "更新表格行",
     description:
-      "在指定工作表新建或更新一行。省略 rowId 则追加；提供已有 rowId 则 patch。写后直接发布。",
+      "按 rowId 更新已有行的若干列（patch）。rowId 必填且必须已存在；表末追加用 sheet_append_rows，插在某行后面用 sheet_insert_rows_at。写后直接发布。",
     parameters: Type.Object({
       documentId: Type.String({ description: "表格文档 documentId" }),
       sheet: sheetParam,
-      rowId: Type.Optional(Type.String({ description: "已有行 id；省略则新建" })),
-      cells: Type.Array(
-        Type.Object({
-          column: Type.String({ description: "列名或 columnId" }),
-          value: Type.String({ description: "单元格文本" }),
-        }),
-        { description: "本行要写入的字段" },
-      ),
+      rowId: Type.String({ description: "已有行 id" }),
+      cells: rowCellsSchema,
     }),
     execute: async (_id, params) => {
       const p = params as {
@@ -298,19 +336,13 @@ export function sheetUpsertRowTool({ visitorId }: ToolDeps): AgentTool {
       };
       const documentId = String(p.documentId ?? "").trim();
       if (!documentId) throw new Error("documentId is required");
-      if (!Array.isArray(p.cells) || p.cells.length === 0) {
-        throw new Error("cells is required");
-      }
-      const cells: Record<string, string> = {};
-      for (const item of p.cells) {
-        const column = String(item.column ?? "").trim();
-        if (!column) throw new Error("cells[].column is required");
-        cells[column] = item.value == null ? "" : String(item.value);
-      }
+      const rowId = String(p.rowId ?? "").trim();
+      if (!rowId) throw new Error("rowId is required");
+      const cells = parseNamedCells(p.cells);
       try {
         const { workbook, headCommitId } = loadWorkbookForEdit(documentId, visitorId);
         const tab = requireTab(workbook, p.sheet);
-        const { tab: nextTab, row, created } = upsertSheetRow(tab, cells, p.rowId);
+        const { tab: nextTab, row } = updateSheetRow(tab, rowId, cells);
         const nextWb = replaceSheetTab(workbook, nextTab);
         const updated = saveWorkbook({
           visitorId,
@@ -324,7 +356,6 @@ export function sheetUpsertRowTool({ visitorId }: ToolDeps): AgentTool {
           displayName: updated.displayName,
           headCommitId: updated.headCommitId ?? null,
           sheet: { id: nextTab.id, name: nextTab.name },
-          created,
           rowId: row.id,
           cells: sheetRowAsNamedCells(nextTab, row),
           rowCount: nextTab.rows.length,
@@ -336,59 +367,34 @@ export function sheetUpsertRowTool({ visitorId }: ToolDeps): AgentTool {
   };
 }
 
-export function sheetInsertRowsTool({ visitorId }: ToolDeps): AgentTool {
+/** 表末批量追加 */
+export function sheetAppendRowsTool({ visitorId }: ToolDeps): AgentTool {
   return {
-    name: "sheet_insert_rows",
-    label: "批量插入表格行",
+    name: "sheet_append_rows",
+    label: "追加表格行",
     description:
-      "向指定工作表末尾一次追加多行（Excel 式 .sheet）。不改已有行；改已有行用 sheet_upsert_row / sheet_set_cells。单次最多 100 行。列名或 columnId。写后直接发布。",
+      "向指定工作表末尾一次追加多行。不改已有行；改已有行用 sheet_update_row / sheet_set_cells；插在某行后面用 sheet_insert_rows_at。单次最多 100 行。写后直接发布。",
     parameters: Type.Object({
       documentId: Type.String({ description: "表格文档 documentId" }),
       sheet: sheetParam,
-      rows: Type.Array(
-        Type.Object({
-          cells: Type.Array(
-            Type.Object({
-              column: Type.String({ description: "列名或 columnId" }),
-              value: Type.String({ description: "单元格文本" }),
-            }),
-            { description: "本行要写入的字段" },
-          ),
-        }),
-        { description: "要追加的行列表" },
-      ),
+      rows: rowsSchema,
     }),
     execute: async (_id, params) => {
       const p = params as {
         documentId?: string;
         sheet?: string;
-        rows?: Array<{ cells?: Array<{ column?: string; value?: unknown }> }>;
+        rows?: RowCellsParam[];
       };
       const documentId = String(p.documentId ?? "").trim();
       if (!documentId) throw new Error("documentId is required");
-      if (!Array.isArray(p.rows) || p.rows.length === 0) {
-        throw new Error("rows is required");
-      }
-      if (p.rows.length > INSERT_ROWS_MAX) {
-        throw new Error(`rows exceeds max ${INSERT_ROWS_MAX}`);
-      }
-      const rows: Array<Record<string, string>> = [];
-      for (const row of p.rows) {
-        if (!Array.isArray(row.cells) || row.cells.length === 0) {
-          throw new Error("rows[].cells is required");
-        }
-        const cells: Record<string, string> = {};
-        for (const item of row.cells) {
-          const column = String(item.column ?? "").trim();
-          if (!column) throw new Error("rows[].cells[].column is required");
-          cells[column] = item.value == null ? "" : String(item.value);
-        }
-        rows.push(cells);
-      }
+      const rows = parseRowsParam(p.rows);
       try {
         const { workbook, headCommitId } = loadWorkbookForEdit(documentId, visitorId);
         const tab = requireTab(workbook, p.sheet);
-        const { tab: nextTab, rowIds, inserted } = insertSheetRows(tab, rows);
+        const { tab: nextTab, rowIds, inserted, atIndex } = insertSheetRows(
+          tab,
+          rows,
+        );
         const nextWb = replaceSheetTab(workbook, nextTab);
         const updated = saveWorkbook({
           visitorId,
@@ -403,6 +409,66 @@ export function sheetInsertRowsTool({ visitorId }: ToolDeps): AgentTool {
           headCommitId: updated.headCommitId ?? null,
           sheet: { id: nextTab.id, name: nextTab.name },
           inserted,
+          atIndex,
+          rowIds,
+          rowCount: nextTab.rows.length,
+        });
+      } catch (err) {
+        asAgentError(err);
+      }
+    },
+  };
+}
+
+/** 插在某行后面 */
+export function sheetInsertRowsAtTool({ visitorId }: ToolDeps): AgentTool {
+  return {
+    name: "sheet_insert_rows_at",
+    label: "在指定行后插入",
+    description:
+      "在 afterRowId 这一行后面插入多行（原后续行下移）。afterRowId 必填。表末追加用 sheet_append_rows；改已有行用 sheet_update_row。单次最多 100 行。写后直接发布。",
+    parameters: Type.Object({
+      documentId: Type.String({ description: "表格文档 documentId" }),
+      sheet: sheetParam,
+      afterRowId: Type.String({ description: "插在此 rowId 之后" }),
+      rows: rowsSchema,
+    }),
+    execute: async (_id, params) => {
+      const p = params as {
+        documentId?: string;
+        sheet?: string;
+        afterRowId?: string;
+        rows?: RowCellsParam[];
+      };
+      const documentId = String(p.documentId ?? "").trim();
+      if (!documentId) throw new Error("documentId is required");
+      const afterRowId = String(p.afterRowId ?? "").trim();
+      if (!afterRowId) throw new Error("afterRowId is required");
+      const rows = parseRowsParam(p.rows);
+      try {
+        const { workbook, headCommitId } = loadWorkbookForEdit(documentId, visitorId);
+        const tab = requireTab(workbook, p.sheet);
+        const { tab: nextTab, rowIds, inserted, atIndex } = insertSheetRows(
+          tab,
+          rows,
+          { afterRowId },
+        );
+        const nextWb = replaceSheetTab(workbook, nextTab);
+        const updated = saveWorkbook({
+          visitorId,
+          documentId,
+          workbook: nextWb,
+          headCommitId,
+        });
+        return asToolResult({
+          status: "updated",
+          documentId: updated.documentId,
+          displayName: updated.displayName,
+          headCommitId: updated.headCommitId ?? null,
+          sheet: { id: nextTab.id, name: nextTab.name },
+          afterRowId,
+          inserted,
+          atIndex,
           rowIds,
           rowCount: nextTab.rows.length,
         });
@@ -418,7 +484,7 @@ export function sheetOverwriteTool({ visitorId }: ToolDeps): AgentTool {
     name: "sheet_overwrite",
     label: "覆写表格",
     description:
-      "用完整的列名列表 + 二维行数据，替换 .sheet 中某一个工作表的全部内容（旧行列作废）。不改其它工作表。局部改格/行请用 sheet_set_cells / sheet_upsert_row / sheet_insert_rows。md/html 正文请用 overwrite_document。写后直接发布。",
+      "用完整的列名列表 + 二维行数据，替换 .sheet 中某一个工作表的全部内容（旧行列作废）。不改其它工作表。局部改格/行请用 sheet_set_cells / sheet_update_row / sheet_append_rows / sheet_insert_rows_at。md/html 正文请用 overwrite_document。写后直接发布。",
     parameters: Type.Object({
       documentId: Type.String({ description: "表格文档 documentId" }),
       sheet: sheetParam,
@@ -990,8 +1056,9 @@ export function sheetTools(deps: ToolDeps): AgentTool[] {
     sheetGetSchemaTool(deps),
     sheetListRowsTool(deps),
     sheetSetCellsTool(deps),
-    sheetUpsertRowTool(deps),
-    sheetInsertRowsTool(deps),
+    sheetUpdateRowTool(deps),
+    sheetAppendRowsTool(deps),
+    sheetInsertRowsAtTool(deps),
     sheetOverwriteTool(deps),
     sheetRenameColumnTool(deps),
     sheetDeleteRowsTool(deps),
