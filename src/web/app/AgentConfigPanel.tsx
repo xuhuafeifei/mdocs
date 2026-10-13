@@ -10,6 +10,7 @@ import {
   type AgentConfigKind,
   type AgentModelConfigPublic,
   type AgentModelId,
+  type AgentThinkingLevel,
 } from "../services/endpoints";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MiniSelect } from "./MiniSelect";
@@ -17,6 +18,13 @@ import { MiniSelect } from "./MiniSelect";
 const DS_MODELS = [
   { value: "deepseek-flash", label: "deepseek-flash（V4.1 Flash）" },
   { value: "deepseek-v4-pro", label: "deepseek-v4-pro（将路由至 Flash）" },
+] as const;
+
+const THINKING_LEVELS = [
+  { value: "off", label: "关（不思考）" },
+  { value: "low", label: "低（推荐）" },
+  { value: "high", label: "高" },
+  { value: "max", label: "最大" },
 ] as const;
 
 const API_TYPES = [
@@ -50,6 +58,7 @@ export function AgentConfigPanel() {
   const [apiType, setApiType] = useState<AgentApiType>("openai-completions");
   const [modelId, setModelId] = useState("deepseek-flash");
   const [contextWindow, setContextWindow] = useState(1000000);
+  const [thinkingLevel, setThinkingLevel] = useState<AgentThinkingLevel>("low");
   const [apiKey, setApiKey] = useState("");
   const [hasApiKey, setHasApiKey] = useState(false);
   const [apiKeyMasked, setApiKeyMasked] = useState<string | null>(null);
@@ -88,6 +97,7 @@ export function AgentConfigPanel() {
     setApiType("openai-completions");
     setModelId("deepseek-flash");
     setContextWindow(1000000);
+    setThinkingLevel("low");
     setApiKey("");
     setHasApiKey(false);
     setApiKeyMasked(null);
@@ -124,6 +134,13 @@ export function AgentConfigPanel() {
         : mid,
     );
     setContextWindow(cfg.contextWindow || 1000000);
+    setThinkingLevel(
+      cfg.thinkingLevel === "off" ||
+        cfg.thinkingLevel === "high" ||
+        cfg.thinkingLevel === "max"
+        ? cfg.thinkingLevel
+        : "low",
+    );
     setHasApiKey(cfg.hasApiKey);
     setApiKeyMasked(cfg.apiKeyMasked);
     setApiKey("");
@@ -227,6 +244,7 @@ export function AgentConfigPanel() {
               apiType,
               name,
               contextWindow,
+              thinkingLevel,
               ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
             }
           : {
@@ -236,6 +254,7 @@ export function AgentConfigPanel() {
               modelId: modelId as AgentModelId,
               name,
               contextWindow,
+              thinkingLevel,
               ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
             };
       await saveAgentConfigApi(body);
@@ -346,6 +365,14 @@ export function AgentConfigPanel() {
                     <MiniSelect options={[...DS_MODELS]} value={modelId} onChange={setModelId} />
                   </label>
                   <label className="mdocs-agent-field">
+                    <span>思考强度</span>
+                    <MiniSelect
+                      options={[...THINKING_LEVELS]}
+                      value={thinkingLevel}
+                      onChange={(v) => setThinkingLevel(v as AgentThinkingLevel)}
+                    />
+                  </label>
+                  <label className="mdocs-agent-field">
                     <span>{t("agentConfigApiKey")}</span>
                     <div className="mdocs-agent-config-apikey">
                       <input
@@ -435,6 +462,17 @@ export function AgentConfigPanel() {
                   </label>
                 </>
               )}
+
+              {kind === "custom" ? (
+                <label className="mdocs-agent-field">
+                  <span>思考强度</span>
+                  <MiniSelect
+                    options={[...THINKING_LEVELS]}
+                    value={thinkingLevel}
+                    onChange={(v) => setThinkingLevel(v as AgentThinkingLevel)}
+                  />
+                </label>
+              ) : null}
 
               <details
                 className="mdocs-agent-advanced"

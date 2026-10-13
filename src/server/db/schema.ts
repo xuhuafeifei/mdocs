@@ -243,6 +243,7 @@ export function applySchema(db: Database.Database): void {
     migrateAgentModelConfigProviderFields(db);
     migrateAgentModelConfigDropDisplayName(db);
     migrateAgentModelConfigMultiDefault(db);
+    migrateAgentModelConfigThinkingLevel(db);
     ensureDefaultDomain(db);
   });
   tx();
@@ -574,5 +575,15 @@ function migrateAgentModelConfigMultiDefault(db: Database.Database): void {
   );
   db.exec(
     `CREATE INDEX idx_agent_model_configs_owner ON agent_model_configs(owner_visitor_id)`,
+  );
+}
+
+/** agent_model_configs.thinking_level：off|low|high|max，默认 low */
+function migrateAgentModelConfigThinkingLevel(db: Database.Database): void {
+  const rows = db.prepare(`PRAGMA table_info(agent_model_configs)`).all() as { name: string }[];
+  if (rows.length === 0) return;
+  if (rows.some((r) => r.name === "thinking_level")) return;
+  db.exec(
+    `ALTER TABLE agent_model_configs ADD COLUMN thinking_level TEXT NOT NULL DEFAULT 'low'`,
   );
 }

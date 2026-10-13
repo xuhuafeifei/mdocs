@@ -28,7 +28,7 @@ export function createToolsForMode(
     if (!deps.coding) throw new Error("coding mode requires coding ctx");
     return [
       ...manualTools(deps),
-      ...utilityTools(),
+      ...utilityTools(deps),
       ...accountTools(deps),
       ...choiceTools(deps),
       ...codingWriteTools(deps),
@@ -38,7 +38,7 @@ export function createToolsForMode(
 
   return [
     ...manualTools(deps),
-    ...utilityTools(),
+    ...utilityTools(deps),
     ...accountTools(deps),
     ...choiceTools(deps),
     ...overwriteTools(deps),

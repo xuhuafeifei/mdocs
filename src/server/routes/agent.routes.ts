@@ -106,6 +106,7 @@ export function buildAgentRouter(): Router {
         apiKey: body.apiKey,
         name: body.name,
         contextWindow: body.contextWindow,
+        thinkingLevel: body.thinkingLevel,
         providerId: body.providerId,
         baseUrl: body.baseUrl,
         apiType: body.apiType,

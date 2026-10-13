@@ -41,7 +41,7 @@ const STRUCTURE_NAMES = [
 
 const MANUAL_NAMES = ["mdocs_manual_outline", "mdocs_manual_content"] as const;
 
-const UTILITY_NAMES = ["get_now"] as const;
+const UTILITY_NAMES = ["get_now", "set_thinking_level"] as const;
 
 /** 用户自建 skill 的增删改查：两种 mode 都无条件注册（与 SkillLoader 无关） */
 const USER_SKILL_NAMES = [

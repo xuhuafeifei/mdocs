@@ -1736,9 +1736,10 @@ export const AgentChatPanel = forwardRef<
                                 );
                               }
                               if (block.type === "document_card") {
+                                const docHref = `${window.location.origin}${window.location.pathname}#/doc/${block.documentId}`;
                                 return (
                                   <div key={`${m.id}-c-${bi}`} className="mdocs-agent-panel-block">
-                                    <details className="mdocs-agent-panel-tool-fold">
+                                    <details className="mdocs-agent-panel-tool-fold" open>
                                       <summary>
                                         <button
                                           type="button"
@@ -1751,12 +1752,24 @@ export const AgentChatPanel = forwardRef<
                                         >
                                           《{block.title}》
                                         </button>
-                                        <span className="mdocs-agent-panel-tool-fold-hint">文档预览</span>
+                                        <span className="mdocs-agent-panel-tool-fold-hint">打开文档</span>
                                       </summary>
                                       <div className="mdocs-agent-panel-doc-card-body">
                                         {block.path ? (
                                           <p className="mdocs-agent-panel-doc-card-path">{block.path}</p>
                                         ) : null}
+                                        <p className="mdocs-agent-panel-doc-card-path">
+                                          <a
+                                            href={docHref}
+                                            className="mdocs-agent-panel-doc-link"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              void openDocumentFromTable(block.documentId);
+                                            }}
+                                          >
+                                            {docHref}
+                                          </a>
+                                        </p>
                                         {block.preview ? (
                                           <p className="mdocs-agent-panel-doc-card-preview">{block.preview}</p>
                                         ) : (

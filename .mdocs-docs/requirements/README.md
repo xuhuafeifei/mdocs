@@ -13,6 +13,7 @@
 | [agent-session-workspace-pin-rename](./agent-session-workspace-pin-rename/设计契约.md) | **已同意**：会话记工作空间 + 历史筛选 + Rename + Pinned |
 | [agent-rename-document](./agent-rename-document/设计契约.md) | **已同意**：Agent `rename_document` 改同目录文件名 |
 | [agent-sheet-insert-rows](./agent-sheet-insert-rows/设计契约.md) | **已同意**：`append_rows` / `update_row` / `insert_rows_at` |
+| [agent-thinking-level](./agent-thinking-level/设计契约.md) | **已同意**：思考档位 off/low/high/max + tool |
 | [agent-sheet-overwrite](./agent-sheet-overwrite/设计契约.md) | **已同意**：Agent `sheet_overwrite` 整表替换工作表 |
 | [sheet-merge-style](./sheet-merge-style/设计契约.md) | **已实现**：`.sheet` 合并单元格 + cell/font 样式 — [代码索引](./sheet-merge-style/代码索引.md) |
 | [conflict-force-overwrite](./conflict-force-overwrite/需求分析.md) | **已同意**：冲突时 owner 强制覆盖（假 merge，正文=本地） |

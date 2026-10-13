@@ -689,6 +689,7 @@ export function deleteCommentApi(documentId: string, commentId: string): Promise
 export type AgentModelId = "deepseek-flash" | "deepseek-v4-pro";
 export type AgentConfigKind = "deepseek" | "custom";
 export type AgentApiType = "openai-completions" | "anthropic-messages";
+export type AgentThinkingLevel = "off" | "low" | "high" | "max";
 
 export interface AgentModelConfigPublic {
   id: string;
@@ -701,6 +702,7 @@ export interface AgentModelConfigPublic {
   hasApiKey: boolean;
   apiKeyMasked: string | null;
   contextWindow: number;
+  thinkingLevel: AgentThinkingLevel;
   isDefault: boolean;
 }
 
@@ -720,6 +722,7 @@ export function saveAgentConfigApi(input: {
   name?: string;
   apiKey?: string;
   contextWindow?: number;
+  thinkingLevel?: AgentThinkingLevel;
   providerId?: string;
   baseUrl?: string;
   apiType?: AgentApiType;

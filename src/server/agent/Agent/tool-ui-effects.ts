@@ -152,12 +152,23 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
     }
 
     if (event.toolName === "create_document") {
+      const documentId = String(details?.documentId ?? "").trim();
       const name = String(details?.displayName ?? "").trim() || "未命名文档";
-      onEvent({
-        type: "tool_notice",
-        toolName: event.toolName,
-        text: `已创建空文档「${name}」`,
-      });
+      if (documentId) {
+        onEvent({
+          type: "document_card",
+          documentId,
+          title: name,
+          path: String(details?.relativePath ?? "").trim(),
+          preview: "（新建空文档，点击打开）",
+        });
+      } else {
+        onEvent({
+          type: "tool_notice",
+          toolName: event.toolName,
+          text: `已创建空文档「${name}」`,
+        });
+      }
       return;
     }
 
@@ -230,14 +241,23 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
     if (event.toolName === "overwrite_document") {
       const status = String(details?.status ?? "");
       if (status === "overwritten") {
-        const documentId = String(details?.documentId ?? "");
+        const documentId = String(details?.documentId ?? "").trim();
         const headCommitId = String(details?.headCommitId ?? "");
         if (documentId && headCommitId) {
           onEvent({ type: "document_overwritten", documentId, headCommitId });
         }
+        if (documentId) {
+          onEvent({
+            type: "document_card",
+            documentId,
+            title: String(details?.displayName ?? "").trim() || "未命名文档",
+            path: String(details?.relativePath ?? "").trim(),
+            preview: "（已覆写，点击打开）",
+          });
+        }
         onEvent({ type: "tree_changed", reason: "overwrite_document" });
       }
-      // 文案由 tool_call 卡片展示
+      // 其它状态文案由 tool_call 卡片展示
       return;
     }
 

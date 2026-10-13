@@ -149,8 +149,8 @@ export async function runOnboardingChat(params: {
       model,
       tools,
       messages: [...historyPi, ...currentSkillPairs],
-      /** Ask / 帮写均开思考流，避免长时间无输出像掉线 */
-      thinkingLevel: "medium",
+      /** 来自默认模型配置；off 关闭思考。DeepSeek 勿用 medium（官方映成 high）。 */
+      thinkingLevel: cfg.thinkingLevel,
     },
     streamFn: models.streamSimple.bind(models),
   });

@@ -76,6 +76,18 @@ export type AgentCompat = {
   supportsReasoningEffort?: boolean;
 };
 
+/** DeepSeek 实际档位；不暴露 medium（官方会映成 high） */
+export const AGENT_THINKING_LEVELS = ["off", "low", "high", "max"] as const;
+export type AgentThinkingLevel = (typeof AGENT_THINKING_LEVELS)[number];
+
+export function normalizeThinkingLevel(raw: unknown): AgentThinkingLevel {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if ((AGENT_THINKING_LEVELS as readonly string[]).includes(v)) {
+    return v as AgentThinkingLevel;
+  }
+  return "low";
+}
+
 export type VisitorAgentConfig = {
   id: string;
   ownerVisitorId: string;
@@ -87,6 +99,7 @@ export type VisitorAgentConfig = {
   modelId: string;
   apiKey: string;
   contextWindow: number;
+  thinkingLevel: AgentThinkingLevel;
   compat: AgentCompat | null;
   isDefault: boolean;
 };
@@ -156,6 +169,7 @@ function rowToConfig(row: AgentModelConfigRow): VisitorAgentConfig | null {
     modelId: row.model_id,
     apiKey: effectiveApiKey,
     contextWindow: normalizeContextWindow(row.context_window),
+    thinkingLevel: normalizeThinkingLevel(row.thinking_level),
     compat: parseCompat(row.compat_json),
     isDefault: row.is_default === 1,
   };
@@ -232,6 +246,7 @@ function buildConfigRow(input: {
   modelId?: string;
   name?: string;
   contextWindow?: number;
+  thinkingLevel?: string;
   providerId?: string;
   baseUrl?: string;
   apiType?: string;
@@ -245,6 +260,9 @@ function buildConfigRow(input: {
       ? resolveConfigName(input.name, input.visitorName, kind)
       : existing?.name ?? resolveConfigName(undefined, input.visitorName, kind);
   const contextWindow = normalizeContextWindow(input.contextWindow ?? existing?.context_window);
+  const thinkingLevel = normalizeThinkingLevel(
+    input.thinkingLevel ?? existing?.thinking_level ?? "low",
+  );
   const updated_at = new Date().toISOString();
 
   if (kind === "custom") {
@@ -281,6 +299,7 @@ function buildConfigRow(input: {
       model_id: modelId,
       api_key: "", // apiKey 存 secrets 文件，DB 不再存明文
       context_window: contextWindow,
+      thinking_level: thinkingLevel,
       is_default: input.isDefault ? 1 : 0,
       updated_at,
     };
@@ -301,6 +320,7 @@ function buildConfigRow(input: {
     model_id: modelId,
     api_key: "", // apiKey 存 secrets 文件，DB 不再存明文
     context_window: contextWindow,
+    thinking_level: thinkingLevel,
     is_default: input.isDefault ? 1 : 0,
     updated_at,
   };
@@ -317,6 +337,7 @@ export function upsertVisitorAgentConfig(input: {
   apiKey?: string;
   name?: string;
   contextWindow?: number;
+  thinkingLevel?: string;
   providerId?: string;
   baseUrl?: string;
   apiType?: string;
@@ -367,6 +388,26 @@ export function upsertVisitorAgentConfig(input: {
   setAgentApiKey(row.id, apiKeyToSave);
 
   return rowToConfig(findAgentModelConfigById(db, row.id, input.ownerVisitorId)!)!;
+}
+
+/** 只改当前默认配置的思考档位（给 Agent tool 用） */
+export function setDefaultThinkingLevel(
+  ownerVisitorId: string,
+  levelRaw: string,
+): PublicAgentConfig {
+  const db = getDb();
+  const row = findDefaultAgentModelConfigByOwner(db, ownerVisitorId);
+  if (!row) throw new Error("config_not_found");
+  const level = normalizeThinkingLevel(levelRaw);
+  const next: AgentModelConfigRow = {
+    ...row,
+    thinking_level: level,
+    updated_at: new Date().toISOString(),
+  };
+  updateAgentModelConfig(db, next);
+  const cfg = rowToConfig(findAgentModelConfigById(db, row.id, ownerVisitorId)!);
+  if (!cfg) throw new Error("config_not_found");
+  return toPublicAgentConfig(cfg);
 }
 
 export function setVisitorDefaultAgentConfig(ownerVisitorId: string, configId: string): PublicAgentConfig {

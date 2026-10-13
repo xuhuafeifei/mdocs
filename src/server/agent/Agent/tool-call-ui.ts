@@ -15,6 +15,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_working_document: "读取帮写工作稿",
   set_markdown_document: "写入帮写正文",
   get_now: "获取当前时间",
+  set_thinking_level: "设置思考强度",
   mdocs_manual_content: "查阅手册",
   sheet_set_cells: "更新表格单元格",
   sheet_update_row: "更新表格行",

@@ -13,6 +13,8 @@ export interface AgentModelConfigRow {
   model_id: string;
   api_key: string;
   context_window: number;
+  /** off | low | high | max */
+  thinking_level: string;
   is_default: number;
   updated_at: string;
 }
@@ -77,8 +79,9 @@ export function insertAgentModelConfig(db: Database.Database, row: AgentModelCon
   db.prepare(
     `INSERT INTO agent_model_configs
        (id, owner_visitor_id, name, provider, kind, provider_id,
-        base_url, api_type, compat_json, model_id, api_key, context_window, is_default, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        base_url, api_type, compat_json, model_id, api_key, context_window,
+        thinking_level, is_default, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     row.id,
     row.owner_visitor_id,
@@ -92,6 +95,7 @@ export function insertAgentModelConfig(db: Database.Database, row: AgentModelCon
     row.model_id,
     row.api_key,
     row.context_window,
+    row.thinking_level,
     row.is_default,
     row.updated_at,
   );
@@ -102,7 +106,8 @@ export function updateAgentModelConfig(db: Database.Database, row: AgentModelCon
     `UPDATE agent_model_configs SET
        name = ?, provider = ?, kind = ?, provider_id = ?,
        base_url = ?, api_type = ?, compat_json = ?, model_id = ?,
-       api_key = ?, context_window = ?, is_default = ?, updated_at = ?
+       api_key = ?, context_window = ?, thinking_level = ?,
+       is_default = ?, updated_at = ?
      WHERE id = ? AND owner_visitor_id = ?`,
   ).run(
     row.name,
@@ -115,6 +120,7 @@ export function updateAgentModelConfig(db: Database.Database, row: AgentModelCon
     row.model_id,
     row.api_key,
     row.context_window,
+    row.thinking_level,
     row.is_default,
     row.updated_at,
     row.id,
