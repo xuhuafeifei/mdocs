@@ -14,6 +14,15 @@ export type AgentStreamEvent =
       preview: string;
     }
   | { type: "tool_notice"; toolName: string; text: string }
+  /** 工具调用生命周期：running → done/error，聊天区展示可视化卡片 */
+  | {
+      type: "tool_call";
+      toolCallId: string;
+      toolName: string;
+      label: string;
+      status: "running" | "done" | "error";
+      detail?: string;
+    }
   | { type: "markdown_set"; markdown: string }
   | {
       type: "choice_card";

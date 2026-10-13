@@ -334,10 +334,10 @@ export function App() {
   // ---- 当前视图：docs（文档）或 settings（设置） ----
   const [view, setView] = useState<"docs" | "settings">("docs");
 
-  useEdgeSwipeOpen(
-    isNarrow && view === "docs" && !mobileNavOpen,
-    () => setMobileNavOpen(true),
-  );
+  useEdgeSwipeOpen(isNarrow && view === "docs", () => setMobileNavOpen(true), {
+    open: mobileNavOpen,
+    onClose: () => setMobileNavOpen(false),
+  });
 
   // ---- 上手助手浮层 ----
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
@@ -1600,6 +1600,7 @@ export function App() {
                           onDelete={async () => {
                             requestDeleteDocument(activeDocMeta.documentId, activeDocMeta.relativePath);
                           }}
+                          canManageInvites={Boolean(visitor && visitor.visitorId === activeDocMeta.ownerVisitorId)}
                           onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
                           commentPanelOpen={commentPanelOpen}
                           commentCount={commentCount}
@@ -2196,7 +2197,6 @@ export function App() {
             }}
             position={agentFabPos}
             onPositionChange={setAgentFabPos}
-            disableDrag={isNarrow}
           />
           {agentPanelOpen ? (
             <Suspense fallback={null}>

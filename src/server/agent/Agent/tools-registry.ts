@@ -11,13 +11,14 @@ import {
   manualTools,
   overwriteTools,
   userSkillManageTools,
+  utilityTools,
 } from "./tools-template.js";
 
 export type { ToolDeps };
 
 /**
- * normal → manual + account + choice + overwrite + user_skills
- * coding → manual + account + choice + coding_write + user_skills
+ * normal → manual + utility + account + choice + overwrite + user_skills
+ * coding → manual + utility + account + choice + coding_write + user_skills
  */
 export function createToolsForMode(
   mode: AgentMode,
@@ -27,6 +28,7 @@ export function createToolsForMode(
     if (!deps.coding) throw new Error("coding mode requires coding ctx");
     return [
       ...manualTools(deps),
+      ...utilityTools(),
       ...accountTools(deps),
       ...choiceTools(deps),
       ...codingWriteTools(deps),
@@ -36,6 +38,7 @@ export function createToolsForMode(
 
   return [
     ...manualTools(deps),
+    ...utilityTools(),
     ...accountTools(deps),
     ...choiceTools(deps),
     ...overwriteTools(deps),

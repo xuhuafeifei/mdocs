@@ -40,6 +40,8 @@ const STRUCTURE_NAMES = [
 
 const MANUAL_NAMES = ["mdocs_manual_outline", "mdocs_manual_content"] as const;
 
+const UTILITY_NAMES = ["get_now"] as const;
+
 /** 用户自建 skill 的增删改查：两种 mode 都无条件注册（与 SkillLoader 无关） */
 const USER_SKILL_NAMES = [
   "list_user_skills",
@@ -64,6 +66,7 @@ describe("createToolsForMode", () => {
     expect(
       createToolsForMode("normal", baseDeps).map((t) => t.name),
     ).toEqual([
+      ...UTILITY_NAMES,
       ...STRUCTURE_NAMES,
       "ask_user_choice",
       "overwrite_document",
@@ -79,6 +82,7 @@ describe("createToolsForMode", () => {
       }).map((t) => t.name),
     ).toEqual([
       ...MANUAL_NAMES,
+      ...UTILITY_NAMES,
       ...STRUCTURE_NAMES,
       "ask_user_choice",
       "overwrite_document",
@@ -99,6 +103,7 @@ describe("createToolsForMode", () => {
       }).map((t) => t.name),
     ).toEqual([
       ...MANUAL_NAMES,
+      ...UTILITY_NAMES,
       ...STRUCTURE_NAMES,
       "ask_user_choice",
       "get_working_document",

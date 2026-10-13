@@ -170,6 +170,8 @@ export const en: Record<TranslationKey, string> = {
   // Settings
   settings: "Settings",
   general: "General",
+  settingsNavSearch: "Search settings…",
+  settingsNavNoMatch: "No matches",
   language: "Language",
   backToDocs: "Back to documents",
   saveAndPublish: "Save & Publish",

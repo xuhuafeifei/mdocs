@@ -36,11 +36,17 @@ import {
   setMarkdownDocumentTool,
 } from "./tools-coding.js";
 import { userSkillTools } from "./tools-user-skills.js";
+import { getNowTool } from "./tools-time.js";
 
 /** 手册（skills 缺省时为空） */
 export function manualTools(deps: ToolDeps): AgentTool[] {
   if (!deps.skills) return [];
   return [mdocsManualOutlineTool(deps), mdocsManualContentTool(deps)];
+}
+
+/** 与账号无关的轻量工具（Ask / 帮写都挂） */
+export function utilityTools(): AgentTool[] {
+  return [getNowTool()];
 }
 
 /** 账号结构：访客 / 域 / 文档 */

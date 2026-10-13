@@ -802,6 +802,14 @@ export type AgentStreamEvent =
       preview: string;
     }
   | { type: "tool_notice"; toolName: string; text: string }
+  | {
+      type: "tool_call";
+      toolCallId: string;
+      toolName: string;
+      label: string;
+      status: "running" | "done" | "error";
+      detail?: string;
+    }
   | { type: "markdown_set"; markdown: string }
   | {
       type: "choice_card";

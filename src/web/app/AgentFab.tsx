@@ -67,7 +67,7 @@ export function AgentFab(props: {
   onToggle: () => void;
   position: AgentFabPos;
   onPositionChange: (pos: AgentFabPos) => void;
-  /** 窄屏：固定左下角，禁止拖动 */
+  /** 保留：强制固定默认位、禁止拖动（默认允许拖动，含手机） */
   disableDrag?: boolean;
 }) {
   const { t } = useI18n();

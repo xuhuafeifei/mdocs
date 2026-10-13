@@ -133,6 +133,14 @@ type AssistantBlock =
     }
   | { type: "tool_notice"; toolName: string; text: string }
   | {
+      type: "tool_call";
+      toolCallId: string;
+      toolName: string;
+      label: string;
+      status: "running" | "done" | "error";
+      detail?: string;
+    }
+  | {
       type: "choice_card";
       requestId: string;
       title: string;
@@ -153,7 +161,10 @@ type ChatMessage = {
   blocks?: AssistantBlock[];
 };
 
-const SUGGESTIONS = ["如何发布文档？", "草稿是什么？", "如何创建工作空间？"];
+const ASK_SUGGESTIONS = ["如何发布文档？", "草稿是什么？", "如何创建工作空间？"];
+
+/** 帮写空态引导：偏改稿/写作，和 Ask 上手答疑区分开 */
+const CODING_SUGGESTIONS = ["润色当前文稿", "补写开头引言", "把这段改得更简洁"];
 
 function toChatMessages(
   sessionId: string,
@@ -203,6 +214,27 @@ function appendThinkingDelta(blocks: AssistantBlock[], text: string): AssistantB
     };
   } else {
     next.push({ type: "thinking", text, startedAt: now });
+  }
+  return next;
+}
+
+function upsertToolCallBlock(
+  blocks: AssistantBlock[],
+  call: Extract<AssistantBlock, { type: "tool_call" }>,
+): AssistantBlock[] {
+  const next = sealThinking(blocks).slice();
+  const idx = next.findIndex(
+    (b) => b.type === "tool_call" && b.toolCallId === call.toolCallId,
+  );
+  if (idx >= 0) {
+    const prev = next[idx] as Extract<AssistantBlock, { type: "tool_call" }>;
+    next[idx] = {
+      ...prev,
+      ...call,
+      detail: call.detail ?? prev.detail,
+    };
+  } else {
+    next.push(call);
   }
   return next;
 }
@@ -974,6 +1006,22 @@ export const AgentChatPanel = forwardRef<
               }),
             );
             requestAnimationFrame(() => scrollToBottomIfStuck());
+          } else if (event.type === "tool_call") {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== assistantId) return m;
+                const blocks = upsertToolCallBlock(m.blocks ?? [], {
+                  type: "tool_call",
+                  toolCallId: event.toolCallId,
+                  toolName: event.toolName,
+                  label: event.label,
+                  status: event.status,
+                  detail: event.detail,
+                });
+                return { ...m, blocks };
+              }),
+            );
+            requestAnimationFrame(() => scrollToBottomIfStuck());
           } else if (event.type === "choice_card") {
             setMessages((prev) =>
               prev.map((m) => {
@@ -1337,20 +1385,14 @@ export const AgentChatPanel = forwardRef<
             : "")
       }
       role={embedded ? undefined : "dialog"}
-      aria-label={embedded ? "对话" : "mdocs 智能助手"}
+      aria-label={coding ? "mdocs 帮写助手" : "mdocs 智能助手"}
       aria-modal={embedded ? undefined : fullscreen ? true : undefined}
       style={embedded || fullscreen ? undefined : anchorStyle}
     >
       <header className="mdocs-agent-panel-header">
         <div className="mdocs-agent-panel-title">
-          {embedded ? (
-            <span>对话</span>
-          ) : (
-            <>
-              <img src={deepseekLogoUrl} alt="" className="mdocs-agent-panel-title-logo" />
-              <span>mdocs 智能助手</span>
-            </>
-          )}
+          <img src={deepseekLogoUrl} alt="" className="mdocs-agent-panel-title-logo" />
+          <span>{coding ? "mdocs 帮写助手" : "mdocs 智能助手"}</span>
         </div>
         <div className="mdocs-agent-panel-actions">
           <button
@@ -1504,11 +1546,13 @@ export const AgentChatPanel = forwardRef<
             >
             {messages.length === 0 ? (
               <>
-                <p className="mdocs-agent-panel-hello">你好，我是 mdocs 智能助手</p>
+                <p className="mdocs-agent-panel-hello">
+                  {coding ? "你好，我是 mdocs 帮写助手" : "你好，我是 mdocs 智能助手"}
+                </p>
                 <p className="mdocs-agent-panel-desc">
                   {coding
-                    ? "描述你想写或改的内容。助手会更新右侧提案；请按段接受或拒绝后完成写回。"
-                    : "我能答疑、搜文档、整理结构，也能帮你写全文；需要精细改稿请点文档顶栏「帮写」。"}
+                    ? "这里专注改稿：你说怎么写，我更新右侧提案；按段接受或拒绝后，再点「完成并写回」。答疑、建目录、搜文档请用右下角「智能助手」。"
+                    : "我能答疑、搜文档、整理结构，也能帮你写全文；需要按段精细改稿，请点文档顶栏「帮写」。"}
                 </p>
                 {needsApiKey ? (
                   <AgentApiKeyInlineSetup onConfigured={refreshAgentStatus} />
@@ -1516,7 +1560,7 @@ export const AgentChatPanel = forwardRef<
                   <p className="mdocs-agent-panel-status-warn">{unavailableHint}</p>
                 ) : (
                   <div className="mdocs-agent-panel-chips">
-                    {SUGGESTIONS.map((q) => (
+                    {(coding ? CODING_SUGGESTIONS : ASK_SUGGESTIONS).map((q) => (
                       <button
                         key={q}
                         type="button"
@@ -1589,6 +1633,36 @@ export const AgentChatPanel = forwardRef<
                                         ))}
                                       </ol>
                                     </details>
+                                  </div>
+                                );
+                              }
+                              if (block.type === "tool_call") {
+                                const statusLabel =
+                                  block.status === "running"
+                                    ? "进行中"
+                                    : block.status === "error"
+                                      ? "失败"
+                                      : "完成";
+                                return (
+                                  <div
+                                    key={`${m.id}-tc-${block.toolCallId}`}
+                                    className={`mdocs-agent-panel-block mdocs-agent-tool-call mdocs-agent-tool-call-${block.status}`}
+                                  >
+                                    <div className="mdocs-agent-tool-call-head">
+                                      <span
+                                        className="mdocs-agent-tool-call-status"
+                                        aria-hidden
+                                      />
+                                      <span className="mdocs-agent-tool-call-label">
+                                        {block.label}
+                                      </span>
+                                      <span className="mdocs-agent-tool-call-badge">
+                                        {statusLabel}
+                                      </span>
+                                    </div>
+                                    {block.detail ? (
+                                      <p className="mdocs-agent-tool-call-detail">{block.detail}</p>
+                                    ) : null}
                                   </div>
                                 );
                               }

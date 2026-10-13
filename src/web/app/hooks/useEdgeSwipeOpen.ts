@@ -1,6 +1,8 @@
 /**
- * 窄屏从左边缘右滑打开侧栏（文档树 / 设置导航）。
- * 仅在抽屉关闭时监听，避免与侧栏内滚动冲突。
+ * 窄屏侧栏抽屉手势：
+ * - 关闭时：左边缘右滑 → 打开
+ * - 打开时：左滑 → 关闭（主区 / 遮罩 / 抽屉均可）
+ * 纵向滑动明显时取消，避免与目录/正文滚动冲突。
  */
 import { useEffect, useRef } from "react";
 
@@ -8,21 +10,37 @@ const EDGE_PX = 28;
 const THRESHOLD_PX = 56;
 const MAX_VERTICAL_RATIO = 0.75;
 
-export function useEdgeSwipeOpen(enabled: boolean, onOpen: () => void): void {
+export function useEdgeSwipeOpen(
+  enabled: boolean,
+  onOpen: () => void,
+  options?: { open?: boolean; onClose?: () => void },
+): void {
+  const open = Boolean(options?.open);
   const onOpenRef = useRef(onOpen);
+  const onCloseRef = useRef(options?.onClose);
   onOpenRef.current = onOpen;
+  onCloseRef.current = options?.onClose;
 
   useEffect(() => {
     if (!enabled) return;
 
-    let tracking = false;
+    let tracking: "open" | "close" | null = null;
     let startX = 0;
     let startY = 0;
 
     const onTouchStart = (e: TouchEvent) => {
       const t = e.touches[0];
-      if (!t || t.clientX > EDGE_PX) return;
-      tracking = true;
+      if (!t) return;
+      // DS 悬浮球可拖：起点在 FAB 上时不抢侧栏手势
+      const el = e.target;
+      if (el instanceof Element && el.closest(".mdocs-agent-fab-wrap")) return;
+      if (open) {
+        if (!onCloseRef.current) return;
+        tracking = "close";
+      } else {
+        if (t.clientX > EDGE_PX) return;
+        tracking = "open";
+      }
       startX = t.clientX;
       startY = t.clientY;
     };
@@ -34,17 +52,22 @@ export function useEdgeSwipeOpen(enabled: boolean, onOpen: () => void): void {
       const dx = t.clientX - startX;
       const dy = Math.abs(t.clientY - startY);
       if (dy > Math.abs(dx) * MAX_VERTICAL_RATIO && dy > 24) {
-        tracking = false;
+        tracking = null;
         return;
       }
-      if (dx >= THRESHOLD_PX) {
-        tracking = false;
+      if (tracking === "open" && dx >= THRESHOLD_PX) {
+        tracking = null;
         onOpenRef.current();
+        return;
+      }
+      if (tracking === "close" && dx <= -THRESHOLD_PX) {
+        tracking = null;
+        onCloseRef.current?.();
       }
     };
 
     const onTouchEnd = () => {
-      tracking = false;
+      tracking = null;
     };
 
     window.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -57,5 +80,5 @@ export function useEdgeSwipeOpen(enabled: boolean, onOpen: () => void): void {
       window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [enabled]);
+  }, [enabled, open]);
 }

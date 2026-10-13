@@ -169,6 +169,8 @@ export const zh: Record<TranslationKey, string> = {
   // Settings
   settings: "设置",
   general: "通用",
+  settingsNavSearch: "搜索设置…",
+  settingsNavNoMatch: "无匹配项",
   language: "语言",
   backToDocs: "返回文档",
   saveAndPublish: "保存与发布",

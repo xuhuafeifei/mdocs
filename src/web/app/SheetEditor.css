@@ -78,10 +78,50 @@
   cursor: pointer;
 }
 
+/* 选区：浅绿铺底 + 外轮廓（非整格描边） */
 .mdocs-sheet-td.is-selected {
-  outline: 2px solid var(--mdocs-accent, #4caf50);
-  outline-offset: -2px;
+  --sel-t: 0;
+  --sel-b: 0;
+  --sel-l: 0;
+  --sel-r: 0;
+  outline: none;
   z-index: 1;
+  box-shadow:
+    inset 0 calc(var(--sel-t) * 2px) 0 0 var(--mdocs-accent, #4caf50),
+    inset 0 calc(var(--sel-b) * -2px) 0 0 var(--mdocs-accent, #4caf50),
+    inset calc(var(--sel-l) * 2px) 0 0 0 var(--mdocs-accent, #4caf50),
+    inset calc(var(--sel-r) * -2px) 0 0 0 var(--mdocs-accent, #4caf50);
+}
+
+.mdocs-sheet-td.is-selected.sel-t {
+  --sel-t: 1;
+}
+.mdocs-sheet-td.is-selected.sel-b {
+  --sel-b: 1;
+}
+.mdocs-sheet-td.is-selected.sel-l {
+  --sel-l: 1;
+}
+.mdocs-sheet-td.is-selected.sel-r {
+  --sel-r: 1;
+}
+
+.mdocs-sheet-td.is-selected::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--mdocs-accent, #4caf50) 12%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.mdocs-sheet-td.is-selected.is-active {
+  z-index: 2;
+  box-shadow: inset 0 0 0 2px var(--mdocs-accent, #4caf50);
+}
+
+.mdocs-sheet-td.is-selected.is-active::after {
+  background: color-mix(in srgb, var(--mdocs-accent, #4caf50) 8%, transparent);
 }
 
 .mdocs-sheet-toolbar-right {
@@ -117,6 +157,52 @@
   cursor: not-allowed;
 }
 
+/* 加行 / 加列：白底 + 绿色描边，中间留白更醒目 */
+.mdocs-sheet-btn-add {
+  height: 28px;
+  padding: 0 11px 0 8px;
+  font-weight: 600;
+  color: var(--mdocs-accent-dark, #388e3c);
+  background: var(--mdocs-surface, #fff);
+  border: 1.5px solid var(--mdocs-accent, #4caf50);
+  box-shadow: none;
+}
+
+.mdocs-sheet-btn-add:hover:not(:disabled) {
+  color: var(--mdocs-accent-dark, #2e7d32);
+  background: var(--mdocs-surface, #fff);
+  border-color: var(--mdocs-accent-dark, #388e3c);
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.18);
+}
+
+.mdocs-sheet-btn-add:disabled {
+  opacity: 0.4;
+  box-shadow: none;
+}
+
+.mdocs-sheet-btn-add-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--mdocs-accent, #4caf50);
+}
+
+.mdocs-sheet-btn-add-plus {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  background: var(--mdocs-surface, #fff);
+  color: var(--mdocs-accent-dark, #388e3c);
+  border: 1px solid var(--mdocs-accent, #4caf50);
+  border-radius: 50%;
+  padding: 0;
+  box-sizing: content-box;
+}
+
 .mdocs-sheet-stats-badge {
   font-size: 11.5px;
   color: var(--mdocs-accent-dark, #388e3c);
@@ -125,6 +211,92 @@
   border-radius: 12px;
   font-variant-numeric: tabular-nums;
   border: 1px solid var(--mdocs-accent-secondary, #81c784);
+}
+
+/* 名称框 + 内容栏（类 Excel 公式栏） */
+.mdocs-sheet-formula-bar {
+  flex-shrink: 0;
+  background: var(--mdocs-bg, #f5f5f5);
+  border-bottom: 1px solid var(--mdocs-border, #e0e0e0);
+  padding: 6px 12px;
+  min-width: 0;
+}
+
+.mdocs-sheet-formula-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mdocs-sheet-name-box,
+.mdocs-sheet-formula-input {
+  height: 28px;
+  box-sizing: border-box;
+  border: 1px solid var(--mdocs-border, #e0e0e0);
+  border-radius: 6px;
+  background: var(--mdocs-surface, #fff);
+  color: var(--mdocs-text, #212121);
+  font-size: 13px;
+  line-height: 1.2;
+  padding: 0 10px;
+  outline: none;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.mdocs-sheet-name-box:focus,
+.mdocs-sheet-formula-input:focus {
+  border-color: var(--mdocs-accent, #4caf50);
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15);
+}
+
+.mdocs-sheet-name-box {
+  width: 72px;
+  flex: 0 0 72px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--mdocs-text-secondary, #616161);
+  cursor: default;
+}
+
+.mdocs-sheet-formula-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.mdocs-sheet-formula-input:disabled {
+  color: var(--mdocs-text-muted, #9e9e9e);
+  background: #fafafa;
+  cursor: default;
+}
+
+@media (max-width: 768px) {
+  .mdocs-sheet-formula-bar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    padding: 6px 8px;
+  }
+
+  .mdocs-sheet-formula-bar-inner {
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .mdocs-sheet-name-box {
+    width: 64px;
+    flex: 0 0 64px;
+  }
+
+  .mdocs-sheet-formula-input {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: min(70vw, 320px);
+    max-width: none;
+  }
 }
 
 /* 数据网格滚动容器 */
@@ -195,10 +367,16 @@
   gap: 4px;
 }
 
-.mdocs-sheet-th.is-selected,
+.mdocs-sheet-th.is-selected {
+  background: var(--mdocs-accent-soft, #e8f5e9) !important;
+  color: var(--mdocs-accent-dark, #388e3c);
+  box-shadow: inset 0 -2px 0 0 var(--mdocs-accent, #4caf50);
+}
+
 .mdocs-sheet-rownum.is-selected {
   background: var(--mdocs-accent-soft, #e8f5e9) !important;
   color: var(--mdocs-accent-dark, #388e3c);
+  box-shadow: inset -2px 0 0 0 var(--mdocs-accent, #4caf50);
 }
 
 .mdocs-sheet-header-label {
@@ -327,7 +505,9 @@
 }
 
 .mdocs-sheet-td.is-selected .mdocs-sheet-cell-input {
-  background: color-mix(in srgb, var(--mdocs-accent-soft, #e8f5e9) 70%, transparent);
+  position: relative;
+  z-index: 1;
+  background: transparent;
 }
 
 .mdocs-sheet-cell-input:focus {

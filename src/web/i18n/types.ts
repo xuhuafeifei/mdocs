@@ -164,6 +164,8 @@ export type TranslationKey =
   // Settings
   | "settings"
   | "general"
+  | "settingsNavSearch"
+  | "settingsNavNoMatch"
   | "language"
   | "backToDocs"
   | "saveAndPublish"

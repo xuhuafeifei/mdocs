@@ -228,46 +228,27 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
 
     if (event.toolName === "overwrite_document") {
       const status = String(details?.status ?? "");
-      const name = String(details?.displayName ?? "").trim() || "文档";
       if (status === "overwritten") {
-        onEvent({
-          type: "tool_notice",
-          toolName: event.toolName,
-          text: `已覆写「${name}」`,
-        });
         const documentId = String(details?.documentId ?? "");
         const headCommitId = String(details?.headCommitId ?? "");
         if (documentId && headCommitId) {
           onEvent({ type: "document_overwritten", documentId, headCommitId });
         }
         onEvent({ type: "tree_changed", reason: "overwrite_document" });
-      } else if (status === "redirected_to_coding") {
-        onEvent({
-          type: "tool_notice",
-          toolName: event.toolName,
-          text: `「${name}」已打开帮写`,
-        });
       }
+      // 文案由 tool_call 卡片展示
       return;
     }
 
     if (event.toolName === "get_working_document") {
-      onEvent({
-        type: "tool_notice",
-        toolName: event.toolName,
-        text: "读取帮写工作稿",
-      });
+      // tool_call 卡片已覆盖
       return;
     }
 
     if (event.toolName === "set_markdown_document") {
       const markdown = String(details?.markdown ?? "");
       onEvent({ type: "markdown_set", markdown });
-      onEvent({
-        type: "tool_notice",
-        toolName: event.toolName,
-        text: "设置帮写正文",
-      });
+      // 进度/摘要已由 tool_call 卡片展示；这里只推右侧提案，不再叠一句空 notice
     }
   };
 }

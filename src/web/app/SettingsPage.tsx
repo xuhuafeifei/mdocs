@@ -6,9 +6,23 @@
  * 3. 成员模板（保存常用访客列表）
  * 4. 保存与发布（自动同步开关、未发布草稿列表）
  */
-import { useEffect, useRef, useState } from "react";
-import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  CloudUpload,
+  FileText,
+  LayoutGrid,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ScanSearch,
+  Search,
+  Settings2,
+  Sparkles,
+  Star,
+  Users,
+} from "lucide-react";
 import { useI18n } from "../i18n";
+import type { TranslationKey } from "../i18n/types";
 import { isDemoMode } from "../services/client";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DraftListPage } from "./DraftListPage";
@@ -62,6 +76,23 @@ function formatDocDate(iso: string): string {
 
 type SettingsTab = "general" | "bookmarks" | "myDocuments" | "embeddingIndex" | "domainManagement" | "memberTemplates" | "savePublish" | "agentConfig";
 
+const SETTINGS_NAV: Array<{
+  id: SettingsTab;
+  labelKey: TranslationKey;
+  /** 额外检索词（中英混搜），不含 label 本身 */
+  keywords: string[];
+  Icon: LucideIcon;
+}> = [
+  { id: "general", labelKey: "general", keywords: ["设置", "语言", "settings", "language"], Icon: Settings2 },
+  { id: "bookmarks", labelKey: "bookmarkTitle", keywords: ["收藏", "bookmark", "star"], Icon: Star },
+  { id: "myDocuments", labelKey: "myDocuments", keywords: ["文章", "文档", "documents", "articles"], Icon: FileText },
+  { id: "embeddingIndex", labelKey: "embeddingIndex", keywords: ["语义", "索引", "embedding", "vector", "检索"], Icon: ScanSearch },
+  { id: "domainManagement", labelKey: "domainManagement", keywords: ["域", "工作空间", "workspace", "domain"], Icon: LayoutGrid },
+  { id: "memberTemplates", labelKey: "memberTemplates", keywords: ["成员", "模板", "members", "template", "邀请"], Icon: Users },
+  { id: "agentConfig", labelKey: "agentConfig", keywords: ["ai", "助手", "模型", "agent", "llm", "deepseek"], Icon: Sparkles },
+  { id: "savePublish", labelKey: "saveAndPublish", keywords: ["草稿", "发布", "同步", "draft", "publish", "sync"], Icon: CloudUpload },
+];
+
 export function SettingsPage(props: {
   onBack: () => void;
   onPublishDraft: (docId: string) => void;
@@ -72,7 +103,10 @@ export function SettingsPage(props: {
   const { onBack, onPublishDraft } = props;
   const isNarrow = useIsNarrowViewport();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  useEdgeSwipeOpen(isNarrow && !mobileNavOpen, () => setMobileNavOpen(true));
+  useEdgeSwipeOpen(isNarrow, () => setMobileNavOpen(true), {
+    open: mobileNavOpen,
+    onClose: () => setMobileNavOpen(false),
+  });
 
   // 组件挂载状态跟踪，防止卸载后 async setState 导致内存泄漏
   const mountedRef = useRef(true);
@@ -96,11 +130,22 @@ export function SettingsPage(props: {
 
   // ---- 当前激活的 Tab ----
   const [tab, setTab] = useState<SettingsTab>("general");
+  const [navQuery, setNavQuery] = useState("");
 
   function selectTab(next: SettingsTab) {
     setTab(next);
     if (isNarrow) setMobileNavOpen(false);
   }
+
+  const navItems = useMemo(() => {
+    const q = navQuery.trim().toLowerCase();
+    if (!q) return SETTINGS_NAV;
+    return SETTINGS_NAV.filter((item) => {
+      const label = t(item.labelKey).toLowerCase();
+      if (label.includes(q)) return true;
+      return item.keywords.some((k) => k.toLowerCase().includes(q));
+    });
+  }, [navQuery, t]);
 
   const tabTitle =
     tab === "general"
@@ -511,62 +556,37 @@ export function SettingsPage(props: {
             </button>
           ) : null}
         </header>
+        <div className="mdocs-config-nav-search">
+          <div className="mdocs-config-nav-search-inner">
+            <Search size={14} strokeWidth={1.75} aria-hidden />
+            <input
+              type="search"
+              value={navQuery}
+              onChange={(e) => setNavQuery(e.target.value)}
+              placeholder={t("settingsNavSearch")}
+              aria-label={t("settingsNavSearch")}
+            />
+          </div>
+        </div>
         <nav className="mdocs-config-tree">
-          {/* 通用设置 Tab */}
-          <div
-            className={"mdocs-config-item" + (tab === "general" ? " active" : "")}
-            onClick={() => selectTab("general")}
-          >
-            {t("general")}
-          </div>
-          {/* 我的收藏 Tab */}
-          <div
-            className={"mdocs-config-item" + (tab === "bookmarks" ? " active" : "")}
-            onClick={() => selectTab("bookmarks")}
-          >
-            {t("bookmarkTitle")}
-          </div>
-          {/* 我的文章 Tab */}
-          <div
-            className={"mdocs-config-item" + (tab === "myDocuments" ? " active" : "")}
-            onClick={() => selectTab("myDocuments")}
-          >
-            {t("myDocuments")}
-          </div>
-          <div
-            className={"mdocs-config-item" + (tab === "embeddingIndex" ? " active" : "")}
-            onClick={() => selectTab("embeddingIndex")}
-          >
-            {t("embeddingIndex")}
-          </div>
-          {/* 域管理 Tab */}
-          <div
-            className={"mdocs-config-item" + (tab === "domainManagement" ? " active" : "")}
-            onClick={() => selectTab("domainManagement")}
-          >
-            {t("domainManagement")}
-          </div>
-          {/* 成员模板 Tab */}
-          <div
-            className={"mdocs-config-item" + (tab === "memberTemplates" ? " active" : "")}
-            onClick={() => selectTab("memberTemplates")}
-          >
-            {t("memberTemplates")}
-          </div>
-          {/* AI / 上手助手配置 */}
-          <div
-            className={"mdocs-config-item" + (tab === "agentConfig" ? " active" : "")}
-            onClick={() => selectTab("agentConfig")}
-          >
-            {t("agentConfig")}
-          </div>
-          {/* 保存与发布 Tab */}
-          <div
-            className={"mdocs-config-item" + (tab === "savePublish" ? " active" : "")}
-            onClick={() => selectTab("savePublish")}
-          >
-            {t("saveAndPublish")}
-          </div>
+          {navItems.length === 0 ? (
+            <div className="mdocs-config-nav-empty">{t("settingsNavNoMatch")}</div>
+          ) : (
+            navItems.map((item) => {
+              const Icon = item.Icon;
+              const active = tab === item.id;
+              return (
+                <div
+                  key={item.id}
+                  className={"mdocs-config-item" + (active ? " active" : "")}
+                  onClick={() => selectTab(item.id)}
+                >
+                  <Icon size={16} strokeWidth={1.75} aria-hidden />
+                  <span>{t(item.labelKey)}</span>
+                </div>
+              );
+            })
+          )}
         </nav>
         {/* 底部返回按钮 */}
         <footer className="mdocs-settings-sidebar-footer" onClick={onBack}>

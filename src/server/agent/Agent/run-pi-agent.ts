@@ -6,6 +6,11 @@ import type { Agent, AgentEvent } from "@earendil-works/pi-agent-core";
 import type { AgentSessionManager } from "./session-manager.js";
 import type { AgentStreamEvent } from "./stream-events.js";
 import { createToolUiEffectsHandler } from "./tool-ui-effects.js";
+import {
+  toolCallDetailFromArgs,
+  toolCallDetailFromResult,
+  toolCallLabel,
+} from "./tool-call-ui.js";
 import { cancelVisitorChoices } from "./choice-pending.js";
 import { cancelVisitorSkillForms } from "./skill-form-pending.js";
 
@@ -105,6 +110,7 @@ function bindAgentEvents(opts: {
 }): (event: AgentEvent) => Promise<void> {
   const { sessionId, sessionManager, skillNames, onEvent, track } = opts;
   const onToolUi = createToolUiEffectsHandler(onEvent);
+  const toolStartDetail = new Map<string, string>();
   let appendedUser = false;
   let appendedAssistant = false;
 
@@ -172,7 +178,36 @@ function bindAgentEvents(opts: {
       }
     }
 
+    if (event.type === "tool_execution_start") {
+      const detail = toolCallDetailFromArgs(event.toolName, event.args);
+      if (detail) toolStartDetail.set(event.toolCallId, detail);
+      onEvent({
+        type: "tool_call",
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        label: toolCallLabel(event.toolName),
+        status: "running",
+        ...(detail ? { detail } : {}),
+      });
+      return;
+    }
+
     if (event.type === "tool_execution_end") {
+      const startDetail = toolStartDetail.get(event.toolCallId);
+      toolStartDetail.delete(event.toolCallId);
+      const detail = toolCallDetailFromResult(
+        event.toolName,
+        event.result,
+        startDetail,
+      );
+      onEvent({
+        type: "tool_call",
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        label: toolCallLabel(event.toolName),
+        status: event.isError ? "error" : "done",
+        ...(detail ? { detail } : {}),
+      });
       onToolUi(event);
     }
   };
