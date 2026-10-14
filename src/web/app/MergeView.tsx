@@ -1,14 +1,14 @@
 /**
- * 冲突 Merge：单栏 inline（红=我的 / 绿=别人的），与帮写审阅同构。
- * 接收=remote，拒绝=local；全部决议后方可手改并发布。
- *
- * md：Lexical → LexicalMarkdownBridge → MD → merge-plan → convert → Lexical
- * html：原文直通 merge-plan → updateDocument（无 Bridge / convert）
+ * 冲突 Merge：
+ * - md：Lexical → LexicalMarkdownBridge → MD → merge-plan → convert → Lexical
+ * - html：原文直通 merge-plan → updateDocument
+ * - sheet：整表二选一（用我的 / 用别人的），不做 JSON 行级 merge
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
 import { LexicalMarkdownBridge } from "./LexicalMarkdownBridge";
 import { MergeInlinePane } from "./merge/MergeInlinePane";
+import { SheetWholeMergePane } from "./merge/SheetWholeMergePane";
 import {
   assembleMergedMarkdown,
   buildThreeWayMergePlan,
@@ -33,7 +33,7 @@ export interface MergeViewProps {
   documentId: string;
   displayName: string;
   conflict: DraftConflictRecord;
-  /** 缺省 md；html 走 raw-text 管道 */
+  /** 缺省 md；html 走 raw-text；sheet 走 whole-document */
   fileType?: string;
   onClose: () => void;
   onSuccess: (doc: DocumentDetail) => void;
@@ -44,7 +44,112 @@ export function MergeView(props: MergeViewProps) {
   const { t } = useI18n();
   const mergePipeline =
     getPolicy((props.fileType ?? "md") as FileType)?.mergePipeline ?? "lexical-md-bridge";
+  const isWholeDocument = mergePipeline === "whole-document";
   const isRawText = mergePipeline === "raw-text";
+
+  if (isWholeDocument) {
+    return <SheetWholeDocumentMerge {...props} />;
+  }
+
+  return (
+    <LineBasedMergeView {...props} isRawText={isRawText} />
+  );
+}
+
+function SheetWholeDocumentMerge(props: MergeViewProps) {
+  const { t } = useI18n();
+  const [remoteContent, setRemoteContent] = useState("");
+  const [loadingRemote, setLoadingRemote] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const localContent = props.conflict.localSnapshotContent;
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingRemote(true);
+    setRemoteContent("");
+    void (async () => {
+      try {
+        const doc = await getDocumentApi(props.documentId);
+        if (cancelled) return;
+        setRemoteContent(doc.content);
+      } catch {
+        if (!cancelled) props.onError(t("mergeLoadRemoteFailed"));
+      } finally {
+        if (!cancelled) setLoadingRemote(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [props.documentId, props.onError, t]);
+
+  async function publishSide(side: "local" | "remote"): Promise<void> {
+    const content = side === "local" ? localContent : remoteContent;
+    if (!content.trim()) {
+      props.onError(
+        side === "local" ? t("mergeLoadLocalFailed") : t("mergeLoadRemoteFailed"),
+      );
+      return;
+    }
+    setBusy(true);
+    try {
+      await updateDocumentApi(props.documentId, {
+        content,
+        displayName: props.displayName,
+        version: {
+          localBaseCommitId: props.conflict.localBaseCommitId,
+          merge: {
+            remoteCommitId: props.conflict.remoteCommitId,
+            localSnapshotContent: props.conflict.localSnapshotContent,
+          },
+        },
+      });
+      const updated = await getDocumentApi(props.documentId);
+      props.onSuccess(updated);
+    } catch (err) {
+      props.onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const ready = !loadingRemote;
+
+  return (
+    <div className="mdocs-merge-overlay">
+      <header className="mdocs-merge-toolbar">
+        <div className="mdocs-merge-toolbar-title">
+          <h2>{t("mergeTitle")}</h2>
+          <span className="mdocs-merge-conflict-pill pending">{t("sheetMergeModeBadge")}</span>
+        </div>
+        <div className="mdocs-merge-toolbar-actions">
+          <button type="button" className="secondary" disabled={busy} onClick={props.onClose}>
+            {t("cancel")}
+          </button>
+        </div>
+      </header>
+      <div className="mdocs-merge-body mdocs-merge-body--sheet-whole">
+        {!ready ? (
+          <p className="mdocs-merge-loading">{t("mergeLoadingRemote")}</p>
+        ) : (
+          <SheetWholeMergePane
+            localContent={localContent}
+            remoteContent={remoteContent}
+            busy={busy}
+            onUseMine={() => void publishSide("local")}
+            onUseTheirs={() => void publishSide("remote")}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LineBasedMergeView(
+  props: MergeViewProps & { isRawText: boolean },
+) {
+  const { t } = useI18n();
+  const { isRawText } = props;
 
   const [localMd, setLocalMd] = useState("");
   const [baseMd, setBaseMd] = useState("");
@@ -126,7 +231,6 @@ export function MergeView(props: MergeViewProps) {
     isRawText,
   ]);
 
-  // html：本地快照即原文
   useEffect(() => {
     if (!isRawText) return;
     setLocalMd(props.conflict.localSnapshotContent);

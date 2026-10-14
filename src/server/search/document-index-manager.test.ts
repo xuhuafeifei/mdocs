@@ -49,6 +49,7 @@ vi.mock("../config/index.js", () => ({
     filesDir: "/tmp/mdocs-test/files",
     docsDir: "/tmp/mdocs-test/files/docs",
     assetsDir: "/tmp/mdocs-test/files/assets",
+    agentAttachmentsDir: "/tmp/mdocs-test/files/agent-attachments",
     logsDir: "/tmp/mdocs-test/logs",
     webDistDir: "/tmp/mdocs-test/web",
     logging: {

@@ -522,7 +522,7 @@
 .mdocs-agent-panel {
   position: fixed;
   z-index: 201;
-  width: min(480px, calc(100vw - 72px));
+  width: min(500px, calc(100vw - 72px));
   height: min(680px, calc(100vh - 80px));
   display: flex;
   flex-direction: column;
@@ -531,6 +531,30 @@
   border-radius: 14px;
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.16);
   overflow: hidden;
+}
+
+.mdocs-agent-panel-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 6;
+  touch-action: none;
+}
+
+.mdocs-agent-panel-resize-left {
+  left: 0;
+}
+
+.mdocs-agent-panel-resize-right {
+  right: 0;
+}
+
+.mdocs-agent-panel-resize:hover,
+.mdocs-agent-panel-resize:active {
+  background: rgba(51, 112, 255, 0.35);
 }
 
 .mdocs-agent-panel--fullscreen {
@@ -588,18 +612,18 @@
 }
 
 .mdocs-agent-panel-context {
-  position: absolute;
-  right: 50px;
-  bottom: 10px;
-  width: 32px;
-  height: 32px;
+  position: static;
+  transform: none;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 999px;
   cursor: help;
   z-index: 1;
   outline: none;
+  flex-shrink: 0;
 }
 
 .mdocs-agent-panel-context:hover,
@@ -681,7 +705,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 18px 18px 12px;
+  padding: 8px 12px 8px;
   background: #fafbfc;
 }
 
@@ -697,6 +721,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding-right: 2px;
 }
 
@@ -885,8 +910,8 @@
 .mdocs-agent-panel-messages {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 4px 0 12px;
+  gap: 8px;
+  padding: 0;
 }
 
 .mdocs-agent-panel-msg {
@@ -1962,89 +1987,177 @@
 }
 
 .mdocs-agent-panel-input-wrap {
-  margin-top: 8px;
+  position: relative;
+  margin-top: 4px;
   flex-shrink: 0;
-  background: #fff;
-  border: 1px solid #e8eaed;
-  border-radius: 14px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px 4px 10px;
+  background: #f4f5f7;
+  border: 1px solid #e6e8ec;
+  border-radius: 16px;
+  box-shadow: none;
 }
 
-.mdocs-agent-doc-ref {
+.mdocs-agent-panel-input-wrap.is-dragover {
+  border-color: #3370ff;
+  background: #eef4ff;
+}
+
+.mdocs-agent-composer-drop {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 8px 8px 0;
-  padding: 8px 8px 8px 10px;
-  border: 1px solid #e4e7ec;
-  border-radius: 10px;
-  background: #f9fafb;
+  justify-content: center;
+  border-radius: inherit;
+  background: rgba(238, 244, 255, 0.92);
+  color: #3370ff;
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
 }
 
-.mdocs-agent-doc-ref-icon {
+.mdocs-agent-composer-refs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.mdocs-agent-composer-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mdocs-agent-page-chip,
+.mdocs-agent-page-refs-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.mdocs-agent-page-refs-summary {
+  width: 100%;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.mdocs-agent-page-refs-summary:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.mdocs-agent-page-refs-summary span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mdocs-agent-page-chip-icon,
+.mdocs-agent-page-refs-summary svg {
   flex-shrink: 0;
   color: #3370ff;
 }
 
-.mdocs-agent-doc-ref-text {
+.mdocs-agent-page-chip-icon-graph {
+  color: #16a34a;
+}
+
+.mdocs-agent-page-chip-text {
   flex: 1;
   min-width: 0;
-  line-height: 1.3;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
-.mdocs-agent-doc-ref-title {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: #1f2329;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.mdocs-agent-page-chip-kind {
+  flex-shrink: 0;
+  color: #4e5969;
 }
 
-.mdocs-agent-doc-ref-path {
-  display: block;
-  margin-top: 2px;
-  font-size: 11px;
+.mdocs-agent-page-chip-dot {
+  flex-shrink: 0;
   color: #98a2b3;
+}
+
+.mdocs-agent-page-chip-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: #1f2329;
+  font-weight: 500;
 }
 
-.mdocs-agent-doc-ref-unlink {
+.mdocs-agent-page-chip-x {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  margin-left: 4px;
-  padding: 0; /* 覆盖 global button padding，否则 26px 盒内装不下图标 */
-  border: 1px solid #d0d5dd;
-  border-radius: 8px;
-  background: #fff;
-  color: #667085;
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #98a2b3;
   cursor: pointer;
 }
 
-.mdocs-agent-doc-ref-unlink:hover:not(:disabled) {
-  border-color: #98a2b3;
-  background: #f2f4f7;
+.mdocs-agent-page-chip-x:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.06);
   color: #344054;
 }
 
-.mdocs-agent-doc-ref-unlink:disabled {
+.mdocs-agent-page-chip-x:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 .mdocs-agent-panel-input-body {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.mdocs-agent-panel-input-body.is-tall {
+  align-items: flex-end;
+  padding-bottom: 4px;
+}
+
+.mdocs-agent-panel-input-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .mdocs-agent-skill-ref {
-  margin-top: 8px;
+  margin: 0 0 4px;
   flex-shrink: 0;
 }
 
@@ -2396,19 +2509,23 @@
 }
 
 .mdocs-agent-panel-input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  width: auto;
   resize: none;
   border: none;
-  border-radius: 14px;
-  padding: 12px 92px 12px 12px;
+  border-radius: 0;
+  padding: 4px 0;
   font: inherit;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 22px;
   background: transparent;
   color: #1f2329;
   box-sizing: border-box;
   outline: none;
-  min-height: 68px;
+  min-height: 22px;
+  max-height: 160px;
+  overflow-y: auto;
 }
 
 .mdocs-agent-panel-input:disabled {
@@ -2416,19 +2533,253 @@
   cursor: not-allowed;
 }
 
-.mdocs-agent-panel-send {
+.mdocs-agent-panel-attach {
+  position: static;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 0;
+  border: none;
+  border-radius: 999px;
+  background: #eceff3;
+  color: #344054;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.mdocs-agent-panel-attach:hover:not(:disabled) {
+  color: #1f2329;
+  background: #e4e7ec;
+}
+
+.mdocs-agent-panel-attach:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mdocs-agent-msg-assets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.mdocs-agent-msg-asset-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(100%, 220px);
+  padding: 4px 8px 4px 4px;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06);
+  color: #344054;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.mdocs-agent-file-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.mdocs-agent-file-mark.is-inline {
+  width: auto;
+  height: 16px;
+  margin-right: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 9px;
+  vertical-align: -2px;
+}
+
+.mdocs-agent-file-mark-pdf {
+  background: #fde8e6;
+  color: #c4320a;
+}
+
+.mdocs-agent-file-mark-md {
+  background: #e0eaff;
+  color: #3538cd;
+}
+
+.mdocs-agent-file-mark-image {
+  background: #f4ebff;
+  color: #6941c6;
+}
+
+.mdocs-agent-file-mark-txt {
+  background: #f2f4f7;
+  color: #344054;
+}
+
+.mdocs-agent-file-mark-csv {
+  background: #e3f8e8;
+  color: #067647;
+}
+
+.mdocs-agent-file-mark-json {
+  background: #fef4d6;
+  color: #b54708;
+}
+
+.mdocs-agent-file-mark-html {
+  background: #e6f4ff;
+  color: #175cd3;
+}
+
+.mdocs-agent-file-mark-sheet {
+  background: #e7f8ef;
+  color: #087443;
+}
+
+.mdocs-agent-file-mark-file {
+  background: #f2f4f7;
+  color: #667085;
+}
+
+.mdocs-agent-file-thumb-btn {
+  flex: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  line-height: 0;
+  cursor: zoom-in;
+}
+
+.mdocs-agent-file-thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 7px;
+  background: #f2f4f7;
+}
+
+.mdocs-agent-image-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mdocs-agent-image-preview-backdrop {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: rgba(15, 23, 42, 0.72);
+  cursor: zoom-out;
+}
+
+.mdocs-agent-image-preview-frame {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: min(960px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+}
+
+.mdocs-agent-image-preview-frame img {
+  max-width: 100%;
+  max-height: calc(100vh - 96px);
+  object-fit: contain;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.28);
+}
+
+.mdocs-agent-image-preview-frame p {
+  margin: 0;
+  max-width: 100%;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mdocs-agent-image-preview-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.55);
+  color: #fff;
+  cursor: pointer;
+}
+
+.mdocs-agent-panel-md a .mdocs-agent-file-mark {
+  text-decoration: none;
+}
+
+.mdocs-agent-msg-asset-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mdocs-agent-pending-asset-remove {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  color: #98a2b3;
+  cursor: pointer;
+}
+
+.mdocs-agent-pending-asset-remove:hover {
+  color: #344054;
+}
+
+.mdocs-agent-panel-send {
+  position: static;
+  transform: none;
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 10px;
+  border-radius: 999px;
   background: #3370ff;
   color: #fff;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .mdocs-agent-panel-send:disabled {
@@ -2446,8 +2797,10 @@
 }
 
 .mdocs-agent-panel-footnote {
-  margin: 10px 0 0;
-  font-size: 12px;
+  margin: 4px 0 0;
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1.3;
   color: #8a919f;
   text-align: center;
 }

@@ -142,7 +142,15 @@ export function buildApp(): Application {
 /** 确保运行时所需的各目录已存在，按 0o700 权限递归创建。 */
 function ensureRuntimeDirs(): void {
   const cfg = getConfig();
-  for (const dir of [cfg.dataDir, cfg.filesDir, cfg.docsDir, cfg.assetsDir, cfg.logsDir]) {
+  for (const dir of [
+    cfg.dataDir,
+    cfg.filesDir,
+    cfg.docsDir,
+    cfg.assetsDir,
+    cfg.agentAttachmentsDir,
+    path.join(cfg.agentAttachmentsDir, "objects"),
+    cfg.logsDir,
+  ]) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
 }

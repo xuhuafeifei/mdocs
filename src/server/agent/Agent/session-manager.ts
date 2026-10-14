@@ -7,6 +7,13 @@ import { atomicWriteJson, withSessionMetaLock } from "./session-meta-lock.js";
 
 export type AgentSessionRole = "user" | "assistant";
 
+export type AgentSessionAssetRef = {
+  id: string;
+  name: string;
+  mime: string;
+  bytes: number;
+};
+
 export interface AgentSessionMessage {
   role: AgentSessionRole;
   content: string;
@@ -14,6 +21,8 @@ export interface AgentSessionMessage {
   skillNames?: string[];
   /** @deprecated 旧 jsonl；读取时并入 skillNames */
   skillIds?: string[];
+  /** user 轮附件 Ref（无字节） */
+  assets?: AgentSessionAssetRef[];
 }
 
 export interface AgentSessionSummary {
@@ -80,6 +89,26 @@ function parseSkillRefsField(raw: unknown): string[] {
     if (!id || seen.has(id)) continue;
     seen.add(id);
     out.push(id);
+  }
+  return out;
+}
+
+function parseAssetRefsField(raw: unknown): AgentSessionAssetRef[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AgentSessionAssetRef[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    if (typeof o.id !== "string" || !o.id.trim()) continue;
+    if (typeof o.name !== "string") continue;
+    if (typeof o.mime !== "string") continue;
+    if (typeof o.bytes !== "number" || !Number.isFinite(o.bytes)) continue;
+    out.push({
+      id: o.id.trim(),
+      name: o.name,
+      mime: o.mime,
+      bytes: o.bytes,
+    });
   }
   return out;
 }
@@ -430,6 +459,7 @@ export class AgentSessionManager {
             content?: unknown;
             skillNames?: unknown;
             skillIds?: unknown;
+            assets?: unknown;
           };
           const role = row.role === "user" ? "user" : row.role === "assistant" ? "assistant" : null;
           const content = typeof row.content === "string" ? row.content : null;
@@ -438,11 +468,11 @@ export class AgentSessionManager {
           const fromIds = parseSkillRefsField(row.skillIds);
           const skillNames =
             fromNames.length > 0 ? fromNames : fromIds.length > 0 ? fromIds : [];
-          messages.push(
-            role === "user" && skillNames.length > 0
-              ? { role, content, skillNames }
-              : { role, content },
-          );
+          const assets = parseAssetRefsField(row.assets);
+          const msg: AgentSessionMessage = { role, content };
+          if (role === "user" && skillNames.length > 0) msg.skillNames = skillNames;
+          if (role === "user" && assets.length > 0) msg.assets = assets;
+          messages.push(msg);
         } catch {
           /* ignore invalid line */
         }
@@ -738,6 +768,7 @@ export class AgentSessionManager {
     sessionId: string,
     content: string,
     skillNames?: string[],
+    assets?: AgentSessionAssetRef[],
   ): Promise<void> {
     if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
     const names = Array.isArray(skillNames)
@@ -745,8 +776,22 @@ export class AgentSessionManager {
           .filter((n) => typeof n === "string" && n.trim())
           .map((n) => n.trim())
       : [];
+    const assetRefs = Array.isArray(assets)
+      ? assets.filter(
+          (a) =>
+            a &&
+            typeof a.id === "string" &&
+            typeof a.name === "string" &&
+            typeof a.mime === "string" &&
+            typeof a.bytes === "number",
+        )
+      : [];
     const row: Record<string, unknown> = { role: "user", content, ts: nowIso() };
     if (names.length > 0) row.skillNames = names;
+    if (assetRefs.length > 0) row.assets = assetRefs;
+    const titleSource =
+      content.trim() ||
+      (assetRefs[0] ? `附件 ${assetRefs[0].name}` : "");
     await this.runSerialized(async () => {
       await fs.promises.appendFile(
         this.jsonlPath(sessionId),
@@ -754,7 +799,7 @@ export class AgentSessionManager {
         "utf8",
       );
       await this.touchLastOpenedUnlocked(sessionId, {
-        titleIfEmpty: titleFromUserContent(content),
+        titleIfEmpty: titleFromUserContent(titleSource),
       });
     });
   }

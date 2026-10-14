@@ -177,6 +177,34 @@ describe("agent model configs", () => {
     expect(getVisitorAgentConfig("v5")?.modelId).toBe("deepseek-flash");
   });
 
+  it("同一访客有多条模型配置时，启动迁移仍能建默认唯一索引", () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    seedVisitor(db, "v-multi");
+    db.exec(`DROP INDEX IF EXISTS idx_agent_model_configs_owner_default`);
+    const now = new Date().toISOString();
+    const insert = db.prepare(
+      `INSERT INTO agent_model_configs
+        (id, owner_visitor_id, name, provider, model_id, api_key, context_window, is_default, updated_at)
+       VALUES (?, ?, ?, 'deepseek', 'deepseek-flash', 'k', 128000, 1, ?)`,
+    );
+    insert.run("c1", "v-multi", "旧", "2020-01-01T00:00:00.000Z");
+    insert.run("c2", "v-multi", "新", now);
+
+    expect(() => applySchema(db)).not.toThrow();
+
+    const defaults = db
+      .prepare(
+        `SELECT id FROM agent_model_configs WHERE owner_visitor_id = ? AND is_default = 1`,
+      )
+      .all("v-multi") as { id: string }[];
+    expect(defaults.map((row) => row.id)).toEqual(["c2"]);
+    const total = db
+      .prepare(`SELECT COUNT(*) AS c FROM agent_model_configs WHERE owner_visitor_id = ?`)
+      .get("v-multi") as { c: number };
+    expect(total.c).toBe(2);
+  });
+
   it("启动迁移会删除 agent_model_configs.display_name 列", () => {
     const db = new Database(":memory:");
     applySchema(db);

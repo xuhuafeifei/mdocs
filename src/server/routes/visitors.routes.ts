@@ -230,6 +230,7 @@ export function buildVisitorsRouter(): Router {
     const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10) || 20));
     const domainId = typeof req.query.domainId === "string" ? req.query.domainId : undefined;
     const creatorVisitorId = typeof req.query.creatorVisitorId === "string" ? req.query.creatorVisitorId : undefined;
+    const fileType = typeof req.query.fileType === "string" ? req.query.fileType : undefined;
     const groupByRaw = typeof req.query.groupBy === "string" ? req.query.groupBy : undefined;
     const groupBy = groupByRaw === "domain" || groupByRaw === "creator" ? groupByRaw : undefined;
     const result = listDocumentsByVisitor(getDb(), req.visitor.visitor_id, {
@@ -237,6 +238,7 @@ export function buildVisitorsRouter(): Router {
       limit,
       domainId,
       creatorVisitorId,
+      fileType,
       groupBy,
     });
     res.json({ data: result });

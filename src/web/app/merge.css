@@ -585,3 +585,106 @@
   background: var(--mdocs-bg, #fff);
   color: var(--mdocs-text);
 }
+
+/* ── Sheet 整表二选一 ── */
+
+.mdocs-merge-body--sheet-whole {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 24px 20px 40px;
+  overflow: auto;
+}
+
+.mdocs-sheet-merge-pane {
+  width: min(720px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.mdocs-sheet-merge-hint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--mdocs-text-muted, #666);
+}
+
+.mdocs-sheet-merge-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .mdocs-sheet-merge-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mdocs-sheet-merge-card {
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--mdocs-bg, #fff);
+}
+
+.mdocs-sheet-merge-card--local {
+  border-color: #ffa39e;
+  background: #fff2f0;
+}
+
+.mdocs-sheet-merge-card--remote {
+  border-color: #b7eb8f;
+  background: #f6ffed;
+}
+
+.mdocs-sheet-merge-card-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.mdocs-sheet-merge-card-meta,
+.mdocs-sheet-merge-card-muted {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--mdocs-text-muted, #666);
+}
+
+.mdocs-sheet-merge-tab-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mdocs-sheet-merge-tab-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.mdocs-sheet-merge-tab-name {
+  font-weight: 500;
+}
+
+.mdocs-sheet-merge-tab-stats {
+  color: var(--mdocs-text-muted, #666);
+}
+
+.mdocs-sheet-merge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+.mdocs-sheet-merge-actions button {
+  min-width: 160px;
+}

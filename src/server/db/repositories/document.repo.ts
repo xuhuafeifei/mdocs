@@ -98,18 +98,7 @@ export interface DocumentWithDomain {
   createdAt: string;
   updatedAt: string;
   permission: number;
-  creatorVisitorId?: string;
-  creatorName?: string;
-}
-
-export interface DocumentWithDomain {
-  documentId: string;
-  domainId: string;
-  relativePath: string;
-  displayName: string;
-  createdAt: string;
-  updatedAt: string;
-  permission: number;
+  fileType: string;
   creatorVisitorId?: string;
   creatorName?: string;
 }
@@ -122,12 +111,17 @@ export interface PaginatedDocuments {
   groups?: { key: string; items: DocumentWithDomain[] }[];
 }
 
+/** 我的文章可筛选的文件类型（与设置页下拉一致） */
+const MY_DOC_FILE_TYPES = new Set(["md", "html", "sheet"]);
+
 export interface MyDocumentsQuery {
   offset?: number;
   limit?: number;
   domainId?: string;
   /** 不传则不按创建者再滤。本接口本身已限定 owner = 当前访客。 */
   creatorVisitorId?: string;
+  /** 不传则不按类型滤；仅允许 md / html / sheet */
+  fileType?: string;
   groupBy?: "domain" | "creator";
 }
 
@@ -149,17 +143,22 @@ export function listDocumentsByVisitor(
   const offset = Math.max(query.offset ?? 0, 0);
   const domainId = query.domainId?.trim() || null;
   const creatorVisitorId = query.creatorVisitorId?.trim() || null;
+  const fileTypeRaw = query.fileType?.trim() || "";
+  const fileType = MY_DOC_FILE_TYPES.has(fileTypeRaw) ? fileTypeRaw : null;
 
   const where = `WHERE d.owner_visitor_id = ?
     AND (? IS NULL OR d.domain_id = ?)
-    AND (? IS NULL OR d.owner_visitor_id = ?)`;
-  const filterArgs: [string, string | null, string | null, string | null, string | null] = [
-    visitorId,
-    domainId,
-    domainId,
-    creatorVisitorId,
-    creatorVisitorId,
-  ];
+    AND (? IS NULL OR d.owner_visitor_id = ?)
+    AND (? IS NULL OR d.file_type = ?)`;
+  const filterArgs: [
+    string,
+    string | null,
+    string | null,
+    string | null,
+    string | null,
+    string | null,
+    string | null,
+  ] = [visitorId, domainId, domainId, creatorVisitorId, creatorVisitorId, fileType, fileType];
 
   const countRow = db
     .prepare<typeof filterArgs, { c: number }>(
@@ -177,11 +176,12 @@ export function listDocumentsByVisitor(
       created_at: string;
       updated_at: string;
       permission: number;
+      file_type: string;
       owner_visitor_id: string;
       creator_name: string | null;
     }>(
       `SELECT d.document_id, d.domain_id, d.relative_path, d.display_name, d.created_at, d.updated_at,
-              d.permission, d.owner_visitor_id, v.visitor_name AS creator_name
+              d.permission, d.file_type, d.owner_visitor_id, v.visitor_name AS creator_name
        FROM documents d
        LEFT JOIN visitors v ON v.visitor_id = d.owner_visitor_id
        ${where}
@@ -197,6 +197,7 @@ export function listDocumentsByVisitor(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     permission: row.permission,
+    fileType: row.file_type,
     creatorVisitorId: row.owner_visitor_id,
     creatorName: row.creator_name ?? row.owner_visitor_id,
   }));

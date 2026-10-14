@@ -597,6 +597,7 @@ export interface MyDocument {
   createdAt: string;
   updatedAt: string;
   permission: number;
+  fileType?: string;
   creatorVisitorId?: string;
   creatorName?: string;
 }
@@ -615,6 +616,8 @@ export interface MyDocumentsQuery {
   limit?: number;
   domainId?: string;
   creatorVisitorId?: string;
+  /** md | html | sheet；不传则不限类型 */
+  fileType?: string;
   groupBy?: "domain" | "creator";
 }
 
@@ -630,6 +633,7 @@ export function fetchMyDocumentsApi(query: MyDocumentsQuery = {}): Promise<Pagin
   });
   if (query.domainId) params.set("domainId", query.domainId);
   if (query.creatorVisitorId) params.set("creatorVisitorId", query.creatorVisitorId);
+  if (query.fileType) params.set("fileType", query.fileType);
   if (query.groupBy) params.set("groupBy", query.groupBy);
   return api<PaginatedResult<MyDocument>>(`/api/visitors/me/documents?${params}`);
 }
@@ -1125,6 +1129,40 @@ async function readAgentSseStream(
   }
 }
 
+export type AgentAttachmentUpload = {
+  id: string;
+  name: string;
+  mime: string;
+  bytes: number;
+  status: string;
+};
+
+/** POST /api/agent/attachments — staging 上传 */
+export async function uploadAgentAttachmentApi(
+  sessionId: string,
+  file: File,
+): Promise<AgentAttachmentUpload> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("sessionId", sessionId);
+  const res = await fetch("/api/agent/attachments", {
+    method: "POST",
+    body: formData,
+  });
+  const body = (await res.json()) as {
+    data?: AgentAttachmentUpload;
+    error?: { message?: string };
+  };
+  if (!res.ok || !body.data) {
+    throw new ApiRequestError(
+      res.status,
+      "UPLOAD_FAILED",
+      body.error?.message ?? "upload failed",
+    );
+  }
+  return body.data;
+}
+
 /** POST /api/agent/chat，解析 SSE；断开订阅不取消服务端 run */
 export async function streamAgentChatApi(
   message: string,
@@ -1134,6 +1172,8 @@ export async function streamAgentChatApi(
     skillNames?: string[];
     /** @deprecated */
     skillIds?: string[];
+    /** 本轮已上传的附件 id */
+    assetIds?: string[];
     /** coding：帮写工作台当前稿 / 进场快照（放 body，不放 header） */
     documentId?: string | null;
     workingMarkdown?: string;
@@ -1152,6 +1192,7 @@ export async function streamAgentChatApi(
     message,
     mode: opts.mode === "coding" ? "coding" : "normal",
   };
+  if (opts.assetIds && opts.assetIds.length > 0) body.assetIds = opts.assetIds;
   const names =
     opts.skillNames && opts.skillNames.length > 0
       ? opts.skillNames

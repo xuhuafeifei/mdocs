@@ -17,6 +17,8 @@ export interface AppConfig {
   filesDir: string;
   docsDir: string;
   assetsDir: string;
+  /** Agent 聊天附件（内容寻址 objects）；与编辑器 files/assets 分离 */
+  agentAttachmentsDir: string;
   commitsDir: string;
   logsDir: string;
   webDistDir: string;
@@ -70,6 +72,7 @@ export function getConfig(): AppConfig {
     filesDir: path.join(dataDir, "files"),
     docsDir: path.join(dataDir, "files", "docs"),
     assetsDir: path.join(dataDir, "files", "assets"),
+    agentAttachmentsDir: path.join(dataDir, "files", "agent-attachments"),
     // 历史提交快照：路径仅由正文 SHA-256 决定，见 resolveCommitBlobAbsolutePath
     commitsDir: path.join(dataDir, "files", "commits"),
     logsDir: path.join(dataDir, "logs"),

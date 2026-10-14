@@ -1,4 +1,4 @@
-import { ArrowDown, Check, ChevronDown, ChevronRight, Copy, FileText, History, Maximize2, Minimize2, Network, Pencil, Pin, Plus, X } from "lucide-react";
+import { ArrowDown, Check, ChevronDown, ChevronRight, Copy, History, Link2, Maximize2, Minimize2, Network, Pencil, Pin, Plus, X } from "lucide-react";
 import {
   forwardRef,
   memo,
@@ -8,11 +8,27 @@ import {
   useMemo,
   useRef,
   useState,
+  type ClipboardEvent as ReactClipboardEvent,
+  type DragEvent as ReactDragEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import deepseekLogoUrl from "../assets/deepseek.svg";
+import {
+  clampAgentPanelWidth,
+  loadAgentPanelWidth,
+  saveAgentPanelWidth,
+} from "./AgentFab";
+import {
+  dataTransferHasFiles,
+  filesFromDataTransfer,
+  nameFilesForUpload,
+} from "./agent-composer-files";
+import { documentIdFromAgentHref } from "./agent-doc-link";
+import { fileMarkKind, fileMarkLabel } from "./agent-file-mark";
 import {
   type AgentDocumentTableRow,
   createAgentSessionApi,
@@ -30,6 +46,8 @@ import {
   expireAgentChoiceApi,
   cancelAgentChoiceApi,
   cancelAgentSkillFormApi,
+  uploadAgentAttachmentApi,
+  type AgentAttachmentUpload,
   type AgentContextUsage,
   type AgentRunPublic,
   type AgentSessionSummary,
@@ -108,9 +126,153 @@ function MarkdownPre(props: { children?: ReactNode }) {
   return <MarkdownPreWithCopy>{props.children}</MarkdownPreWithCopy>;
 }
 
+const openAgentDocumentRef: { current: (documentId: string) => void } = {
+  current: () => {},
+};
+
+function reactNodeText(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(reactNodeText).join("");
+  return "";
+}
+
+function FileTypeMark(props: { name: string; mime?: string; inline?: boolean }) {
+  const kind = fileMarkKind(props.name, props.mime ?? "");
+  if (props.inline && kind === "file") return null;
+  return (
+    <span
+      className={
+        "mdocs-agent-file-mark mdocs-agent-file-mark-" +
+        kind +
+        (props.inline ? " is-inline" : "")
+      }
+      aria-hidden
+    >
+      {fileMarkLabel(kind)}
+    </span>
+  );
+}
+
+function ImagePreviewDialog(props: { src: string; name: string; onClose: () => void }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") props.onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [props.onClose]);
+
+  return createPortal(
+    <div className="mdocs-agent-image-preview" role="dialog" aria-modal="true" aria-label={props.name}>
+      <button
+        type="button"
+        className="mdocs-agent-image-preview-backdrop"
+        aria-label="关闭预览"
+        onClick={props.onClose}
+      />
+      <div className="mdocs-agent-image-preview-frame">
+        <button
+          type="button"
+          className="mdocs-agent-image-preview-close"
+          aria-label="关闭"
+          onClick={props.onClose}
+        >
+          <X size={16} aria-hidden />
+        </button>
+        <img src={props.src} alt={props.name} />
+        <p>{props.name}</p>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function AgentAssetChip(props: {
+  id: string;
+  name: string;
+  mime: string;
+  previewUrl?: string;
+  onRemove?: () => void;
+  removeDisabled?: boolean;
+}) {
+  const [thumbBroken, setThumbBroken] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const kind = fileMarkKind(props.name, props.mime);
+  const thumb =
+    kind === "image" && !thumbBroken
+      ? props.previewUrl || `/api/agent/attachments/${props.id}`
+      : "";
+  return (
+    <span className={"mdocs-agent-msg-asset-chip" + (thumb ? " has-thumb" : "")} title={props.name}>
+      {thumb ? (
+        <button
+          type="button"
+          className="mdocs-agent-file-thumb-btn"
+          aria-label={`预览 ${props.name}`}
+          title="点击查看大图"
+          onClick={() => setPreviewOpen(true)}
+        >
+          <img
+            className="mdocs-agent-file-thumb"
+            src={thumb}
+            alt=""
+            onError={() => setThumbBroken(true)}
+          />
+        </button>
+      ) : (
+        <FileTypeMark name={props.name} mime={props.mime} />
+      )}
+      <span className="mdocs-agent-msg-asset-chip-name">{props.name}</span>
+      {props.onRemove ? (
+        <button
+          type="button"
+          className="mdocs-agent-pending-asset-remove"
+          aria-label={`移除 ${props.name}`}
+          disabled={props.removeDisabled}
+          onClick={props.onRemove}
+        >
+          <X size={12} aria-hidden />
+        </button>
+      ) : null}
+      {previewOpen && thumb ? (
+        <ImagePreviewDialog src={thumb} name={props.name} onClose={() => setPreviewOpen(false)} />
+      ) : null}
+    </span>
+  );
+}
+
+function AgentMarkdownLink(props: { href?: string; children?: ReactNode }) {
+  const documentId = documentIdFromAgentHref(props.href);
+  const label = reactNodeText(props.children);
+  const mark = label ? <FileTypeMark name={label} inline /> : null;
+  if (!documentId) {
+    const external = props.href?.startsWith("http://") || props.href?.startsWith("https://");
+    return (
+      <a href={props.href} {...(external ? { target: "_blank", rel: "noreferrer" } : {})}>
+        {mark}
+        {props.children}
+      </a>
+    );
+  }
+  return (
+    <a
+      href={`#/doc/${documentId}`}
+      className="mdocs-agent-panel-doc-link"
+      onClick={(ev) => {
+        ev.preventDefault();
+        openAgentDocumentRef.current(documentId);
+      }}
+    >
+      {mark}
+      {props.children}
+    </a>
+  );
+}
+
 /** 模块级稳定引用：避免输入框改 state 时 components 换新导致 Mermaid 卸载重挂 */
 const agentMarkdownComponents = {
   pre: ({ children }: { children?: ReactNode }) => <MarkdownPre>{children}</MarkdownPre>,
+  a: AgentMarkdownLink,
 };
 
 const AgentMarkdown = memo(function AgentMarkdown(props: { children: string }) {
@@ -161,6 +323,7 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   skillNames?: string[];
+  assets?: Array<{ id: string; name: string; mime: string; bytes: number; previewUrl?: string }>;
   /** 仅当轮 SSE；历史会话不恢复 */
   blocks?: AssistantBlock[];
 };
@@ -177,6 +340,7 @@ function toChatMessages(
     content: string;
     skillNames?: string[];
     skillIds?: string[];
+    assets?: Array<{ id: string; name: string; mime: string; bytes: number; previewUrl?: string }>;
   }[],
 ): ChatMessage[] {
   return messages.map((m, i) => {
@@ -191,6 +355,7 @@ function toChatMessages(
       role: m.role,
       content: m.content,
       skillNames,
+      assets: m.assets && m.assets.length > 0 ? m.assets : undefined,
     };
   });
 }
@@ -496,6 +661,52 @@ export type AgentChatPanelHandle = {
   requestClose: () => void;
 };
 
+type ComposerPageRef = {
+  key: string;
+  variant: "page" | "graph";
+  kind: string;
+  name: string;
+  title: string;
+};
+
+function PageRefChip(props: {
+  item: ComposerPageRef;
+  disabled?: boolean;
+  onDismiss: () => void;
+}) {
+  const Icon = props.item.variant === "graph" ? Network : Link2;
+  return (
+    <div className="mdocs-agent-page-chip" title={props.item.title}>
+      <Icon
+        className={
+          "mdocs-agent-page-chip-icon" +
+          (props.item.variant === "graph" ? " mdocs-agent-page-chip-icon-graph" : "")
+        }
+        size={14}
+        strokeWidth={2}
+        aria-hidden
+      />
+      <span className="mdocs-agent-page-chip-text">
+        <span className="mdocs-agent-page-chip-kind">{props.item.kind}</span>
+        <span className="mdocs-agent-page-chip-dot" aria-hidden>
+          ·
+        </span>
+        <span className="mdocs-agent-page-chip-name">{props.item.name}</span>
+      </span>
+      <button
+        type="button"
+        className="mdocs-agent-page-chip-x"
+        title="取消引用"
+        aria-label={`取消引用 ${props.item.name}`}
+        disabled={props.disabled}
+        onClick={props.onDismiss}
+      >
+        <X size={14} strokeWidth={2} aria-hidden />
+      </button>
+    </div>
+  );
+}
+
 function hasOpenCountdown(messages: ChatMessage[]): boolean {
   for (const m of messages) {
     if (m.role !== "assistant" || !m.blocks?.length) continue;
@@ -602,8 +813,34 @@ export const AgentChatPanel = forwardRef<
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [input, setInput] = useState("");
   const [selectedSkillNames, setSelectedSkillNames] = useState<string[]>([]);
+  const [pendingAttachments, setPendingAttachments] = useState<
+    Array<AgentAttachmentUpload & { previewUrl?: string }>
+  >([]);
+  const previewUrlsRef = useRef<string[]>([]);
+  useEffect(() => {
+    const urls = previewUrlsRef.current;
+    return () => {
+      for (const url of urls) URL.revokeObjectURL(url);
+    };
+  }, []);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [composerDragOver, setComposerDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   /** 用户点右侧取消后，本轮不再带 documentId；换一篇文自动恢复 */
   const [docRefDismissed, setDocRefDismissed] = useState(false);
+  const [pageRefsExpanded, setPageRefsExpanded] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(loadAgentPanelWidth);
+  /** 拖宽时临时改 left，避免贴右边时被挤出视口；松手后仍跟这次拖动，直到 FAB 再移动 */
+  const [panelLeft, setPanelLeft] = useState<number | null>(null);
+  const panelWidthRef = useRef(panelWidth);
+  panelWidthRef.current = panelWidth;
+  const resizeDragRef = useRef<{
+    edge: "left" | "right";
+    startX: number;
+    startW: number;
+    startLeft: number;
+  } | null>(null);
   const [sending, setSending] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [contextUsage, setContextUsage] = useState<AgentContextUsage | null>(null);
@@ -630,9 +867,119 @@ export const AgentChatPanel = forwardRef<
   const graphRefActive = Boolean(graphFileId?.trim()) && !docRefDismissed;
   const graphRefTitle = graphLabel?.trim() || "当前图谱";
 
+  const pageRefs = useMemo((): ComposerPageRef[] => {
+    if (coding) return [];
+    if (graphRefActive) {
+      return [
+        {
+          key: "graph",
+          variant: "graph",
+          kind: "图谱引用",
+          name: graphRefTitle,
+          title: "图谱 · 只读",
+        },
+      ];
+    }
+    if (docRefActive) {
+      const fileName = docRefPath.split("/").pop()?.trim() || docRefTitle;
+      return [
+        {
+          key: documentId?.trim() || "doc",
+          variant: "page",
+          kind: "文章引用",
+          name: fileName,
+          title: docRefPath || docRefTitle,
+        },
+      ];
+    }
+    return [];
+  }, [
+    coding,
+    graphRefActive,
+    docRefActive,
+    graphRefTitle,
+    docRefTitle,
+    docRefPath,
+    documentId,
+  ]);
+
   useEffect(() => {
     setDocRefDismissed(false);
   }, [documentId, graphFileId]);
+
+  useEffect(() => {
+    if (pageRefs.length < 2) setPageRefsExpanded(false);
+  }, [pageRefs.length]);
+
+  useEffect(() => {
+    setPanelLeft(null);
+  }, [anchorStyle?.left, anchorStyle?.bottom]);
+
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const body = el.closest(".mdocs-agent-panel-input-body");
+    el.style.height = "auto";
+    const tall = el.scrollHeight > 44;
+    el.style.height = tall ? `${Math.min(160, el.scrollHeight)}px` : "";
+    body?.classList.toggle("is-tall", tall);
+  }, [input]);
+
+  useEffect(() => {
+    function onMove(e: PointerEvent) {
+      const drag = resizeDragRef.current;
+      if (!drag) return;
+      const dx = e.clientX - drag.startX;
+      let nextW = drag.edge === "right" ? drag.startW + dx : drag.startW - dx;
+      nextW = clampAgentPanelWidth(nextW);
+      let nextLeft = drag.edge === "left" ? drag.startLeft + (drag.startW - nextW) : drag.startLeft;
+      if (nextLeft < 8) {
+        nextW = clampAgentPanelWidth(nextW - (8 - nextLeft));
+        nextLeft = 8;
+      }
+      const overflow = nextLeft + nextW - (window.innerWidth - 8);
+      if (overflow > 0) {
+        if (drag.edge === "right") {
+          nextLeft = Math.max(8, nextLeft - overflow);
+        } else {
+          nextW = clampAgentPanelWidth(nextW - overflow);
+        }
+      }
+      panelWidthRef.current = nextW;
+      setPanelWidth(nextW);
+      setPanelLeft(nextLeft);
+    }
+    function onUp() {
+      if (!resizeDragRef.current) return;
+      resizeDragRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      saveAgentPanelWidth(panelWidthRef.current);
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, []);
+
+  function onResizePointerDown(edge: "left" | "right", e: ReactPointerEvent<HTMLDivElement>) {
+    if (embedded || fullscreen) return;
+    e.preventDefault();
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    resizeDragRef.current = {
+      edge,
+      startX: e.clientX,
+      startW: rect.width,
+      startLeft: rect.left,
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }
 
   function nextId(prefix: string) {
     idRef.current += 1;
@@ -1144,9 +1491,80 @@ export const AgentChatPanel = forwardRef<
     }
   }
 
+  async function ensureSessionIdForUpload(): Promise<string | null> {
+    if (sessionId) return sessionId;
+    try {
+      const created = await createAgentSessionApi(
+        sessionMode,
+        coding ? documentId ?? null : undefined,
+      );
+      setSessionId(created.sessionId);
+      return created.sessionId;
+    } catch (err) {
+      setStreamError(err instanceof Error ? err.message : String(err));
+      return null;
+    }
+  }
+
+  async function uploadFiles(incoming: File[]) {
+    const files = nameFilesForUpload(
+      incoming,
+      pendingAttachments.map((a) => a.name),
+    );
+    if (files.length === 0 || sending || uploadingAttachment || !status?.enabled) return;
+    const sid = await ensureSessionIdForUpload();
+    if (!sid) return;
+    setUploadingAttachment(true);
+    setStreamError(null);
+    try {
+      for (const file of files) {
+        const uploaded = await uploadAgentAttachmentApi(sid, file);
+        const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
+        if (previewUrl) previewUrlsRef.current.push(previewUrl);
+        setPendingAttachments((prev) => [...prev, { ...uploaded, previewUrl }]);
+      }
+    } catch (err) {
+      setStreamError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploadingAttachment(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function onPickAttachment(fileList: FileList | null) {
+    void uploadFiles(fileList ? Array.from(fileList) : []);
+  }
+
+  function onComposerPaste(e: ReactClipboardEvent) {
+    const files = filesFromDataTransfer(e.clipboardData);
+    if (files.length === 0) return;
+    e.preventDefault();
+    void uploadFiles(files);
+  }
+
+  function onComposerDragOver(e: ReactDragEvent) {
+    if (!dataTransferHasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setComposerDragOver(true);
+  }
+
+  function onComposerDragLeave(e: ReactDragEvent) {
+    const next = e.relatedTarget;
+    if (next instanceof Node && e.currentTarget.contains(next)) return;
+    setComposerDragOver(false);
+  }
+
+  function onComposerDrop(e: ReactDragEvent) {
+    e.preventDefault();
+    setComposerDragOver(false);
+    void uploadFiles(filesFromDataTransfer(e.dataTransfer));
+  }
+
   async function sendMessage(raw: string) {
     const text = raw.trim();
-    if (!text || sending) return;
+    const assetIds = pendingAttachments.map((a) => a.id);
+    if ((!text && assetIds.length === 0) || sending) return;
     if (!status?.enabled) {
       setStreamError(
         status?.reason === "missing_api_key"
@@ -1162,17 +1580,26 @@ export const AgentChatPanel = forwardRef<
     const ac = new AbortController();
     abortRef.current = ac;
 
+    const assetsForBubble = pendingAttachments.map((a) => ({
+      id: a.id,
+      name: a.name,
+      mime: a.mime,
+      bytes: a.bytes,
+      previewUrl: a.previewUrl,
+    }));
     const userMsg: ChatMessage = {
       id: nextId("u"),
       role: "user",
-      content: text,
+      content: text || (assetsForBubble[0] ? `(附件 ${assetsForBubble.map((a) => a.name).join(", ")})` : ""),
       skillNames: selectedSkillNames.length > 0 ? [...selectedSkillNames] : undefined,
+      assets: assetsForBubble.length > 0 ? assetsForBubble : undefined,
     };
     const assistantId = nextId("a");
     streamAssistantIdRef.current = assistantId;
     stickToBottomRef.current = true;
     setMessages((prev) => [...prev, userMsg, { id: assistantId, role: "assistant", content: "" }]);
     setInput("");
+    setPendingAttachments([]);
     setSending(true);
     setStreamError(null);
     setHistoryOpen(false);
@@ -1186,6 +1613,7 @@ export const AgentChatPanel = forwardRef<
       await streamAgentChatApi(text, {
         mode: sessionMode,
         skillNames: selectedSkillNames.length > 0 ? selectedSkillNames : undefined,
+        assetIds: assetIds.length > 0 ? assetIds : undefined,
         ...(coding
           ? {
               documentId: documentId ?? null,
@@ -1375,6 +1803,7 @@ export const AgentChatPanel = forwardRef<
     if (!documentId || !onOpenDocument) return;
     void onOpenDocument(documentId);
   }
+  openAgentDocumentRef.current = openDocumentFromTable;
 
   function renderHistoryRow(s: AgentSessionSummary) {
     const renaming = renamingId === s.id;
@@ -1475,8 +1904,40 @@ export const AgentChatPanel = forwardRef<
       role={embedded ? undefined : "dialog"}
       aria-label={coding ? "mdocs 帮写助手" : "mdocs 智能助手"}
       aria-modal={embedded ? undefined : fullscreen ? true : undefined}
-      style={embedded || fullscreen ? undefined : anchorStyle}
+      style={
+        embedded || fullscreen
+          ? undefined
+          : {
+              ...anchorStyle,
+              width: panelWidth,
+              ...(panelLeft != null ? { left: panelLeft } : {}),
+            }
+      }
     >
+      {embedded || fullscreen ? null : (
+        <>
+          <div
+            className="mdocs-agent-panel-resize mdocs-agent-panel-resize-left"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整面板宽度"
+            aria-valuenow={panelWidth}
+            aria-valuemin={400}
+            aria-valuemax={960}
+            onPointerDown={(e) => onResizePointerDown("left", e)}
+          />
+          <div
+            className="mdocs-agent-panel-resize mdocs-agent-panel-resize-right"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整面板宽度"
+            aria-valuenow={panelWidth}
+            aria-valuemin={400}
+            aria-valuemax={960}
+            onPointerDown={(e) => onResizePointerDown("right", e)}
+          />
+        </>
+      )}
       <header className="mdocs-agent-panel-header">
         <div className="mdocs-agent-panel-title">
           <img src={deepseekLogoUrl} alt="" className="mdocs-agent-panel-title-logo" />
@@ -1625,7 +2086,13 @@ export const AgentChatPanel = forwardRef<
           )}
         </div>
       ) : (
-        <div className="mdocs-agent-panel-body">
+        <div
+          className="mdocs-agent-panel-body"
+          onPaste={onComposerPaste}
+          onDragOver={onComposerDragOver}
+          onDragLeave={onComposerDragLeave}
+          onDrop={onComposerDrop}
+        >
           <div className="mdocs-agent-panel-scroll-wrap">
             <div
               className="mdocs-agent-panel-welcome"
@@ -1682,6 +2149,19 @@ export const AgentChatPanel = forwardRef<
                     <div className="mdocs-agent-panel-msg-bubble">
                       {m.role === "user" && m.skillNames && m.skillNames.length > 0 ? (
                         <div className="mdocs-agent-msg-skills">Skill ×{m.skillNames.length}</div>
+                      ) : null}
+                      {m.role === "user" && m.assets && m.assets.length > 0 ? (
+                        <div className="mdocs-agent-msg-assets">
+                          {m.assets.map((a) => (
+                            <AgentAssetChip
+                              key={a.id}
+                              id={a.id}
+                              name={a.name}
+                              mime={a.mime}
+                              previewUrl={a.previewUrl}
+                            />
+                          ))}
+                        </div>
                       ) : null}
                       {m.role === "assistant" ? (
                         m.blocks && m.blocks.length > 0 ? (
@@ -1969,102 +2449,138 @@ export const AgentChatPanel = forwardRef<
             onChange={setSelectedSkillNames}
             disabled={sending || !status?.enabled}
           />
-          <div className="mdocs-agent-panel-input-wrap">
-            {coding ? null : graphRefActive ? (
-              <div className="mdocs-agent-doc-ref mdocs-agent-graph-ref">
-                <Network size={15} strokeWidth={1.75} className="mdocs-agent-doc-ref-icon" aria-hidden />
-                <div className="mdocs-agent-doc-ref-text">
-                  <span className="mdocs-agent-doc-ref-title">{graphRefTitle}</span>
-                  <span className="mdocs-agent-doc-ref-path">图谱（只读）</span>
-                </div>
-                <button
-                  type="button"
-                  className="mdocs-agent-doc-ref-unlink"
-                  title="取消引用"
-                  aria-label="取消引用当前图谱"
-                  disabled={sending}
-                  onClick={() => setDocRefDismissed(true)}
-                >
-                  <X size={14} strokeWidth={2} aria-hidden />
-                </button>
-              </div>
-            ) : docRefActive ? (
-              <div className="mdocs-agent-doc-ref">
-                <FileText size={15} strokeWidth={1.75} className="mdocs-agent-doc-ref-icon" aria-hidden />
-                <div className="mdocs-agent-doc-ref-text">
-                  <span className="mdocs-agent-doc-ref-title">{docRefTitle}</span>
-                  {docRefPath ? (
-                    <span className="mdocs-agent-doc-ref-path">{docRefPath}</span>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  className="mdocs-agent-doc-ref-unlink"
-                  title="取消引用"
-                  aria-label="取消引用当前文档"
-                  disabled={sending}
-                  onClick={() => setDocRefDismissed(true)}
-                >
-                  <X size={14} strokeWidth={2} aria-hidden />
-                </button>
+          <div
+            className={
+              "mdocs-agent-panel-input-wrap" + (composerDragOver ? " is-dragover" : "")
+            }
+          >
+            {composerDragOver ? (
+              <div className="mdocs-agent-composer-drop">松开以添加</div>
+            ) : null}
+            {pageRefs.length > 0 || pendingAttachments.length > 0 ? (
+              <div className="mdocs-agent-composer-refs">
+                {pageRefs.length > 1 ? (
+                  <button
+                    type="button"
+                    className="mdocs-agent-page-refs-summary"
+                    aria-expanded={pageRefsExpanded}
+                    onClick={() => setPageRefsExpanded((open) => !open)}
+                  >
+                    <Link2 size={14} strokeWidth={2} aria-hidden />
+                    <span>已引用 {pageRefs.length} 篇文章</span>
+                    {pageRefsExpanded ? (
+                      <ChevronDown size={14} strokeWidth={2} aria-hidden />
+                    ) : (
+                      <ChevronRight size={14} strokeWidth={2} aria-hidden />
+                    )}
+                  </button>
+                ) : null}
+                {pageRefs.length < 2 || pageRefsExpanded
+                  ? pageRefs.map((item) => (
+                      <PageRefChip
+                        key={item.key}
+                        item={item}
+                        disabled={sending}
+                        onDismiss={() => setDocRefDismissed(true)}
+                      />
+                    ))
+                  : null}
+                {pendingAttachments.length > 0 ? (
+                  <div className="mdocs-agent-composer-files">
+                    {pendingAttachments.map((a) => (
+                      <AgentAssetChip
+                        key={a.id}
+                        id={a.id}
+                        name={a.name}
+                        mime={a.mime}
+                        previewUrl={a.previewUrl}
+                        removeDisabled={sending}
+                        onRemove={() => {
+                          if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+                          setPendingAttachments((prev) => prev.filter((x) => x.id !== a.id));
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : null}
             <div className="mdocs-agent-panel-input-body">
-            <textarea
-              className="mdocs-agent-panel-input"
-              rows={2}
-              placeholder={
-                status?.enabled
-                  ? coding
-                    ? "说说要写什么…"
-                    : "把你的问题告诉我…"
-                  : "请先配置 API Key"
-              }
-              value={input}
-              disabled={sending || !status?.enabled}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void sendMessage(input);
-                }
-              }}
-            />
-            {contextUsage ? (
-              <ContextUsageRing
-                percent={contextUsage.percent}
-                used={contextUsage.used}
-                limit={contextUsage.limit}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".png,.jpg,.jpeg,.webp,.gif,.txt,.md,.csv,.json,.pdf"
+                hidden
+                onChange={(e) => void onPickAttachment(e.target.files)}
               />
-            ) : null}
-            <button
-              type="button"
-              className={
-                sending
-                  ? "mdocs-agent-panel-send mdocs-agent-panel-send-stop"
-                  : "mdocs-agent-panel-send"
-              }
-              disabled={
-                sending
-                  ? false
-                  : !status?.enabled || !input.trim()
-              }
-              onClick={() => {
-                if (sending) {
-                  const runId = activeRunIdRef.current;
-                  abortRef.current?.abort();
-                  activeRunIdRef.current = null;
-                  setSending(false);
-                  if (runId) void cancelAgentRunApi(runId).catch(() => undefined);
-                  return;
+              <button
+                type="button"
+                className="mdocs-agent-panel-attach"
+                disabled={sending || uploadingAttachment || !status?.enabled}
+                title="上传附件，也可粘贴或拖入"
+                aria-label="上传附件"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Plus size={18} strokeWidth={2} aria-hidden />
+              </button>
+              <textarea
+                ref={inputRef}
+                className="mdocs-agent-panel-input"
+                rows={1}
+                placeholder={
+                  status?.enabled
+                    ? coding
+                      ? "说说要写什么…"
+                      : "告诉 Agent 你想做什么…"
+                    : "请先配置 API Key"
                 }
-                void sendMessage(input);
-              }}
-              title={sending ? "停止" : "发送"}
-              aria-label={sending ? "停止" : "发送"}
-            >
-              {sending ? "■" : "↑"}
-            </button>
+                value={input}
+                disabled={sending || !status?.enabled}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void sendMessage(input);
+                  }
+                }}
+              />
+              <div className="mdocs-agent-panel-input-actions">
+                {contextUsage ? (
+                  <ContextUsageRing
+                    percent={contextUsage.percent}
+                    used={contextUsage.used}
+                    limit={contextUsage.limit}
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  className={
+                    sending
+                      ? "mdocs-agent-panel-send mdocs-agent-panel-send-stop"
+                      : "mdocs-agent-panel-send"
+                  }
+                  disabled={
+                    sending
+                      ? false
+                      : !status?.enabled || (!input.trim() && pendingAttachments.length === 0)
+                  }
+                  onClick={() => {
+                    if (sending) {
+                      const runId = activeRunIdRef.current;
+                      abortRef.current?.abort();
+                      activeRunIdRef.current = null;
+                      setSending(false);
+                      if (runId) void cancelAgentRunApi(runId).catch(() => undefined);
+                      return;
+                    }
+                    void sendMessage(input);
+                  }}
+                  title={sending ? "停止" : "发送"}
+                  aria-label={sending ? "停止" : "发送"}
+                >
+                  {sending ? "■" : "↑"}
+                </button>
+              </div>
             </div>
           </div>
           <p className="mdocs-agent-panel-footnote">内容由 AI 生成，仅供参考</p>

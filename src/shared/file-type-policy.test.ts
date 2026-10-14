@@ -48,7 +48,7 @@ describe("file-type-policy", () => {
     ]);
   });
 
-  it("sheet：可见、可移动；aiWrite 关；.sheet + raw", () => {
+  it("sheet：可见、可移动；aiWrite 关；.sheet + whole-document merge", () => {
     const p = getPolicy(FILE_TYPE.SHEET);
     expect(p.treeVisible).toBe(true);
     expect(p.movable).toBe(true);
@@ -56,6 +56,7 @@ describe("file-type-policy", () => {
     expect(p.ftsIndex).toBe(true);
     expect(p.writeNormalize).toBe("raw");
     expect(p.draftKind).toBe("sheet");
+    expect(p.mergePipeline).toBe("whole-document");
     expect(p.aiWrite).toBe(false);
     expect(p.comments).toBe(true);
   });

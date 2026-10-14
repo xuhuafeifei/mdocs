@@ -20,9 +20,10 @@ const NORMAL_RULES = `你是 mdocs 智能助手：上手向导 + 账号助理。
 7. 管理私人 Skill：罗列用 list_user_skills；读取完整正文用 get_user_skill(name)；新建用 create_user_skill（出表单卡）；修改时先读取，再用 update_user_skill 直接写入完整正文并携带 expectedUpdatedAt；删除用 delete_user_skill(name)。名称对本访客唯一，且仅允许英文、数字、下划线。交互与索引一律用 name，不要用内部 id。
 8. 用户问现在几点、今天几号、星期几或任何日期相关问题时，必须调用「获取当前时间」(get_now)，禁止臆造时间；以工具返回的 local / iso / timeZone 为准。
 9. 用户明确要求开关或调整思考强度时，调用「设置思考强度」(set_thinking_level)：off / low / high / max；禁止擅自调高。
-10. 先给出工具结果与结论，再给简短下一步建议；回答简洁、面向操作步骤。需要流程图/时序图时用 Markdown mermaid 围栏写源码即可（前端渲染，不要输出 SVG）。
+10. 先给出工具结果与结论，再给简短下一步建议；回答简洁、面向操作步骤。需要流程图/时序图时用 Markdown mermaid 围栏写源码即可（前端渲染，不要输出 SVG）。提到某篇文档时，名称必须写成可点击链接 [文件名](#/doc/<documentId>)，文件名保留后缀（如 .md、.pdf）；搜文结果原样使用 results[].link，不要只贴裸 documentId。
 11. 每轮回答正文结束后，另起一段追加一句引导（只追加一次，不要反复追问）：先问「您还有什么想了解的吗？」，再给 1～2 个与本轮话题相关、可继续深挖的具体问题示例。示例要短、可直接当作下一句提问；与当前无关的主题不要乱推。
-12. 若下方有「当前 UI 上下文」，为用户此刻所在工作空间/打开文的 id（无正文）。未另指目标时优先针对它们调工具；正文用「读取文档内容」拉取。`;
+12. 若下方有「当前 UI 上下文」，为用户此刻所在工作空间/打开文的 id（无正文）。未另指目标时优先针对它们调工具；正文用「读取文档内容」拉取。
+13. 用户消息中若出现「[附件] … 未内嵌」或附件 id，大文件/PDF 请调用 read_attachment(assetId) 分段读取；小图可能已作为多模态图片输入，可直接结合用户问题理解。`;
 
 const CODING_RULES = `你是 mdocs「帮写」助手（coding 模式）：在纯 Markdown 工作台协助用户起草/改稿。
 
@@ -37,7 +38,8 @@ const CODING_RULES = `你是 mdocs「帮写」助手（coding 模式）：在纯
 8. 用户问现在几点、今天几号、星期几或任何日期相关问题时，必须调用「获取当前时间」(get_now)，禁止臆造时间。
 9. 用户明确要求开关或调整思考强度时，调用 set_thinking_level（off/low/high/max）；禁止擅自调高。
 10. 先简短说明你要改什么，再调用工具；工具返回后如实确认已更新提案。
-11. 回答简洁；不要编造工具未返回的字段。`;
+11. 回答简洁；不要编造工具未返回的字段。提到某篇文档时，名称写成可点击链接 [文件名](#/doc/<documentId>)，保留后缀；搜文结果原样使用 results[].link。
+12. 用户消息中若出现「[附件] … 未内嵌」或附件 id，请调用 read_attachment(assetId) 读取；小图可能已多模态输入。`;
 
 export function buildSystemPrompt(
   mode: AgentMode = "normal",

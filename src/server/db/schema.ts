@@ -217,6 +217,23 @@ const SCHEMA_STATEMENTS: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_embedding_chunks_domain ON document_embedding_chunks (domain_id)`,
   `CREATE INDEX IF NOT EXISTS idx_embedding_chunks_document ON document_embedding_chunks (document_id)`,
+  `CREATE TABLE IF NOT EXISTS agent_attachments (
+    attachment_id TEXT PRIMARY KEY,
+    owner_visitor_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    sha256 TEXT NOT NULL,
+    name TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    byte_size INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('staging', 'persisted')),
+    created_at TEXT NOT NULL,
+    persisted_at TEXT,
+    FOREIGN KEY (owner_visitor_id) REFERENCES visitors(visitor_id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_att_session ON agent_attachments (session_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_att_staging_created ON agent_attachments (status, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_att_sha ON agent_attachments (sha256)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_att_owner ON agent_attachments (owner_visitor_id)`,
 ];
 
 
@@ -511,20 +528,62 @@ function migrateAgentModelConfigDropDisplayName(db: Database.Database): void {
 }
 
 /** 一访客多配置：去掉 owner UNIQUE，增加 is_default */
+/** 唯一索引的列（按 seqno）。主键 autoindex 的列是 id，不能当成 owner 唯一约束。 */
+function uniqueIndexColumns(db: Database.Database, indexName: string): string[] {
+  const quoted = indexName.replaceAll(`"`, `""`);
+  const rows = db.prepare(`PRAGMA index_info("${quoted}")`).all() as {
+    seqno: number;
+    name: string;
+  }[];
+  return rows.sort((a, b) => a.seqno - b.seqno).map((r) => r.name);
+}
+
+function hasOwnerVisitorUnique(db: Database.Database): boolean {
+  const indexes = db.prepare(`PRAGMA index_list(agent_model_configs)`).all() as {
+    name: string;
+    unique: number;
+  }[];
+  return indexes.some((idx) => {
+    if (idx.unique !== 1) return false;
+    const cols = uniqueIndexColumns(db, idx.name);
+    return cols.length === 1 && cols[0] === "owner_visitor_id";
+  });
+}
+
+/** 每个访客只保留一条 is_default=1（已有默认里取最新；都没有则提升最新一条）。 */
+function collapseAgentModelConfigDefaults(db: Database.Database): void {
+  const rows = db.prepare(
+    `SELECT id, owner_visitor_id, is_default, updated_at
+     FROM agent_model_configs
+     ORDER BY owner_visitor_id, is_default DESC, updated_at DESC, id DESC`,
+  ).all() as { id: string; owner_visitor_id: string; is_default: number }[];
+  const clear = db.prepare(`UPDATE agent_model_configs SET is_default = 0 WHERE id = ?`);
+  const setDefault = db.prepare(`UPDATE agent_model_configs SET is_default = 1 WHERE id = ?`);
+  let currentOwner = "";
+  let kept = false;
+  for (const row of rows) {
+    if (row.owner_visitor_id !== currentOwner) {
+      currentOwner = row.owner_visitor_id;
+      kept = false;
+    }
+    if (!kept) {
+      kept = true;
+      if (row.is_default !== 1) setDefault.run(row.id);
+      continue;
+    }
+    if (row.is_default === 1) clear.run(row.id);
+  }
+}
+
 function migrateAgentModelConfigMultiDefault(db: Database.Database): void {
   const cols = db.prepare(`PRAGMA table_info(agent_model_configs)`).all() as { name: string }[];
   if (cols.length === 0) return;
 
   const hasIsDefault = cols.some((c) => c.name === "is_default");
-  const indexes = db.prepare(`PRAGMA index_list(agent_model_configs)`).all() as {
-    name: string;
-    unique: number;
-  }[];
-  const hasOwnerUnique = indexes.some(
-    (idx) => idx.unique === 1 && idx.name.startsWith("sqlite_autoindex_agent_model_configs"),
-  );
+  const hasOwnerUnique = hasOwnerVisitorUnique(db);
 
   if (hasIsDefault && !hasOwnerUnique) {
+    collapseAgentModelConfigDefaults(db);
     db.exec(
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_model_configs_owner_default
        ON agent_model_configs(owner_visitor_id) WHERE is_default = 1`,
@@ -564,7 +623,12 @@ function migrateAgentModelConfigMultiDefault(db: Database.Database): void {
       COALESCE(api_type, 'openai-completions'),
       compat_json, model_id, api_key,
       COALESCE(context_window, 128000),
-      1,
+      CASE WHEN id = (
+        SELECT o.id FROM agent_model_configs AS o
+        WHERE o.owner_visitor_id = agent_model_configs.owner_visitor_id
+        ORDER BY o.updated_at DESC, o.id DESC
+        LIMIT 1
+      ) THEN 1 ELSE 0 END,
       updated_at
     FROM agent_model_configs`);
 

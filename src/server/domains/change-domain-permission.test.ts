@@ -48,4 +48,17 @@ describe("listDocumentsByVisitor filters", () => {
     expect(all.total).toBe(2);
     expect(all.groups).toBeUndefined();
   });
+
+  it("filters by fileType md vs sheet", () => {
+    const db = seed();
+    db.prepare(`UPDATE documents SET file_type = 'sheet' WHERE document_id = 'doc-b'`).run();
+    const sheets = listDocumentsByVisitor(db, "owner", { fileType: "sheet" });
+    expect(sheets.total).toBe(1);
+    expect(sheets.items[0]?.documentId).toBe("doc-b");
+    expect(sheets.items[0]?.fileType).toBe("sheet");
+    const mds = listDocumentsByVisitor(db, "owner", { fileType: "md" });
+    expect(mds.total).toBe(1);
+    expect(mds.items[0]?.documentId).toBe("doc-a");
+    expect(mds.items[0]?.fileType).toBe("md");
+  });
 });

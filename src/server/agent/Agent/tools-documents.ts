@@ -69,7 +69,7 @@ export function searchDocumentsTool({ visitorId }: ToolDeps): AgentTool {
     name: "search_documents",
     label: "搜索文档",
     description:
-      "全文搜索当前访客可读文档（跨工作空间内容检索）。mode 控制检索路：auto（默认，关键词+语义混合）、keyword（仅关键词 FTS）、semantic（仅语义近邻，模型未就绪返回空）。要按「我创建的文章」筛选/翻页请用 query_my_documents。",
+      "全文搜索当前访客可读文档（跨工作空间内容检索）。mode 控制检索路：auto（默认，关键词+语义混合）、keyword（仅关键词 FTS）、semantic（仅语义近邻，模型未就绪返回空）。每条结果含 link（Markdown 链接，文字是带后缀的文件名）。向用户展示命中时原样使用 link，不要改成纯文本。要按「我创建的文章」筛选/翻页请用 query_my_documents。",
     parameters: Type.Object({
       query: Type.String({ description: "搜索词" }),
       mode: Type.Optional(
@@ -102,7 +102,13 @@ export function searchDocumentsTool({ visitorId }: ToolDeps): AgentTool {
         mode: mode ?? "auto",
         modelReady: isEmbeddingReady(),
         tokens: tokenizeQuery(q),
-        results,
+        results: results.map((row) => {
+          const base =
+            row.relativePath.split("/").filter(Boolean).pop() || row.displayName || "文档";
+          const label = base.replace(/[\[\]()]/g, "") || "文档";
+          const openUrl = `#/doc/${row.documentId}`;
+          return { ...row, openUrl, link: `[${label}](${openUrl})` };
+        }),
       });
     },
   };
@@ -177,11 +183,16 @@ export function queryMyDocumentsTool({ visitorId }: ToolDeps): AgentTool {
     name: "query_my_documents",
     label: "查询我的文章",
     description:
-      "列出当前访客创建的文档（与设置页「我的文章」同一接口）。可按 domainId、creatorVisitorId 筛选，按 domain/creator 分组；用 offset/limit 翻页。要全文检索可读文档请用 search_documents。",
+      "列出当前访客创建的文档（与设置页「我的文章」同一接口）。可按 domainId、creatorVisitorId、fileType（md/html/sheet）筛选，按 domain/creator 分组；用 offset/limit 翻页。要全文检索可读文档请用 search_documents。",
     parameters: Type.Object({
       domainId: Type.Optional(Type.String({ description: "只看该工作空间，不传则全部" })),
       creatorVisitorId: Type.Optional(
         Type.String({ description: "只看该创建者。本工具已限定为当前访客创建的文档，筛他人通常为空" }),
+      ),
+      fileType: Type.Optional(
+        Type.Union([Type.Literal("md"), Type.Literal("html"), Type.Literal("sheet")], {
+          description: "只看该文件类型；不传则不限",
+        }),
       ),
       groupBy: Type.Optional(
         Type.Union([Type.Literal("domain"), Type.Literal("creator")], {
@@ -192,9 +203,10 @@ export function queryMyDocumentsTool({ visitorId }: ToolDeps): AgentTool {
       limit: Type.Optional(Type.Number({ description: "每页条数，默认 20，最大 100" })),
     }),
     execute: async (_id, params) => {
-      const { domainId, creatorVisitorId, groupBy, offset, limit } = params as {
+      const { domainId, creatorVisitorId, fileType, groupBy, offset, limit } = params as {
         domainId?: string;
         creatorVisitorId?: string;
+        fileType?: "md" | "html" | "sheet";
         groupBy?: "domain" | "creator";
         offset?: number;
         limit?: number;
@@ -204,6 +216,7 @@ export function queryMyDocumentsTool({ visitorId }: ToolDeps): AgentTool {
         limit: Math.min(Math.max(Math.floor(limit ?? 20), 1), 100),
         domainId,
         creatorVisitorId,
+        fileType,
         groupBy,
       });
       return asToolResult({

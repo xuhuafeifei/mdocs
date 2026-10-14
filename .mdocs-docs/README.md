@@ -45,6 +45,7 @@
 | `agent-thinking-level` | **已同意**：模型配置思考档位 + `set_thinking_level` — [需求分析](./requirements/agent-thinking-level/需求分析.md) · [设计契约](./requirements/agent-thinking-level/设计契约.md) |
 | `agent-sheet-overwrite` | **已同意**：Agent `sheet_overwrite` 整表替换指定工作表的列与行 — [需求分析](./requirements/agent-sheet-overwrite/需求分析.md) · [设计契约](./requirements/agent-sheet-overwrite/设计契约.md) |
 | `sheet-merge-style` | **已实现**：`.sheet` 合并单元格 + cell/font 样式（底色/字色/粗斜体/字号）— [需求分析](./requirements/sheet-merge-style/需求分析.md) · [设计契约](./requirements/sheet-merge-style/设计契约.md) · [代码索引](./requirements/sheet-merge-style/代码索引.md) |
+| `sheet-conflict-whole-choose` | **已同意**：sheet 发布冲突整表二选一（用我的 / 用别人的），不做 JSON 行级 merge — [需求分析](./requirements/sheet-conflict-whole-choose/需求分析.md) · [设计契约](./requirements/sheet-conflict-whole-choose/设计契约.md) · [代码索引](./requirements/sheet-conflict-whole-choose/代码索引.md) |
 | `conflict-force-overwrite` | **已同意**：冲突时 owner 强制覆盖（merge 通道 + 正文=本地）— [需求分析](./requirements/conflict-force-overwrite/需求分析.md) · [设计契约](./requirements/conflict-force-overwrite/设计契约.md) |
 | `agent-chat-mermaid` | **已同意**：Ask 聊天气泡 mermaid 默认渲染、可切代码；只存源码前端翻译 — [需求分析](./requirements/agent-chat-mermaid/需求分析.md) · [设计契约](./requirements/agent-chat-mermaid/设计契约.md) |
 | `domain-permission-and-doc-table` | **已同意**：域权限只升不降；我的文章按域/创建者筛选分组；Agent 可升级域、筛文章、邀请看文档 — [设计契约](./requirements/domain-permission-and-doc-table/设计契约.md) |
@@ -72,6 +73,7 @@
 | `doc-info-menu` | 文档信息菜单与图标；**增量已同意** 纯文字符数 — [设计契约-char-count](./requirements/doc-info-menu/设计契约-char-count.md) |
 | `server-file-logging` | **已同意**：文件日志（默认 error 落盘，无前台）— [设计契约](./requirements/server-file-logging/设计契约.md) |
 | `editor-content-width` | 编辑区宽度溢出 |
+| `agent-multimedia-assets` | **已同意**：SQLite + 全局 `agent-attachments`；能力表；ContentPart 注入 — [需求分析](./requirements/agent-multimedia-assets/需求分析.md) · [设计契约](./requirements/agent-multimedia-assets/设计契约.md) · [流程图](./diagrams/agent-multimedia-dsh-vs-proposal.md) |
 
 ## 目录约定
 

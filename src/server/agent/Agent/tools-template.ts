@@ -38,6 +38,7 @@ import {
 import { userSkillTools } from "./tools-user-skills.js";
 import { getNowTool } from "./tools-time.js";
 import { setThinkingLevelTool } from "./tools-thinking.js";
+import { readAttachmentTool } from "../attachments/tools-read-attachment.js";
 
 /** 手册（skills 缺省时为空） */
 export function manualTools(deps: ToolDeps): AgentTool[] {
@@ -47,7 +48,7 @@ export function manualTools(deps: ToolDeps): AgentTool[] {
 
 /** 与账号无关的轻量工具（Ask / 帮写都挂） */
 export function utilityTools(deps: ToolDeps): AgentTool[] {
-  return [getNowTool(), setThinkingLevelTool(deps)];
+  return [getNowTool(), setThinkingLevelTool(deps), readAttachmentTool(deps)];
 }
 
 /** 账号结构：访客 / 域 / 文档 */

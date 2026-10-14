@@ -22,8 +22,14 @@ export type PiRunTrack = {
 export type RunPiAgentParams = {
   agent: Agent;
   message: string;
+  /** 本轮多模态图片（pi ImageContent）；不落盘 */
+  images?: Array<{ type: "image"; data: string; mimeType: string }>;
   /** 本轮引用；落盘到 user 行，不写入展开正文 */
   skillNames?: string[];
+  /** 本轮附件 Ref；落盘到 user 行 */
+  assets?: Array<{ id: string; name: string; mime: string; bytes: number }>;
+  /** 落盘用的 user 可见文本（可与 prompt 文本不同） */
+  persistContent?: string;
   visitorId: string;
   sessionId: string;
   sessionManager: AgentSessionManager;
@@ -35,7 +41,10 @@ export async function runPiAgent(params: RunPiAgentParams): Promise<PiRunTrack> 
   const {
     agent,
     message,
+    images,
     skillNames,
+    assets,
+    persistContent,
     visitorId,
     sessionId,
     sessionManager,
@@ -45,7 +54,15 @@ export async function runPiAgent(params: RunPiAgentParams): Promise<PiRunTrack> 
 
   const track: PiRunTrack = { emittedError: false, lastUsageInput: 0 };
   const unsub = agent.subscribe(
-    bindAgentEvents({ sessionId, sessionManager, skillNames, onEvent, track }),
+    bindAgentEvents({
+      sessionId,
+      sessionManager,
+      skillNames,
+      assets,
+      persistContent: persistContent ?? message,
+      onEvent,
+      track,
+    }),
   );
 
   const onAbort = () => {
@@ -56,7 +73,11 @@ export async function runPiAgent(params: RunPiAgentParams): Promise<PiRunTrack> 
   signal?.addEventListener("abort", onAbort);
 
   try {
-    await agent.prompt(message);
+    if (images && images.length > 0) {
+      await agent.prompt(message, images);
+    } else {
+      await agent.prompt(message);
+    }
     const leftover = agent.state.errorMessage;
     // prompt 在模型鉴权失败时仍可能 resolve，再兜底一次
     if (leftover && !track.emittedError) {
@@ -105,10 +126,20 @@ function bindAgentEvents(opts: {
   sessionId: string;
   sessionManager: AgentSessionManager;
   skillNames?: string[];
+  assets?: Array<{ id: string; name: string; mime: string; bytes: number }>;
+  persistContent: string;
   onEvent: (event: AgentStreamEvent) => void;
   track: PiRunTrack;
 }): (event: AgentEvent) => Promise<void> {
-  const { sessionId, sessionManager, skillNames, onEvent, track } = opts;
+  const {
+    sessionId,
+    sessionManager,
+    skillNames,
+    assets,
+    persistContent,
+    onEvent,
+    track,
+  } = opts;
   const onToolUi = createToolUiEffectsHandler(onEvent);
   const toolStartDetail = new Map<string, string>();
   let appendedUser = false;
@@ -131,8 +162,16 @@ function bindAgentEvents(opts: {
       if (event.message.role === "user") {
         if (!appendedUser) {
           appendedUser = true;
-          const content = extractUserContent(event.message);
-          if (content) await sessionManager.appendUser(sessionId, content, skillNames);
+          const fromEvent = extractUserContent(event.message);
+          const content = persistContent || fromEvent;
+          if (content || (assets && assets.length > 0)) {
+            await sessionManager.appendUser(
+              sessionId,
+              content || "(见附件)",
+              skillNames,
+              assets,
+            );
+          }
         }
         return;
       }

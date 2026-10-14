@@ -197,6 +197,7 @@ export async function startAgentRun(params: {
   message: string;
   mode?: AgentMode;
   skillNames?: string[];
+  assetIds?: string[];
   documentId?: string | null;
   workingMarkdown?: string;
   baseMarkdown?: string;
@@ -262,6 +263,7 @@ export async function startAgentRun(params: {
         message: params.message,
         mode,
         skillNames: params.skillNames,
+        assetIds: params.assetIds,
         documentId: params.documentId,
         workingMarkdown: params.workingMarkdown,
         baseMarkdown: params.baseMarkdown,

@@ -25,13 +25,16 @@
 
 ### 发布冲突 / 强制覆盖
 
-- **关键词**：`VERSION_CONFLICT` `forceLocal` `ConflictModal` `publishMerge`
+- **关键词**：`VERSION_CONFLICT` `forceLocal` `ConflictModal` `publishMerge` `whole-document` `SheetWholeMergePane`
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `src/server/documents/document.service.ts` | `assertNoVersionConflict` `publishMergeDocument` |
   | `src/web/app/ConflictModal.tsx` | 冲突入口弹窗 |
-- **需求**：[`../requirements/conflict-force-overwrite/`](../requirements/conflict-force-overwrite/)
+  | `src/shared/file-type-policy.ts` | `mergePipeline`（sheet=`whole-document`） |
+  | `src/web/app/MergeView.tsx` | `SheetWholeDocumentMerge` |
+  | `src/web/app/merge/SheetWholeMergePane.tsx` | sheet 整表二选一 UI |
+- **需求**：[`../requirements/conflict-force-overwrite/`](../requirements/conflict-force-overwrite/)、[`../requirements/sheet-conflict-whole-choose/`](../requirements/sheet-conflict-whole-choose/)
 
 ### Commit / merge-base
 

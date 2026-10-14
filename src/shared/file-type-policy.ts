@@ -33,8 +33,8 @@ export interface FileTypePolicy {
   writeNormalize: 'md-lexical' | 'raw' | 'none';
   /** 本地草稿类型 */
   draftKind: 'lexical' | 'html' | 'sheet' | 'none';
-  /** merge 管道 */
-  mergePipeline: 'lexical-md-bridge' | 'raw-text' | 'none';
+  /** merge 管道：整文档二选一（sheet）；行级 raw；Lexical↔MD bridge；不可 merge */
+  mergePipeline: 'lexical-md-bridge' | 'raw-text' | 'whole-document' | 'none';
   /**
    * 顶栏是否提供 AI 帮写入口。
    * html：工作台与写回均为 HTML 原文（不做 MD↔HTML）。
@@ -88,7 +88,7 @@ const POLICY_TABLE: Record<FileType, FileTypePolicy> = {
     textExtract: 'raw',
     writeNormalize: 'raw',
     draftKind: 'sheet',
-    mergePipeline: 'raw-text',
+    mergePipeline: 'whole-document',
     aiWrite: false,
     comments: true,
   },

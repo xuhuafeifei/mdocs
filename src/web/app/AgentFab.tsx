@@ -7,6 +7,41 @@ export type AgentFabPos = { left: number; bottom: number };
 export const AGENT_FAB_DEFAULT: AgentFabPos = { left: 12, bottom: 64 };
 const STORAGE_KEY = "mdocs.agentFabPosition";
 const FAB_SIZE = 36;
+/** 浮层默认落在 480–520 这一档，避免一打开就占满半屏 */
+export const AGENT_PANEL_WIDTH_DEFAULT = 500;
+export const AGENT_PANEL_WIDTH_MIN = 400;
+export const AGENT_PANEL_WIDTH_MAX = 960;
+const AGENT_PANEL_WIDTH_KEY = "mdocs.agentPanelWidth";
+
+export function clampAgentPanelWidth(width: number): number {
+  const viewportMax =
+    typeof window === "undefined"
+      ? AGENT_PANEL_WIDTH_MAX
+      : Math.max(
+          AGENT_PANEL_WIDTH_MIN,
+          Math.min(AGENT_PANEL_WIDTH_MAX, window.innerWidth - 32),
+        );
+  if (!Number.isFinite(width)) return Math.min(AGENT_PANEL_WIDTH_DEFAULT, viewportMax);
+  return Math.min(viewportMax, Math.max(AGENT_PANEL_WIDTH_MIN, Math.round(width)));
+}
+
+export function loadAgentPanelWidth(): number {
+  try {
+    const raw = localStorage.getItem(AGENT_PANEL_WIDTH_KEY);
+    if (!raw) return clampAgentPanelWidth(AGENT_PANEL_WIDTH_DEFAULT);
+    return clampAgentPanelWidth(Number(raw));
+  } catch {
+    return clampAgentPanelWidth(AGENT_PANEL_WIDTH_DEFAULT);
+  }
+}
+
+export function saveAgentPanelWidth(width: number): void {
+  try {
+    localStorage.setItem(AGENT_PANEL_WIDTH_KEY, String(clampAgentPanelWidth(width)));
+  } catch {
+    // 隐私模式或配额满时忽略，本次会话仍用内存宽度
+  }
+}
 /** 超过该像素位移才算拖动（否则松开视为点击开关面板） */
 const CLICK_SLOP = 3;
 
@@ -50,14 +85,18 @@ function isDefaultPos(pos: AgentFabPos): boolean {
 }
 
 /** 按 FAB 位置计算聊天面板 left/bottom（尽量贴在入口旁，避让视口边缘） */
-export function agentPanelAnchorStyle(fab: AgentFabPos): React.CSSProperties {
+export function agentPanelAnchorStyle(
+  fab: AgentFabPos,
+  panelWidth?: number,
+): React.CSSProperties {
   const gap = 8;
-  const panelW = Math.min(480, window.innerWidth - 72);
+  const panelW = clampAgentPanelWidth(panelWidth ?? loadAgentPanelWidth());
   let left = fab.left + FAB_SIZE + gap;
   if (left + panelW > window.innerWidth - 8) {
     left = fab.left - gap - panelW;
   }
-  left = Math.max(8, left);
+  const maxLeft = Math.max(8, window.innerWidth - panelW - 8);
+  left = Math.max(8, Math.min(left, maxLeft));
   const bottom = Math.max(8, fab.bottom - 8);
   return { left, bottom };
 }

@@ -74,6 +74,16 @@ function formatDocDate(iso: string): string {
   return `${d.getFullYear()}-${month}-${day}`;
 }
 
+function formatMyDocFileType(
+  fileType: string | undefined,
+  t: (key: TranslationKey) => string,
+): string {
+  if (fileType === "md") return t("myDocumentsFileTypeMd");
+  if (fileType === "sheet") return t("myDocumentsFileTypeSheet");
+  if (fileType === "html") return t("myDocumentsFileTypeHtml");
+  return fileType || "—";
+}
+
 type SettingsTab = "general" | "bookmarks" | "myDocuments" | "embeddingIndex" | "domainManagement" | "memberTemplates" | "savePublish" | "agentConfig";
 
 const SETTINGS_NAV: Array<{
@@ -210,6 +220,7 @@ export function SettingsPage(props: {
   const [myDocTotal, setMyDocTotal] = useState(0);
   const [myDocDomainId, setMyDocDomainId] = useState("");
   const [myDocCreatorId, setMyDocCreatorId] = useState("");
+  const [myDocFileType, setMyDocFileType] = useState<"" | "md" | "html" | "sheet">("");
   const [myDocGroupBy, setMyDocGroupBy] = useState<"" | "domain" | "creator">("");
   const [myDocGroups, setMyDocGroups] = useState<{ key: string; items: MyDocument[] }[] | null>(null);
   const [visitorOptions, setVisitorOptions] = useState<VisitorDirectoryEntry[]>([]);
@@ -266,7 +277,7 @@ export function SettingsPage(props: {
         if (mountedRef.current) setVisitorOptions(rows);
       }).catch(() => {});
     }
-  }, [tab, myDocDomainId, myDocCreatorId, myDocGroupBy]);
+  }, [tab, myDocDomainId, myDocCreatorId, myDocFileType, myDocGroupBy]);
 
   /**
    * 我的文章搜索：防抖 300ms 接 POST /search。
@@ -366,6 +377,7 @@ export function SettingsPage(props: {
         limit: MY_DOC_PAGE_SIZE,
         domainId: myDocDomainId || undefined,
         creatorVisitorId: myDocCreatorId || undefined,
+        fileType: myDocFileType || undefined,
         groupBy: myDocGroupBy || undefined,
       });
       if (!mountedRef.current) return;
@@ -944,6 +956,19 @@ export function SettingsPage(props: {
                     </option>
                   ))}
                 </select>
+                {!myDocSearchActive && (
+                  <select
+                    className="mdocs-my-docs-select"
+                    value={myDocFileType}
+                    aria-label={t("myDocumentsFilterFileType")}
+                    onChange={(e) => setMyDocFileType(e.target.value as "" | "md" | "html" | "sheet")}
+                  >
+                    <option value="">{t("myDocumentsFilterAllFileTypes")}</option>
+                    <option value="md">{t("myDocumentsFileTypeMd")}</option>
+                    <option value="sheet">{t("myDocumentsFileTypeSheet")}</option>
+                    <option value="html">{t("myDocumentsFileTypeHtml")}</option>
+                  </select>
+                )}
                 <select
                   className="mdocs-my-docs-select"
                   value={myDocSearchMode}
@@ -1051,6 +1076,7 @@ export function SettingsPage(props: {
                       <thead>
                         <tr>
                           <th>{t("myDocumentsColTitle")}</th>
+                          <th>{t("myDocumentsColFileType")}</th>
                           <th>{t("myDocumentsColDomain")}</th>
                           <th>{t("myDocumentsColCreator")}</th>
                           <th>{t("myDocumentsColUpdated")}</th>
@@ -1062,7 +1088,7 @@ export function SettingsPage(props: {
                         {(myDocGroups ?? [{ key: "", items: myDocuments }]).flatMap((group) => {
                           const header = group.key ? (
                             <tr key={`group-${group.key}`} className="mdocs-my-docs-group">
-                              <td colSpan={6}>
+                              <td colSpan={7}>
                                 {myDocGroupBy === "domain"
                                   ? (domainNameMap.get(group.key) || group.key)
                                   : (group.items[0]?.creatorName || group.key)}
@@ -1074,6 +1100,7 @@ export function SettingsPage(props: {
                             <td className="mdocs-my-docs-title" onClick={() => props.onOpenDocument(doc.documentId)}>
                               {doc.displayName || doc.relativePath || "Untitled"}
                             </td>
+                            <td>{formatMyDocFileType(doc.fileType, t)}</td>
                             <td>{domainNameMap.get(doc.domainId || "") || doc.domainId || "—"}</td>
                             <td>{doc.creatorName || doc.creatorVisitorId || "—"}</td>
                             <td className="mdocs-my-docs-date">{formatDocDate(doc.updatedAt)}</td>

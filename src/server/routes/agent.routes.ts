@@ -22,6 +22,11 @@ import {
   renameAgentSessionForApi,
   pinAgentSessionForApi,
 } from "../agent/Agent/session-manager.js";
+import {
+  allowedUploadAccept,
+  getAttachmentStore,
+} from "../agent/attachments/index.js";
+import { agentAttachmentUpload } from "../agent/attachments/upload.js";
 import { resolveUserChoice, expireUserChoice, cancelUserChoice } from "../agent/Agent/choice-pending.js";
 import {
   resolveSkillForm,
@@ -67,6 +72,81 @@ function parseDocumentId(raw: unknown): string | null | undefined {
 /** 薄封装：校验入参 → 调 agent 层 → 把 onEvent 写成 SSE */
 export function buildAgentRouter(): Router {
   const router = Router();
+
+  router.get("/attachments/accept", (_req, res) => {
+    res.json({ data: { accept: allowedUploadAccept() } });
+  });
+
+  router.post("/attachments", agentAttachmentUpload.single("file"), async (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const sessionId =
+      typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : "";
+    if (!sessionId) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "sessionId is required" } });
+      return;
+    }
+    const file = req.file;
+    if (!file?.buffer?.length) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "file is required" } });
+      return;
+    }
+    try {
+      const meta = await getAttachmentStore().saveStaging({
+        visitorId: req.visitor.visitor_id,
+        sessionId,
+        name: file.originalname || "file",
+        mime: file.mimetype,
+        data: new Uint8Array(file.buffer),
+      });
+      res.status(201).json({
+        data: {
+          id: meta.id,
+          name: meta.name,
+          mime: meta.mime,
+          bytes: meta.bytes,
+          status: meta.status,
+        },
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "unsupported_type" || msg === "file_too_large") {
+        res.status(400).json({ error: { code: "BAD_REQUEST", message: msg } });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.get("/attachments/:id", async (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
+    if (!id) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "id is required" } });
+      return;
+    }
+    try {
+      const { meta, data } = await getAttachmentStore().read({
+        visitorId: req.visitor.visitor_id,
+        id,
+      });
+      res.setHeader("Content-Type", meta.mime || "application/octet-stream");
+      res.setHeader("Cache-Control", "private, max-age=300");
+      res.send(Buffer.from(data));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "attachment_not_found") {
+        res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
+        return;
+      }
+      throw err;
+    }
+  });
 
   router.get("/status", (req, res) => {
     if (!req.visitor) {
@@ -642,8 +722,15 @@ export function buildAgentRouter(): Router {
     }
 
     const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
-    if (!message) {
-      res.status(400).json({ error: { code: "BAD_REQUEST", message: "message is required" } });
+    const assetIds = Array.isArray(req.body?.assetIds)
+      ? (req.body.assetIds as unknown[])
+          .filter((id): id is string => typeof id === "string" && !!id.trim())
+          .map((id) => id.trim())
+      : [];
+    if (!message && assetIds.length === 0) {
+      res.status(400).json({
+        error: { code: "BAD_REQUEST", message: "message or assetIds is required" },
+      });
       return;
     }
 
@@ -699,6 +786,7 @@ export function buildAgentRouter(): Router {
         message,
         mode,
         skillNames,
+        assetIds,
         documentId,
         workingMarkdown,
         baseMarkdown,

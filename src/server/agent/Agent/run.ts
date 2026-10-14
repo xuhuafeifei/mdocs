@@ -37,6 +37,10 @@ import {
   markSkillExpandPoints,
 } from "./hydrate-messages.js";
 import { normalizeSkillRefs } from "./user-skills.js";
+import {
+  getAttachmentStore,
+  prepareUserTurn,
+} from "../attachments/index.js";
 
 export type { AgentContextUsage, AgentMode };
 export type { AgentDocumentTableRow, AgentStreamEvent };
@@ -73,6 +77,8 @@ export async function runOnboardingChat(params: {
   skillNames?: string[];
   /** @deprecated 兼容旧客户端 skillIds */
   skillIds?: string[];
+  /** 本轮聊天附件 id（staging → persist） */
+  assetIds?: string[];
   /** coding：本轮前端工作稿（请求体携带） */
   documentId?: string | null;
   workingMarkdown?: string;
@@ -87,6 +93,9 @@ export async function runOnboardingChat(params: {
   const skillNames = normalizeSkillRefs(
     params.skillNames?.length ? params.skillNames : params.skillIds,
   );
+  const assetIds = Array.isArray(params.assetIds)
+    ? params.assetIds.filter((id) => typeof id === "string" && id.trim()).map((id) => id.trim())
+    : [];
 
   const cfg = getVisitorAgentConfig(visitorId);
   if (!cfg?.apiKey) throw new Error("missing_api_key");
@@ -123,10 +132,28 @@ export async function runOnboardingChat(params: {
       mode === "coding" ? params.documentId ?? null : undefined,
     );
 
+  const prepared =
+    assetIds.length > 0
+      ? await prepareUserTurn({
+          store: getAttachmentStore(),
+          visitorId,
+          sessionId,
+          message,
+          assetIds,
+        })
+      : null;
+  const promptText = prepared?.pi.text ?? message;
+  const promptImages = prepared?.pi.images ?? [];
+  const persistContent = message.trim()
+    ? message.trim()
+    : prepared?.refs.length
+      ? `(附件 ${prepared.refs.map((r) => r.name).join(", ")})`
+      : message;
+
   // 含本轮标定展开点（越新越先 → 本轮优先）；历史 hydrate；本轮假 tool；原文 prompt
   const expandAt = markSkillExpandPoints([
     ...history,
-    { role: "user", content: message, skillNames },
+    { role: "user", content: persistContent, skillNames },
   ]);
   const { messages: historyPi } = hydrateSessionMessagesToPi(
     visitorId,
@@ -157,8 +184,11 @@ export async function runOnboardingChat(params: {
 
   const track = await runPiAgent({
     agent,
-    message,
+    message: promptText,
+    images: promptImages.length > 0 ? promptImages : undefined,
     skillNames,
+    assets: prepared?.refs,
+    persistContent,
     visitorId,
     sessionId,
     sessionManager,
@@ -202,7 +232,8 @@ function createAgentModel(cfg: VisitorAgentConfig) {
       provider: providerId,
       baseUrl: cfg.baseUrl,
       reasoning: false,
-      input: ["text"],
+      // 不含 image 时，pi-ai 会把图片换成 “(image omitted: model does not support images)”
+      input: ["text", "image"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: cfg.contextWindow,
       maxTokens: 8192,
@@ -225,7 +256,8 @@ function createAgentModel(cfg: VisitorAgentConfig) {
       provider: providerId,
       baseUrl: cfg.baseUrl,
       reasoning: true,
-      input: ["text"],
+      // 不含 image 时，pi-ai 会把图片换成 “(image omitted: model does not support images)”
+      input: ["text", "image"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: cfg.contextWindow,
       maxTokens: 8192,
