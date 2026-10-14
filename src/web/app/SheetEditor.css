@@ -21,6 +21,7 @@
   padding: 0 16px;
   height: 38px;
   min-height: 38px;
+  flex-shrink: 0;
   background: var(--mdocs-surface, #ffffff);
   border-bottom: 1px solid var(--mdocs-border, #e0e0e0);
   gap: 12px;
@@ -282,11 +283,18 @@
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     justify-content: flex-start;
+    /* 窄屏加行/加列必须露在 DocChrome 下方，勿被挤出视口 */
+    position: relative;
+    z-index: 1;
   }
 
   .mdocs-sheet-toolbar-left {
     flex-wrap: nowrap;
     min-width: max-content;
+  }
+
+  .mdocs-sheet-btn-add {
+    flex-shrink: 0;
   }
 
   .mdocs-sheet-toolbar-right {

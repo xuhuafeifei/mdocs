@@ -792,6 +792,7 @@ export function SheetEditor(props: SheetEditorProps) {
         onToggleDocInfo={() => setShowDocInfoMenu(!showDocInfoMenu)}
         docInfoMenuRef={docInfoMenuRef}
         readerChrome={props.readerChrome}
+        readerHeaderDocked={Boolean(props.readerChrome)}
         onOpenMobileNav={props.onOpenMobileNav}
         readerMoreOpen={showReaderMoreMenu}
         onToggleReaderMore={() => setShowReaderMoreMenu((o) => !o)}
