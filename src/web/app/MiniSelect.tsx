@@ -13,9 +13,11 @@ interface MiniSelectProps {
   options: MiniSelectOption[];
   value: string;
   onChange: (value: string) => void;
+  ariaLabel?: string;
+  className?: string;
 }
 
-export function MiniSelect({ options, value, onChange }: MiniSelectProps) {
+export function MiniSelect({ options, value, onChange, ariaLabel, className }: MiniSelectProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -60,24 +62,33 @@ export function MiniSelect({ options, value, onChange }: MiniSelectProps) {
   }
 
   return (
-    <div className="mdocs-mini-select" style={{ position: "relative" }}>
+    <div
+      className={"mdocs-mini-select" + (className ? ` ${className}` : "")}
+      style={{ position: "relative" }}
+    >
       {/* 触发按钮 */}
       <button
         ref={triggerRef}
         type="button"
         className="mdocs-mini-select-trigger"
+        aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => setOpen((v) => !v)}
       >
-        <span>{selected?.label}</span>
+        <span className="mdocs-mini-select-label">{selected?.label}</span>
         <svg className={"mdocs-mini-select-chevron" + (open ? " open" : "")} width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M1 1l4 4 4-4" />
         </svg>
       </button>
       {/* 下拉菜单 */}
       {open && (
-        <div ref={menuRef} className="mdocs-mini-select-menu card" role="listbox">
+        <div
+          ref={menuRef}
+          className="mdocs-mini-select-menu card"
+          role="listbox"
+          aria-label={ariaLabel}
+        >
           {options.map((o) => (
             <button
               key={o.value}

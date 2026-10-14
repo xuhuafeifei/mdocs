@@ -8,6 +8,7 @@ import { ChevronDown, Search, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import { fetchDomainsSafe } from "../services/domainsBootstrap";
 import { searchDocumentsApi, type SearchMode, type SearchResult } from "../services/endpoints";
+import { MiniSelect } from "./MiniSelect";
 import { localizeDomainName, translateError } from "./utils";
 import type { DomainSummary } from "../../shared/types/domain";
 
@@ -210,106 +211,114 @@ export function DocSearchOverlay(props: {
         aria-label={t("docSearchTitle")}
       >
         <div className="mdocs-doc-search-bar">
-          <Search size={18} strokeWidth={1.75} aria-hidden />
-          <input
-            ref={inputRef}
-            className="mdocs-doc-search-input"
-            type="search"
-            value={query}
-            placeholder={t("docSearchPlaceholder")}
-            aria-label={t("docSearchPlaceholder")}
-            onChange={(ev) => setQuery(ev.target.value)}
-          />
-          <select
-            className="mdocs-doc-search-mode"
-            value={mode}
-            aria-label={t("myDocumentsSearchMode")}
-            onChange={(ev) => setMode(ev.target.value as SearchMode)}
-          >
-            <option value="auto">{t("myDocumentsModeAuto")}</option>
-            <option value="keyword">{t("myDocumentsModeKeyword")}</option>
-            <option value="semantic">{t("myDocumentsModeSemantic")}</option>
-          </select>
-          <div className="mdocs-doc-search-domain" ref={domainWrapRef}>
-            <button
-              type="button"
-              className="mdocs-doc-search-domain-trigger"
-              aria-label={t("docSearchDomainAria")}
-              aria-expanded={domainOpen}
-              aria-haspopup="listbox"
-              onClick={() => {
-                if (domainOpen) {
-                  setDomainOpen(false);
-                  return;
-                }
-                setDomainOpen(true);
-                setDomainFilter("");
-                refreshDomains();
+          <div className="mdocs-doc-search-query">
+            <Search size={18} strokeWidth={1.75} aria-hidden className="mdocs-doc-search-query-icon" />
+            <input
+              ref={inputRef}
+              className="mdocs-doc-search-input"
+              type="search"
+              value={query}
+              placeholder={t("docSearchPlaceholder")}
+              aria-label={t("docSearchPlaceholder")}
+              onChange={(ev) => setQuery(ev.target.value)}
+            />
+          </div>
+          <div className="mdocs-doc-search-filters">
+            <MiniSelect
+              className="mdocs-doc-search-mode"
+              ariaLabel={t("myDocumentsSearchMode")}
+              value={mode}
+              onChange={(v) => {
+                setDomainOpen(false);
+                setMode(v as SearchMode);
               }}
-            >
-              <span className="mdocs-doc-search-domain-label">{selectedDomainLabel}</span>
-              <ChevronDown size={14} strokeWidth={1.75} />
-            </button>
-            {domainOpen && (
-              <div className="mdocs-doc-search-domain-menu" role="listbox" aria-label={t("docSearchDomainAria")}>
-                <input
-                  className="mdocs-doc-search-domain-filter"
-                  type="search"
-                  value={domainFilter}
-                  placeholder={t("docSearchDomainFilter")}
-                  aria-label={t("docSearchDomainFilter")}
-                  autoFocus
-                  onChange={(ev) => setDomainFilter(ev.target.value)}
-                  onClick={(ev) => ev.stopPropagation()}
-                />
-                <button
-                  type="button"
-                  className={
-                    "mdocs-doc-search-domain-option" + (domainId === ALL_DOMAINS ? " active" : "")
-                  }
-                  role="option"
-                  aria-selected={domainId === ALL_DOMAINS}
-                  onClick={() => {
-                    setDomainId(ALL_DOMAINS);
+              options={[
+                { value: "auto", label: t("myDocumentsModeAuto") },
+                { value: "keyword", label: t("myDocumentsModeKeyword") },
+                { value: "semantic", label: t("myDocumentsModeSemantic") },
+              ]}
+            />
+            <div className="mdocs-doc-search-domain" ref={domainWrapRef}>
+              <button
+                type="button"
+                className="mdocs-doc-search-domain-trigger"
+                aria-label={t("docSearchDomainAria")}
+                aria-expanded={domainOpen}
+                aria-haspopup="listbox"
+                onClick={() => {
+                  if (domainOpen) {
                     setDomainOpen(false);
-                  }}
-                >
-                  <span className="mdocs-doc-search-domain-option-name">{t("docSearchAllDomains")}</span>
-                </button>
-                {filteredDomains.map((d) => {
-                  const name = localizeDomainName(d.domainName, lang, t);
-                  const isPrivate = d.permission === "private";
-                  return (
-                    <button
-                      key={d.domainId}
-                      type="button"
-                      className={
-                        "mdocs-doc-search-domain-option" + (d.domainId === domainId ? " active" : "")
-                      }
-                      role="option"
-                      aria-selected={d.domainId === domainId}
-                      onClick={() => {
-                        setDomainId(d.domainId);
-                        setDomainOpen(false);
-                      }}
-                    >
-                      <span className="mdocs-doc-search-domain-option-name">{name}</span>
-                      {isPrivate ? (
-                        <span className="mdocs-doc-search-domain-option-tag" aria-hidden>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                          </svg>
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-                {filteredDomains.length === 0 && (
-                  <p className="mdocs-doc-search-domain-empty">{t("docSearchDomainNoMatch")}</p>
-                )}
-              </div>
-            )}
+                    return;
+                  }
+                  setDomainOpen(true);
+                  setDomainFilter("");
+                  refreshDomains();
+                }}
+              >
+                <span className="mdocs-doc-search-domain-label">{selectedDomainLabel}</span>
+                <ChevronDown size={14} strokeWidth={1.75} />
+              </button>
+              {domainOpen && (
+                <div className="mdocs-doc-search-domain-menu" role="listbox" aria-label={t("docSearchDomainAria")}>
+                  <input
+                    className="mdocs-doc-search-domain-filter"
+                    type="search"
+                    value={domainFilter}
+                    placeholder={t("docSearchDomainFilter")}
+                    aria-label={t("docSearchDomainFilter")}
+                    autoFocus
+                    onChange={(ev) => setDomainFilter(ev.target.value)}
+                    onClick={(ev) => ev.stopPropagation()}
+                  />
+                  <button
+                    type="button"
+                    className={
+                      "mdocs-doc-search-domain-option" + (domainId === ALL_DOMAINS ? " active" : "")
+                    }
+                    role="option"
+                    aria-selected={domainId === ALL_DOMAINS}
+                    onClick={() => {
+                      setDomainId(ALL_DOMAINS);
+                      setDomainOpen(false);
+                    }}
+                  >
+                    <span className="mdocs-doc-search-domain-option-name">{t("docSearchAllDomains")}</span>
+                  </button>
+                  {filteredDomains.map((d) => {
+                    const name = localizeDomainName(d.domainName, lang, t);
+                    const isPrivate = d.permission === "private";
+                    return (
+                      <button
+                        key={d.domainId}
+                        type="button"
+                        className={
+                          "mdocs-doc-search-domain-option" + (d.domainId === domainId ? " active" : "")
+                        }
+                        role="option"
+                        aria-selected={d.domainId === domainId}
+                        onClick={() => {
+                          setDomainId(d.domainId);
+                          setDomainOpen(false);
+                        }}
+                      >
+                        <span className="mdocs-doc-search-domain-option-name">{name}</span>
+                        {isPrivate ? (
+                          <span className="mdocs-doc-search-domain-option-tag" aria-hidden>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                  {filteredDomains.length === 0 && (
+                    <p className="mdocs-doc-search-domain-empty">{t("docSearchDomainNoMatch")}</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <button
             type="button"
