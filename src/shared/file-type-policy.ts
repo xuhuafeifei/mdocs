@@ -81,7 +81,7 @@ const POLICY_TABLE: Record<FileType, FileTypePolicy> = {
     treeVisible: true,
     treeInclude: true,
     movable: true,
-    ftsIndex: false,
+    ftsIndex: true,
     graphExtract: false,
     graphWalkStruct: false,
     pathExt: '.sheet',

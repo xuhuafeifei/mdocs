@@ -54,6 +54,8 @@
   | `src/server/agent/Config/config.ts` | `getVisitorAgentConfig` `upsertVisitorAgentConfig` |
   | `src/server/agent/Agent/run.ts` | `getAgentStatus` `runOnboardingChat` |
   | `src/server/agent/Agent/run-pi-agent.ts` | `runPiAgent`（subscribe / prompt / bindAgentEvents） |
+  | `src/server/agent/Agent/run-manager.ts` | `startAgentRun` `subscribeAgentRun` `cancelAgentRun`（SSE 解耦后台跑） |
+  | `src/server/agent/Agent/run-store.ts` | run meta / events JSONL / 重启 interrupted |
   | `src/server/agent/Agent/stream-events.ts` | `AgentStreamEvent` |
   | `src/server/agent/Agent/tool-ui-effects.ts` | `createToolUiEffectsHandler`（tool→SSE） |
   | `src/server/agent/Agent/tool-deps.ts` | `ToolDeps` |

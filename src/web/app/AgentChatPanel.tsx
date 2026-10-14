@@ -24,14 +24,18 @@ import {
   pinAgentSessionApi,
   renameAgentSessionApi,
   streamAgentChatApi,
+  streamAgentRunApi,
+  cancelAgentRunApi,
   submitAgentChoiceApi,
   expireAgentChoiceApi,
   cancelAgentChoiceApi,
   cancelAgentSkillFormApi,
   type AgentContextUsage,
+  type AgentRunPublic,
   type AgentSessionSummary,
   type AgentSourceRef,
   type AgentStatus,
+  type AgentStreamEvent,
 } from "../services/endpoints";
 import { AgentSkillRefPicker } from "./AgentSkillRefPicker";
 import { AgentApiKeyInlineSetup } from "./AgentApiKeyInlineSetup";
@@ -608,6 +612,9 @@ export const AgentChatPanel = forwardRef<
   const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  /** 当前后台 run；关闭面板只断 SSE，不 clear */
+  const activeRunIdRef = useRef<string | null>(null);
+  const streamAssistantIdRef = useRef<string | null>(null);
   const idRef = useRef(0);
   /** 用户是否贴在底部；上滑阅读时为 false，不再强制滚 */
   const stickToBottomRef = useRef(true);
@@ -724,9 +731,9 @@ export const AgentChatPanel = forwardRef<
   useEffect(() => {
     if (!open) {
       setHistoryOpen(false);
+      // 关闭面板：只取消 SSE 订阅，后台 run 继续
       abortRef.current?.abort();
       abortRef.current = null;
-      setSending(false);
       return;
     }
     let cancelled = false;
@@ -767,9 +774,15 @@ export const AgentChatPanel = forwardRef<
         if (cancelled) return;
         setSessionId(s.sessionId);
         setMessages((prev) => {
-          if (!scopeChanged && prev.length > 0) return prev;
+          if (!scopeChanged && prev.length > 0 && !s.activeRun) return prev;
           return toChatMessages(s.sessionId, s.messages);
         });
+        if (
+          s.activeRun &&
+          (s.activeRun.status === "running" || s.activeRun.status === "waiting_user")
+        ) {
+          void resumeActiveRun(s.activeRun);
+        }
       } catch {
         /* ignore */
       }
@@ -783,6 +796,13 @@ export const AgentChatPanel = forwardRef<
     if (!open || !historyOpen) return;
     void refreshSessions();
   }, [open, historyOpen]);
+
+  // 关闭/卸载只断 SSE 订阅，不 cancel 服务端 run
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   function requestClose() {
     if (forceClosing) return;
@@ -810,8 +830,12 @@ export const AgentChatPanel = forwardRef<
         }
       }
     }
+    const runId = activeRunIdRef.current;
+    if (runId) tasks.push(cancelAgentRunApi(runId).catch(() => undefined));
     await Promise.all(tasks);
     abortRef.current?.abort();
+    activeRunIdRef.current = null;
+    setSending(false);
     setMessages((prev) =>
       prev.map((m) => {
         if (m.role !== "assistant" || !m.blocks) return m;
@@ -866,6 +890,260 @@ export const AgentChatPanel = forwardRef<
     return () => document.removeEventListener("keydown", onKey);
   }, [open, historyOpen, closeConfirmOpen, forceClosing]);
 
+  function applyStreamEvent(assistantId: string, event: AgentStreamEvent): boolean {
+    let hadError = false;
+    if (event.type === "run_started") {
+      activeRunIdRef.current = event.runId;
+      setSessionId(event.sessionId);
+      return false;
+    }
+    if (event.type === "text_delta") {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId) return m;
+          const blocks = appendTextDelta(m.blocks ?? [], event.text);
+          return { ...m, blocks, content: textFromBlocks(blocks) };
+        }),
+      );
+      requestAnimationFrame(() => scrollToBottomIfStuck());
+    } else if (event.type === "thinking_delta") {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId) return m;
+          const blocks = appendThinkingDelta(m.blocks ?? [], event.text);
+          return { ...m, blocks };
+        }),
+      );
+      requestAnimationFrame(() => scrollToBottomIfStuck());
+    } else if (event.type === "sources") {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId) return m;
+          const blocks = (m.blocks ?? []).slice();
+          const last = blocks[blocks.length - 1];
+          if (last?.type === "sources") {
+            blocks[blocks.length - 1] = { type: "sources", items: event.items };
+          } else {
+            blocks.push({ type: "sources", items: event.items });
+          }
+          return { ...m, blocks };
+        }),
+      );
+      requestAnimationFrame(() => scrollToBottomIfStuck());
+    } else if (event.type === "document_table") {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId) return m;
+          const blocks = [
+            ...(m.blocks ?? []),
+            {
+              type: "document_table" as const,
+              title: event.title,
+              rows: event.rows,
+            },
+          ];
+          return { ...m, blocks };
+        }),
+      );
+      requestAnimationFrame(() => scrollToBottomIfStuck());
+    } else if (event.type === "document_card") {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId) return m;
+          const blocks = [
+            ...(m.blocks ?? []),
+            {
+              type: "document_card" as const,
+              documentId: event.documentId,
+              title: event.title,
+              path: event.path,
+              preview: event.preview,
+            },
+          ];
+          return { ...m, blocks };
+        }),
+      );
+      requestAnimationFrame(() => scrollToBottomIfStuck());
+    } else if (event.type === "tool_notice") {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId) return m;
+          const blocks = [
+            ...(m.blocks ?? []),
+            {
+              type: "tool_notice" as const,
+              toolName: event.toolName,
+              text: event.text,
+            },
+          ];
+          return { ...m, blocks };
+        }),
+      );
+      requestAnimationFrame(() => scrollToBottomIfStuck());
+    } else if (event.type === "tool_call") {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId) return m;
+          const blocks = upsertToolCallBlock(m.blocks ?? [], {
+            type: "tool_call",
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            label: event.label,
+            status: event.status,
+            detail: event.detail,
+          });
+          return { ...m, blocks };
+        }),
+      );
+      requestAnimationFrame(() => scrollToBottomIfStuck());
+    } else if (event.type === "choice_card") {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId) return m;
+          const blocks = [
+            ...(m.blocks ?? []),
+            {
+              type: "choice_card" as const,
+              requestId: event.requestId,
+              title: event.title,
+              options: event.options,
+              expiresAt: event.expiresAt,
+              status: "open" as const,
+            },
+          ];
+          return { ...m, blocks };
+        }),
+      );
+      requestAnimationFrame(() => scrollToBottomIfStuck());
+    } else if (event.type === "choice_expired") {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId || !m.blocks) return m;
+          return {
+            ...m,
+            blocks: m.blocks.map((b) =>
+              b.type === "choice_card" &&
+              b.requestId === event.requestId &&
+              b.status === "open"
+                ? { ...b, status: "expired" as const }
+                : b,
+            ),
+          };
+        }),
+      );
+    } else if (event.type === "skill_form_card") {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId) return m;
+          const blocks = [
+            ...(m.blocks ?? []),
+            {
+              type: "skill_form_card" as const,
+              requestId: event.requestId,
+              mode: event.mode,
+              title: event.title,
+              currentName: event.currentName,
+              initialName: event.initialName,
+              initialDescription: event.initialDescription,
+              initialBody: event.initialBody,
+              expiresAt: event.expiresAt,
+              status: "open" as const,
+            },
+          ];
+          return { ...m, blocks };
+        }),
+      );
+      requestAnimationFrame(() => scrollToBottomIfStuck());
+    } else if (event.type === "skill_form_expired") {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId || !m.blocks) return m;
+          return {
+            ...m,
+            blocks: m.blocks.map((b) =>
+              b.type === "skill_form_card" &&
+              b.requestId === event.requestId &&
+              b.status === "open"
+                ? { ...b, status: "expired" as const }
+                : b,
+            ),
+          };
+        }),
+      );
+    } else if (event.type === "markdown_set") {
+      onMarkdownSet?.(event.markdown);
+    } else if (event.type === "tree_changed") {
+      void onTreeChanged?.();
+    } else if (event.type === "document_overwritten") {
+      void onDocumentOverwritten?.({
+        documentId: event.documentId,
+        headCommitId: event.headCommitId,
+      });
+    } else if (event.type === "open_coding") {
+      void onOpenCoding?.({
+        documentId: event.documentId,
+        displayName: event.displayName,
+      });
+    } else if (event.type === "context_usage") {
+      setContextUsage({
+        percent: event.percent,
+        used: event.used,
+        limit: event.limit,
+      });
+    } else if (event.type === "error") {
+      hadError = true;
+      setStreamError(event.message);
+    } else if (event.type === "done") {
+      activeRunIdRef.current = null;
+    }
+    return hadError;
+  }
+
+  async function resumeActiveRun(run: AgentRunPublic) {
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    activeRunIdRef.current = run.runId;
+    const assistantId = nextId("a");
+    streamAssistantIdRef.current = assistantId;
+    stickToBottomRef.current = true;
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.role === "assistant" && !last.content && !(last.blocks?.length)) {
+        streamAssistantIdRef.current = last.id;
+        return prev;
+      }
+      return [...prev, { id: assistantId, role: "assistant", content: "" }];
+    });
+    const aid = streamAssistantIdRef.current ?? assistantId;
+    setSending(true);
+    setStreamError(null);
+    try {
+      let hadError = false;
+      await streamAgentRunApi(run.runId, {
+        afterSeq: 0,
+        signal: ac.signal,
+        onEvent: (event) => {
+          if (applyStreamEvent(aid, event)) hadError = true;
+        },
+      });
+      if (!ac.signal.aborted && !hadError) {
+        setSelectedSkillNames([]);
+      }
+    } catch (err) {
+      if (ac.signal.aborted) return;
+      setStreamError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === aid && m.blocks ? { ...m, blocks: sealThinking(m.blocks) } : m,
+        ),
+      );
+      if (abortRef.current === ac) abortRef.current = null;
+      if (!activeRunIdRef.current) setSending(false);
+    }
+  }
+
   async function sendMessage(raw: string) {
     const text = raw.trim();
     if (!text || sending) return;
@@ -891,6 +1169,7 @@ export const AgentChatPanel = forwardRef<
       skillNames: selectedSkillNames.length > 0 ? [...selectedSkillNames] : undefined,
     };
     const assistantId = nextId("a");
+    streamAssistantIdRef.current = assistantId;
     stickToBottomRef.current = true;
     setMessages((prev) => [...prev, userMsg, { id: assistantId, role: "assistant", content: "" }]);
     setInput("");
@@ -922,204 +1201,7 @@ export const AgentChatPanel = forwardRef<
             }),
         signal: ac.signal,
         onEvent: (event) => {
-          if (event.type === "text_delta") {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== assistantId) return m;
-                const blocks = appendTextDelta(m.blocks ?? [], event.text);
-                return { ...m, blocks, content: textFromBlocks(blocks) };
-              }),
-            );
-            requestAnimationFrame(() => scrollToBottomIfStuck());
-          } else if (event.type === "thinking_delta") {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== assistantId) return m;
-                const blocks = appendThinkingDelta(m.blocks ?? [], event.text);
-                return { ...m, blocks };
-              }),
-            );
-            requestAnimationFrame(() => scrollToBottomIfStuck());
-          } else if (event.type === "sources") {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== assistantId) return m;
-                const blocks = (m.blocks ?? []).slice();
-                const last = blocks[blocks.length - 1];
-                // 连续 sources 更新合并为同一块，避免手册多章时堆多份
-                if (last?.type === "sources") {
-                  blocks[blocks.length - 1] = { type: "sources", items: event.items };
-                } else {
-                  blocks.push({ type: "sources", items: event.items });
-                }
-                return { ...m, blocks };
-              }),
-            );
-            requestAnimationFrame(() => scrollToBottomIfStuck());
-          } else if (event.type === "document_table") {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== assistantId) return m;
-                const blocks = [
-                  ...(m.blocks ?? []),
-                  {
-                    type: "document_table" as const,
-                    title: event.title,
-                    rows: event.rows,
-                  },
-                ];
-                return { ...m, blocks };
-              }),
-            );
-            requestAnimationFrame(() => scrollToBottomIfStuck());
-          } else if (event.type === "document_card") {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== assistantId) return m;
-                const blocks = [
-                  ...(m.blocks ?? []),
-                  {
-                    type: "document_card" as const,
-                    documentId: event.documentId,
-                    title: event.title,
-                    path: event.path,
-                    preview: event.preview,
-                  },
-                ];
-                return { ...m, blocks };
-              }),
-            );
-            requestAnimationFrame(() => scrollToBottomIfStuck());
-          } else if (event.type === "tool_notice") {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== assistantId) return m;
-                const blocks = [
-                  ...(m.blocks ?? []),
-                  {
-                    type: "tool_notice" as const,
-                    toolName: event.toolName,
-                    text: event.text,
-                  },
-                ];
-                return { ...m, blocks };
-              }),
-            );
-            requestAnimationFrame(() => scrollToBottomIfStuck());
-          } else if (event.type === "tool_call") {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== assistantId) return m;
-                const blocks = upsertToolCallBlock(m.blocks ?? [], {
-                  type: "tool_call",
-                  toolCallId: event.toolCallId,
-                  toolName: event.toolName,
-                  label: event.label,
-                  status: event.status,
-                  detail: event.detail,
-                });
-                return { ...m, blocks };
-              }),
-            );
-            requestAnimationFrame(() => scrollToBottomIfStuck());
-          } else if (event.type === "choice_card") {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== assistantId) return m;
-                const blocks = [
-                  ...(m.blocks ?? []),
-                  {
-                    type: "choice_card" as const,
-                    requestId: event.requestId,
-                    title: event.title,
-                    options: event.options,
-                    expiresAt: event.expiresAt,
-                    status: "open" as const,
-                  },
-                ];
-                return { ...m, blocks };
-              }),
-            );
-            requestAnimationFrame(() => scrollToBottomIfStuck());
-          } else if (event.type === "choice_expired") {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== assistantId || !m.blocks) return m;
-                return {
-                  ...m,
-                  blocks: m.blocks.map((b) =>
-                    b.type === "choice_card" &&
-                    b.requestId === event.requestId &&
-                    b.status === "open"
-                      ? { ...b, status: "expired" as const }
-                      : b,
-                  ),
-                };
-              }),
-            );
-          } else if (event.type === "skill_form_card") {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== assistantId) return m;
-                const blocks = [
-                  ...(m.blocks ?? []),
-                  {
-                    type: "skill_form_card" as const,
-                    requestId: event.requestId,
-                    mode: event.mode,
-                    title: event.title,
-                    currentName: event.currentName,
-                    initialName: event.initialName,
-                    initialDescription: event.initialDescription,
-                    initialBody: event.initialBody,
-                    expiresAt: event.expiresAt,
-                    status: "open" as const,
-                  },
-                ];
-                return { ...m, blocks };
-              }),
-            );
-            requestAnimationFrame(() => scrollToBottomIfStuck());
-          } else if (event.type === "skill_form_expired") {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== assistantId || !m.blocks) return m;
-                return {
-                  ...m,
-                  blocks: m.blocks.map((b) =>
-                    b.type === "skill_form_card" &&
-                    b.requestId === event.requestId &&
-                    b.status === "open"
-                      ? { ...b, status: "expired" as const }
-                      : b,
-                  ),
-                };
-              }),
-            );
-          } else if (event.type === "markdown_set") {
-            onMarkdownSet?.(event.markdown);
-          } else if (event.type === "tree_changed") {
-            void onTreeChanged?.();
-          } else if (event.type === "document_overwritten") {
-            void onDocumentOverwritten?.({
-              documentId: event.documentId,
-              headCommitId: event.headCommitId,
-            });
-          } else if (event.type === "open_coding") {
-            void onOpenCoding?.({
-              documentId: event.documentId,
-              displayName: event.displayName,
-            });
-          } else if (event.type === "context_usage") {
-            setContextUsage({
-              percent: event.percent,
-              used: event.used,
-              limit: event.limit,
-            });
-          } else if (event.type === "error") {
-            hadError = true;
-            setStreamError(event.message);
-          }
+          if (applyStreamEvent(assistantId, event)) hadError = true;
         },
       });
       if (!ac.signal.aborted && !hadError) {
@@ -1137,16 +1219,19 @@ export const AgentChatPanel = forwardRef<
         ),
       );
       if (abortRef.current === ac) abortRef.current = null;
-      setSending(false);
+      // done / 失败会清 activeRunId；仅断订阅时保留，重开后 resume
+      if (!activeRunIdRef.current) setSending(false);
     }
   }
 
   async function onNewSession() {
-    if (sending) return;
     abortRef.current?.abort();
+    const runId = activeRunIdRef.current;
+    activeRunIdRef.current = null;
+    setSending(false);
+    if (runId) void cancelAgentRunApi(runId).catch(() => undefined);
     setStreamError(null);
     setHistoryOpen(false);
-    setSending(false);
     try {
       const created = await createAgentSessionApi(
         sessionMode,
@@ -1165,12 +1250,15 @@ export const AgentChatPanel = forwardRef<
   }
 
   async function onOpenSession(id: string) {
-    if (sending) return;
     if (id === sessionId) {
       setHistoryOpen(false);
       return;
     }
     abortRef.current?.abort();
+    const runId = activeRunIdRef.current;
+    activeRunIdRef.current = null;
+    setSending(false);
+    if (runId) void cancelAgentRunApi(runId).catch(() => undefined);
     setStreamError(null);
     try {
       const opened = await openAgentSessionApi(
@@ -1963,7 +2051,11 @@ export const AgentChatPanel = forwardRef<
               }
               onClick={() => {
                 if (sending) {
+                  const runId = activeRunIdRef.current;
                   abortRef.current?.abort();
+                  activeRunIdRef.current = null;
+                  setSending(false);
+                  if (runId) void cancelAgentRunApi(runId).catch(() => undefined);
                   return;
                 }
                 void sendMessage(input);

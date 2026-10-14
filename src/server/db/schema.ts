@@ -244,6 +244,7 @@ export function applySchema(db: Database.Database): void {
     migrateAgentModelConfigDropDisplayName(db);
     migrateAgentModelConfigMultiDefault(db);
     migrateAgentModelConfigThinkingLevel(db);
+    migrateAgentModelConfigRunTimeout(db);
     ensureDefaultDomain(db);
   });
   tx();
@@ -585,5 +586,15 @@ function migrateAgentModelConfigThinkingLevel(db: Database.Database): void {
   if (rows.some((r) => r.name === "thinking_level")) return;
   db.exec(
     `ALTER TABLE agent_model_configs ADD COLUMN thinking_level TEXT NOT NULL DEFAULT 'low'`,
+  );
+}
+
+/** agent_model_configs.run_timeout_seconds：单轮后台运行超时，默认 300 */
+function migrateAgentModelConfigRunTimeout(db: Database.Database): void {
+  const rows = db.prepare(`PRAGMA table_info(agent_model_configs)`).all() as { name: string }[];
+  if (rows.length === 0) return;
+  if (rows.some((r) => r.name === "run_timeout_seconds")) return;
+  db.exec(
+    `ALTER TABLE agent_model_configs ADD COLUMN run_timeout_seconds INTEGER NOT NULL DEFAULT 300`,
   );
 }

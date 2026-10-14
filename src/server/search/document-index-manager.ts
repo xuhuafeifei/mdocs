@@ -16,6 +16,8 @@ import { readDocument } from "../storage/file-store.js";
 import { useLogger } from "../logger/logger.js";
 import { deleteEmbeddingChunks, upsertDocumentEmbeddings } from "./embedding-store.js";
 import { isEmbeddingReady } from "./embedding-model.js";
+import { ftsIndexTypes } from "../../shared/file-type-policy.js";
+import { getCellValue, parseSheetDocument } from "../../shared/sheetDocument.js";
 
 /** 递归遍历 Lexical JSON 的最大深度，防止爆栈 */
 const MAX_LEXICAL_DEPTH = 40;
@@ -94,17 +96,24 @@ export function markDirty(documentId: string): void {
 export async function backfillMissingEmbeddings(limit = 40): Promise<number> {
   if (!isEmbeddingReady()) return 0;
   const db = getDb();
+  const indexedTypes = ftsIndexTypes();
+  const placeholders = indexedTypes.map(() => "?").join(", ");
   const rows = db
     .prepare(
-      `SELECT d.document_id, d.domain_id, d.relative_path
+      `SELECT d.document_id, d.domain_id, d.relative_path, d.file_type
        FROM documents d
-       WHERE d.file_type = 'md'
+       WHERE d.file_type IN (${placeholders})
          AND NOT EXISTS (
            SELECT 1 FROM document_embedding_chunks c WHERE c.document_id = d.document_id
          )
        LIMIT ?`,
     )
-    .all(limit) as Array<{ document_id: string; domain_id: string; relative_path: string }>;
+    .all(...indexedTypes, limit) as Array<{
+    document_id: string;
+    domain_id: string;
+    relative_path: string;
+    file_type: string;
+  }>;
 
   let n = 0;
   if (rows.length === 0) {
@@ -117,7 +126,7 @@ export async function backfillMissingEmbeddings(limit = 40): Promise<number> {
     try {
       log.info("embedding backfill doc %d/%d: %s", i + 1, rows.length, row.relative_path || row.document_id);
       const { content } = readDocument(row.domain_id, row.relative_path);
-      const plainText = extractLexicalPlainText(content);
+      const plainText = extractSearchPlainText(content, row.file_type);
       await upsertDocumentEmbeddings({
         documentId: row.document_id,
         domainId: row.domain_id,
@@ -160,9 +169,23 @@ export function removeIndex(documentId: string): void {
  */
 export async function rebuildAllDirty(): Promise<number> {
   const db = getDb();
+  const indexedTypes = ftsIndexTypes();
+  const placeholders = indexedTypes.map(() => "?").join(", ");
   const dirtyIds = db
-    .prepare(`SELECT document_id FROM documents WHERE is_dirty = 1 AND file_type = 'md'`)
-    .all() as { document_id: string }[];
+    .prepare(
+      `SELECT document_id FROM documents
+       WHERE file_type IN (${placeholders})
+         AND (
+           is_dirty = 1
+           OR NOT EXISTS (
+             SELECT 1 FROM documents_fts_rowid b WHERE b.document_id = documents.document_id
+           )
+           OR NOT EXISTS (
+             SELECT 1 FROM documents_fts_title_rowid t WHERE t.document_id = documents.document_id
+           )
+         )`,
+    )
+    .all(...indexedTypes) as { document_id: string }[];
 
   let count = 0;
   for (const { document_id } of dirtyIds) {
@@ -212,7 +235,7 @@ export function rebuildDocument(documentId: string): {
   // ---- 获取文档元数据 ----
   const doc = db
     .prepare(
-      `SELECT domain_id, relative_path, display_name, owner_visitor_id, permission, updated_at
+      `SELECT domain_id, relative_path, display_name, owner_visitor_id, permission, updated_at, file_type
        FROM documents WHERE document_id = ?`,
     )
     .get(documentId) as {
@@ -222,6 +245,7 @@ export function rebuildDocument(documentId: string): {
     owner_visitor_id: string;
     permission: number;
     updated_at: string;
+    file_type: string;
   } | undefined;
   if (!doc) return null;
 
@@ -230,7 +254,7 @@ export function rebuildDocument(documentId: string): {
 
   // ---- 读取磁盘文件内容 ---- Lexical 抽字：FTS 用分词版，语义用原文
   const { content } = readDocument(doc.domain_id, doc.relative_path);
-  const rawPlain = extractLexicalPlainText(content);
+  const rawPlain = extractSearchPlainText(content, doc.file_type);
   const plainText = tokenizeForSearch(rawPlain);
   const titleTokens = tokenizeForSearch(doc.display_name || "");
 
@@ -336,6 +360,30 @@ export function extractLexicalPlainText(rawContent: string): string {
   const parts: string[] = [];
   collectLexicalText((doc as { root: unknown }).root, parts, 0);
   return parts.join("");
+}
+
+/** 按文档类型提取可搜索文本；Sheet 仅包含标签名、列名和单元格值。 */
+export function extractSearchPlainText(rawContent: string, fileType: string): string {
+  if (fileType !== "sheet") return extractLexicalPlainText(rawContent);
+  try {
+    const raw = JSON.parse(rawContent);
+    if (!raw || typeof raw !== "object") return "";
+  } catch {
+    return "";
+  }
+  const workbook = parseSheetDocument(rawContent);
+  const parts: string[] = [];
+  for (const sheet of workbook.sheets) {
+    parts.push(sheet.name);
+    parts.push(...sheet.columns.map((column) => column.name));
+    for (const row of sheet.rows) {
+      for (const column of sheet.columns) {
+        const value = getCellValue(row.cells[column.id]).trim();
+        if (value) parts.push(value);
+      }
+    }
+  }
+  return parts.join("\n");
 }
 
 /**

@@ -451,6 +451,8 @@ export const zh: Record<TranslationKey, string> = {
   agentConfigModel: "模型",
   agentConfigContextWindow: "上下文窗口",
   agentConfigContextWindowDesc: "助手可用的 token 上限（默认 128000），用于占用圆环显示。",
+  agentConfigRunTimeout: "单轮超时（秒）",
+  agentConfigRunTimeoutDesc: "关闭面板后仍在后台跑；超时后自动停止（默认 300，范围 60–3600）。",
   agentConfigApiKey: "API Key",
   agentConfigApiKeyPlaceholder: "粘贴 DeepSeek API Key",
   agentConfigApiKeyConfigured: "已配置 {{masked}}，留空不修改",

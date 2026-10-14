@@ -112,21 +112,34 @@ export function insertAgentUserSkill(db: Database.Database, row: AgentUserSkillR
 export function updateAgentUserSkill(
   db: Database.Database,
   row: Pick<AgentUserSkillRow, "id" | "owner_visitor_id" | "name" | "description" | "body" | "updated_at">,
+  expectedUpdatedAt?: string,
 ): boolean {
-  const result = db
-    .prepare(
-      `UPDATE agent_user_skills
+  const result = expectedUpdatedAt
+    ? db.prepare(
+        `UPDATE agent_user_skills
+       SET name = ?, description = ?, body = ?, updated_at = ?
+       WHERE id = ? AND owner_visitor_id = ? AND updated_at = ?`,
+      ).run(
+        row.name,
+        row.description,
+        row.body,
+        row.updated_at,
+        row.id,
+        row.owner_visitor_id,
+        expectedUpdatedAt,
+      )
+    : db.prepare(
+        `UPDATE agent_user_skills
        SET name = ?, description = ?, body = ?, updated_at = ?
        WHERE id = ? AND owner_visitor_id = ?`,
-    )
-    .run(
-      row.name,
-      row.description,
-      row.body,
-      row.updated_at,
-      row.id,
-      row.owner_visitor_id,
-    );
+      ).run(
+        row.name,
+        row.description,
+        row.body,
+        row.updated_at,
+        row.id,
+        row.owner_visitor_id,
+      );
   return result.changes > 0;
 }
 

@@ -100,9 +100,26 @@ export type VisitorAgentConfig = {
   apiKey: string;
   contextWindow: number;
   thinkingLevel: AgentThinkingLevel;
+  /** 单轮后台运行超时（秒），默认 300 */
+  runTimeoutSeconds: number;
   compat: AgentCompat | null;
   isDefault: boolean;
 };
+
+export const DEFAULT_AGENT_RUN_TIMEOUT_SECONDS = 300;
+export const MIN_AGENT_RUN_TIMEOUT_SECONDS = 60;
+export const MAX_AGENT_RUN_TIMEOUT_SECONDS = 3600;
+
+export function normalizeRunTimeoutSeconds(
+  value: unknown,
+  fallback = DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
+): number {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  const rounded = Math.floor(n);
+  if (rounded < MIN_AGENT_RUN_TIMEOUT_SECONDS) return MIN_AGENT_RUN_TIMEOUT_SECONDS;
+  return Math.min(rounded, MAX_AGENT_RUN_TIMEOUT_SECONDS);
+}
 
 export type PublicAgentConfig = Omit<VisitorAgentConfig, "apiKey" | "ownerVisitorId"> & {
   hasApiKey: boolean;
@@ -170,6 +187,7 @@ function rowToConfig(row: AgentModelConfigRow): VisitorAgentConfig | null {
     apiKey: effectiveApiKey,
     contextWindow: normalizeContextWindow(row.context_window),
     thinkingLevel: normalizeThinkingLevel(row.thinking_level),
+    runTimeoutSeconds: normalizeRunTimeoutSeconds(row.run_timeout_seconds),
     compat: parseCompat(row.compat_json),
     isDefault: row.is_default === 1,
   };
@@ -247,6 +265,7 @@ function buildConfigRow(input: {
   name?: string;
   contextWindow?: number;
   thinkingLevel?: string;
+  runTimeoutSeconds?: number;
   providerId?: string;
   baseUrl?: string;
   apiType?: string;
@@ -262,6 +281,9 @@ function buildConfigRow(input: {
   const contextWindow = normalizeContextWindow(input.contextWindow ?? existing?.context_window);
   const thinkingLevel = normalizeThinkingLevel(
     input.thinkingLevel ?? existing?.thinking_level ?? "low",
+  );
+  const runTimeoutSeconds = normalizeRunTimeoutSeconds(
+    input.runTimeoutSeconds ?? existing?.run_timeout_seconds,
   );
   const updated_at = new Date().toISOString();
 
@@ -300,6 +322,7 @@ function buildConfigRow(input: {
       api_key: "", // apiKey 存 secrets 文件，DB 不再存明文
       context_window: contextWindow,
       thinking_level: thinkingLevel,
+      run_timeout_seconds: runTimeoutSeconds,
       is_default: input.isDefault ? 1 : 0,
       updated_at,
     };
@@ -321,6 +344,7 @@ function buildConfigRow(input: {
     api_key: "", // apiKey 存 secrets 文件，DB 不再存明文
     context_window: contextWindow,
     thinking_level: thinkingLevel,
+    run_timeout_seconds: runTimeoutSeconds,
     is_default: input.isDefault ? 1 : 0,
     updated_at,
   };
@@ -338,6 +362,7 @@ export function upsertVisitorAgentConfig(input: {
   name?: string;
   contextWindow?: number;
   thinkingLevel?: string;
+  runTimeoutSeconds?: number;
   providerId?: string;
   baseUrl?: string;
   apiType?: string;

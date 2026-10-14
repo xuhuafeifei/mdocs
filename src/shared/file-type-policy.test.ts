@@ -32,8 +32,8 @@ describe("file-type-policy", () => {
     expect((p as { editor?: unknown }).editor).toBeUndefined();
   });
 
-  it("派生查询不含 html 进 FTS / graph walk", () => {
-    expect(ftsIndexTypes()).toEqual([FILE_TYPE.DOCUMENT]);
+  it("派生查询仅 md、sheet 进 FTS，html 不进入", () => {
+    expect(ftsIndexTypes()).toEqual([FILE_TYPE.DOCUMENT, FILE_TYPE.SHEET]);
     expect(graphWalkIncludeTypes()).toEqual([
       FILE_TYPE.DOCUMENT,
       FILE_TYPE.FOLDER,
@@ -53,6 +53,7 @@ describe("file-type-policy", () => {
     expect(p.treeVisible).toBe(true);
     expect(p.movable).toBe(true);
     expect(p.pathExt).toBe(".sheet");
+    expect(p.ftsIndex).toBe(true);
     expect(p.writeNormalize).toBe("raw");
     expect(p.draftKind).toBe("sheet");
     expect(p.aiWrite).toBe(false);

@@ -18,6 +18,7 @@ import { documentCommentsRouter } from "./routes/document-comments.routes.js";
 import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
 import { buildAgentRouter } from "./routes/agent.routes.js";
 import { buildGraphRouter } from "./routes/graph.routes.js";
+import { bootstrapAgentRuns } from "./agent/Agent/run-manager.js";
 import { startIndexTimer } from "./search/document-index-manager.js";
 import { ensureLocalEmbeddingModel } from "./search/embedding-model.js";
 import { useLogger } from "./logger/logger.js";
@@ -36,6 +37,8 @@ export function buildApp(): Application {
   startIndexTimer();
   // 本地 embedding 模型：后台确保文件并 load，不阻塞 listen
   ensureLocalEmbeddingModel();
+  // 进程重启后：未完成的 Agent run 标为 interrupted
+  bootstrapAgentRuns();
 
   const app = express();
   app.disable("x-powered-by");

@@ -7,7 +7,8 @@ use url::Url;
 
 mod url_util;
 use url_util::{
-    clipboard_doc_target, is_shell_setup_url, normalize_server_url, origin_key, same_doc_target,
+    clipboard_doc_target, is_downloadable_asset, is_shell_setup_url, normalize_server_url,
+    origin_key, same_doc_target,
 };
 
 struct ShellState {
@@ -57,18 +58,6 @@ fn origin_of_server(server: &str) -> Option<String> {
     origin_key(&Url::parse(server).ok()?)
 }
 
-fn is_downloadable_asset(url: &Url) -> bool {
-    let path = url.path();
-    if !path.contains("/api/assets/") {
-        return false;
-    }
-    let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
-    !matches!(
-        ext.as_str(),
-        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "ico" | "bmp" | "jfif" | "pjpeg"
-    )
-}
-
 fn navigation_allowed(url: &Url, server: Option<&str>) -> bool {
     if url.scheme() == "about" || is_shell_setup_url(url) {
         return true;
@@ -82,6 +71,16 @@ fn navigation_allowed(url: &Url, server: Option<&str>) -> bool {
     match (origin_key(url), origin_of_server(server)) {
         (Some(a), Some(b)) => a == b,
         _ => false,
+    }
+}
+
+fn assign_in_main(app: &AppHandle, url: &Url) {
+    if let Some(window) = app.get_webview_window("main") {
+        let js = format!(
+            "window.location.assign({})",
+            serde_json::to_string(url.as_str()).unwrap_or_else(|_| "\"\"".into())
+        );
+        let _ = window.eval(js);
     }
 }
 
@@ -210,26 +209,21 @@ pub fn run() {
                     let handle_nw = handle_nav.clone();
                     move |url, _features| {
                         // 附件卡片是 target=_blank。不接这个回调时 wry 直接拒绝新窗口，点击无反应。
-                        // 可下载附件交给系统浏览器（保留 download / Content-Disposition）；
+                        // 可下载附件改在主窗口导航，由 Content-Disposition 触发 on_download；
                         // 同源普通链接仍在主窗口打开；外链走系统浏览器。
-                        if is_downloadable_asset(&url) {
-                            open_in_browser(url.as_str());
-                            return NewWindowResponse::Deny;
-                        }
                         let server = handle_nw
                             .state::<ShellState>()
                             .server_url
                             .lock()
                             .ok()
                             .and_then(|g| g.clone());
+                        if is_downloadable_asset(&url) && navigation_allowed(&url, server.as_deref())
+                        {
+                            assign_in_main(&handle_nw, &url);
+                            return NewWindowResponse::Deny;
+                        }
                         if navigation_allowed(&url, server.as_deref()) {
-                            if let Some(window) = handle_nw.get_webview_window("main") {
-                                let js = format!(
-                                    "window.location.assign({})",
-                                    serde_json::to_string(url.as_str()).unwrap_or_else(|_| "\"\"".into())
-                                );
-                                let _ = window.eval(js);
-                            }
+                            assign_in_main(&handle_nw, &url);
                         } else if url.scheme() == "http" || url.scheme() == "https" {
                             open_in_browser(url.as_str());
                         }
@@ -237,18 +231,16 @@ pub fn run() {
                     }
                 })
                 .on_navigation(move |url| {
-                    if is_downloadable_asset(url) {
-                        // 网页侧拦截后会 location.assign；在壳内导航会丢掉 download 属性。
-                        // 改交给系统浏览器下载。
-                        open_in_browser(url.as_str());
-                        return false;
-                    }
                     let server = handle_nav
                         .state::<ShellState>()
                         .server_url
                         .lock()
                         .ok()
                         .and_then(|g| g.clone());
+                    // 同源附件允许壳内导航，靠服务端 attachment 头触发 on_download 写入下载目录。
+                    if is_downloadable_asset(url) {
+                        return navigation_allowed(url, server.as_deref());
+                    }
                     if navigation_allowed(url, server.as_deref()) {
                         return true;
                     }

@@ -96,6 +96,7 @@ export function updateUserSkillByName(input: {
   name: string;
   description?: string;
   body: string;
+  expectedUpdatedAt?: string;
 }): UserSkillPublic {
   const db = getDb();
   const existing = findAgentUserSkillByName(
@@ -104,6 +105,12 @@ export function updateUserSkillByName(input: {
     input.currentName.trim(),
   );
   if (!existing) throw new Error("skill_not_found");
+  if (
+    input.expectedUpdatedAt !== undefined &&
+    input.expectedUpdatedAt !== existing.updated_at
+  ) {
+    throw new Error("skill_update_conflict");
+  }
   const name = normalizeName(input.name);
   const description = normalizeDescription(input.description);
   const body = normalizeBody(input.body);
@@ -111,20 +118,29 @@ export function updateUserSkillByName(input: {
     const clash = findAgentUserSkillByName(db, input.ownerVisitorId, name);
     if (clash) throw new Error("skill_name_taken");
   }
-  const now = new Date().toISOString();
+  const currentMs = Date.parse(existing.updated_at);
+  const now = new Date(
+    Math.max(Date.now(), Number.isFinite(currentMs) ? currentMs + 1 : 0),
+  ).toISOString();
   try {
-    const ok = updateAgentUserSkill(db, {
-      id: existing.id,
-      owner_visitor_id: input.ownerVisitorId,
-      name,
-      description,
-      body,
-      updated_at: now,
-    });
-    if (!ok) throw new Error("skill_not_found");
+    const ok = updateAgentUserSkill(
+      db,
+      {
+        id: existing.id,
+        owner_visitor_id: input.ownerVisitorId,
+        name,
+        description,
+        body,
+        updated_at: now,
+      },
+      input.expectedUpdatedAt,
+    );
+    if (!ok) {
+      throw new Error(input.expectedUpdatedAt ? "skill_update_conflict" : "skill_not_found");
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg === "skill_not_found") throw err;
+    if (msg === "skill_not_found" || msg === "skill_update_conflict") throw err;
     if (msg.includes("UNIQUE") || msg.includes("unique")) {
       throw new Error("skill_name_taken");
     }

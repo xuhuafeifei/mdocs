@@ -25,7 +25,7 @@ export function listUserSkillsTool({ visitorId }: ToolDeps): AgentTool {
     name: "list_user_skills",
     label: "列出私人 Skill",
     description:
-      "列出当前访客已保存的私人 Agent Skill。返回 name / description / updatedAt（不含正文全文时可再 update 打开表单查看）。名称全局（对本访客）唯一，交互请用 name。",
+      "列出当前访客已保存的私人 Agent Skill。返回 name / description / updatedAt，不含正文；需要正文时调用 get_user_skill。名称对本访客唯一，交互请用 name。",
     parameters: Type.Object({}),
     execute: async () => {
       const skills = listUserSkills(visitorId).map((s) => ({
@@ -35,6 +35,26 @@ export function listUserSkillsTool({ visitorId }: ToolDeps): AgentTool {
         bodyChars: s.body.length,
       }));
       return asToolResult({ count: skills.length, skills });
+    },
+  };
+}
+
+/** 读取单个 skill 的完整内容，供 Agent 修改前获取版本。 */
+export function getUserSkillTool({ visitorId }: ToolDeps): AgentTool {
+  return {
+    name: "get_user_skill",
+    label: "读取私人 Skill",
+    description:
+      "按 name 读取私人 Skill 的完整 description、body 与 updatedAt。修改前先读取，并把 updatedAt 传给 update_user_skill。",
+    parameters: Type.Object({
+      name: Type.String({ description: "要读取的 skill 名称" }),
+    }),
+    execute: async (_id, params) => {
+      const name = String((params as { name?: string }).name ?? "").trim();
+      if (!name) throw new Error("skill_name_required");
+      const skill = getUserSkillByName(visitorId, name);
+      if (!skill) return asToolResult({ status: "error", error: "skill_not_found", name });
+      return asToolResult({ status: "found", skill });
     },
   };
 }
@@ -62,8 +82,6 @@ async function runSkillForm(params: {
   visitorId: string;
   onEvent: ToolDeps["onEvent"];
   signal?: AbortSignal;
-  mode: "create" | "update";
-  currentName?: string;
   initial: { name: string; description: string; body: string };
   title: string;
   timeoutMs: number;
@@ -77,9 +95,8 @@ async function runSkillForm(params: {
   params.onEvent({
     type: "skill_form_card",
     requestId,
-    mode: params.mode,
+    mode: "create",
     title: params.title,
-    currentName: params.currentName,
     initialName: params.initial.name,
     initialDescription: params.initial.description,
     initialBody: params.initial.body,
@@ -96,30 +113,20 @@ async function runSkillForm(params: {
   }
 
   try {
-    if (params.mode === "create") {
-      const saved = createUserSkill({
-        ownerVisitorId: params.visitorId,
-        name: result.name,
-        description: result.description,
-        body: result.body,
-      });
-      return asToolResult({ status: "created", skill: saved });
-    }
-    const saved = updateUserSkillByName({
+    const saved = createUserSkill({
       ownerVisitorId: params.visitorId,
-      currentName: params.currentName!,
       name: result.name,
       description: result.description,
       body: result.body,
     });
-    return asToolResult({ status: "updated", skill: saved });
+    return asToolResult({ status: "created", skill: saved });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return asToolResult({ status: "error", error: msg });
   }
 }
 
-/** 新增：弹出表单卡（与 update 同 UI） */
+/** 新增：弹出表单卡。 */
 export function createUserSkillTool({
   visitorId,
   onEvent,
@@ -151,7 +158,6 @@ export function createUserSkillTool({
         visitorId,
         onEvent,
         signal,
-        mode: "create",
         title: (p.title ?? "新建 Skill").trim() || "新建 Skill",
         initial: {
           name: typeof p.suggestedName === "string" ? p.suggestedName : "",
@@ -165,48 +171,51 @@ export function createUserSkillTool({
   };
 }
 
-/** 修改：先指定 name，再弹出预填表单 */
-export function updateUserSkillTool({
-  visitorId,
-  onEvent,
-  signal,
-}: ToolDeps): AgentTool {
+/** 修改：Agent 直接写入；expectedUpdatedAt 防止覆盖并发编辑。 */
+export function updateUserSkillTool({ visitorId }: ToolDeps): AgentTool {
   return {
     name: "update_user_skill",
     label: "修改私人 Skill",
     description:
-      "按 name 打开表单修改已有私人 Skill（名称 / 简介 / 正文），带倒计时。须先知道要改哪个 name（可先 list_user_skills）。用户可改名（仍须英文数字下划线且唯一）。",
+      "直接修改已有私人 Skill。先调用 get_user_skill 取得完整正文和 updatedAt，再提交完整 description/body；expectedUpdatedAt 不一致时拒绝覆盖。newName 可选，仍须英文数字下划线且唯一。",
     parameters: Type.Object({
       name: Type.String({ description: "要修改的 skill 当前名称" }),
-      title: Type.Optional(Type.String()),
-      timeoutMs: Type.Optional(Type.Number()),
+      newName: Type.Optional(Type.String({ description: "可选的新名称" })),
+      description: Type.String({ description: "完整的新简介" }),
+      body: Type.String({ description: "完整的新正文" }),
+      expectedUpdatedAt: Type.String({
+        description: "get_user_skill 返回的 updatedAt，用于防止覆盖并发修改",
+      }),
     }),
     execute: async (_id, params) => {
-      const p = params as { name?: string; title?: string; timeoutMs?: number };
+      const p = params as {
+        name?: string;
+        newName?: string;
+        description?: string;
+        body?: string;
+        expectedUpdatedAt?: string;
+      };
       const currentName = String(p.name ?? "").trim();
       if (!currentName) throw new Error("skill_name_required");
-      const existing = getUserSkillByName(visitorId, currentName);
-      if (!existing) {
+      try {
+        const skill = updateUserSkillByName({
+          ownerVisitorId: visitorId,
+          currentName,
+          name: typeof p.newName === "string" && p.newName.trim()
+            ? p.newName
+            : currentName,
+          description: p.description,
+          body: String(p.body ?? ""),
+          expectedUpdatedAt: String(p.expectedUpdatedAt ?? ""),
+        });
+        return asToolResult({ status: "updated", skill });
+      } catch (err) {
         return asToolResult({
           status: "error",
-          error: "skill_not_found",
+          error: err instanceof Error ? err.message : String(err),
           name: currentName,
         });
       }
-      return runSkillForm({
-        visitorId,
-        onEvent,
-        signal,
-        mode: "update",
-        currentName: existing.name,
-        title: (p.title ?? `修改 Skill：${existing.name}`).trim() || "修改 Skill",
-        initial: {
-          name: existing.name,
-          description: existing.description,
-          body: existing.body,
-        },
-        timeoutMs: formTimeoutMs(p.timeoutMs),
-      });
     },
   };
 }
@@ -214,6 +223,7 @@ export function updateUserSkillTool({
 export function userSkillTools(deps: ToolDeps): AgentTool[] {
   return [
     listUserSkillsTool(deps),
+    getUserSkillTool(deps),
     createUserSkillTool(deps),
     updateUserSkillTool(deps),
     deleteUserSkillTool(deps),

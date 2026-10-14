@@ -455,6 +455,9 @@ export const en: Record<TranslationKey, string> = {
   agentConfigModel: "Model",
   agentConfigContextWindow: "Context window",
   agentConfigContextWindowDesc: "Token budget for the assistant (default 128000). Used for the usage ring.",
+  agentConfigRunTimeout: "Run timeout (seconds)",
+  agentConfigRunTimeoutDesc:
+    "Keeps running after the panel closes; stops automatically on timeout (default 300, range 60–3600).",
   agentConfigApiKey: "API Key",
   agentConfigApiKeyPlaceholder: "Paste DeepSeek API Key",
   agentConfigApiKeyConfigured: "Configured {{masked}}; leave blank to keep",

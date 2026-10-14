@@ -451,6 +451,8 @@ export type TranslationKey =
   | "agentConfigModel"
   | "agentConfigContextWindow"
   | "agentConfigContextWindowDesc"
+  | "agentConfigRunTimeout"
+  | "agentConfigRunTimeoutDesc"
   | "agentConfigApiKey"
   | "agentConfigApiKeyPlaceholder"
   | "agentConfigApiKeyConfigured"

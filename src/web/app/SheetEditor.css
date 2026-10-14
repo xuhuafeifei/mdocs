@@ -274,6 +274,25 @@
 }
 
 @media (max-width: 768px) {
+  .mdocs-sheet-toolbar {
+    height: auto;
+    min-height: 42px;
+    padding: 6px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    justify-content: flex-start;
+  }
+
+  .mdocs-sheet-toolbar-left {
+    flex-wrap: nowrap;
+    min-width: max-content;
+  }
+
+  .mdocs-sheet-toolbar-right {
+    display: none;
+  }
+
   .mdocs-sheet-formula-bar {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -693,13 +712,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  gap: 4px;
+  min-width: max-content;
   height: 24px;
-  border: none;
-  background: transparent;
+  padding: 0 9px;
+  border: 1px solid var(--mdocs-accent, #4caf50);
+  background: var(--mdocs-surface, #fff);
   border-radius: 4px;
   cursor: pointer;
-  color: var(--mdocs-text-muted, #616161);
+  color: var(--mdocs-accent-dark, #388e3c);
+  font-size: 12px;
+  font-weight: 600;
   margin-left: 4px;
   margin-bottom: 3px;
   transition: all 0.15s ease;

@@ -2,9 +2,17 @@ import { Router, type Request, type Response } from "express";
 import {
   getAgentStatus,
   getAgentContextUsageForApi,
-  runOnboardingChat,
   type AgentStreamEvent,
 } from "../agent/Agent/run.js";
+import {
+  AgentRunActiveError,
+  bootstrapAgentRuns,
+  cancelAgentRun,
+  getActiveRunForSession,
+  getRunPublic,
+  startAgentRun,
+  subscribeAgentRun,
+} from "../agent/Agent/run-manager.js";
 import {
   getAgentSessionForApi,
   createAgentSessionForApi,
@@ -107,6 +115,7 @@ export function buildAgentRouter(): Router {
         name: body.name,
         contextWindow: body.contextWindow,
         thinkingLevel: body.thinkingLevel,
+        runTimeoutSeconds: body.runTimeoutSeconds,
         providerId: body.providerId,
         baseUrl: body.baseUrl,
         apiType: body.apiType,
@@ -309,7 +318,8 @@ export function buildAgentRouter(): Router {
       mode,
       documentId ?? null,
     );
-    res.json({ data });
+    const activeRun = getActiveRunForSession(req.visitor.visitor_id, data.sessionId);
+    res.json({ data: { ...data, activeRun: activeRun ?? null } });
   });
 
   router.get("/context-usage", async (req, res) => {
@@ -682,19 +692,9 @@ export function buildAgentRouter(): Router {
           }
         : undefined;
 
-    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders?.();
-
-    const ac = new AbortController();
-    // 监听响应 close：客户端中途断开时 abort；正常 res.end() 后 writableEnded=true 不再 abort
-    res.on("close", () => {
-      if (!res.writableEnded) ac.abort();
-    });
-
+    let started;
     try {
-      await runOnboardingChat({
+      started = await startAgentRun({
         visitorId: req.visitor.visitor_id,
         message,
         mode,
@@ -703,17 +703,117 @@ export function buildAgentRouter(): Router {
         workingMarkdown,
         baseMarkdown,
         references,
-        signal: ac.signal,
-        onEvent: (event) => writeSse(res, event),
       });
     } catch (err) {
-      if (!ac.signal.aborted) {
-        log.error("chat failed: %s", (err as Error).message);
+      if (err instanceof AgentRunActiveError) {
+        res.status(409).json({
+          error: {
+            code: "RUN_ACTIVE",
+            message: "当前会话已有进行中的对话，请等待结束或取消后再发",
+            activeRun: err.activeRun,
+          },
+        });
+        return;
       }
-    } finally {
-      if (!res.writableEnded) res.end();
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error("chat start failed: %s", msg);
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: msg } });
+      return;
     }
+
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Agent-Run-Id", started.run.runId);
+    res.flushHeaders?.();
+
+    // 断开仅取消订阅，不终止后台 run
+    const sub = subscribeAgentRun({
+      visitorId: req.visitor.visitor_id,
+      runId: started.run.runId,
+      afterSeq: 0,
+      onEvent: (event) => writeSse(res, event),
+      onClose: () => {
+        if (!res.writableEnded) res.end();
+      },
+    });
+    res.on("close", () => {
+      sub?.unsubscribe();
+      if (!res.writableEnded) res.end();
+    });
   });
 
+  router.get("/runs/:runId", (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const runId = typeof req.params.runId === "string" ? req.params.runId : "";
+    const run = getRunPublic(req.visitor.visitor_id, runId);
+    if (!run) {
+      res.status(404).json({ error: { code: "NOT_FOUND", message: "run_not_found" } });
+      return;
+    }
+    res.json({ data: run });
+  });
+
+  router.get("/runs/:runId/stream", (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const runId = typeof req.params.runId === "string" ? req.params.runId : "";
+    const afterRaw = req.query?.afterSeq;
+    const afterSeq =
+      typeof afterRaw === "string" && /^\d+$/.test(afterRaw) ? Number(afterRaw) : 0;
+
+    // 先确认存在并写好 SSE 头：subscribe 会同步回放事件 / 可能立刻 onClose
+    if (!getRunPublic(req.visitor.visitor_id, runId)) {
+      res.status(404).json({ error: { code: "NOT_FOUND", message: "run_not_found" } });
+      return;
+    }
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Agent-Run-Id", runId);
+    res.flushHeaders?.();
+
+    const sub = subscribeAgentRun({
+      visitorId: req.visitor.visitor_id,
+      runId,
+      afterSeq,
+      onEvent: (event) => {
+        if (!res.writableEnded) writeSse(res, event);
+      },
+      onClose: () => {
+        if (!res.writableEnded) res.end();
+      },
+    });
+    if (!sub) {
+      if (!res.writableEnded) res.end();
+      return;
+    }
+
+    res.on("close", () => {
+      sub.unsubscribe();
+      if (!res.writableEnded) res.end();
+    });
+  });
+
+  router.post("/runs/:runId/cancel", async (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const runId = typeof req.params.runId === "string" ? req.params.runId : "";
+    const run = await cancelAgentRun(req.visitor.visitor_id, runId);
+    if (!run) {
+      res.status(404).json({ error: { code: "NOT_FOUND", message: "run_not_found" } });
+      return;
+    }
+    res.json({ data: run });
+  });
+
+  bootstrapAgentRuns();
   return router;
 }

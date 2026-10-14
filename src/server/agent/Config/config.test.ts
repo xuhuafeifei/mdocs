@@ -40,6 +40,39 @@ describe("agent model configs", () => {
     expect(cfg?.kind).toBe("deepseek");
     expect(cfg?.baseUrl).toBe("https://api.deepseek.com");
     expect(cfg?.isDefault).toBe(true);
+    expect(cfg?.runTimeoutSeconds).toBe(300);
+  });
+
+  it("runTimeoutSeconds 可配置并钳制范围", () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    testDbRef.db = db;
+    seedVisitor(db, "v1-timeout");
+
+    upsertVisitorAgentConfig({
+      ownerVisitorId: "v1-timeout",
+      visitorName: "超时",
+      modelId: "deepseek-flash",
+      apiKey: "sk-t",
+      runTimeoutSeconds: 120,
+    });
+    expect(getVisitorAgentConfig("v1-timeout")?.runTimeoutSeconds).toBe(120);
+
+    upsertVisitorAgentConfig({
+      ownerVisitorId: "v1-timeout",
+      visitorName: "超时",
+      modelId: "deepseek-flash",
+      runTimeoutSeconds: 10,
+    });
+    expect(getVisitorAgentConfig("v1-timeout")?.runTimeoutSeconds).toBe(60);
+
+    upsertVisitorAgentConfig({
+      ownerVisitorId: "v1-timeout",
+      visitorName: "超时",
+      modelId: "deepseek-flash",
+      runTimeoutSeconds: 99999,
+    });
+    expect(getVisitorAgentConfig("v1-timeout")?.runTimeoutSeconds).toBe(3600);
   });
 
   it("custom 保存自定义字段", () => {

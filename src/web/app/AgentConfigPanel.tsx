@@ -58,6 +58,7 @@ export function AgentConfigPanel() {
   const [apiType, setApiType] = useState<AgentApiType>("openai-completions");
   const [modelId, setModelId] = useState("deepseek-flash");
   const [contextWindow, setContextWindow] = useState(1000000);
+  const [runTimeoutSeconds, setRunTimeoutSeconds] = useState(300);
   const [thinkingLevel, setThinkingLevel] = useState<AgentThinkingLevel>("low");
   const [apiKey, setApiKey] = useState("");
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -97,6 +98,7 @@ export function AgentConfigPanel() {
     setApiType("openai-completions");
     setModelId("deepseek-flash");
     setContextWindow(1000000);
+    setRunTimeoutSeconds(300);
     setThinkingLevel("low");
     setApiKey("");
     setHasApiKey(false);
@@ -134,6 +136,11 @@ export function AgentConfigPanel() {
         : mid,
     );
     setContextWindow(cfg.contextWindow || 1000000);
+    setRunTimeoutSeconds(
+      typeof cfg.runTimeoutSeconds === "number" && cfg.runTimeoutSeconds > 0
+        ? cfg.runTimeoutSeconds
+        : 300,
+    );
     setThinkingLevel(
       cfg.thinkingLevel === "off" ||
         cfg.thinkingLevel === "high" ||
@@ -244,6 +251,7 @@ export function AgentConfigPanel() {
               apiType,
               name,
               contextWindow,
+              runTimeoutSeconds,
               thinkingLevel,
               ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
             }
@@ -254,6 +262,7 @@ export function AgentConfigPanel() {
               modelId: modelId as AgentModelId,
               name,
               contextWindow,
+              runTimeoutSeconds,
               thinkingLevel,
               ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
             };
@@ -524,6 +533,20 @@ export function AgentConfigPanel() {
                     onChange={(e) => setContextWindow(Number(e.target.value) || 1000000)}
                   />
                   <p className="mdocs-agent-field-hint">{t("agentConfigContextWindowDesc")}</p>
+                </label>
+                <label className="mdocs-agent-field">
+                  <span>{t("agentConfigRunTimeout")}</span>
+                  <input
+                    type="number"
+                    min={60}
+                    max={3600}
+                    step={30}
+                    value={runTimeoutSeconds}
+                    onChange={(e) =>
+                      setRunTimeoutSeconds(Math.max(60, Number(e.target.value) || 300))
+                    }
+                  />
+                  <p className="mdocs-agent-field-hint">{t("agentConfigRunTimeoutDesc")}</p>
                 </label>
               </details>
 

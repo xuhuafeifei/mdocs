@@ -15,6 +15,8 @@ export interface AgentModelConfigRow {
   context_window: number;
   /** off | low | high | max */
   thinking_level: string;
+  /** 单轮 Agent 后台运行超时（秒） */
+  run_timeout_seconds: number;
   is_default: number;
   updated_at: string;
 }
@@ -80,8 +82,8 @@ export function insertAgentModelConfig(db: Database.Database, row: AgentModelCon
     `INSERT INTO agent_model_configs
        (id, owner_visitor_id, name, provider, kind, provider_id,
         base_url, api_type, compat_json, model_id, api_key, context_window,
-        thinking_level, is_default, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        thinking_level, run_timeout_seconds, is_default, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     row.id,
     row.owner_visitor_id,
@@ -96,6 +98,7 @@ export function insertAgentModelConfig(db: Database.Database, row: AgentModelCon
     row.api_key,
     row.context_window,
     row.thinking_level,
+    row.run_timeout_seconds ?? 300,
     row.is_default,
     row.updated_at,
   );
@@ -107,7 +110,7 @@ export function updateAgentModelConfig(db: Database.Database, row: AgentModelCon
        name = ?, provider = ?, kind = ?, provider_id = ?,
        base_url = ?, api_type = ?, compat_json = ?, model_id = ?,
        api_key = ?, context_window = ?, thinking_level = ?,
-       is_default = ?, updated_at = ?
+       run_timeout_seconds = ?, is_default = ?, updated_at = ?
      WHERE id = ? AND owner_visitor_id = ?`,
   ).run(
     row.name,
@@ -121,6 +124,7 @@ export function updateAgentModelConfig(db: Database.Database, row: AgentModelCon
     row.api_key,
     row.context_window,
     row.thinking_level,
+    row.run_timeout_seconds ?? 300,
     row.is_default,
     row.updated_at,
     row.id,

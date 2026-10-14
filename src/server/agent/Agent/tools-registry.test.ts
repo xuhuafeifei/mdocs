@@ -46,6 +46,7 @@ const UTILITY_NAMES = ["get_now", "set_thinking_level"] as const;
 /** 用户自建 skill 的增删改查：两种 mode 都无条件注册（与 SkillLoader 无关） */
 const USER_SKILL_NAMES = [
   "list_user_skills",
+  "get_user_skill",
   "create_user_skill",
   "update_user_skill",
   "delete_user_skill",

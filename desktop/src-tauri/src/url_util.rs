@@ -99,6 +99,23 @@ pub fn is_shell_setup_url(url: &Url) -> bool {
     url.scheme() == "tauri" || url.host_str() == Some("tauri.localhost")
 }
 
+/// 同源 `/api/assets/` 非图片附件：由 WKWebView 导航触发 `on_download`。
+pub fn is_downloadable_asset(url: &Url) -> bool {
+    let path = url.path();
+    if !path.starts_with("/api/assets/") {
+        return false;
+    }
+    let base = path.rsplit('/').next().unwrap_or("");
+    let ext = match base.rfind('.') {
+        Some(dot) if dot > 0 => base[dot + 1..].to_ascii_lowercase(),
+        _ => return true, // 无扩展名：按可下载附件处理
+    };
+    !matches!(
+        ext.as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "ico" | "bmp" | "jfif" | "pjpeg"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,5 +165,29 @@ mod tests {
         assert!(is_shell_setup_url(&setup));
         assert!(is_shell_setup_url(&win_setup));
         assert!(!is_shell_setup_url(&mdocs));
+    }
+
+    #[test]
+    fn downloadable_asset_requires_api_path_and_non_image() {
+        assert!(is_downloadable_asset(
+            &Url::parse("https://docs.example/api/assets/report.pdf").unwrap()
+        ));
+        assert!(is_downloadable_asset(
+            &Url::parse("https://docs.example/api/assets/x.zip?name=%E5%AD%A3%E5%BA%A6.pdf")
+                .unwrap()
+        ));
+        assert!(is_downloadable_asset(
+            &Url::parse("https://docs.example/api/assets/11111111-1111-4111-8111-111111111111")
+                .unwrap()
+        ));
+        assert!(!is_downloadable_asset(
+            &Url::parse("https://docs.example/api/assets/image.png").unwrap()
+        ));
+        assert!(!is_downloadable_asset(
+            &Url::parse("https://docs.example/other/api/assets/report.pdf").unwrap()
+        ));
+        assert!(!is_downloadable_asset(
+            &Url::parse("https://docs.example/doc/abc").unwrap()
+        ));
     }
 }

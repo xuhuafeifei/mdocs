@@ -59,7 +59,14 @@ export type AgentStreamEvent =
       headCommitId: string;
     }
   | { type: "done" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  /** 后台 run 已创建；关闭面板不取消执行 */
+  | {
+      type: "run_started";
+      runId: string;
+      sessionId: string;
+      deadlineAt: string;
+    };
 
 export interface AgentDocumentTableRow {
   documentId: string;

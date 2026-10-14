@@ -10,6 +10,7 @@ import { searchDocuments } from "./search.service.js";
 
 const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
 const contentByPath = vi.hoisted(() => new Map<string, string>());
+const embeddedPlainTexts = vi.hoisted(() => [] as string[]);
 
 const JIEBA = Jieba.withDict(dict);
 function tok(text: string): string {
@@ -73,7 +74,9 @@ vi.mock("../logger/logger.js", () => ({
 /** 本文件测 FTS；语义路 no-op，避免拉 GGUF */
 vi.mock("./embedding-store.js", () => ({
   deleteEmbeddingChunks: () => {},
-  upsertDocumentEmbeddings: async () => {},
+  upsertDocumentEmbeddings: async (input: { plainText: string }) => {
+    embeddedPlainTexts.push(input.plainText);
+  },
   querySemanticNeighbors: async () => [],
 }));
 
@@ -84,6 +87,7 @@ function insertFtsDoc(opts: {
   relativePath: string;
   ownerVisitorId: string;
   permission: number;
+  fileType?: string;
   title?: string;
   body?: string;
 }): void {
@@ -93,7 +97,7 @@ function insertFtsDoc(opts: {
     `INSERT INTO documents (
       document_id, domain_id, relative_path, display_name, owner_visitor_id,
       created_by, updated_by, content_hash, created_at, updated_at, permission, file_type, is_dirty
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'md', 0)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
   ).run(
     opts.documentId,
     opts.domainId,
@@ -106,6 +110,7 @@ function insertFtsDoc(opts: {
     now,
     now,
     opts.permission,
+    opts.fileType ?? "md",
   );
 
   if (opts.title !== undefined) {
@@ -169,6 +174,7 @@ describe("Search functionality", () => {
     db.exec("DELETE FROM audit_logs");
     db.exec("DELETE FROM document_invites");
     contentByPath.clear();
+    embeddedPlainTexts.length = 0;
   });
 
   it("should index documents and search works", async () => {
@@ -219,6 +225,92 @@ describe("Search functionality", () => {
     });
 
     expect(results).toEqual([]);
+  });
+
+  it("indexes sheet title, tab, columns and cell values for FTS and embeddings", async () => {
+    const sheet = JSON.stringify({
+      version: 2,
+      activeSheetId: "s1",
+      sheets: [
+        {
+          id: "s1",
+          name: "华东预算",
+          columns: [
+            { id: "c1", name: "项目" },
+            { id: "c2", name: "金额" },
+          ],
+          rows: [{ id: "r1", cells: { c1: "服务器续费", c2: "8600" } }],
+        },
+      ],
+    });
+    contentByPath.set("budget.sheet", sheet);
+    const created = createDocument({
+      actorVisitorId: "test-actor",
+      fileName: "budget.sheet",
+      displayName: "年度费用表",
+      content: sheet,
+      fileType: "sheet",
+      domainId: "default",
+      parentId: null,
+    });
+
+    await rebuildAllDirty();
+
+    expect(
+      (await searchDocuments({
+        query: "服务器续费",
+        visitorId: "test-actor",
+        domainId: "default",
+        mode: "keyword",
+      })).map((item) => item.documentId),
+    ).toEqual([created.documentId]);
+    expect(
+      (await searchDocuments({
+        query: "年度费用表",
+        visitorId: "test-actor",
+        domainId: "default",
+        mode: "keyword",
+      })).map((item) => item.documentId),
+    ).toEqual([created.documentId]);
+    expect(embeddedPlainTexts.join("\n")).toContain("华东预算");
+    expect(embeddedPlainTexts.join("\n")).toContain("项目");
+    expect(embeddedPlainTexts.join("\n")).toContain("服务器续费");
+    expect(embeddedPlainTexts.join("\n")).not.toContain("activeSheetId");
+  });
+
+  it("backfills a clean sheet that predates sheet indexing", async () => {
+    contentByPath.set(
+      "legacy.sheet",
+      JSON.stringify({
+        version: 2,
+        activeSheetId: "s1",
+        sheets: [{
+          id: "s1",
+          name: "旧表",
+          columns: [{ id: "c1", name: "备注" }],
+          rows: [{ id: "r1", cells: { c1: "历史库存盘点" } }],
+        }],
+      }),
+    );
+    insertFtsDoc({
+      documentId: "legacy-sheet",
+      domainId: "default",
+      displayName: "旧工作簿",
+      relativePath: "legacy.sheet",
+      ownerVisitorId: "owner-a",
+      permission: Permission.PUBLIC_READ,
+      fileType: "sheet",
+    });
+
+    expect(await rebuildAllDirty()).toBe(1);
+    expect(
+      (await searchDocuments({
+        query: "历史库存盘点",
+        visitorId: "owner-a",
+        domainId: "default",
+        mode: "keyword",
+      })).map((item) => item.documentId),
+    ).toEqual(["legacy-sheet"]);
   });
 
   it("title-only hit ranks and returns displayName snippet", async () => {

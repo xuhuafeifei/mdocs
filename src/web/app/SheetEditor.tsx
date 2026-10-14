@@ -81,6 +81,7 @@ import {
 } from "../services/endpoints";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { VisitorPickerModal } from "./VisitorPickerModal";
+import { ConfirmDialog } from "./ConfirmDialog";
 import "./SheetEditor.css";
 
 interface SheetEditorProps {
@@ -257,6 +258,7 @@ export function SheetEditor(props: SheetEditorProps) {
   const [showInvitePicker, setShowInvitePicker] = useState(false);
   const [existingInvites, setExistingInvites] = useState<Map<string, string>>(new Map());
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
+  const [deleteTabTarget, setDeleteTabTarget] = useState<{ id: string; name: string } | null>(null);
   const [renamingColId, setRenamingColId] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<CellRef | null>(null);
   const [focus, setFocus] = useState<CellRef | null>(null);
@@ -1218,11 +1220,7 @@ export function SheetEditor(props: SheetEditorProps) {
                     title={t("sheetDeleteSheet")}
                     onClick={(e) => {
                       e.stopPropagation();
-                      try {
-                        mutateWorkbook(removeWorkbookSheet(workbook, tab.id));
-                      } catch {
-                        /* last sheet */
-                      }
+                      setDeleteTabTarget({ id: tab.id, name: tab.name });
                     }}
                   >
                     <X size={11} strokeWidth={2.4} />
@@ -1241,13 +1239,32 @@ export function SheetEditor(props: SheetEditorProps) {
               mutateWorkbook(doc);
             }}
           >
-            <Plus size={13} strokeWidth={2.2} />
+            <Plus size={14} strokeWidth={2.4} />
+            <span>{t("sheetAddSheet")}</span>
           </button>
         </div>
         <div className="mdocs-sheet-footer-info">
           <span>共 {workbook.sheets.length} 个工作表</span>
         </div>
       </footer>
+
+      {deleteTabTarget ? (
+        <ConfirmDialog
+          title={t("sheetDeleteSheet")}
+          message={`确定删除工作表「${deleteTabTarget.name}」？其中的数据将一并删除。`}
+          confirmLabel={t("delete")}
+          cancelLabel={t("cancel")}
+          danger
+          onCancel={() => setDeleteTabTarget(null)}
+          onConfirm={() => {
+            try {
+              mutateWorkbook(removeWorkbookSheet(workbook, deleteTabTarget.id));
+            } finally {
+              setDeleteTabTarget(null);
+            }
+          }}
+        />
+      ) : null}
 
       {showPermissionDialog && (
         <div

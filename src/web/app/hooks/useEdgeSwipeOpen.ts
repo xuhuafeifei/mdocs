@@ -6,8 +6,9 @@
  */
 import { useEffect, useRef } from "react";
 
-const EDGE_PX = 28;
-const THRESHOLD_PX = 56;
+// Android 系统返回手势会抢最边缘触摸；允许从更宽的安全区起滑。
+const EDGE_PX = 64;
+const THRESHOLD_PX = 44;
 const MAX_VERTICAL_RATIO = 0.75;
 
 export function useEdgeSwipeOpen(

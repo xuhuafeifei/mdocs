@@ -703,6 +703,8 @@ export interface AgentModelConfigPublic {
   apiKeyMasked: string | null;
   contextWindow: number;
   thinkingLevel: AgentThinkingLevel;
+  /** 单轮后台运行超时（秒） */
+  runTimeoutSeconds: number;
   isDefault: boolean;
 }
 
@@ -723,6 +725,7 @@ export function saveAgentConfigApi(input: {
   apiKey?: string;
   contextWindow?: number;
   thinkingLevel?: AgentThinkingLevel;
+  runTimeoutSeconds?: number;
   providerId?: string;
   baseUrl?: string;
   apiType?: AgentApiType;
@@ -848,7 +851,13 @@ export type AgentStreamEvent =
       headCommitId: string;
     }
   | { type: "done" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | {
+      type: "run_started";
+      runId: string;
+      sessionId: string;
+      deadlineAt: string;
+    };
 
 export interface AgentSourceRef {
   id: string;
@@ -884,9 +893,30 @@ export interface AgentSessionMessage {
   skillIds?: string[];
 }
 
+export type AgentRunStatus =
+  | "running"
+  | "waiting_user"
+  | "completed"
+  | "failed"
+  | "timed_out"
+  | "cancelled"
+  | "interrupted";
+
+export interface AgentRunPublic {
+  runId: string;
+  sessionId: string;
+  status: AgentRunStatus;
+  startedAt: string;
+  deadlineAt: string;
+  finishedAt?: string;
+  lastSeq: number;
+  abortReason?: string;
+}
+
 export interface AgentSessionResponse {
   sessionId: string;
   messages: AgentSessionMessage[];
+  activeRun?: AgentRunPublic | null;
 }
 
 export interface AgentSessionSummary {
@@ -1053,7 +1083,49 @@ export function cancelAgentSkillFormApi(
   });
 }
 
-/** POST /api/agent/chat，解析 SSE `data: {...}` 行 */
+async function readAgentSseStream(
+  res: Response,
+  opts: {
+    signal?: AbortSignal;
+    onEvent: (event: AgentStreamEvent, seq?: number) => void;
+  },
+): Promise<void> {
+  if (!res.body) throw new Error("empty response body");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const onAbort = () => {
+    void reader.cancel().catch(() => undefined);
+  };
+  opts.signal?.addEventListener("abort", onAbort, { once: true });
+  const consumeLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) return;
+    const payload = trimmed.slice(5).trim();
+    if (!payload || payload === "[DONE]") return;
+    try {
+      opts.onEvent(JSON.parse(payload) as AgentStreamEvent);
+    } catch {
+      /* skip malformed chunk */
+    }
+  };
+  try {
+    while (true) {
+      if (opts.signal?.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n");
+      buffer = parts.pop() ?? "";
+      for (const line of parts) consumeLine(line);
+    }
+    if (buffer.trim()) consumeLine(buffer);
+  } finally {
+    opts.signal?.removeEventListener("abort", onAbort);
+  }
+}
+
+/** POST /api/agent/chat，解析 SSE；断开订阅不取消服务端 run */
 export async function streamAgentChatApi(
   message: string,
   opts: {
@@ -1104,50 +1176,60 @@ export async function streamAgentChatApi(
   if (!res.ok) {
     let messageText = `HTTP ${res.status}`;
     try {
-      const body = (await res.json()) as { error?: { message?: string } };
-      if (body.error?.message) messageText = body.error.message;
+      const errBody = (await res.json()) as {
+        error?: { message?: string; code?: string };
+      };
+      if (errBody.error?.message) messageText = errBody.error.message;
+      if (errBody.error?.code === "RUN_ACTIVE") {
+        const err = new Error(messageText) as Error & { code?: string };
+        err.code = "RUN_ACTIVE";
+        throw err;
+      }
+    } catch (e) {
+      if (e instanceof Error && (e as Error & { code?: string }).code === "RUN_ACTIVE") throw e;
+    }
+    throw new Error(messageText);
+  }
+
+  await readAgentSseStream(res, opts);
+}
+
+/** 重连已有后台 run 的 SSE 流 */
+export async function streamAgentRunApi(
+  runId: string,
+  opts: {
+    afterSeq?: number;
+    signal?: AbortSignal;
+    onEvent: (event: AgentStreamEvent) => void;
+  },
+): Promise<void> {
+  const params = new URLSearchParams();
+  if (opts.afterSeq != null && opts.afterSeq > 0) {
+    params.set("afterSeq", String(opts.afterSeq));
+  }
+  const q = params.toString();
+  const res = await fetch(
+    `/api/agent/runs/${encodeURIComponent(runId)}/stream${q ? `?${q}` : ""}`,
+    { signal: opts.signal },
+  );
+  if (!res.ok) {
+    let messageText = `HTTP ${res.status}`;
+    try {
+      const errBody = (await res.json()) as { error?: { message?: string } };
+      if (errBody.error?.message) messageText = errBody.error.message;
     } catch {
       /* ignore */
     }
     throw new Error(messageText);
   }
+  await readAgentSseStream(res, opts);
+}
 
-  if (!res.body) throw new Error("empty response body");
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split("\n");
-    buffer = parts.pop() ?? "";
-    for (const line of parts) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-      const payload = trimmed.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      try {
-        opts.onEvent(JSON.parse(payload) as AgentStreamEvent);
-      } catch {
-        /* skip malformed chunk */
-      }
-    }
-  }
-
-  const tail = buffer.trim();
-  if (tail.startsWith("data:")) {
-    const payload = tail.slice(5).trim();
-    if (payload && payload !== "[DONE]") {
-      try {
-        opts.onEvent(JSON.parse(payload) as AgentStreamEvent);
-      } catch {
-        /* ignore */
-      }
-    }
-  }
+export function cancelAgentRunApi(runId: string): Promise<AgentRunPublic> {
+  return api<AgentRunPublic>(`/api/agent/runs/${encodeURIComponent(runId)}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
 // ========== 知识图谱 ==========
