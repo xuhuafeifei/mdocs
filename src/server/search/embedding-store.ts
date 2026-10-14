@@ -119,6 +119,16 @@ export async function upsertDocumentEmbeddings(params: {
       );
     }
 
+    // embed 是异步的：期间文档可能已被删除；落库前再确认，避免孤儿语义块
+    const stillExists = db
+      .prepare(`SELECT 1 AS ok FROM documents WHERE document_id = ?`)
+      .get(params.documentId) as { ok: number } | undefined;
+    if (!stillExists) {
+      deleteEmbeddingChunks(db, params.documentId);
+      log.info("semantic build skip %s: document deleted during embed", label);
+      return;
+    }
+
     const tx = db.transaction(() => {
       deleteEmbeddingChunks(db, params.documentId);
       const insert = db.prepare(

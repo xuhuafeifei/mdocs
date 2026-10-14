@@ -148,17 +148,36 @@ export async function backfillMissingEmbeddings(limit = 40): Promise<number> {
 
 /**
  * 从全文索引中移除文档（正文 + 标题两路 + 语义块）。
- * 文档删除时调用。
+ * 文档删除时调用。各步独立 try，避免 FTS 失败导致语义块漏删。
  */
 export function removeIndex(documentId: string): void {
   const db = getDb();
   try {
     deleteFtsRow(db, "documents_fts", "documents_fts_rowid", documentId);
+  } catch (err) {
+    log.warn(
+      "removeIndex fts body failed for %s: %s",
+      documentId,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+  try {
     deleteFtsRow(db, "documents_fts_title", "documents_fts_title_rowid", documentId);
+  } catch (err) {
+    log.warn(
+      "removeIndex fts title failed for %s: %s",
+      documentId,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+  try {
     deleteEmbeddingChunks(db, documentId);
-  } catch {
-    // 忽略索引删除错误，不影响文档删除的主流程
-    // 索引不一致问题会在下次 rebuildAllDirty 时自动修复
+  } catch (err) {
+    log.warn(
+      "removeIndex embeddings failed for %s: %s",
+      documentId,
+      err instanceof Error ? err.message : String(err),
+    );
   }
 }
 

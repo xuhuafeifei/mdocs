@@ -14,6 +14,7 @@ import {
   cosineSimilarity,
   deleteEmbeddingChunks,
   float32ToBlob,
+  upsertDocumentEmbeddings,
 } from "./embedding-store.js";
 
 const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
@@ -45,10 +46,10 @@ vi.mock("../logger/logger.js", () => ({
 vi.mock("./embedding-model.js", () => ({
   EMBEDDING_DIM: 8,
   isEmbeddingReady: () => embedState.ready,
-  embedText: async (_text: string, kind: "document" | "query") => {
+  embedText: async (text: string, kind: "document" | "query") => {
     if (!embedState.ready) return null;
     if (kind === "query") return embedState.queryVec;
-    return null;
+    return embedState.vectors.get(text) ?? unit(0);
   },
 }));
 
@@ -359,6 +360,33 @@ describe("searchDocuments semantic merge", () => {
       testDbRef.db!.prepare(`SELECT COUNT(*) AS c FROM document_embedding_chunks WHERE document_id = ?`).get(
         "gone",
       ) as { c: number }
+    ).c;
+    expect(n).toBe(0);
+  });
+
+  it("upsertDocumentEmbeddings does not write after document is deleted", async () => {
+    insertDoc({
+      documentId: "to-delete",
+      domainId: "default",
+      displayName: "将删",
+      relativePath: "del.md",
+      ownerVisitorId: "u1",
+      permission: Permission.PUBLIC_READ,
+      body: "一段足够长的正文用于切块写入语义索引",
+    });
+    // 模拟 embed 进行中文档被删
+    const embedPromise = upsertDocumentEmbeddings({
+      documentId: "to-delete",
+      domainId: "default",
+      plainText: "一段足够长的正文用于切块写入语义索引",
+      label: "将删",
+    });
+    testDbRef.db!.prepare(`DELETE FROM documents WHERE document_id = ?`).run("to-delete");
+    await embedPromise;
+    const n = (
+      testDbRef.db!
+        .prepare(`SELECT COUNT(*) AS c FROM document_embedding_chunks WHERE document_id = ?`)
+        .get("to-delete") as { c: number }
     ).c;
     expect(n).toBe(0);
   });

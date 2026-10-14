@@ -924,9 +924,8 @@ export function removeFolder(params: {
     } catch {
       // 盘上可能已不存在
     }
-    if (getPolicy(doc.file_type as any)?.ftsIndex) {
-      removeIndex(doc.document_id);
-    }
+    // 始终清 FTS + 语义（非索引类型也是安全 no-op）
+    removeIndex(doc.document_id);
   }
 
   scheduleGraphLifecycle(() =>

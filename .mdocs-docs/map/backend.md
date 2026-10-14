@@ -90,7 +90,7 @@
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/server/search/document-index-manager.ts` | 正文+标题索引；语义尽力更新；`removeIndex` / `rebuildDocument` / `backfillMissingEmbeddings` |
+  | `src/server/search/document-index-manager.ts` | 正文+标题索引；语义尽力更新；`removeIndex`（删文清 FTS+语义，分步不互相拖垮）/ `rebuildDocument` / `backfillMissingEmbeddings` |
   | `src/server/search/search.service.ts` | `SearchMode`（auto/keyword/semantic）；两路 MATCH → 可选语义近邻 → 合并 → `canReadDocument` |
   | `src/server/routes/documents.routes.ts` | `POST /search`（mode 入参，返回 `{results, modelReady}`）；`GET /embedding-index`；`POST /embedding-rebuild` |
   | `src/server/agent/Agent/tools-documents.ts` | `searchDocumentsTool`（mode）；`listSemanticIndexTool`；`rebuildSemanticIndexTool`（可读即可索引） |

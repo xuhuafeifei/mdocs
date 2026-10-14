@@ -71,9 +71,11 @@ vi.mock("../logger/logger.js", () => ({
   }),
 }));
 
-/** 本文件测 FTS；语义路 no-op，避免拉 GGUF */
+/** 本文件测 FTS；语义写入只记账，删除走真实 SQL 以便断言 removeIndex */
 vi.mock("./embedding-store.js", () => ({
-  deleteEmbeddingChunks: () => {},
+  deleteEmbeddingChunks: (db: Database.Database, documentId: string) => {
+    db.prepare(`DELETE FROM document_embedding_chunks WHERE document_id = ?`).run(documentId);
+  },
   upsertDocumentEmbeddings: async (input: { plainText: string }) => {
     embeddedPlainTexts.push(input.plainText);
   },
@@ -488,7 +490,7 @@ describe("Search functionality", () => {
     ).toEqual([created.documentId]);
   });
 
-  it("removeIndex clears both fts paths", async () => {
+  it("removeIndex clears both fts paths and embedding chunks", async () => {
     contentByPath.set("gone.md", lexical("正文里有独有词xyzabc"));
     const created = createDocument({
       actorVisitorId: "test-actor",
@@ -502,11 +504,24 @@ describe("Search functionality", () => {
     // createDocument 会 nextTick 再 rebuild；先冲掉，避免 remove 后又被写回
     await new Promise<void>((resolve) => process.nextTick(resolve));
 
+    testDbRef.db!
+      .prepare(
+        `INSERT INTO document_embedding_chunks (document_id, domain_id, chunk_index, text, embedding, updated_at)
+         VALUES (?, 'default', 0, 'chunk', X'00', ?)`,
+      )
+      .run(created.documentId, new Date().toISOString());
+
     removeIndex(created.documentId);
     testDbRef.db!.prepare(`DELETE FROM documents WHERE document_id = ?`).run(created.documentId);
 
     expect(
       await searchDocuments({ query: "xyzabc", visitorId: "test-actor", domainId: "default" }),
     ).toEqual([]);
+    const chunks = (
+      testDbRef.db!
+        .prepare(`SELECT COUNT(*) AS c FROM document_embedding_chunks WHERE document_id = ?`)
+        .get(created.documentId) as { c: number }
+    ).c;
+    expect(chunks).toBe(0);
   });
 });
