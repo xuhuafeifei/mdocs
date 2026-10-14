@@ -6177,21 +6177,15 @@ strong.label {
   white-space: nowrap;
 }
 
-/* 窄屏：搜索独占一行，模式/工作空间第二行，避免输入框被挤没 */
+/* 窄屏：仍用居中浮层；搜索一行、筛选一行，避免输入框被挤没 */
 @media (max-width: 768px) {
   .mdocs-doc-search-backdrop {
-    padding: 0;
-    align-items: stretch;
-    justify-content: stretch;
+    padding: 12vh 12px 24px;
   }
 
   .mdocs-doc-search-panel {
     width: 100%;
-    max-height: none;
-    height: 100%;
-    border-radius: 0;
-    border: none;
-    box-shadow: none;
+    max-height: min(72vh, 560px);
   }
 
   .mdocs-doc-search-bar {
@@ -6200,24 +6194,12 @@ strong.label {
     grid-template-areas:
       "query close"
       "filters filters";
-    gap: 10px;
-    padding: 12px;
-    border-radius: 0;
+    gap: 8px;
+    padding: 10px 12px;
   }
 
   .mdocs-doc-search-query {
     grid-area: query;
-    min-height: 40px;
-    padding: 0 12px;
-    border: 1px solid var(--mdocs-border, #e5e5e5);
-    border-radius: 10px;
-    background: var(--mdocs-bg, #f7f7f7);
-  }
-
-  .mdocs-doc-search-query:focus-within {
-    border-color: var(--mdocs-accent, #4caf50);
-    background: var(--mdocs-surface, #fff);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mdocs-accent, #4caf50) 18%, transparent);
   }
 
   .mdocs-doc-search-input {
@@ -6226,10 +6208,7 @@ strong.label {
 
   .mdocs-doc-search-close {
     grid-area: close;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    border-radius: 10px;
+    align-self: center;
   }
 
   .mdocs-doc-search-filters {
@@ -6252,9 +6231,8 @@ strong.label {
     width: 100%;
     max-width: none;
     min-width: 0;
-    height: 36px;
+    height: 32px;
     justify-content: space-between;
-    background: var(--mdocs-surface, #fff);
   }
 
   .mdocs-doc-search-mode .mdocs-mini-select-label {
@@ -6266,12 +6244,10 @@ strong.label {
   .mdocs-doc-search-domain-menu {
     left: 0;
     right: auto;
-    width: min(100vw - 24px, 320px);
+    width: min(100%, 280px);
   }
 
   .mdocs-doc-search-results {
-    max-height: none;
-    flex: 1 1 auto;
-    border-radius: 0;
+    max-height: min(52vh, 400px);
   }
 }
