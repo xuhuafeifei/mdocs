@@ -5523,6 +5523,19 @@ strong.label {
     -webkit-overflow-scrolling: touch;
   }
 
+  .mdocs-editor-toolbar-leading-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .mdocs-editor-toolbar-leading-wrap .mdocs-reader-nav-btn {
+    flex: 0 0 auto;
+    touch-action: manipulation;
+  }
+
   .mdocs-editor-toolbar--float .mdocs-editor-toolbar-leading,
   .mdocs-editor-toolbar--docked .mdocs-editor-toolbar-leading {
     touch-action: none;

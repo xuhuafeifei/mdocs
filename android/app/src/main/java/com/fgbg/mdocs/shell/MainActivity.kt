@@ -5,8 +5,10 @@ import android.app.DownloadManager
 import android.content.ActivityNotFoundException
 import android.content.ClipboardManager
 import android.content.Intent
+import android.graphics.Rect
 import android.net.Uri
 import android.net.http.SslError
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.webkit.CookieManager
@@ -88,6 +90,10 @@ class MainActivity : AppCompatActivity() {
         webView.setDownloadListener { downloadUrl, userAgent, contentDisposition, mimeType, _ ->
             enqueueAssetDownload(downloadUrl, userAgent, contentDisposition, mimeType)
         }
+        // 把左缘留给 Web 侧「右滑开目录」，避免被系统返回手势整段吞掉
+        webView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            updateSystemGestureExclusion()
+        }
         webView.loadUrl(url)
 
         onBackPressedDispatcher.addCallback(
@@ -108,9 +114,19 @@ class MainActivity : AppCompatActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (!hasFocus || !::webView.isInitialized) return
+        updateSystemGestureExclusion()
         val target = clipboardDocUrl() ?: return
         if (sameDocTarget(webView.url.orEmpty(), target)) return
         webView.loadUrl(target)
+    }
+
+    /** API 29+：声明左缘为应用手势区，减轻系统返回手势抢触摸。 */
+    private fun updateSystemGestureExclusion() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        if (!::webView.isInitialized) return
+        val edge = (48f * resources.displayMetrics.density).toInt().coerceAtLeast(1)
+        val h = webView.height.coerceAtLeast(1)
+        webView.systemGestureExclusionRects = listOf(Rect(0, 0, edge, h))
     }
 
     private fun clipboardText(): String? {

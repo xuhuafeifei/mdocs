@@ -133,15 +133,9 @@ export function DocChrome(props: DocChromeProps) {
       : undefined;
 
   if (props.readerChrome) {
-    /** 汉堡 + 标题 */
+    /** 汉堡在拖动手势外，避免 touch-action:none 吞掉开目录点击 / 左缘滑动 */
     const leading = (
-      <div
-        className="mdocs-editor-toolbar-leading"
-        onPointerDown={props.onReaderHeaderPointerDown}
-        onPointerMove={props.onReaderHeaderPointerMove}
-        onPointerUp={props.onReaderHeaderPointerUp}
-        onPointerCancel={props.onReaderHeaderPointerUp}
-      >
+      <div className="mdocs-editor-toolbar-leading-wrap">
         <button
           type="button"
           className="mdocs-reader-nav-btn"
@@ -150,15 +144,23 @@ export function DocChrome(props: DocChromeProps) {
         >
           <PanelLeftOpen size={18} strokeWidth={1.75} />
         </button>
-        <input
-          className="mdocs-editor-title-input"
-          value={props.displayName}
-          onChange={(e) => props.onDisplayNameChange(e.target.value)}
-          onBlur={props.onDisplayNameBlur}
-          placeholder={t("displayNamePlaceholder")}
-          disabled={!props.editing}
-          readOnly={!props.editing}
-        />
+        <div
+          className="mdocs-editor-toolbar-leading"
+          onPointerDown={props.onReaderHeaderPointerDown}
+          onPointerMove={props.onReaderHeaderPointerMove}
+          onPointerUp={props.onReaderHeaderPointerUp}
+          onPointerCancel={props.onReaderHeaderPointerUp}
+        >
+          <input
+            className="mdocs-editor-title-input"
+            value={props.displayName}
+            onChange={(e) => props.onDisplayNameChange(e.target.value)}
+            onBlur={props.onDisplayNameBlur}
+            placeholder={t("displayNamePlaceholder")}
+            disabled={!props.editing}
+            readOnly={!props.editing}
+          />
+        </div>
       </div>
     );
 
