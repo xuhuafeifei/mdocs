@@ -26,3 +26,5 @@
 | [overwrite-html-markdown-rejected-2026-09-11](./overwrite-html-markdown-rejected-2026-09-11.md) | Ask 覆写 html 误传 markdown 被 400 |
 | [graph-missing-import-blank-screen-2026-09-13](./graph-missing-import-blank-screen-2026-09-13.md) | 图谱页漏 import 致编译失败，永远「加载中」且无 network |
 | [ai-write-confirm-desktop-2026-09-19](./ai-write-confirm-desktop-2026-09-19.md) | 桌面端帮写完成/取消被 window.confirm 吞掉 |
+| [mobile-sheet-toolbar-covered-2026-10-14](./mobile-sheet-toolbar-covered-2026-10-14.md) | 窄屏 sheet 加行/加列被 DocChrome 浮层盖住 |
+| [mobile-doc-search-ui-2026-10-14](./mobile-doc-search-ui-2026-10-14.md) | 手机搜索输入被挤没；模式改 MiniSelect；取消全屏 |

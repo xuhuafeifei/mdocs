@@ -10,13 +10,15 @@
   |------|------|
   | `src/web/main.tsx` | 挂载 |
   | `src/web/app/App.tsx` | 主壳 / `openDocument`；悬浮层在 shell **外**；侧栏搜索 + ⌘K |
-  | `src/web/app/DocSearchOverlay.tsx` | 当前域文档搜索浮层 |
+  | `src/web/app/DocSearchOverlay.tsx` | 文档搜索浮层；模式用 `MiniSelect`；窄屏两行 bar |
+  | `src/web/app/MiniSelect.tsx` | 通用小下拉（搜索模式等） |
   | `src/web/app/App.css` | `.mdocs-shell` `.mdocs-sidebar` `.mdocs-sidebar-list` `.mdocs-doc-search-*` |
+  | `src/web/app/hooks/useEdgeSwipeOpen.ts` | 窄屏左缘右滑开侧栏 / 左滑关 |
   | `src/web/app/DocumentTree.tsx` | 文档树根节点 = `.mdocs-sidebar-list` |
   | `src/web/app/DocumentEditor.tsx` | 编辑器容器 |
   | `src/web/app/DocChrome.tsx` | 文档顶栏（桌面+reader）；`aiWrite`/`comments` |
   | `src/web/app/HtmlEditor.tsx` | HTML 预览/编辑（sandbox iframe） |
-  | `src/web/app/SheetEditor.tsx` | `.sheet` 工作簿 UI（多工作表标签；`aiWrite=false`） |
+  | `src/web/app/SheetEditor.tsx` | `.sheet` 工作簿 UI；窄屏 `readerHeaderDocked` 免盖工具栏 |
   | `src/shared/sheetDocument.ts` | workbook JSON（`sheets[]`）/ 行列与表标签 mutate |
   | `src/web/app/MergeView.tsx` | 冲突 merge；`fileType` → raw-text 管道 |
 - **布局约定**：shell 只承载 layout；侧栏头尾 `flex: 0 0 auto`，仅 list `overflow-y: auto`（见 [`../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md`](../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md)）
@@ -152,13 +154,15 @@
 
 ### Android WebView 壳
 
-- **关键词**：`apk` `WebView` `SetupActivity` `server url`
+- **关键词**：`apk` `WebView` `SetupActivity` `server url` `systemGestureExclusionRects` `edge swipe`
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `android/` | Gradle 工程（与 pnpm 打包隔离） |
   | `android/app/.../Prefs.kt` | `Prefs` `normalizeServerUrl` |
-  | `android/app/.../MainActivity.kt` | `MainActivity` |
+  | `android/app/.../MainActivity.kt` | `MainActivity` `updateSystemGestureExclusion` |
+  | `src/web/app/hooks/useEdgeSwipeOpen.ts` | Web 侧开/关抽屉手势 |
+- **决策**：[`../decisions/014-mobile-edge-swipe-vs-system-back.md`](../decisions/014-mobile-edge-swipe-vs-system-back.md)（系统返回抢边；汉堡为可靠入口）
 - **需求**：[`../requirements/android-webview-shell/`](../requirements/android-webview-shell/)
 
 ### 桌面 WebView 壳
