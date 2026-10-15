@@ -78,10 +78,11 @@ describe("toolCallPreparingDetail", () => {
     const detail = toolCallPreparingDetail("set_markdown_document", {
       markdown: "第一段引言。\n第二段正在往下写。",
     });
-    expect(detail).toContain("约 16 字");
-    expect(detail).toContain("第一段引言");
-    expect(detail).toContain("第二段正在往下写");
-    expect(detail.startsWith("…")).toBe(false);
+    expect(detail).toBeDefined();
+    expect(detail!).toContain("约 16 字");
+    expect(detail!).toContain("第一段引言");
+    expect(detail!).toContain("第二段正在往下写");
+    expect(detail!.startsWith("…")).toBe(false);
   });
 
   it("falls back for unknown tool name", () => {

@@ -146,10 +146,7 @@ function bindAgentEvents(opts: {
   const onToolUi = createToolUiEffectsHandler(onEvent);
   const toolStartDetail = new Map<string, string>();
   /** contentIndex → 已推过的 preparing 卡片，避免 toolcall_delta 刷屏 */
-  const preparingByIndex = new Map<
-    number,
-    { toolCallId: string; toolName: string; detailBucket: number }
-  >();
+  const preparingByIndex = new Map<number, PreparingTrack>();
   let appendedUser = false;
   let appendedAssistant = false;
 
