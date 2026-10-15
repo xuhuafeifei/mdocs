@@ -28,3 +28,4 @@
 | [ai-write-confirm-desktop-2026-09-19](./ai-write-confirm-desktop-2026-09-19.md) | 桌面端帮写完成/取消被 window.confirm 吞掉 |
 | [mobile-sheet-toolbar-covered-2026-10-14](./mobile-sheet-toolbar-covered-2026-10-14.md) | 窄屏 sheet 加行/加列被 DocChrome 浮层盖住 |
 | [mobile-doc-search-ui-2026-10-14](./mobile-doc-search-ui-2026-10-14.md) | 手机搜索输入被挤没；模式改 MiniSelect；取消全屏 |
+| [mobile-nav-push-vs-table-swipe-2026-10-14](./mobile-nav-push-vs-table-swipe-2026-10-14.md) | 窄屏目录 push；表先滚；收拢压缝；首滑要先点一下 |

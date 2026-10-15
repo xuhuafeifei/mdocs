@@ -6,7 +6,7 @@
  * 3. 成员模板（保存常用访客列表）
  * 4. 保存与发布（自动同步开关、未发布草稿列表）
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   CloudUpload,
@@ -113,9 +113,11 @@ export function SettingsPage(props: {
   const { onBack, onPublishDraft } = props;
   const isNarrow = useIsNarrowViewport();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  useEdgeSwipeOpen(isNarrow, () => setMobileNavOpen(true), {
+  const mobileNavLayoutRef = useRef<HTMLDivElement>(null);
+  const mobileNavSwipe = useEdgeSwipeOpen(isNarrow, {
     open: mobileNavOpen,
-    onClose: () => setMobileNavOpen(false),
+    onOpenChange: setMobileNavOpen,
+    layoutRef: mobileNavLayoutRef,
   });
 
   // 组件挂载状态跟踪，防止卸载后 async setState 导致内存泄漏
@@ -521,15 +523,20 @@ export function SettingsPage(props: {
   const myDocTotalPages = Math.ceil(myDocTotal / MY_DOC_PAGE_SIZE);
 
   return (
-    <div className={"mdocs-layout" + (isNarrow ? " mdocs-layout--reader mdocs-layout--settings" : "")}>
-      {isNarrow && mobileNavOpen ? (
-        <button
-          type="button"
-          className="mdocs-mobile-nav-scrim"
-          aria-label={t("collapseSidebar")}
-          onClick={() => setMobileNavOpen(false)}
-        />
-      ) : null}
+    <div
+      ref={mobileNavLayoutRef}
+      className={
+        "mdocs-layout" +
+        (isNarrow ? " mdocs-layout--reader mdocs-layout--settings" : "") +
+        (isNarrow && mobileNavOpen ? " mdocs-layout--nav-open" : "") +
+        (isNarrow && mobileNavSwipe.dragging ? " is-nav-dragging" : "")
+      }
+      style={
+        isNarrow
+          ? ({ ["--mdocs-nav-reveal" as string]: `${mobileNavSwipe.revealPx}px` } as CSSProperties)
+          : undefined
+      }
+    >
       {/* ========== 左侧设置导航栏 ========== */}
       <aside
         className={

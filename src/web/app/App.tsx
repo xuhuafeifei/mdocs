@@ -8,7 +8,7 @@
  * 5. 新建文档/文件夹的模态框管理
  * 6. 全局消息提示与冲突处理
  */
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Search, Star, Table } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
@@ -334,9 +334,11 @@ export function App() {
   // ---- 当前视图：docs（文档）或 settings（设置） ----
   const [view, setView] = useState<"docs" | "settings">("docs");
 
-  useEdgeSwipeOpen(isNarrow && view === "docs", () => setMobileNavOpen(true), {
+  const mobileNavLayoutRef = useRef<HTMLDivElement>(null);
+  const mobileNavSwipe = useEdgeSwipeOpen(isNarrow && view === "docs", {
     open: mobileNavOpen,
-    onClose: () => setMobileNavOpen(false),
+    onOpenChange: setMobileNavOpen,
+    layoutRef: mobileNavLayoutRef,
   });
 
   // ---- 上手助手浮层 ----
@@ -1311,15 +1313,20 @@ export function App() {
           />
         </Suspense>
       ) : (
-        <div className={"mdocs-layout" + (isNarrow ? " mdocs-layout--reader" : "")}>
-          {isNarrow && mobileNavOpen ? (
-            <button
-              type="button"
-              className="mdocs-mobile-nav-scrim"
-              aria-label={t("collapseSidebar")}
-              onClick={() => setMobileNavOpen(false)}
-            />
-          ) : null}
+        <div
+          ref={mobileNavLayoutRef}
+          className={
+            "mdocs-layout" +
+            (isNarrow ? " mdocs-layout--reader" : "") +
+            (isNarrow && mobileNavOpen ? " mdocs-layout--nav-open" : "") +
+            (isNarrow && mobileNavSwipe.dragging ? " is-nav-dragging" : "")
+          }
+          style={
+            isNarrow
+              ? ({ ["--mdocs-nav-reveal" as string]: `${mobileNavSwipe.revealPx}px` } as CSSProperties)
+              : undefined
+          }
+        >
           {/* ========== 左侧边栏 ========== */}
           <aside
             className={
