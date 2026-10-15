@@ -99,7 +99,9 @@ pub fn is_shell_setup_url(url: &Url) -> bool {
     url.scheme() == "tauri" || url.host_str() == Some("tauri.localhost")
 }
 
-/// 同源 `/api/assets/` 非图片附件：由 WKWebView 导航触发 `on_download`。
+/// 同源 `/api/assets/` 非图片附件。
+/// macOS：壳内导航 + `Content-Disposition` → `on_download`。
+/// Windows WebView2：同路径常不触发下载事件，壳侧应改走系统浏览器或自下载。
 pub fn is_downloadable_asset(url: &Url) -> bool {
     let path = url.path();
     if !path.starts_with("/api/assets/") {

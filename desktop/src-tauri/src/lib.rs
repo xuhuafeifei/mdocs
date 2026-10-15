@@ -209,7 +209,7 @@ pub fn run() {
                     let handle_nw = handle_nav.clone();
                     move |url, _features| {
                         // 附件卡片是 target=_blank。不接这个回调时 wry 直接拒绝新窗口，点击无反应。
-                        // 可下载附件改在主窗口导航，由 Content-Disposition 触发 on_download；
+                        // 可下载附件：macOS 主窗口导航触发 on_download；Windows WebView2 不可靠，改系统浏览器。
                         // 同源普通链接仍在主窗口打开；外链走系统浏览器。
                         let server = handle_nw
                             .state::<ShellState>()
@@ -219,7 +219,14 @@ pub fn run() {
                             .and_then(|g| g.clone());
                         if is_downloadable_asset(&url) && navigation_allowed(&url, server.as_deref())
                         {
-                            assign_in_main(&handle_nw, &url);
+                            #[cfg(target_os = "windows")]
+                            {
+                                open_in_browser(url.as_str());
+                            }
+                            #[cfg(not(target_os = "windows"))]
+                            {
+                                assign_in_main(&handle_nw, &url);
+                            }
                             return NewWindowResponse::Deny;
                         }
                         if navigation_allowed(&url, server.as_deref()) {
@@ -237,9 +244,20 @@ pub fn run() {
                         .lock()
                         .ok()
                         .and_then(|g| g.clone());
-                    // 同源附件允许壳内导航，靠服务端 attachment 头触发 on_download 写入下载目录。
+                    // 同源附件：macOS 壳内导航 → on_download；Windows WebView2 改系统浏览器下载。
                     if is_downloadable_asset(url) {
-                        return navigation_allowed(url, server.as_deref());
+                        if navigation_allowed(url, server.as_deref()) {
+                            #[cfg(target_os = "windows")]
+                            {
+                                open_in_browser(url.as_str());
+                                return false;
+                            }
+                            #[cfg(not(target_os = "windows"))]
+                            {
+                                return true;
+                            }
+                        }
+                        return false;
                     }
                     if navigation_allowed(url, server.as_deref()) {
                         return true;
