@@ -303,7 +303,7 @@ type AssistantBlock =
       toolCallId: string;
       toolName: string;
       label: string;
-      status: "running" | "done" | "error";
+      status: "preparing" | "running" | "done" | "error";
       detail?: string;
     }
   | {
@@ -387,19 +387,52 @@ function appendThinkingDelta(blocks: AssistantBlock[], text: string): AssistantB
   return next;
 }
 
+const TOOL_CALL_STATUS_RANK: Record<
+  Extract<AssistantBlock, { type: "tool_call" }>["status"],
+  number
+> = {
+  preparing: 0,
+  running: 1,
+  done: 2,
+  error: 2,
+};
+
 function upsertToolCallBlock(
   blocks: AssistantBlock[],
   call: Extract<AssistantBlock, { type: "tool_call" }>,
 ): AssistantBlock[] {
   const next = sealThinking(blocks).slice();
-  const idx = next.findIndex(
+  let idx = next.findIndex(
     (b) => b.type === "tool_call" && b.toolCallId === call.toolCallId,
   );
+  // preparing 可能用 pending:N，running 起用真实 toolCallId —— 合并到同名准备卡
+  if (idx < 0 && call.status !== "preparing") {
+    const preparing = next
+      .map((b, i) => ({ b, i }))
+      .filter(
+        ({ b }) =>
+          b.type === "tool_call" &&
+          b.status === "preparing" &&
+          (b.toolName === call.toolName ||
+            b.toolName === "tool" ||
+            b.toolCallId.startsWith("pending:")),
+      );
+    const byName = preparing.filter(({ b }) =>
+      b.type === "tool_call" ? b.toolName === call.toolName : false,
+    );
+    const pool = byName.length > 0 ? byName : preparing;
+    if (pool.length > 0) idx = pool[pool.length - 1]!.i;
+  }
   if (idx >= 0) {
     const prev = next[idx] as Extract<AssistantBlock, { type: "tool_call" }>;
+    if (TOOL_CALL_STATUS_RANK[call.status] < TOOL_CALL_STATUS_RANK[prev.status]) {
+      return next;
+    }
     next[idx] = {
       ...prev,
       ...call,
+      toolCallId: call.toolCallId || prev.toolCallId,
+      label: call.label || prev.label,
       detail: call.detail ?? prev.detail,
     };
   } else {
@@ -414,6 +447,150 @@ function textFromBlocks(blocks: AssistantBlock[] | undefined): string {
     .filter((b): b is Extract<AssistantBlock, { type: "text" }> => b.type === "text")
     .map((b) => b.text)
     .join("");
+}
+
+/** 用户 / Agent 消息正文可复制文本（不含思考与工具卡） */
+function messageCopyText(m: ChatMessage): string {
+  if (m.role === "user") return (m.content ?? "").trim();
+  if (m.blocks && m.blocks.length > 0) {
+    return m.blocks
+      .filter((b): b is Extract<AssistantBlock, { type: "text" }> => b.type === "text")
+      .map((b) => b.text)
+      .join("\n\n")
+      .trim();
+  }
+  return (m.content ?? "").trim();
+}
+
+function MessageCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (timerRef.current != null) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+  if (!text) return null;
+  return (
+    <button
+      type="button"
+      className="mdocs-agent-panel-msg-copy"
+      aria-label={copied ? "已复制" : "复制"}
+      title={copied ? "已复制" : "复制"}
+      onClick={() => {
+        void copyTextToClipboard(text).then((ok) => {
+          if (!ok) return;
+          setCopied(true);
+          if (timerRef.current != null) window.clearTimeout(timerRef.current);
+          timerRef.current = window.setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+    >
+      {copied ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
+    </button>
+  );
+}
+
+/** 写工具 detail：可折叠；输出中 summary 波浪，展开后正文增量跟滚 */
+function ToolCallDetailScroll({
+  detail,
+  followTail,
+  grow,
+}: {
+  detail: string;
+  followTail: boolean;
+  grow?: boolean;
+}) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
+  const animRef = useRef(0);
+  const [open, setOpen] = useState(false);
+  const nl = detail.indexOf("\n");
+  const meta = nl >= 0 ? detail.slice(0, nl) : detail;
+  const body = nl >= 0 ? detail.slice(nl + 1) : "";
+  const scrollable = body.length > 0;
+
+  useLayoutEffect(() => {
+    if (!open || !followTail || !scrollable || !bodyRef.current) return;
+    if (!stickRef.current) return;
+    const el = bodyRef.current;
+    cancelAnimationFrame(animRef.current);
+    if (!grow) {
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+    const step = () => {
+      const target = el.scrollHeight - el.clientHeight;
+      const cur = el.scrollTop;
+      const delta = target - cur;
+      if (delta <= 1) {
+        el.scrollTop = target;
+        return;
+      }
+      el.scrollTop = cur + Math.max(1.5, delta * 0.28);
+      animRef.current = requestAnimationFrame(step);
+    };
+    animRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(animRef.current);
+  }, [body, followTail, scrollable, grow, open]);
+
+  if (!scrollable) {
+    return (
+      <p className="mdocs-agent-tool-call-detail">
+        <span
+          className={
+            "mdocs-agent-tool-call-fold-label" + (followTail ? " live" : "")
+          }
+        >
+          {meta}
+        </span>
+      </p>
+    );
+  }
+
+  return (
+    <details
+      className="mdocs-agent-tool-call-fold"
+      open={open}
+      onToggle={(e) => {
+        setOpen((e.currentTarget as HTMLDetailsElement).open);
+      }}
+    >
+      <summary>
+        <span
+          className={
+            "mdocs-agent-tool-call-fold-label" + (followTail ? " live" : "")
+          }
+        >
+          {meta}
+        </span>
+        <ChevronRight
+          size={14}
+          strokeWidth={1.8}
+          className="mdocs-agent-tool-call-fold-chevron"
+        />
+      </summary>
+      <div
+        ref={bodyRef}
+        className={
+          "mdocs-agent-tool-call-detail scrollable" +
+          (grow ? " grow" : "") +
+          (followTail ? " live" : "")
+        }
+        onScroll={() => {
+          const el = bodyRef.current;
+          if (!el) return;
+          const gap = el.scrollHeight - el.clientHeight - el.scrollTop;
+          stickRef.current = gap < 28;
+        }}
+      >
+        {body}
+        {followTail && grow ? (
+          <span className="mdocs-agent-tool-call-caret" aria-hidden />
+        ) : null}
+      </div>
+    </details>
+  );
 }
 
 function hasThinkingText(blocks: AssistantBlock[] | undefined): boolean {
@@ -2146,6 +2323,7 @@ export const AgentChatPanel = forwardRef<
                         <img src={deepseekLogoUrl} alt="" />
                       </div>
                     ) : null}
+                    <div className="mdocs-agent-panel-msg-main">
                     <div className="mdocs-agent-panel-msg-bubble">
                       {m.role === "user" && m.skillNames && m.skillNames.length > 0 ? (
                         <div className="mdocs-agent-msg-skills">Skill ×{m.skillNames.length}</div>
@@ -2205,12 +2383,17 @@ export const AgentChatPanel = forwardRef<
                                 );
                               }
                               if (block.type === "tool_call") {
+                                const live =
+                                  block.status === "preparing" ||
+                                  block.status === "running";
                                 const statusLabel =
-                                  block.status === "running"
-                                    ? "进行中"
-                                    : block.status === "error"
-                                      ? "失败"
-                                      : "完成";
+                                  block.status === "preparing"
+                                    ? "准备中"
+                                    : block.status === "running"
+                                      ? "进行中"
+                                      : block.status === "error"
+                                        ? "失败"
+                                        : "完成";
                                 return (
                                   <div
                                     key={`${m.id}-tc-${block.toolCallId}`}
@@ -2221,7 +2404,12 @@ export const AgentChatPanel = forwardRef<
                                         className="mdocs-agent-tool-call-status"
                                         aria-hidden
                                       />
-                                      <span className="mdocs-agent-tool-call-label">
+                                      <span
+                                        className={
+                                          "mdocs-agent-tool-call-label" +
+                                          (live ? " live" : "")
+                                        }
+                                      >
                                         {block.label}
                                       </span>
                                       <span className="mdocs-agent-tool-call-badge">
@@ -2229,7 +2417,21 @@ export const AgentChatPanel = forwardRef<
                                       </span>
                                     </div>
                                     {block.detail ? (
-                                      <p className="mdocs-agent-tool-call-detail">{block.detail}</p>
+                                      <ToolCallDetailScroll
+                                        detail={block.detail}
+                                        followTail={
+                                          block.status === "preparing" ||
+                                          block.status === "running"
+                                        }
+                                        grow={
+                                          (block.status === "preparing" ||
+                                            block.status === "running") &&
+                                          (block.toolName ===
+                                            "set_markdown_document" ||
+                                            block.toolName ===
+                                              "overwrite_document")
+                                        }
+                                      />
                                     ) : null}
                                   </div>
                                 );
@@ -2414,6 +2616,8 @@ export const AgentChatPanel = forwardRef<
                       ) : (
                         m.content
                       )}
+                    </div>
+                    <MessageCopyButton text={messageCopyText(m)} />
                     </div>
                     {m.role === "user" ? (
                       <div className="mdocs-agent-panel-avatar mdocs-agent-panel-avatar-user" aria-hidden>

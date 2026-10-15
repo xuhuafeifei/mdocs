@@ -817,7 +817,7 @@ export type AgentStreamEvent =
       toolCallId: string;
       toolName: string;
       label: string;
-      status: "running" | "done" | "error";
+      status: "preparing" | "running" | "done" | "error";
       detail?: string;
     }
   | { type: "markdown_set"; markdown: string }

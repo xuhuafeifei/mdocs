@@ -7,9 +7,12 @@ import type { AgentSessionManager } from "./session-manager.js";
 import type { AgentStreamEvent } from "./stream-events.js";
 import { createToolUiEffectsHandler } from "./tool-ui-effects.js";
 import {
+  isWriteTool,
   toolCallDetailFromArgs,
   toolCallDetailFromResult,
   toolCallLabel,
+  toolCallPreparingDetail,
+  writeToolBodyText,
 } from "./tool-call-ui.js";
 import { cancelVisitorChoices } from "./choice-pending.js";
 import { cancelVisitorSkillForms } from "./skill-form-pending.js";
@@ -142,6 +145,11 @@ function bindAgentEvents(opts: {
   } = opts;
   const onToolUi = createToolUiEffectsHandler(onEvent);
   const toolStartDetail = new Map<string, string>();
+  /** contentIndex → 已推过的 preparing 卡片，避免 toolcall_delta 刷屏 */
+  const preparingByIndex = new Map<
+    number,
+    { toolCallId: string; toolName: string; detailBucket: number }
+  >();
   let appendedUser = false;
   let appendedAssistant = false;
 
@@ -154,6 +162,10 @@ function bindAgentEvents(opts: {
       }
       if (ame.type === "thinking_delta") {
         onEvent({ type: "thinking_delta", text: ame.delta });
+        return;
+      }
+      if (ame.type === "toolcall_start" || ame.type === "toolcall_delta") {
+        emitToolCallPreparing(ame, preparingByIndex, onEvent);
         return;
       }
     }
@@ -250,4 +262,77 @@ function bindAgentEvents(opts: {
       onToolUi(event);
     }
   };
+}
+
+type PreparingTrack = {
+  toolCallId: string;
+  toolName: string;
+  /** 正文长度桶，控制推送频率 */
+  detailBucket: number;
+  /** 可见尾巴指纹，尾巴一变就推，方便卡片「闪过」 */
+  previewTail: string;
+};
+
+/** 模型还在流式拼装工具参数时，提前推 preparing 卡片（写工具带可滚动预览） */
+function emitToolCallPreparing(
+  ame: {
+    type: string;
+    contentIndex: number;
+    partial?: { content?: unknown };
+  },
+  preparingByIndex: Map<number, PreparingTrack>,
+  onEvent: (event: AgentStreamEvent) => void,
+): void {
+  const content = ame.partial?.content;
+  if (!Array.isArray(content)) return;
+  const block = content[ame.contentIndex] as
+    | { type?: string; id?: string; name?: string; arguments?: unknown }
+    | undefined;
+  if (!block || block.type !== "toolCall") return;
+
+  const toolName = String(block.name ?? "").trim() || "tool";
+  const prev = preparingByIndex.get(ame.contentIndex);
+  const rawId = String(block.id ?? "").trim();
+  // 准备阶段固定用首次 id，避免 id 从空→真实时前端出现两张卡
+  const toolCallId =
+    prev?.toolCallId ?? (rawId || `pending:${ame.contentIndex}`);
+
+  const args = block.arguments;
+  const detail = toolCallPreparingDetail(toolName, args);
+  const body = isWriteTool(toolName) ? writeToolBodyText(toolName, args) : "";
+  // 帮写/覆写更密推送，卡片增量滚动更跟手
+  const bucketSize =
+    toolName === "set_markdown_document" || toolName === "overwrite_document"
+      ? 48
+      : isWriteTool(toolName)
+        ? 100
+        : 800;
+  const detailBucket = Math.floor(body.length / bucketSize);
+  const previewTail = body.slice(-64);
+
+  if (
+    ame.type === "toolcall_delta" &&
+    prev &&
+    prev.toolName === toolName &&
+    prev.detailBucket === detailBucket &&
+    prev.previewTail === previewTail
+  ) {
+    return;
+  }
+
+  preparingByIndex.set(ame.contentIndex, {
+    toolCallId,
+    toolName,
+    detailBucket,
+    previewTail,
+  });
+
+  onEvent({
+    type: "tool_call",
+    toolCallId,
+    toolName,
+    label: toolName === "tool" ? "调用工具" : toolCallLabel(toolName),
+    status: "preparing",
+    ...(detail ? { detail } : {}),
+  });
 }

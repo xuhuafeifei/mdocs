@@ -959,12 +959,29 @@
   line-height: 1;
 }
 
-.mdocs-agent-panel-msg-bubble {
+.mdocs-agent-panel-msg-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   max-width: calc(100% - 42px);
+  min-width: 0;
+}
+
+.mdocs-agent-panel-msg-user .mdocs-agent-panel-msg-main {
+  align-items: flex-end;
+}
+
+.mdocs-agent-panel-msg-assistant .mdocs-agent-panel-msg-main {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.mdocs-agent-panel-msg-bubble {
   font-size: 14px;
   line-height: 1.65;
   word-break: break-word;
   min-width: 0;
+  max-width: 100%;
 }
 
 .mdocs-agent-panel-msg-user .mdocs-agent-panel-msg-bubble {
@@ -976,10 +993,38 @@
 }
 
 .mdocs-agent-panel-msg-assistant .mdocs-agent-panel-msg-bubble {
+  /* 避免选择卡/工具卡按内容收缩，整列变窄 */
+  width: 100%;
   padding: 0;
   background: transparent;
   border: none;
   color: #1f2329;
+}
+
+.mdocs-agent-panel-msg-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #8a919f;
+  cursor: pointer;
+  opacity: 0.72;
+}
+
+.mdocs-agent-panel-msg-copy:hover {
+  opacity: 1;
+  color: #1f2329;
+  background: #f2f4f7;
+}
+
+.mdocs-agent-panel-msg:hover .mdocs-agent-panel-msg-copy,
+.mdocs-agent-panel-msg:focus-within .mdocs-agent-panel-msg-copy {
+  opacity: 1;
 }
 
 .mdocs-agent-panel-think-fold {
@@ -1095,11 +1140,14 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: 100%;
   min-width: 0;
 }
 
 .mdocs-agent-panel-block {
+  width: 100%;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .mdocs-agent-panel-md > :first-child {
@@ -1647,8 +1695,11 @@
   border-radius: 10px;
   background: #f8f9fb;
   font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
+.mdocs-agent-tool-call-preparing,
 .mdocs-agent-tool-call-running {
   border-color: #c9d8ff;
   background: #f3f6ff;
@@ -1674,6 +1725,7 @@
   background: #8a919f;
 }
 
+.mdocs-agent-tool-call-preparing .mdocs-agent-tool-call-status,
 .mdocs-agent-tool-call-running .mdocs-agent-tool-call-status {
   background: #3370ff;
   box-shadow: 0 0 0 0 rgba(51, 112, 255, 0.45);
@@ -1705,6 +1757,23 @@
   color: #1f2329;
 }
 
+/* 与 thinking 同款波浪，准备中 / 进行中都闪 */
+.mdocs-agent-tool-call-label.live {
+  background: linear-gradient(
+    90deg,
+    #5b8cff 0%,
+    #5b8cff 40%,
+    #e8f0ff 50%,
+    #5b8cff 60%,
+    #5b8cff 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mdocs-think-shimmer 1.4s linear infinite;
+}
+
 .mdocs-agent-tool-call-badge {
   margin-left: auto;
   font-size: 12px;
@@ -1712,6 +1781,7 @@
   color: #8a919f;
 }
 
+.mdocs-agent-tool-call-preparing .mdocs-agent-tool-call-badge,
 .mdocs-agent-tool-call-running .mdocs-agent-tool-call-badge {
   color: #3370ff;
 }
@@ -1728,11 +1798,129 @@
   word-break: break-word;
 }
 
+.mdocs-agent-tool-call-fold {
+  margin-top: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.mdocs-agent-tool-call-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.mdocs-agent-tool-call-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mdocs-agent-tool-call-fold-label {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #8a919f;
+}
+
+/* 输出中：与 thinking 同款波浪 */
+.mdocs-agent-tool-call-fold-label.live {
+  background: linear-gradient(
+    90deg,
+    #5b8cff 0%,
+    #5b8cff 40%,
+    #e8f0ff 50%,
+    #5b8cff 60%,
+    #5b8cff 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mdocs-think-shimmer 1.4s linear infinite;
+}
+
+.mdocs-agent-tool-call-fold-chevron {
+  flex-shrink: 0;
+  color: #8a919f;
+  transition: transform 0.12s ease;
+}
+
+.mdocs-agent-tool-call-fold[open] .mdocs-agent-tool-call-fold-chevron {
+  transform: rotate(90deg);
+}
+
+/* 写工具：正文区固定高度内可滚动 */
+.mdocs-agent-tool-call-detail.scrollable {
+  white-space: pre-wrap;
+  max-height: 9.6em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #5b6472;
+  font-size: 12px;
+  line-height: 1.45;
+  scrollbar-width: thin;
+}
+
+/* 帮写增量：略高一点，末尾光标提示还在写 */
+.mdocs-agent-tool-call-detail.scrollable.grow {
+  max-height: 12em;
+}
+
+/* 输出中正文也带一层淡波浪，增强「正在写」感 */
+.mdocs-agent-tool-call-detail.scrollable.live {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(232, 240, 255, 0.95) 45%,
+    rgba(255, 255, 255, 0.72) 90%
+  );
+  background-size: 220% 100%;
+  animation: mdocs-tool-body-shimmer 1.6s linear infinite;
+}
+
+@keyframes mdocs-tool-body-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.mdocs-agent-tool-call-caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: #3370ff;
+  animation: mdocs-tool-caret-blink 1s steps(1) infinite;
+}
+
+@keyframes mdocs-tool-caret-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
 .mdocs-agent-choice-card {
   padding: 12px;
   border: 1px solid #e8eaed;
   border-radius: 10px;
   background: #fafbfc;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .mdocs-agent-choice-card-done {
