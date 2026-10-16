@@ -323,6 +323,10 @@
   border-color: var(--mdocs-border);
 }
 
+.mdocs-tree-folder-row:focus {
+  outline: none;
+}
+
 .mdocs-tree-dragging {
   /* 不用 opacity：结束后偶发残留会导致选中行发灰 */
   color: var(--mdocs-text-muted);
@@ -5778,6 +5782,8 @@ strong.label {
   border: none;
   border-radius: 0;
   background: transparent;
+  max-width: 100%;
+  min-width: 0;
 }
 .mdocs-ai-write-inline-hunk-add .mdocs-ai-write-line.add {
   background: rgba(46, 160, 67, 0.12);
@@ -5824,6 +5830,7 @@ strong.label {
   min-width: 0;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .mdocs-ai-write-line-readonly {
   user-select: text;
@@ -5843,6 +5850,7 @@ strong.label {
   line-height: inherit;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
   overflow: hidden;
   field-sizing: content;
 }
@@ -5894,6 +5902,10 @@ strong.label {
   font: inherit;
   background: transparent;
   overflow: visible;
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .mdocs-ai-write-float-nav {
   position: absolute;

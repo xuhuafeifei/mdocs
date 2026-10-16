@@ -140,7 +140,7 @@ async function initDomainsAndTree(
   visitorId: string,
   setDomains: (doms: DomainSummary[]) => void,
   setCurrentDomainId: (id: string) => void,
-  refreshTree: (domainId?: string) => Promise<void>,
+  refreshTree: (domainId?: string) => Promise<unknown>,
 ): Promise<void> {
   // 向后端请求域列表，如果失败则返回 fallback 默认域
   const doms = await fetchDomainsSafe();
@@ -330,6 +330,8 @@ export function App() {
 
   // ---- 新建文档/文件夹时的默认父路径 ----
   const [selectedCreateParentPath, setSelectedCreateParentPath] = useState("");
+  /** 新建目录后滚到并聚焦该目录行；打开其它文档时清空 */
+  const [revealFolderId, setRevealFolderId] = useState<string | null>(null);
 
   // ---- 当前视图：docs（文档）或 settings（设置） ----
   const [view, setView] = useState<"docs" | "settings">("docs");
@@ -651,13 +653,14 @@ export function App() {
   /**
    * 刷新指定域（或当前域）的文档树数据。
    */
-  async function refreshTree(domainId?: string): Promise<void> {
+  async function refreshTree(domainId?: string): Promise<TreeNode[]> {
     // 如果没有传入 domainId，则使用当前激活的域
     const did = domainId ?? currentDomainId;
     // 向后端请求该域的文档树结构
     const nodes = await fetchTreeApi(did);
     // 更新侧边栏树数据
     setTree(nodes);
+    return nodes;
   }
 
   function loadEditorFromServer(doc: DocumentDetail): void {
@@ -830,8 +833,13 @@ export function App() {
     onDocCreated: (doc: DocumentDetail) => {
       setActiveDocMeta(documentDetailToMeta(doc));
       loadEditorFromServer(doc);
+      setRevealFolderId(null);
       setSelectedCreateParentPath(parentDirForCreates(doc.relativePath));
       navigate(`/doc/${doc.documentId}`);
+    },
+    onFolderCreated: ({ folderId, path }) => {
+      setSelectedCreateParentPath(path);
+      setRevealFolderId(folderId);
     },
     refreshTree,
   });
@@ -1434,14 +1442,17 @@ export function App() {
               activeDocumentId={activeDocumentId}
               graphFocusAnchorId={focus?.kind === "graph" ? focus.resourceId : null}
               selectedParentPath={selectedCreateParentPath}
+              revealNodeId={revealFolderId}
               // 点击文档节点：先保存草稿再导航到文档
               onOpen={(node) => {
+                setRevealFolderId(null);
                 if (isNarrow) setMobileNavOpen(false);
                 guardNavigate(() => navigate(`/doc/${node.documentId}`));
               }}
               // 点击文件夹：更新父路径，如果有描述文档则打开
               onOpenFolder={(folderPath, descDocumentId) => {
                 guardNavigate(() => {
+                  setRevealFolderId(null);
                   setSelectedCreateParentPath(folderPath);
                   if (descDocumentId) {
                     closeGraph();

@@ -44,7 +44,7 @@ function findRevealTarget(
       }
       continue;
     }
-    if (n.descDocumentId === targetId) {
+    if (n.documentId === targetId || n.descDocumentId === targetId) {
       return { forceOpenFolderIds: ancestors, scrollTreeId: n.documentId };
     }
     const hit = findRevealTarget(n.children, targetId, [...ancestors, n.documentId]);
@@ -82,6 +82,8 @@ export function DocumentTree(props: {
   activeDocumentId: string | null;
   /** 图谱焦点时树高亮锚点（可见 folderId 或 documentId） */
   graphFocusAnchorId?: string | null;
+  /** 优先展开并滚到该节点（新建目录后选中） */
+  revealNodeId?: string | null;
   /** Folder path used as default parent for "New document" / "New folder" from the sidebar. */
   selectedParentPath: string;
   onOpen: (node: Extract<TreeNode, { type: "document" }>) => void;
@@ -102,10 +104,13 @@ export function DocumentTree(props: {
 
   const reveal = useMemo(() => {
     // 图谱焦点时用 anchor 展开定位；文档焦点时用 activeDocumentId
-    const id = props.graphFocusAnchorId?.trim() || props.activeDocumentId?.trim();
+    const id =
+      props.revealNodeId?.trim() ||
+      props.graphFocusAnchorId?.trim() ||
+      props.activeDocumentId?.trim();
     if (!id) return null;
     return findRevealTarget(props.nodes, id);
-  }, [props.nodes, props.activeDocumentId, props.graphFocusAnchorId]);
+  }, [props.nodes, props.activeDocumentId, props.graphFocusAnchorId, props.revealNodeId]);
 
   const forceOpenFolderIds = useMemo(
     () => new Set(reveal?.forceOpenFolderIds ?? []),
@@ -120,13 +125,16 @@ export function DocumentTree(props: {
         `[data-tree-id="${CSS.escape(treeId)}"]`,
       ) as HTMLElement | null;
       el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      if (props.revealNodeId && treeId === props.revealNodeId) {
+        el?.focus({ preventScroll: true });
+      }
     };
     // 等强制展开的文件夹先渲染子节点
     const t1 = requestAnimationFrame(() => {
       requestAnimationFrame(scroll);
     });
     return () => cancelAnimationFrame(t1);
-  }, [reveal?.scrollTreeId, forceOpenFolderIds, props.nodes]);
+  }, [reveal?.scrollTreeId, forceOpenFolderIds, props.nodes, props.revealNodeId]);
 
 
   function clearDropHighlight(): void {
@@ -519,7 +527,7 @@ function FolderRow(props: {
 }) {
   const { t } = useI18n();
   const forceOpen = props.forceOpenFolderIds.has(props.folder.documentId);
-  const [userOpen, setUserOpen] = useState(props.depth < 1 || forceOpen);
+  const [userOpen, setUserOpen] = useState(forceOpen);
   const open = userOpen;
 
   useEffect(() => {
@@ -547,6 +555,7 @@ function FolderRow(props: {
           (dropActive ? " mdocs-tree-drop-target" : "")
         }
         data-tree-id={props.folder.documentId}
+        tabIndex={-1}
         style={props.indent}
         onClick={activateFolder}
         onContextMenu={(e) => {

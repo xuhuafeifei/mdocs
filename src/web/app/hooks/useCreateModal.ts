@@ -108,17 +108,29 @@ function translateStorageError(t: (k: TranslationKey, vars?: Record<string, stri
   return message;
 }
 
+function findFolderById(nodes: TreeNode[], folderId: string): Extract<TreeNode, { type: "folder" }> | null {
+  for (const n of nodes) {
+    if (n.type !== "folder") continue;
+    if (n.documentId === folderId) return n;
+    const hit = findFolderById(n.children, folderId);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 interface UseCreateModalOpts {
   tree: TreeNode[];
   currentDomainId: string;
   selectedCreateParentPath: string;
   t: (k: TranslationKey, vars?: Record<string, string>) => string;
   onDocCreated: (doc: DocumentDetail) => void;
-  refreshTree: () => Promise<void>;
+  /** 目录创建成功：用树里的 path 选中该目录 */
+  onFolderCreated?: (folder: { folderId: string; path: string }) => void;
+  refreshTree: () => Promise<TreeNode[]>;
 }
 
 export function useCreateModal(opts: UseCreateModalOpts) {
-  const { tree, currentDomainId, selectedCreateParentPath, t, onDocCreated, refreshTree } = opts;
+  const { tree, currentDomainId, selectedCreateParentPath, t, onDocCreated, onFolderCreated, refreshTree } = opts;
 
   // ---- 模态框状态：null 表示未打开 ----
   const [createModal, setCreateModal] = useState<CreateModalState | null>(null);
@@ -317,15 +329,18 @@ export function useCreateModal(opts: UseCreateModalOpts) {
 
       // 调用独立的创建目录接口
       const folderParentId = effectiveParent ? findFolderIdByPath(tree, effectiveParent) ?? undefined : undefined;
-      await createFolderApi({
-        name: storageSeg,
+      const created = await createFolderApi({
+        name: parsed.display,
         parentId: folderParentId,
         domainId: currentDomainId,
       });
 
-      // 刷新文档树
-      await refreshTree();
-      // 关闭模态框（文件夹没有文档 ID，不需要打开编辑器）
+      const nodes = await refreshTree();
+      const folder = findFolderById(nodes, created.folderId);
+      onFolderCreated?.({
+        folderId: created.folderId,
+        path: folder?.path ?? created.path,
+      });
       setCreateModal(null);
     } catch (err) {
       // 创建失败（如网络错误、权限不足），显示错误提示
