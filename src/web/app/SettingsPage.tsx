@@ -34,6 +34,7 @@ import { AgentUserSkillsPanel } from "./AgentUserSkillsPanel";
 import { EmbeddingIndexPanel } from "./EmbeddingIndexPanel";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 import { useIsNarrowViewport } from "./hooks/useIsNarrowViewport";
+import { copyTextToClipboard } from "./copyText";
 import { useEdgeSwipeOpen } from "./hooks/useEdgeSwipeOpen";
 import {
   createCliTokenApi,
@@ -730,18 +731,14 @@ export function SettingsPage(props: {
                         type="button"
                         className="secondary"
                         onClick={() => {
-                          void (async () => {
-                            try {
-                              await navigator.clipboard.writeText(cliTokenResult.token);
-                              setCliTokenCopyFailed(false);
-                              setCliTokenCopied(true);
-                              window.setTimeout(() => setCliTokenCopied(false), 2000);
-                            } catch {
+                          void copyTextToClipboard(cliTokenResult.token).then((ok) => {
+                            setCliTokenCopyFailed(!ok);
+                            setCliTokenCopied(ok);
+                            window.setTimeout(() => {
                               setCliTokenCopied(false);
-                              setCliTokenCopyFailed(true);
-                              window.setTimeout(() => setCliTokenCopyFailed(false), 3000);
-                            }
-                          })();
+                              setCliTokenCopyFailed(false);
+                            }, ok ? 2000 : 3000);
+                          });
                         }}
                       >
                         {cliTokenCopied ? t("cliTokenCopied") : t("cliTokenCopy")}
@@ -796,18 +793,14 @@ export function SettingsPage(props: {
                         type="button"
                         className="primary"
                         onClick={() => {
-                          void (async () => {
-                            try {
-                              await navigator.clipboard.writeText(recoveryCodeResult);
-                              setRecoveryCodeCopyFailed(false);
-                              setRecoveryCodeCopied(true);
-                              window.setTimeout(() => setRecoveryCodeCopied(false), 2000);
-                            } catch {
+                          void copyTextToClipboard(recoveryCodeResult).then((ok) => {
+                            setRecoveryCodeCopyFailed(!ok);
+                            setRecoveryCodeCopied(ok);
+                            window.setTimeout(() => {
                               setRecoveryCodeCopied(false);
-                              setRecoveryCodeCopyFailed(true);
-                              window.setTimeout(() => setRecoveryCodeCopyFailed(false), 3000);
-                            }
-                          })();
+                              setRecoveryCodeCopyFailed(false);
+                            }, ok ? 2000 : 3000);
+                          });
                         }}
                       >
                         {recoveryCodeCopied ? "已复制" : "复制恢复码"}

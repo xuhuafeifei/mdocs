@@ -21,6 +21,7 @@ import type { TreeNode } from "../../shared/types/tree";
 import { isPublicWritePermission } from "../../shared/permissions.js";
 import { isFolderDescPath } from "../../shared/folderDesc.js";
 import { loadLastSession, saveLastSession } from "../storage/lastSession";
+import { copyTextToClipboard } from "./copyText";
 import {
   ApiRequestError,
   MDOCS_API_ERROR_EVENT,
@@ -863,16 +864,24 @@ export function App() {
           ? { scope: focus.scope, resourceId: focus.resourceId, name: focus.name }
           : null,
     };
+    if (session.domainId) {
+      localStorage.setItem("mdocs.currentDomainId", session.domainId);
+    }
     const timer = window.setTimeout(() => {
       void saveLastSession(session);
     }, 300);
     const flush = () => {
       void saveLastSession(session);
     };
+    const onHide = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
     window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onHide);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onHide);
     };
   }, [phase, sessionReady, currentDomainId, view, documentId, focus]);
 
@@ -2157,59 +2166,59 @@ export function App() {
             />
           )}
 
-          {/* ========== 新建文档/文件夹模态框 ========== */}
-          {createModal && (
-            <div
-              className="mdocs-dialog-backdrop"
-              role="presentation"
-              // 点击遮罩层关闭模态框（但正在提交时不能关闭）
-              onMouseDown={(ev) => {
-                if (ev.target === ev.currentTarget && !createModalBusy) setCreateModal(null);
-              }}
-            >
-              <div className="mdocs-dialog card" role="dialog" aria-modal="true">
-                <h1>{createModal.kind === "document" ? t("newDocumentTitle") : t("newFolderTitle")}</h1>
-                <p className="muted">
-                  {createModal.kind === "document"
-                    ? t("fileNameHint")
-                    : t("folderNameHint")}
-                </p>
-                <form onSubmit={submitCreateModal} className="mdocs-dialog-form">
-                  <label className="mdocs-dialog-label">
-                    {createModal.kind === "document" ? t("fileNameLabel") : t("folderNameLabel")}
-                    <input
-                      ref={createModalInputRef}
-                      value={createModal.draft}
-                      onChange={(ev) =>
-                        setCreateModal((prev) =>
-                          prev ? { ...prev, draft: ev.target.value } : prev,
-                        )
-                      }
-                      placeholder={createModal.kind === "document" ? t("untitledPlaceholder") : t("folderExamplePlaceholder")}
-                      maxLength={200}
-                      disabled={createModalBusy}
-                    />
-                  </label>
-                  {createModalError && <div className="mdocs-dialog-error">{createModalError}</div>}
-                  <div className="mdocs-dialog-actions">
-                    <button
-                      type="button"
-                      onClick={() => !createModalBusy && setCreateModal(null)}
-                      disabled={createModalBusy}
-                    >
-                      {t("cancel")}
-                    </button>
-                    <button type="submit" className="primary" disabled={createModalBusy}>
-                      {createModalBusy ? t("creating") : t("create")}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
         </div>
       )}
       </div>
+
+      {/* 新建弹层放在 shell 外：窄屏侧栏用 transform 滑动，fixed 若留在里面会相对整条轨道定位 */}
+      {createModal && (
+        <div
+          className="mdocs-dialog-backdrop"
+          role="presentation"
+          onMouseDown={(ev) => {
+            if (ev.target === ev.currentTarget && !createModalBusy) setCreateModal(null);
+          }}
+        >
+          <div className="mdocs-dialog card" role="dialog" aria-modal="true">
+            <h1>{createModal.kind === "document" ? t("newDocumentTitle") : t("newFolderTitle")}</h1>
+            <p className="muted mdocs-dialog-hint">
+              {createModal.kind === "document"
+                ? t("fileNameHint")
+                : t("folderNameHint")}
+            </p>
+            <form onSubmit={submitCreateModal} className="mdocs-dialog-form">
+              <label className="mdocs-dialog-label">
+                {createModal.kind === "document" ? t("fileNameLabel") : t("folderNameLabel")}
+                <input
+                  ref={createModalInputRef}
+                  value={createModal.draft}
+                  onChange={(ev) =>
+                    setCreateModal((prev) =>
+                      prev ? { ...prev, draft: ev.target.value } : prev,
+                    )
+                  }
+                  placeholder={createModal.kind === "document" ? t("untitledPlaceholder") : t("folderExamplePlaceholder")}
+                  maxLength={200}
+                  disabled={createModalBusy}
+                />
+              </label>
+              {createModalError && <div className="mdocs-dialog-error">{createModalError}</div>}
+              <div className="mdocs-dialog-actions">
+                <button
+                  type="button"
+                  onClick={() => !createModalBusy && setCreateModal(null)}
+                  disabled={createModalBusy}
+                >
+                  {t("cancel")}
+                </button>
+                <button type="submit" className="primary" disabled={createModalBusy}>
+                  {createModalBusy ? t("creating") : t("create")}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* 悬浮层放在 shell 外，避免参与主布局高度计算 */}
       {pendingVisitorId && visitor && (
@@ -2251,7 +2260,7 @@ export function App() {
                 type="button"
                 className="primary"
                 onClick={() => {
-                  navigator.clipboard.writeText(recoveryCode);
+                  void copyTextToClipboard(recoveryCode);
                 }}
               >
                 复制恢复码

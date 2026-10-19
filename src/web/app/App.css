@@ -4945,7 +4945,7 @@ strong.label {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  z-index: 200;
+  z-index: 300;
   animation: backdrop-in 0.2s ease;
 }
 
@@ -5016,6 +5016,68 @@ strong.label {
 .mdocs-dialog-error {
   color: var(--mdocs-error);
   font-size: 12px;
+}
+
+.mdocs-dialog-label input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .mdocs-dialog-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .mdocs-dialog.card {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(88vh, 100%);
+    overflow: auto;
+    padding: 20px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12);
+    animation: dialog-sheet-in 0.22s ease;
+  }
+
+  .mdocs-dialog-hint {
+    display: none;
+  }
+
+  .mdocs-dialog h1 {
+    margin-bottom: 16px;
+  }
+
+  .mdocs-dialog-label input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .mdocs-dialog-label input:focus {
+    box-shadow: none;
+  }
+
+  .mdocs-dialog-actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .mdocs-dialog-actions button {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
+@keyframes dialog-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* === Message dialog (alert) === */
