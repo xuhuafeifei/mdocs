@@ -19,6 +19,8 @@ import { getDocumentTaskQueue } from "./documentTaskQueue";
 import type { DomainSummary } from "../../shared/types/domain";
 import type { TreeNode } from "../../shared/types/tree";
 import { isPublicWritePermission } from "../../shared/permissions.js";
+import { isFolderDescPath } from "../../shared/folderDesc.js";
+import { loadLastSession, saveLastSession } from "../storage/lastSession";
 import {
   ApiRequestError,
   MDOCS_API_ERROR_EVENT,
@@ -335,6 +337,9 @@ export function App() {
 
   // ---- 当前视图：docs（文档）或 settings（设置） ----
   const [view, setView] = useState<"docs" | "settings">("docs");
+  /** 启动时先读上次会话，读完前不要把空首页写回 IndexedDB */
+  const [sessionReady, setSessionReady] = useState(false);
+  const sessionBootRef = useRef(false);
 
   const mobileNavLayoutRef = useRef<HTMLDivElement>(null);
   const mobileNavSwipe = useEdgeSwipeOpen(isNarrow && view === "docs", {
@@ -813,6 +818,63 @@ export function App() {
     // 但将 openDocument 加入依赖会导致无限循环，因此忽略该规则
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, documentId]);
+
+  /**
+   * 冷启动且地址里没有文档时，回到上次关闭的域 / 文档 / 设置 / 图谱。
+   * 地址已带 /doc/:id（刷新或分享链接）则尊重地址。
+   */
+  useEffect(() => {
+    if (phase !== "ready" || sessionBootRef.current) return;
+    sessionBootRef.current = true;
+    const urlDocId = documentId;
+    void (async () => {
+      try {
+        if (!urlDocId) {
+          const session = await loadLastSession();
+          if (session?.domainId) {
+            localStorage.setItem("mdocs.currentDomainId", session.domainId);
+            setCurrentDomainId(session.domainId);
+            await refreshTree(session.domainId);
+          }
+          if (session?.view === "settings") {
+            setView("settings");
+          } else if (session?.graph) {
+            openGraph(session.graph.resourceId, session.graph.name, session.graph.scope);
+          } else if (session?.documentId) {
+            navigate(`/doc/${session.documentId}`);
+          }
+        }
+      } finally {
+        setSessionReady(true);
+      }
+    })();
+    // 只在进入 ready 时读一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "ready" || !sessionReady) return;
+    const session = {
+      domainId: currentDomainId,
+      view,
+      documentId: documentId ?? (focus?.kind === "document" ? focus.documentId : null),
+      graph:
+        focus?.kind === "graph"
+          ? { scope: focus.scope, resourceId: focus.resourceId, name: focus.name }
+          : null,
+    };
+    const timer = window.setTimeout(() => {
+      void saveLastSession(session);
+    }, 300);
+    const flush = () => {
+      void saveLastSession(session);
+    };
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [phase, sessionReady, currentDomainId, view, documentId, focus]);
 
   // ---- 新建文档/文件夹模态框的相关状态和操作 ----
   const {
@@ -1722,7 +1784,10 @@ export function App() {
                       onMergeRequest={() => setMergeViewOpen(true)}
                       canManageInvites={Boolean(visitor && visitor.visitorId === activeDocMeta.ownerVisitorId)}
                       onDelete={async () => {
-                        if (activeDocMeta.relativePath.endsWith("/___desc___.md")) {
+                        if (
+                          activeDocMeta.fileType === "folder_desc" ||
+                          isFolderDescPath(activeDocMeta.relativePath)
+                        ) {
                           const folderPath = activeDocMeta.relativePath.replace(/\/___desc___\.md$/, "");
                           requestDeleteFolder(activeDocMeta.documentId, folderPath);
                         } else {

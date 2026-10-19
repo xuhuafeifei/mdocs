@@ -591,6 +591,19 @@ describe("removeFolder 递归删除目录", () => {
     expect(findDocumentById(getDb(), folderId)).toBeUndefined();
   });
 
+  it("删除时传入 folder_desc 类型的描述文档 ID：找到父目录", () => {
+    const folderId = createFolder("typed-desc", "default", null, "folder description");
+    const descDoc = listDocumentsByPathPrefix(getDb(), "default", "typed-desc/").find(
+      (d) => d.relative_path.endsWith("/___desc___.md"),
+    );
+    expect(descDoc).toBeDefined();
+    getDb().prepare(`UPDATE documents SET file_type = 'folder_desc' WHERE document_id = ?`).run(descDoc!.document_id);
+
+    const result = removeFolder({ actorVisitorId: OWNER, folderDocumentId: descDoc!.document_id });
+    expect(result.deletedCount).toBe(2);
+    expect(findDocumentById(getDb(), folderId)).toBeUndefined();
+  });
+
   it("非创建者删除目录：抛出 403", () => {
     const folderId = createFolder("owned-folder");
     expect(() => {

@@ -68,6 +68,7 @@ import { getConfig } from "../config/index.js";
 import { markdownToLexicalJson } from "./markdown-to-lexical.js";
 import { extractPlainTextFromLexical } from "./lexical-text.js";
 import { FILE_TYPE } from "../../shared/file-types.js";
+import { isFolderDescPath } from "../../shared/folderDesc.js";
 import { getPolicy } from "../../shared/file-type-policy.js";
 import {
   onArticleDeleted,
@@ -857,8 +858,8 @@ export function removeFolder(params: {
   let folder = findDocumentById(db, params.folderDocumentId);
   if (!folder) throw new DocumentError("DOC_NOT_FOUND", "目录不存在", 404);
 
-  // 如果传进来的是 ___desc___.md 文档，自动查找它的父目录
-  if (folder.file_type === "md" && folder.relative_path.endsWith("/___desc___.md")) {
+  // 选中目录时打开的是隐藏描述文件。类型现为 folder_desc，旧数据仍可能是 md。
+  if (folder.file_type === FILE_TYPE.FOLDER_DESC || isFolderDescPath(folder.relative_path)) {
     if (!folder.parent_id) {
       throw new DocumentError("BAD_REQUEST", "描述文档无父目录", 400);
     }
