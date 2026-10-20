@@ -77,6 +77,18 @@ describe("createToolsForMode", () => {
     ]);
   });
 
+  it("kind=deepseek 时挂载 web_search / web_fetch", () => {
+    const names = createToolsForMode("normal", {
+      ...baseDeps,
+      deepseekWeb: { apiKey: "sk-test" },
+    }).map((t) => t.name);
+    expect(names).toContain("web_search");
+    expect(names).toContain("web_fetch");
+    expect(names.indexOf("web_search")).toBeGreaterThan(
+      names.indexOf("read_attachment"),
+    );
+  });
+
   it("normal Ask: manual + account + choice + overwrite", () => {
     expect(
       createToolsForMode("normal", {

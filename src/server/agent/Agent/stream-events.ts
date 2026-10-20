@@ -22,6 +22,8 @@ export type AgentStreamEvent =
       label: string;
       status: "preparing" | "running" | "done" | "error";
       detail?: string;
+      /** web_search 完成态：结构化结果供前端卡片展示 */
+      webResults?: AgentWebSearchResults;
     }
   | { type: "markdown_set"; markdown: string }
   | {
@@ -73,3 +75,17 @@ export interface AgentDocumentTableRow {
   title: string;
   summary: string;
 }
+
+export type AgentWebSearchResultItem = {
+  title: string;
+  url: string;
+  snippet: string;
+  siteName?: string | null;
+  siteIcon?: string | null;
+  date?: string | null;
+};
+
+export type AgentWebSearchResults = {
+  query: string;
+  items: AgentWebSearchResultItem[];
+};

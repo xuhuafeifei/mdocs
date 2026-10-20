@@ -4,7 +4,10 @@
  */
 import type { Agent, AgentEvent } from "@earendil-works/pi-agent-core";
 import type { AgentSessionManager } from "./session-manager.js";
-import type { AgentStreamEvent } from "./stream-events.js";
+import type {
+  AgentStreamEvent,
+  AgentWebSearchResults,
+} from "./stream-events.js";
 import { createToolUiEffectsHandler } from "./tool-ui-effects.js";
 import {
   isWriteTool,
@@ -14,6 +17,36 @@ import {
   toolCallPreparingDetail,
   writeToolBodyText,
 } from "./tool-call-ui.js";
+
+function webResultsFromToolResult(result: unknown): AgentWebSearchResults | undefined {
+  const details = (
+    result && typeof result === "object"
+      ? (result as { details?: Record<string, unknown> }).details
+      : null
+  ) as Record<string, unknown> | null | undefined;
+  if (!details) return undefined;
+  const query = String(details.query ?? "").trim();
+  const raw = details.results;
+  if (!Array.isArray(raw)) return undefined;
+  const items = raw
+    .map((row) => {
+      const r = row && typeof row === "object" ? (row as Record<string, unknown>) : null;
+      if (!r) return null;
+      const title = String(r.title ?? "").trim();
+      const url = String(r.url ?? "").trim();
+      if (!title || !url) return null;
+      return {
+        title,
+        url,
+        snippet: String(r.snippet ?? r.summary ?? "").trim(),
+        siteName: (r.siteName as string | null | undefined) ?? null,
+        siteIcon: (r.siteIcon as string | null | undefined) ?? null,
+        date: (r.date as string | null | undefined) ?? null,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => Boolean(x));
+  return { query, items };
+}
 import { cancelVisitorChoices } from "./choice-pending.js";
 import { cancelVisitorSkillForms } from "./skill-form-pending.js";
 
@@ -248,6 +281,10 @@ function bindAgentEvents(opts: {
         event.result,
         startDetail,
       );
+      const webResults =
+        !event.isError && event.toolName === "web_search"
+          ? webResultsFromToolResult(event.result)
+          : undefined;
       onEvent({
         type: "tool_call",
         toolCallId: event.toolCallId,
@@ -255,6 +292,7 @@ function bindAgentEvents(opts: {
         label: toolCallLabel(event.toolName),
         status: event.isError ? "error" : "done",
         ...(detail ? { detail } : {}),
+        ...(webResults ? { webResults } : {}),
       });
       onToolUi(event);
     }

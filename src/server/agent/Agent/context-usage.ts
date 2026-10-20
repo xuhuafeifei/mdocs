@@ -32,10 +32,14 @@ export function estimateTokens(text: string): number {
 
 function estimateToolsTokens(visitorId: string): number {
   const skills = getSkillLoader();
+  const cfg = getVisitorAgentConfig(visitorId);
   const tools = createToolsForMode("normal", {
     visitorId,
     onEvent: () => {},
     skills: skills.isReady() ? skills : null,
+    ...(cfg?.kind === "deepseek" && cfg.apiKey
+      ? { deepseekWeb: { apiKey: cfg.apiKey, baseUrl: cfg.baseUrl || undefined } }
+      : {}),
   });
   let total = 0;
   for (const t of tools) {

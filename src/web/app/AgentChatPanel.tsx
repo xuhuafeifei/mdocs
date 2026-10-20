@@ -305,6 +305,17 @@ type AssistantBlock =
       label: string;
       status: "preparing" | "running" | "done" | "error";
       detail?: string;
+      webResults?: {
+        query: string;
+        items: Array<{
+          title: string;
+          url: string;
+          snippet: string;
+          siteName?: string | null;
+          siteIcon?: string | null;
+          date?: string | null;
+        }>;
+      };
     }
   | {
       type: "choice_card";
@@ -434,6 +445,7 @@ function upsertToolCallBlock(
       toolCallId: call.toolCallId || prev.toolCallId,
       label: call.label || prev.label,
       detail: call.detail ?? prev.detail,
+      webResults: call.webResults ?? prev.webResults,
     };
   } else {
     next.push(call);
@@ -488,6 +500,84 @@ function MessageCopyButton({ text }: { text: string }) {
     >
       {copied ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
     </button>
+  );
+}
+
+type WebSearchResultItem = {
+  title: string;
+  url: string;
+  snippet: string;
+  siteName?: string | null;
+  siteIcon?: string | null;
+  date?: string | null;
+};
+
+/** 网页搜索结果：默认可展开看列表，收起只留摘要行 */
+function WebSearchResultsFold({
+  query,
+  items,
+}: {
+  query: string;
+  items: WebSearchResultItem[];
+}) {
+  const [open, setOpen] = useState(true);
+  const q = query.trim();
+  const summary = q
+    ? `网页结果 · ${items.length} 条 · 「${q.length > 36 ? `${q.slice(0, 36)}…` : q}」`
+    : `网页结果 · ${items.length} 条`;
+
+  return (
+    <details
+      className="mdocs-agent-tool-call-fold mdocs-agent-web-results-fold"
+      open={open}
+      onToggle={(e) => {
+        setOpen((e.currentTarget as HTMLDetailsElement).open);
+      }}
+    >
+      <summary>
+        <span className="mdocs-agent-tool-call-fold-label">{summary}</span>
+        <ChevronRight
+          size={14}
+          strokeWidth={1.8}
+          className="mdocs-agent-tool-call-fold-chevron"
+        />
+      </summary>
+      <div className="mdocs-agent-web-results">
+        <ol className="mdocs-agent-web-results-list">
+          {items.map((item) => (
+            <li key={item.url} className="mdocs-agent-web-results-item">
+              <a
+                className="mdocs-agent-web-results-title"
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {item.siteIcon ? (
+                  <img
+                    className="mdocs-agent-web-results-icon"
+                    src={item.siteIcon}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="mdocs-agent-web-results-icon-fallback" aria-hidden />
+                )}
+                <span>{item.title}</span>
+              </a>
+              <div className="mdocs-agent-web-results-meta">
+                {[item.siteName, item.date ? item.date.slice(0, 10) : ""]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+              {item.snippet ? (
+                <p className="mdocs-agent-web-results-snippet">{item.snippet}</p>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      </div>
+    </details>
   );
 }
 
@@ -1515,6 +1605,7 @@ export const AgentChatPanel = forwardRef<
             label: event.label,
             status: event.status,
             detail: event.detail,
+            webResults: event.webResults,
           });
           return { ...m, blocks };
         }),
@@ -2429,8 +2520,16 @@ export const AgentChatPanel = forwardRef<
                                           (block.toolName ===
                                             "set_markdown_document" ||
                                             block.toolName ===
-                                              "overwrite_document")
+                                              "overwrite_document" ||
+                                            block.toolName === "web_fetch")
                                         }
+                                      />
+                                    ) : null}
+                                    {block.webResults &&
+                                    block.webResults.items.length > 0 ? (
+                                      <WebSearchResultsFold
+                                        query={block.webResults.query}
+                                        items={block.webResults.items}
                                       />
                                     ) : null}
                                   </div>

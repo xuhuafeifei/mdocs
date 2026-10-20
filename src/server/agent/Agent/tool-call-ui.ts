@@ -5,6 +5,8 @@
 
 const TOOL_LABELS: Record<string, string> = {
   search_documents: "搜索文档",
+  web_search: "网页搜索",
+  web_fetch: "抓取网页",
   query_my_documents: "查询我的文档",
   list_tree: "浏览目录",
   get_document: "读取文档",
@@ -247,10 +249,14 @@ export function toolCallDetailFromArgs(
     return formatWriteToolDetail(meta, body, "head");
   }
 
-  if (toolName === "search_documents") {
+  if (toolName === "search_documents" || toolName === "web_search") {
     return (
       clip(String(a.query ?? a.keyword ?? a.q ?? "").trim()) || undefined
     );
+  }
+
+  if (toolName === "web_fetch") {
+    return clip(String(a.url ?? "").trim()) || undefined;
   }
 
   if (
@@ -342,10 +348,27 @@ export function toolCallDetailFromResult(
     return name ? `已创建「${name}」` : fallback;
   }
 
-  if (toolName === "search_documents") {
+  if (toolName === "search_documents" || toolName === "web_search") {
     const results = details.results;
     const n = Array.isArray(results) ? results.length : undefined;
-    return typeof n === "number" ? `找到 ${n} 条` : fallback;
+    const q = clip(String(details.query ?? "").trim(), 48);
+    if (typeof n === "number") {
+      return q ? `「${q}」· ${n} 条` : `找到 ${n} 条`;
+    }
+    return fallback;
+  }
+
+  if (toolName === "web_fetch") {
+    const title = String(details.title ?? "").trim();
+    const body = String(details.content ?? "").trim();
+    const chars =
+      typeof details.chars === "number" ? details.chars : body.length;
+    const meta = title
+      ? `已抓取「${clip(title)}」${chars ? ` · ${chars} 字` : ""}`
+      : chars
+        ? `已抓取 · ${chars} 字`
+        : "已抓取";
+    return formatWriteToolDetail(meta, body, "head");
   }
 
   if (toolName.startsWith("sheet_")) {

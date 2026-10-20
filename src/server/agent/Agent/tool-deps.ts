@@ -8,6 +8,12 @@ export type CodingDocContext = {
   baseMarkdown: string;
 };
 
+/** DeepSeek Search/Fetch：仅 kind=deepseek 时注入 */
+export type DeepSeekWebCreds = {
+  apiKey: string;
+  baseUrl?: string;
+};
+
 /** 装配 / 单个 tool 共用的依赖，一律用 `{}` 传递 */
 export type ToolDeps = {
   visitorId: string;
@@ -18,6 +24,8 @@ export type ToolDeps = {
   skills?: SkillLoader | null;
   /** coding 读写 buffer */
   coding?: CodingDocContext;
+  /** 有值时注册 web_search / web_fetch */
+  deepseekWeb?: DeepSeekWebCreds;
 };
 
 export function asToolResult(payload: unknown) {

@@ -109,6 +109,14 @@ export async function runOnboardingChat(params: {
     onEvent,
     signal,
     skills,
+    ...(cfg.kind === "deepseek" && cfg.apiKey
+      ? {
+          deepseekWeb: {
+            apiKey: cfg.apiKey,
+            baseUrl: cfg.baseUrl || undefined,
+          },
+        }
+      : {}),
     ...(mode === "coding"
       ? {
           coding: {

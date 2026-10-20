@@ -1804,6 +1804,72 @@
   word-break: break-word;
 }
 
+.mdocs-agent-web-results-fold {
+  margin-top: 8px;
+}
+
+.mdocs-agent-web-results {
+  margin-top: 8px;
+  padding-top: 2px;
+}
+
+.mdocs-agent-web-results-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mdocs-agent-web-results-item {
+  margin: 0;
+  padding: 0;
+}
+
+.mdocs-agent-web-results-title {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-weight: 500;
+  color: #1a56db;
+  text-decoration: none;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.mdocs-agent-web-results-title:hover {
+  text-decoration: underline;
+}
+
+.mdocs-agent-web-results-icon,
+.mdocs-agent-web-results-icon-fallback {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  object-fit: cover;
+  background: #e8eaed;
+}
+
+.mdocs-agent-web-results-meta {
+  margin: 2px 0 0 20px;
+  font-size: 11px;
+  color: #8a919f;
+}
+
+.mdocs-agent-web-results-snippet {
+  margin: 4px 0 0 20px;
+  font-size: 12px;
+  color: #4e5969;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .mdocs-agent-tool-call-fold {
   margin-top: 8px;
   width: 100%;

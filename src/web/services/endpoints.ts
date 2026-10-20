@@ -819,6 +819,17 @@ export type AgentStreamEvent =
       label: string;
       status: "preparing" | "running" | "done" | "error";
       detail?: string;
+      webResults?: {
+        query: string;
+        items: Array<{
+          title: string;
+          url: string;
+          snippet: string;
+          siteName?: string | null;
+          siteIcon?: string | null;
+          date?: string | null;
+        }>;
+      };
     }
   | { type: "markdown_set"; markdown: string }
   | {

@@ -63,6 +63,8 @@
   | `src/server/agent/Agent/tool-deps.ts` | `ToolDeps` |
   | `src/server/agent/Agent/session-manager.ts` | `listSessions` `createSession` `openSession` `renameSession` `setSessionPinned`（`domainId` / `pinned`） |
   | `src/server/agent/Agent/tools-template.ts` | `manualTools` `accountTools` `choiceTools` `overwriteTools` `codingWriteTools` |
+  | `src/server/agent/Agent/tools-web.ts` | `web_search` / `web_fetch`（仅 `deepseekWeb` 注入时） |
+  | `src/server/agent/deepseek/web-tools-client.ts` | DeepSeek `POST /v1/tools/search|fetch` |
   | `src/server/agent/Agent/tools-registry.ts` | `createToolsForMode(mode, deps)` |
   | `src/server/agent/Agent/tools-choice.ts` | `askUserChoiceTool` |
   | `src/server/agent/Agent/tools-overwrite.ts` | `overwriteDocumentTool` |
