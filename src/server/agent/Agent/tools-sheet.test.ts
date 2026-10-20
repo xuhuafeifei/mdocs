@@ -43,11 +43,13 @@ import {
   sheetDeleteSheetTool,
   sheetAppendRowsTool,
   sheetGetSchemaTool,
+  sheetGetStylesTool,
   sheetInsertRowsAtTool,
   sheetListRowsTool,
   sheetMergeCellsTool,
   sheetOverwriteTool,
   sheetRenameColumnTool,
+  sheetSetCellStyleTool,
   sheetSetCellsTool,
   sheetUnmergeCellsTool,
   sheetUpdateRowTool,
@@ -258,6 +260,85 @@ describe("sheet agent tools (workbook)", () => {
     expect(overwritten.status).toBe("updated");
     expect(overwritten.columnCount).toBe(2);
     expect(overwritten.rowCount).toBe(2);
+  });
+
+  it("sheet_get_styles scopes after set_cell_style", async () => {
+    const content = serializeSheetDocument(
+      createEmptySheetDocument({ columnCount: 2, rowCount: 2 }),
+    );
+    fileStoreMocks.lastWriteContent = content;
+    const created = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "styles.sheet",
+      content,
+      fileType: FILE_TYPE.SHEET,
+      domainId: "public-domain",
+      permission: Permission.PUBLIC_WRITE,
+    });
+    const deps = { visitorId: OWNER, onEvent: () => {} };
+
+    const listed = (await runTool(sheetListRowsTool(deps), {
+      documentId: created.documentId,
+    })).details as {
+      rows: Array<{ rowId: string }>;
+      columns: Array<{ name: string }>;
+    };
+    const r0 = listed.rows[0]!.rowId;
+    const r1 = listed.rows[1]!.rowId;
+    const c0 = listed.columns[0]!.name;
+    const c1 = listed.columns[1]!.name;
+
+    await runTool(sheetSetCellStyleTool(deps), {
+      documentId: created.documentId,
+      cells: [
+        { rowId: r0, column: c0, style: { bg: "#E8F5E9", bold: true } },
+        { rowId: r1, column: c1, style: { color: "#C62828" } },
+      ],
+    });
+
+    const sheetStyles = (await runTool(sheetGetStylesTool(deps), {
+      documentId: created.documentId,
+      scope: "sheet",
+    })).details as {
+      styledCount: number;
+      cells: Array<{ rowId: string; column: string; style: { bg?: string } | null }>;
+    };
+    expect(sheetStyles.styledCount).toBe(2);
+    expect(sheetStyles.cells).toHaveLength(2);
+
+    const rowStyles = (await runTool(sheetGetStylesTool(deps), {
+      documentId: created.documentId,
+      scope: "row",
+      rowId: r0,
+    })).details as { cells: Array<{ column: string }> };
+    expect(rowStyles.cells).toHaveLength(1);
+    expect(rowStyles.cells[0]!.column).toBe(c0);
+
+    const colStyles = (await runTool(sheetGetStylesTool(deps), {
+      documentId: created.documentId,
+      scope: "column",
+      column: c1,
+    })).details as { cells: Array<{ rowId: string }> };
+    expect(colStyles.cells).toHaveLength(1);
+    expect(colStyles.cells[0]!.rowId).toBe(r1);
+
+    const cellNull = (await runTool(sheetGetStylesTool(deps), {
+      documentId: created.documentId,
+      scope: "cell",
+      rowId: r0,
+      column: c1,
+    })).details as { cells: Array<{ style: null }>; styledCount: number };
+    expect(cellNull.styledCount).toBe(0);
+    expect(cellNull.cells[0]!.style).toBeNull();
+
+    await expect(
+      runTool(sheetGetStylesTool(deps), {
+        documentId: created.documentId,
+        scope: "cell",
+        rowId: "missing",
+        column: c0,
+      }),
+    ).rejects.toThrow(/row not found/);
   });
 
   it("sheet_merge_cells and sheet_unmerge_cells", async () => {

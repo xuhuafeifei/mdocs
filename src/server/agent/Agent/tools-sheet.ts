@@ -9,6 +9,7 @@ import { getDocument, updateDocument } from "../../documents/document.service.js
 import { FILE_TYPE } from "../../../shared/file-types.js";
 import {
   addWorkbookSheet,
+  collectSheetCellStyles,
   insertSheetRows,
   mergeSheetCells,
   normalizeStyle,
@@ -30,6 +31,7 @@ import {
   updateSheetRow,
   type SheetCellStyle,
   type SheetDocument,
+  type SheetStyleScope,
   type SheetTab,
 } from "../../../shared/sheetDocument.js";
 import { asToolResult, type ToolDeps } from "./tool-deps.js";
@@ -181,7 +183,7 @@ export function sheetListRowsTool({ visitorId }: ToolDeps): AgentTool {
     name: "sheet_list_rows",
     label: "列出表格行",
     description:
-      "分页列出指定工作表的行。每行含 rowId 与按列名展开的 cells。默认 limit=50，最大 100。",
+      "分页列出指定工作表的行。每行含 rowId 与按列名展开的 cells（仅文本值，不含样式）。默认 limit=50，最大 100。查样式用 sheet_get_styles。",
     parameters: Type.Object({
       documentId: Type.String({ description: "表格文档 documentId" }),
       sheet: sheetParam,
@@ -218,6 +220,76 @@ export function sheetListRowsTool({ visitorId }: ToolDeps): AgentTool {
             rowId: r.id,
             cells: sheetRowAsNamedCells(tab, r),
           })),
+        });
+      } catch (err) {
+        asAgentError(err);
+      }
+    },
+  };
+}
+
+const STYLE_SCOPES = new Set<SheetStyleScope>(["cell", "row", "column", "sheet"]);
+
+export function sheetGetStylesTool({ visitorId }: ToolDeps): AgentTool {
+  return {
+    name: "sheet_get_styles",
+    label: "读取表格样式",
+    description:
+      "读取 .sheet 单元格样式（bg / color / bold / italic / fontSize）。" +
+      "scope=cell|row|column|sheet。默认只返回已设置样式的格；单格无样式返回 style:null。" +
+      "要单元格文本请用 sheet_list_rows；写样式用 sheet_set_cell_style。",
+    parameters: Type.Object({
+      documentId: Type.String({ description: "表格文档 documentId" }),
+      sheet: sheetParam,
+      scope: Type.String({
+        description: "cell | row | column | sheet",
+      }),
+      rowId: Type.Optional(
+        Type.String({ description: "scope=cell / row 时必填" }),
+      ),
+      column: Type.Optional(
+        Type.String({ description: "scope=cell / column 时必填；列名或 columnId" }),
+      ),
+      includeEmpty: Type.Optional(
+        Type.Boolean({
+          description:
+            "默认 false。true 时补无样式格（style:null）；单元格过多会失败",
+        }),
+      ),
+    }),
+    execute: async (_id, params) => {
+      const p = params as {
+        documentId?: string;
+        sheet?: string;
+        scope?: string;
+        rowId?: string;
+        column?: string;
+        includeEmpty?: boolean;
+      };
+      const documentId = String(p.documentId ?? "").trim();
+      if (!documentId) throw new Error("documentId is required");
+      const scopeRaw = String(p.scope ?? "").trim() as SheetStyleScope;
+      if (!STYLE_SCOPES.has(scopeRaw)) {
+        throw new Error("scope must be cell | row | column | sheet");
+      }
+      const includeEmpty = p.includeEmpty === true;
+      try {
+        const { doc, workbook } = loadWorkbookForRead(documentId, visitorId);
+        const tab = requireTab(workbook, p.sheet);
+        const { cells, styledCount } = collectSheetCellStyles(tab, {
+          scope: scopeRaw,
+          rowId: p.rowId,
+          column: p.column,
+          includeEmpty,
+        });
+        return asToolResult({
+          documentId: doc.documentId,
+          displayName: doc.displayName,
+          sheet: { id: tab.id, name: tab.name },
+          scope: scopeRaw,
+          includeEmpty,
+          styledCount,
+          cells,
         });
       } catch (err) {
         asAgentError(err);
@@ -1055,6 +1127,7 @@ export function sheetTools(deps: ToolDeps): AgentTool[] {
   return [
     sheetGetSchemaTool(deps),
     sheetListRowsTool(deps),
+    sheetGetStylesTool(deps),
     sheetSetCellsTool(deps),
     sheetUpdateRowTool(deps),
     sheetAppendRowsTool(deps),

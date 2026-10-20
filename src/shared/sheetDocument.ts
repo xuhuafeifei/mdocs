@@ -783,6 +783,135 @@ export function sheetRowAsNamedCells(
   return out;
 }
 
+export type SheetStyleScope = "cell" | "row" | "column" | "sheet";
+
+export interface SheetStyleCellEntry {
+  rowId: string;
+  column: string;
+  columnId: string;
+  style: SheetCellStyle | null;
+}
+
+export interface CollectSheetCellStylesOpts {
+  scope: SheetStyleScope;
+  rowId?: string;
+  column?: string;
+  /** 默认 false：只返回有 style 的格；true 时补 null（单格始终返回） */
+  includeEmpty?: boolean;
+}
+
+/** includeEmpty 时单元格总数上限，防爆 token */
+export const SHEET_STYLE_INCLUDE_EMPTY_MAX = 5000;
+
+/**
+ * 只读收集单元格样式（不含 v）。
+ * scope=cell 始终一条；其余默认稀疏。
+ */
+export function collectSheetCellStyles(
+  tab: SheetTab,
+  opts: CollectSheetCellStylesOpts,
+): { cells: SheetStyleCellEntry[]; styledCount: number } {
+  const includeEmpty = opts.includeEmpty === true;
+  const scope = opts.scope;
+
+  const pushEntry = (
+    out: SheetStyleCellEntry[],
+    rowId: string,
+    col: SheetColumn,
+    cell: SheetCell | undefined,
+  ) => {
+    const style = getCellStyle(cell) ?? null;
+    if (!includeEmpty && style == null && scope !== "cell") return;
+    out.push({
+      rowId,
+      column: col.name,
+      columnId: col.id,
+      style,
+    });
+  };
+
+  if (scope === "cell") {
+    const rowId = String(opts.rowId ?? "").trim();
+    if (!rowId) throw new Error("rowId is required for scope=cell");
+    const colKey = String(opts.column ?? "").trim();
+    if (!colKey) throw new Error("column is required for scope=cell");
+    const row = tab.rows.find((r) => r.id === rowId);
+    if (!row) throw new Error(`row not found: ${rowId}`);
+    const col = resolveSheetColumn(tab, colKey);
+    if (!col) throw new Error(`unknown column: ${colKey}`);
+    const style = getCellStyle(row.cells[col.id]) ?? null;
+    return {
+      cells: [
+        {
+          rowId,
+          column: col.name,
+          columnId: col.id,
+          style,
+        },
+      ],
+      styledCount: style ? 1 : 0,
+    };
+  }
+
+  if (scope === "row") {
+    const rowId = String(opts.rowId ?? "").trim();
+    if (!rowId) throw new Error("rowId is required for scope=row");
+    const row = tab.rows.find((r) => r.id === rowId);
+    if (!row) throw new Error(`row not found: ${rowId}`);
+    if (includeEmpty && tab.columns.length > SHEET_STYLE_INCLUDE_EMPTY_MAX) {
+      throw new Error(
+        `includeEmpty exceeds max ${SHEET_STYLE_INCLUDE_EMPTY_MAX} cells`,
+      );
+    }
+    const cells: SheetStyleCellEntry[] = [];
+    let styledCount = 0;
+    for (const col of tab.columns) {
+      const style = getCellStyle(row.cells[col.id]);
+      if (style) styledCount += 1;
+      pushEntry(cells, row.id, col, row.cells[col.id]);
+    }
+    return { cells, styledCount };
+  }
+
+  if (scope === "column") {
+    const colKey = String(opts.column ?? "").trim();
+    if (!colKey) throw new Error("column is required for scope=column");
+    const col = resolveSheetColumn(tab, colKey);
+    if (!col) throw new Error(`unknown column: ${colKey}`);
+    if (includeEmpty && tab.rows.length > SHEET_STYLE_INCLUDE_EMPTY_MAX) {
+      throw new Error(
+        `includeEmpty exceeds max ${SHEET_STYLE_INCLUDE_EMPTY_MAX} cells`,
+      );
+    }
+    const cells: SheetStyleCellEntry[] = [];
+    let styledCount = 0;
+    for (const row of tab.rows) {
+      const style = getCellStyle(row.cells[col.id]);
+      if (style) styledCount += 1;
+      pushEntry(cells, row.id, col, row.cells[col.id]);
+    }
+    return { cells, styledCount };
+  }
+
+  // sheet
+  const total = tab.rows.length * tab.columns.length;
+  if (includeEmpty && total > SHEET_STYLE_INCLUDE_EMPTY_MAX) {
+    throw new Error(
+      `includeEmpty exceeds max ${SHEET_STYLE_INCLUDE_EMPTY_MAX} cells`,
+    );
+  }
+  const cells: SheetStyleCellEntry[] = [];
+  let styledCount = 0;
+  for (const row of tab.rows) {
+    for (const col of tab.columns) {
+      const style = getCellStyle(row.cells[col.id]);
+      if (style) styledCount += 1;
+      pushEntry(cells, row.id, col, row.cells[col.id]);
+    }
+  }
+  return { cells, styledCount };
+}
+
 export function setSheetCells(
   tab: SheetTab,
   updates: Array<{ rowId: string; column: string; value: string }>,

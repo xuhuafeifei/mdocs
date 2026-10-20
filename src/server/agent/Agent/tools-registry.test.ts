@@ -23,6 +23,7 @@ const STRUCTURE_NAMES = [
   "rename_document",
   "sheet_get_schema",
   "sheet_list_rows",
+  "sheet_get_styles",
   "sheet_set_cells",
   "sheet_update_row",
   "sheet_append_rows",

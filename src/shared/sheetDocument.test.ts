@@ -3,6 +3,7 @@ import {
   addSheetColumn,
   addSheetRow,
   addWorkbookSheet,
+  collectSheetCellStyles,
   createEmptySheetDocument,
   getCellStyle,
   getCellValue,
@@ -240,5 +241,62 @@ describe("sheetDocument workbook", () => {
     });
     const del = removeSheetColumns(tab, [c1!.id]);
     expect(del.tab.merges ?? []).toHaveLength(0);
+  });
+
+  it("collectSheetCellStyles sparse / scopes", () => {
+    let tab = createEmptySheetDocument({ columnCount: 2, rowCount: 2 }).sheets[0]!;
+    const [c0, c1] = tab.columns;
+    const [r0, r1] = tab.rows;
+    tab = setSheetCellStyle(tab, r0!.id, c0!.id, { bg: "#E8F5E9", bold: true });
+    tab = setSheetCellStyle(tab, r1!.id, c1!.id, { color: "#C62828" });
+
+    const sheetSparse = collectSheetCellStyles(tab, { scope: "sheet" });
+    expect(sheetSparse.styledCount).toBe(2);
+    expect(sheetSparse.cells).toHaveLength(2);
+
+    const rowSparse = collectSheetCellStyles(tab, {
+      scope: "row",
+      rowId: r0!.id,
+    });
+    expect(rowSparse.styledCount).toBe(1);
+    expect(rowSparse.cells).toHaveLength(1);
+    expect(rowSparse.cells[0]!.columnId).toBe(c0!.id);
+
+    const colSparse = collectSheetCellStyles(tab, {
+      scope: "column",
+      column: c1!.name,
+    });
+    expect(colSparse.styledCount).toBe(1);
+    expect(colSparse.cells[0]!.rowId).toBe(r1!.id);
+
+    const cellEmpty = collectSheetCellStyles(tab, {
+      scope: "cell",
+      rowId: r0!.id,
+      column: c1!.name,
+    });
+    expect(cellEmpty.styledCount).toBe(0);
+    expect(cellEmpty.cells).toEqual([
+      {
+        rowId: r0!.id,
+        column: c1!.name,
+        columnId: c1!.id,
+        style: null,
+      },
+    ]);
+
+    const rowFull = collectSheetCellStyles(tab, {
+      scope: "row",
+      rowId: r0!.id,
+      includeEmpty: true,
+    });
+    expect(rowFull.cells).toHaveLength(2);
+    expect(rowFull.styledCount).toBe(1);
+
+    expect(() =>
+      collectSheetCellStyles(tab, { scope: "row", rowId: "missing" }),
+    ).toThrow(/row not found/);
+    expect(() =>
+      collectSheetCellStyles(tab, { scope: "column", column: "nope" }),
+    ).toThrow(/unknown column/);
   });
 });
