@@ -8,12 +8,14 @@ import {
   getDocumentInvites,
   getDocumentMergeContext,
   getDocumentSyncStatus,
+  listDeletedDocuments,
   listDocuments,
   listFolderChildren,
   moveDocument,
   removeDocument,
   removeFolder,
   removeDocumentInvite,
+  restoreDocumentFromAudit,
   updateDocument,
 } from "../documents/document.service.js";
 import { findDomainByName } from "../db/repositories/domain.repo.js";
@@ -37,6 +39,8 @@ const log = useLogger("documents-route");
  * 包含以下接口：
  * - GET  /          列出当前访客在指定域下可见的文档列表
  * - POST /          创建新文档（需登录）
+ * - GET  /deleted   最近删除（带 recovery，可恢复）
+ * - POST /restore   按删除审计恢复文档
  * - GET  /:id       读取单篇文档详情（需 read 权限）
  * - PUT  /:id       更新文档（需 edit 权限）
  * - DELETE /:id     删除文档（需 delete 权限，仅限创建者）
@@ -48,6 +52,50 @@ const log = useLogger("documents-route");
  */
 export function buildDocumentsRouter(): Router {
   const router = Router();
+
+  /**
+   * GET /deleted
+   * 当前访客作为删除者的最近 document.delete（含 recovery）。须在 /:documentId 之前注册。
+   */
+  router.get("/deleted", (req: Request, res: Response) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+      return;
+    }
+    const rawLimit = typeof req.query.limit === "string" ? Number(req.query.limit) : 50;
+    const items = listDeletedDocuments({
+      actorVisitorId: req.visitor.visitor_id,
+      limit: Number.isFinite(rawLimit) ? rawLimit : 50,
+    });
+    res.json({ data: items });
+  });
+
+  /**
+   * POST /restore
+   * 按删除审计 auditId 恢复文档。须在 /:documentId 之前注册。
+   * Body: { auditId: number }
+   */
+  router.post("/restore", (req: Request, res: Response) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+      return;
+    }
+    const body = (req.body ?? {}) as { auditId?: unknown };
+    const auditId = typeof body.auditId === "number" ? body.auditId : Number(body.auditId);
+    if (!Number.isInteger(auditId) || auditId < 1) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "auditId is required" } });
+      return;
+    }
+    try {
+      const doc = restoreDocumentFromAudit({
+        actorVisitorId: req.visitor.visitor_id,
+        auditId,
+      });
+      res.status(201).json({ data: doc });
+    } catch (err) {
+      respondError(res, err, "documents-route.restore");
+    }
+  });
 
   /**
    * GET /

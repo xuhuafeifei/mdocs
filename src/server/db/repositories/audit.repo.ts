@@ -10,27 +10,74 @@ export interface InsertAuditLogInput {
   createdAt: string;
 }
 
+export interface AuditLogRow {
+  id: number;
+  actor_visitor_id: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  metadata_json: string | null;
+  created_at: string;
+}
+
 /**
  * 插入一条审计日志记录。
  * metadata 对象会被序列化为 JSON 字符串存储；若为空则存 NULL。
+ * @returns 新行 id
  */
 export function insertAuditLog(
   db: Database.Database,
   input: InsertAuditLogInput,
-): void {
+): number {
   const metadataText = input.metadata ? JSON.stringify(input.metadata) : null;
-  db.prepare(
-    `INSERT INTO audit_logs (
+  const result = db
+    .prepare(
+      `INSERT INTO audit_logs (
       actor_visitor_id, action, target_type, target_id, metadata_json, created_at
     ) VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(
-    input.actorVisitorId,
-    input.action,
-    input.targetType ?? null,
-    input.targetId ?? null,
-    metadataText,
-    input.createdAt,
-  );
+    )
+    .run(
+      input.actorVisitorId,
+      input.action,
+      input.targetType ?? null,
+      input.targetId ?? null,
+      metadataText,
+      input.createdAt,
+    );
+  return Number(result.lastInsertRowid);
+}
+
+export function findAuditById(
+  db: Database.Database,
+  auditId: number,
+): AuditLogRow | undefined {
+  return db
+    .prepare<number, AuditLogRow>(
+      `SELECT id, actor_visitor_id, action, target_type, target_id, metadata_json, created_at
+       FROM audit_logs WHERE id = ?`,
+    )
+    .get(auditId);
+}
+
+/** 当前访客作为 actor 的 document.delete（带 recovery）最近 N 条。 */
+export function listDocumentDeleteAuditsByActor(
+  db: Database.Database,
+  actorVisitorId: string,
+  limit: number,
+): AuditLogRow[] {
+  const safeLimit = Math.min(Math.max(1, Math.floor(limit) || 50), 200);
+  return db
+    .prepare<[string, number], AuditLogRow>(
+      `SELECT id, actor_visitor_id, action, target_type, target_id, metadata_json, created_at
+       FROM audit_logs
+       WHERE actor_visitor_id = ?
+         AND action = 'document.delete'
+         AND metadata_json IS NOT NULL
+         AND instr(metadata_json, '"recovery"') > 0
+       ORDER BY id DESC
+       LIMIT ?`,
+    )
+    .all(actorVisitorId, safeLimit);
 }
 
 /** 插入访客迁移记录所需的输入参数。 */

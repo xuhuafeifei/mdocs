@@ -41,7 +41,11 @@ import {
   type DomainAccessInfo,
   validateDomainPermission,
 } from "../access/access-control.js";
-import { insertAuditLog } from "../db/repositories/audit.repo.js";
+import {
+  findAuditById,
+  insertAuditLog,
+  listDocumentDeleteAuditsByActor,
+} from "../db/repositories/audit.repo.js";
 import {
   deleteDocumentFile,
   readCommitBlob,
@@ -603,8 +607,80 @@ export function updateDocument(params: {
 }
 
 // ============================================================
-//  删除文档
+//  删除文档 / 恢复
 // ============================================================
+
+/** 删文审计里的 recovery 快照（head 指针，正文在 commit blob）。 */
+export type DocumentDeleteRecovery = {
+  domainId: string;
+  displayName: string;
+  fileType: string;
+  permission: number;
+  parentId: string | null;
+  ownerVisitorId: string;
+  createdBy: string;
+  contentHash: string;
+  headCommitId: string | null;
+  blobRef: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function buildDeleteRecovery(
+  db: ReturnType<typeof getDb>,
+  row: DocumentRow,
+): DocumentDeleteRecovery {
+  let blobRef: string | null = null;
+  let contentHash = row.content_hash;
+  if (row.head_commit_id) {
+    const commit = findCommitById(db, row.head_commit_id);
+    if (commit) {
+      blobRef = commit.blob_ref;
+      contentHash = commit.content_hash;
+    }
+  }
+  return {
+    domainId: row.domain_id,
+    displayName: row.display_name,
+    fileType: row.file_type,
+    permission: row.permission,
+    parentId: row.parent_id,
+    ownerVisitorId: row.owner_visitor_id,
+    createdBy: row.created_by,
+    contentHash,
+    headCommitId: row.head_commit_id,
+    blobRef,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function parseDeleteRecovery(raw: unknown): DocumentDeleteRecovery | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.domainId !== "string" || !o.domainId.trim()) return null;
+  if (typeof o.displayName !== "string") return null;
+  if (typeof o.fileType !== "string") return null;
+  if (typeof o.permission !== "number") return null;
+  if (typeof o.ownerVisitorId !== "string") return null;
+  if (typeof o.createdBy !== "string") return null;
+  if (typeof o.contentHash !== "string") return null;
+  if (typeof o.createdAt !== "string" || typeof o.updatedAt !== "string") return null;
+  return {
+    domainId: o.domainId,
+    displayName: o.displayName,
+    fileType: o.fileType,
+    permission: o.permission,
+    parentId: typeof o.parentId === "string" ? o.parentId : o.parentId === null ? null : null,
+    ownerVisitorId: o.ownerVisitorId,
+    createdBy: o.createdBy,
+    contentHash: o.contentHash,
+    headCommitId: typeof o.headCommitId === "string" ? o.headCommitId : null,
+    blobRef: typeof o.blobRef === "string" ? o.blobRef : null,
+    createdAt: o.createdAt,
+    updatedAt: o.updatedAt,
+  };
+}
 
 export function removeDocument(params: {
   actorVisitorId: string;
@@ -622,6 +698,7 @@ export function removeDocument(params: {
     parentId: row.parent_id,
   };
   const now = new Date().toISOString();
+  const recovery = buildDeleteRecovery(db, row);
   const tx = db.transaction(() => {
     deleteDocument(db, row.document_id);
     insertAuditLog(db, {
@@ -629,7 +706,7 @@ export function removeDocument(params: {
       action: "document.delete",
       targetType: "document",
       targetId: row.document_id,
-      metadata: { relativePath: row.relative_path },
+      metadata: { relativePath: row.relative_path, recovery },
       createdAt: now,
     });
   });
@@ -639,6 +716,191 @@ export function removeDocument(params: {
   removeIndex(row.document_id);
 
   scheduleGraphIfExtractable(row.file_type, () => onArticleDeleted(hook));
+}
+
+export type DeletedDocumentListItem = {
+  auditId: number;
+  documentId: string;
+  deletedAt: string;
+  relativePath: string;
+  displayName: string;
+  domainId: string;
+  fileType: string;
+  viaFolderDelete: boolean;
+  restorable: boolean;
+};
+
+/** 当前访客删过的、带 recovery 的文档（最近 N 条）。 */
+export function listDeletedDocuments(params: {
+  actorVisitorId: string;
+  limit?: number;
+}): DeletedDocumentListItem[] {
+  const db = getDb();
+  const rows = listDocumentDeleteAuditsByActor(
+    db,
+    params.actorVisitorId,
+    params.limit ?? 50,
+  );
+  const out: DeletedDocumentListItem[] = [];
+  for (const row of rows) {
+    let meta: Record<string, unknown> = {};
+    try {
+      meta = row.metadata_json ? (JSON.parse(row.metadata_json) as Record<string, unknown>) : {};
+    } catch {
+      continue;
+    }
+    const recovery = parseDeleteRecovery(meta.recovery);
+    if (!recovery) continue;
+    if (recovery.ownerVisitorId !== params.actorVisitorId) continue;
+    const relativePath =
+      typeof meta.relativePath === "string" ? meta.relativePath : recovery.displayName;
+    out.push({
+      auditId: row.id,
+      documentId: row.target_id ?? "",
+      deletedAt: row.created_at,
+      relativePath,
+      displayName: recovery.displayName,
+      domainId: recovery.domainId,
+      fileType: recovery.fileType,
+      viaFolderDelete: meta.viaFolderDelete === true,
+      restorable: !!(
+        recovery.headCommitId &&
+        recovery.blobRef &&
+        recovery.fileType !== "dir" &&
+        recovery.fileType !== FILE_TYPE.GRAPH_DIR
+      ),
+    });
+  }
+  return out;
+}
+
+/** 按删除审计恢复文档（同 documentId + head blob）。 */
+export function restoreDocumentFromAudit(params: {
+  actorVisitorId: string;
+  auditId: number;
+}): DocumentDetail {
+  const db = getDb();
+  const audit = findAuditById(db, params.auditId);
+  if (!audit || audit.action !== "document.delete") {
+    throw new DocumentError("AUDIT_NOT_FOUND", "删除审计不存在", 404);
+  }
+  let meta: Record<string, unknown> = {};
+  try {
+    meta = audit.metadata_json
+      ? (JSON.parse(audit.metadata_json) as Record<string, unknown>)
+      : {};
+  } catch {
+    throw new DocumentError("INVALID_RECOVERY", "删除审计 metadata 无法解析", 400);
+  }
+  const recovery = parseDeleteRecovery(meta.recovery);
+  if (!recovery) {
+    throw new DocumentError("INVALID_RECOVERY", "该删除记录无可恢复快照", 400);
+  }
+  if (recovery.ownerVisitorId !== params.actorVisitorId) {
+    throw new DocumentError("FORBIDDEN", "仅原创建者可恢复此文档", 403);
+  }
+  const documentId = audit.target_id?.trim();
+  if (!documentId) {
+    throw new DocumentError("INVALID_RECOVERY", "删除审计缺少 documentId", 400);
+  }
+  const relativePath =
+    typeof meta.relativePath === "string" && meta.relativePath.trim()
+      ? meta.relativePath.trim()
+      : null;
+  if (!relativePath) {
+    throw new DocumentError("INVALID_RECOVERY", "删除审计缺少 relativePath", 400);
+  }
+  if (!recovery.headCommitId || !recovery.blobRef) {
+    throw new DocumentError("BLOB_MISSING", "无 head 快照，无法恢复正文", 409);
+  }
+  if (recovery.fileType === "dir" || recovery.fileType === FILE_TYPE.GRAPH_DIR) {
+    throw new DocumentError("NOT_RESTORABLE", "目录节点本期不支持恢复", 400);
+  }
+
+  if (findDocumentById(db, documentId)) {
+    throw new DocumentError("DOC_EXISTS", "文档已存在，无法恢复到同一 documentId", 409);
+  }
+  const pathTaken = findDocumentByPath(db, recovery.domainId, relativePath);
+  if (pathTaken) {
+    throw new DocumentError(
+      "PATH_EXISTS",
+      "同路径已被占用，无法恢复",
+      409,
+      { existingDocumentId: pathTaken.document_id, relativePath },
+    );
+  }
+
+  let content: string;
+  try {
+    content = readCommitBlob(recovery.blobRef);
+  } catch {
+    throw new DocumentError("BLOB_MISSING", "commit blob 不存在或不可读", 409);
+  }
+  const contentHash = sha256(Buffer.from(content, "utf8"));
+  if (contentHash !== recovery.contentHash) {
+    throw new DocumentError("BLOB_HASH_MISMATCH", "blob 内容与记录的 hash 不一致", 409);
+  }
+
+  const parentId =
+    recovery.parentId && findDocumentById(db, recovery.parentId)
+      ? recovery.parentId
+      : null;
+
+  const now = new Date().toISOString();
+  const write = writeDocument(recovery.domainId, relativePath, content);
+
+  const tx = db.transaction(() => {
+    insertDocument(db, {
+      documentId,
+      domainId: recovery.domainId,
+      relativePath,
+      displayName: recovery.displayName,
+      ownerVisitorId: recovery.ownerVisitorId,
+      createdBy: recovery.createdBy,
+      updatedBy: params.actorVisitorId,
+      contentHash: write.contentHash,
+      headCommitId: recovery.headCommitId!,
+      createdAt: recovery.createdAt,
+      updatedAt: now,
+      permission: recovery.permission,
+      fileType: recovery.fileType,
+      parentId,
+    });
+    insertCommit(db, {
+      commitId: recovery.headCommitId!,
+      documentId,
+      contentHash: write.contentHash,
+      blobRef: recovery.blobRef!,
+      authorVisitorId: recovery.ownerVisitorId,
+      createdAt: recovery.updatedAt,
+    });
+    insertAuditLog(db, {
+      actorVisitorId: params.actorVisitorId,
+      action: "document.restore",
+      targetType: "document",
+      targetId: documentId,
+      metadata: {
+        auditId: params.auditId,
+        relativePath,
+        headCommitId: recovery.headCommitId,
+      },
+      createdAt: now,
+    });
+  });
+  tx();
+
+  scheduleFtsIfNeeded(recovery.fileType, documentId);
+
+  const row = findDocumentById(db, documentId)!;
+  return buildDocumentDetail(row, {
+    displayName: row.display_name,
+    content,
+    contentHash: row.content_hash,
+    updatedBy: row.updated_by,
+    updatedAt: row.updated_at,
+    permission: row.permission,
+    headCommitId: row.head_commit_id!,
+  });
 }
 
 // ============================================================
@@ -904,6 +1166,7 @@ export function removeFolder(params: {
 
   const tx = db.transaction(() => {
     for (const doc of allToDelete) {
+      const recovery = buildDeleteRecovery(db, doc);
       deleteDocument(db, doc.document_id);
       deletedIds.push(doc.document_id);
       insertAuditLog(db, {
@@ -911,7 +1174,11 @@ export function removeFolder(params: {
         action: doc.file_type === "dir" ? "folder.delete" : "document.delete",
         targetType: doc.file_type === "dir" ? "folder" : "document",
         targetId: doc.document_id,
-        metadata: { relativePath: doc.relative_path, viaFolderDelete: true },
+        metadata: {
+          relativePath: doc.relative_path,
+          viaFolderDelete: true,
+          recovery,
+        },
         createdAt: now,
       });
     }
