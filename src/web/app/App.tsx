@@ -1920,219 +1920,7 @@ export function App() {
               </div>
             )}
 
-            {/* 错误弹窗 */}
-            {alertMessage && (
-              <MessageDialog
-                title={t("error")}
-                message={alertMessage}
-                onClose={() => setAlertMessage(null)}
-              />
-            )}
           </main>
-
-          {/* ========== 退出确认弹窗 ========== */}
-          {showLogoutConfirm && (
-            <div
-              className="mdocs-dialog-backdrop"
-              onClick={(e) => { if (e.target === e.currentTarget) setShowLogoutConfirm(false); }}
-            >
-              <div className="mdocs-dialog card" style={{ maxWidth: 440 }}>
-                <h1 style={{ fontSize: "1.125rem", marginBottom: 8 }}>退出当前登录身份？</h1>
-                <p style={{ lineHeight: 1.6, color: "var(--mdocs-text-secondary, #666)", marginBottom: 20 }}>
-                  这将会导致您无法修改以前的文章。如果想找回账号，需要恢复码或联系管理员执行合并用户脚本。
-                </p>
-                <div className="mdocs-dialog-actions" style={{ justifyContent: "flex-end" }}>
-                  <button type="button" onClick={() => setShowLogoutConfirm(false)}>
-                    取消
-                  </button>
-                  <button
-                    type="button"
-                    className="primary"
-                    style={{ background: "#d32f2f" }}
-                    onClick={() => {
-                      clearVisitorId();
-                      setActiveDocMeta(null);
-                      setEditorContent(null);
-                      setVisitor(null);
-                      setTree([]);
-                      setShowLogoutConfirm(false);
-                      setPhase("needsRegister");
-                    }}
-                  >
-                    确认退出
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ========== 收藏列表弹窗 ========== */}
-          {showBookmarksDialog && (
-            <div
-              className="mdocs-dialog-backdrop"
-              onClick={(e) => { if (e.target === e.currentTarget) setShowBookmarksDialog(false); }}
-            >
-              <div className="mdocs-dialog card" style={{ maxWidth: 640, width: "min(640px, 100%)", maxHeight: "70vh", display: "flex", flexDirection: "column" }}>
-                <h1 style={{ fontSize: "1.125rem", marginBottom: 16 }}>
-                  {t("bookmarkTitle")}（{bookmarks.length}）
-                </h1>
-
-                {bookmarks.length > 0 && (
-                  <div className="mdocs-bookmark-filterbar">
-                    <input
-                      type="text"
-                      placeholder={t("bookmarkSearch")}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    <select
-                      value={selectedDomainId}
-                      onChange={(e) => setSelectedDomainId(e.target.value)}
-                    >
-                      <option value="">{t("bookmarkFilterAll")}</option>
-                      {uniqueDomains.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {bookmarks.length === 0 ? (
-                  <p style={{ color: "var(--mdocs-text-muted, #999)", textAlign: "center", padding: "2rem 0" }}>
-                    {t("bookmarkEmpty")}
-                  </p>
-                ) : filteredBookmarks.length === 0 ? (
-                  <p style={{ color: "var(--mdocs-text-muted, #999)", textAlign: "center", padding: "2rem 0" }}>
-                    {t("bookmarkNoMatch")}
-                  </p>
-                ) : (
-                  <div style={{ overflowY: "auto", flex: 1, margin: "0 -1rem", padding: "0 1rem" }}>
-                    <table className="mdocs-bookmark-table">
-                      <thead>
-                        <tr>
-                          <th>{t("bookmarkColTitle")}</th>
-                          <th>{t("bookmarkColDomain")}</th>
-                          <th>{t("bookmarkColAuthor")}</th>
-                          <th>{t("bookmarkColTime")}</th>
-                          <th className="mdocs-bookmark-col-action" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                    {filteredBookmarks.map((bm) => {
-                      const isRemoving = removingIds.has(bm.documentId);
-                      return (
-                      <tr
-                        key={bm.documentId}
-                        className={`${isRemoving ? "mdocs-bookmark-removing" : ""}`}
-                        style={{ opacity: bm.isDeleted ? 0.6 : 1 }}
-                      >
-                        <td className="mdocs-bookmark-col-title">
-                          <div
-                            style={{ cursor: bm.isDeleted ? "default" : "pointer", display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}
-                            onClick={() => {
-                              if (bm.isDeleted) return;
-                              guardNavigate(() => {
-                                setShowBookmarksDialog(false);
-                                navigate(`/doc/${bm.documentId}`);
-                              });
-                            }}
-                          >
-                            <span
-                              ref={(el) => {
-                                if (el) {
-                                  const overflow = el.scrollWidth > el.clientWidth;
-                                  el.title = overflow ? (bm.displayName ?? "") : "";
-                                }
-                              }}
-                              style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}
-                            >{bm.displayName ?? "(无标题)"}</span>
-                            {bm.isDeleted && <span style={{ fontSize: "0.7rem", color: "#d32f2f", background: "#ffebee", padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>已删除</span>}
-                          </div>
-                        </td>
-                        <td>{bm.isDeleted ? "" : (domainNameLookup[bm.domainId ?? ""] ?? bm.domainId ?? "")}</td>
-                        <td>{bm.isDeleted ? "" : (bm.ownerVisitorName ?? "-")}</td>
-                        <td>{bm.isDeleted ? "" : formatRelativeTime(bm.bookmarkedAt, lang)}</td>
-                        <td className="mdocs-bookmark-col-action">
-                          <div style={{ display: "flex", gap: 2, alignItems: "center", justifyContent: "flex-end" }}>
-                            <button
-                              type="button"
-                              className="mdocs-tooltip"
-                              data-tooltip={t("bookmarkOpen")}
-                              onClick={() => {
-                                if (bm.isDeleted) return;
-                                guardNavigate(() => {
-                                  setShowBookmarksDialog(false);
-                                  navigate(`/doc/${bm.documentId}`);
-                                });
-                              }}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                cursor: bm.isDeleted ? "default" : "pointer",
-                                padding: "4px",
-                                color: "var(--mdocs-text-muted, #999)",
-                                lineHeight: 1,
-                                borderRadius: 4,
-                                display: "inline-flex",
-                                alignItems: "center",
-                              }}
-                            >
-                              <BookOpen size={14} strokeWidth={1.5} />
-                            </button>
-                            <button
-                              type="button"
-                              className="mdocs-tooltip"
-                              data-tooltip={t("bookmarkRemove")}
-                              onClick={async () => {
-                                try {
-                                  await removeBookmarkApi(bm.documentId);
-                                  setRemovingIds((prev) => new Set(prev).add(bm.documentId));
-                                  setTimeout(() => {
-                                    setBookmarks((prev) => prev.filter((x) => x.documentId !== bm.documentId));
-                                    setRemovingIds((prev) => {
-                                      const next = new Set(prev);
-                                      next.delete(bm.documentId);
-                                      return next;
-                                    });
-                                  }, 300);
-                                } catch (err) {
-                                  setAlertMessage(translateError(t, err));
-                                }
-                              }}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                cursor: "pointer",
-                                padding: "4px",
-                                color: "var(--mdocs-text-muted, #999)",
-                                fontSize: "1rem",
-                                lineHeight: 1,
-                                borderRadius: 4,
-                                display: "inline-flex",
-                                alignItems: "center",
-                              }}
-                              onMouseEnter={(e) => { e.currentTarget.style.color = "#d32f2f"; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--mdocs-text-muted, #999)"; }}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      );
-                    })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                <div className="mdocs-dialog-actions" style={{ justifyContent: "flex-end", marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--mdocs-border, #eee)" }}>
-                  <button type="button" onClick={() => setShowBookmarksDialog(false)}>
-                    {t("close")}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* ========== 右键菜单浮层 ========== */}
           {menu && (
@@ -2149,28 +1937,237 @@ export function App() {
             />
           )}
 
-          {/* ========== 删除确认弹窗 ========== */}
-          {deleteConfirm && (
-            <ConfirmDialog
-              title={deleteConfirm.type === "folder" ? "删除文件夹" : "删除文档"}
-              message={
-                deleteConfirm.type === "folder"
-                  ? `确定要删除「${deleteConfirm.name}」及其下的所有文档和子文件夹吗？此操作不可撤销。`
-                  : `确定要删除「${deleteConfirm.name}」吗？`
-              }
-              confirmLabel="删除"
-              cancelLabel="取消"
-              onConfirm={executeDelete}
-              onCancel={() => setDeleteConfirm(null)}
-              danger
-            />
-          )}
-
         </div>
       )}
       </div>
 
-      {/* 新建弹层放在 shell 外：窄屏侧栏用 transform 滑动，fixed 若留在里面会相对整条轨道定位 */}
+      {/* 弹层放在 shell 外：窄屏侧栏用 transform 滑动，fixed 若留在里面会相对整条轨道定位 */}
+      {alertMessage && (
+        <MessageDialog
+          title={t("error")}
+          message={alertMessage}
+          onClose={() => setAlertMessage(null)}
+        />
+      )}
+
+      {showLogoutConfirm && (
+        <div
+          className="mdocs-dialog-backdrop"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowLogoutConfirm(false); }}
+        >
+          <div className="mdocs-dialog card" style={{ maxWidth: 440 }}>
+            <h1 style={{ fontSize: "1.125rem", marginBottom: 8 }}>退出当前登录身份？</h1>
+            <p style={{ lineHeight: 1.6, color: "var(--mdocs-text-secondary, #666)", marginBottom: 20 }}>
+              这将会导致您无法修改以前的文章。如果想找回账号，需要恢复码或联系管理员执行合并用户脚本。
+            </p>
+            <div className="mdocs-dialog-actions" style={{ justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => setShowLogoutConfirm(false)}>
+                取消
+              </button>
+              <button
+                type="button"
+                className="primary"
+                style={{ background: "#d32f2f" }}
+                onClick={() => {
+                  clearVisitorId();
+                  setActiveDocMeta(null);
+                  setEditorContent(null);
+                  setVisitor(null);
+                  setTree([]);
+                  setShowLogoutConfirm(false);
+                  setPhase("needsRegister");
+                }}
+              >
+                确认退出
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBookmarksDialog && (
+        <div
+          className="mdocs-dialog-backdrop"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowBookmarksDialog(false); }}
+        >
+          <div className="mdocs-dialog card" style={{ maxWidth: 640, width: "min(640px, 100%)", maxHeight: "70vh", display: "flex", flexDirection: "column" }}>
+            <h1 style={{ fontSize: "1.125rem", marginBottom: 16 }}>
+              {t("bookmarkTitle")}（{bookmarks.length}）
+            </h1>
+
+            {bookmarks.length > 0 && (
+              <div className="mdocs-bookmark-filterbar">
+                <input
+                  type="text"
+                  placeholder={t("bookmarkSearch")}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <select
+                  value={selectedDomainId}
+                  onChange={(e) => setSelectedDomainId(e.target.value)}
+                >
+                  <option value="">{t("bookmarkFilterAll")}</option>
+                  {uniqueDomains.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {bookmarks.length === 0 ? (
+              <p style={{ color: "var(--mdocs-text-muted, #999)", textAlign: "center", padding: "2rem 0" }}>
+                {t("bookmarkEmpty")}
+              </p>
+            ) : filteredBookmarks.length === 0 ? (
+              <p style={{ color: "var(--mdocs-text-muted, #999)", textAlign: "center", padding: "2rem 0" }}>
+                {t("bookmarkNoMatch")}
+              </p>
+            ) : (
+              <div style={{ overflowY: "auto", flex: 1, margin: "0 -1rem", padding: "0 1rem" }}>
+                <table className="mdocs-bookmark-table">
+                  <thead>
+                    <tr>
+                      <th>{t("bookmarkColTitle")}</th>
+                      <th>{t("bookmarkColDomain")}</th>
+                      <th>{t("bookmarkColAuthor")}</th>
+                      <th>{t("bookmarkColTime")}</th>
+                      <th className="mdocs-bookmark-col-action" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                {filteredBookmarks.map((bm) => {
+                  const isRemoving = removingIds.has(bm.documentId);
+                  return (
+                  <tr
+                    key={bm.documentId}
+                    className={`${isRemoving ? "mdocs-bookmark-removing" : ""}`}
+                    style={{ opacity: bm.isDeleted ? 0.6 : 1 }}
+                  >
+                    <td className="mdocs-bookmark-col-title">
+                      <div
+                        style={{ cursor: bm.isDeleted ? "default" : "pointer", display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}
+                        onClick={() => {
+                          if (bm.isDeleted) return;
+                          guardNavigate(() => {
+                            setShowBookmarksDialog(false);
+                            navigate(`/doc/${bm.documentId}`);
+                          });
+                        }}
+                      >
+                        <span
+                          ref={(el) => {
+                            if (el) {
+                              const overflow = el.scrollWidth > el.clientWidth;
+                              el.title = overflow ? (bm.displayName ?? "") : "";
+                            }
+                          }}
+                          style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}
+                        >{bm.displayName ?? "(无标题)"}</span>
+                        {bm.isDeleted && <span style={{ fontSize: "0.7rem", color: "#d32f2f", background: "#ffebee", padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>已删除</span>}
+                      </div>
+                    </td>
+                    <td>{bm.isDeleted ? "" : (domainNameLookup[bm.domainId ?? ""] ?? bm.domainId ?? "")}</td>
+                    <td>{bm.isDeleted ? "" : (bm.ownerVisitorName ?? "-")}</td>
+                    <td>{bm.isDeleted ? "" : formatRelativeTime(bm.bookmarkedAt, lang)}</td>
+                    <td className="mdocs-bookmark-col-action">
+                      <div style={{ display: "flex", gap: 2, alignItems: "center", justifyContent: "flex-end" }}>
+                        <button
+                          type="button"
+                          className="mdocs-tooltip"
+                          data-tooltip={t("bookmarkOpen")}
+                          onClick={() => {
+                            if (bm.isDeleted) return;
+                            guardNavigate(() => {
+                              setShowBookmarksDialog(false);
+                              navigate(`/doc/${bm.documentId}`);
+                            });
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: bm.isDeleted ? "default" : "pointer",
+                            padding: "4px",
+                            color: "var(--mdocs-text-muted, #999)",
+                            lineHeight: 1,
+                            borderRadius: 4,
+                            display: "inline-flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          <BookOpen size={14} strokeWidth={1.5} />
+                        </button>
+                        <button
+                          type="button"
+                          className="mdocs-tooltip"
+                          data-tooltip={t("bookmarkRemove")}
+                          onClick={async () => {
+                            try {
+                              await removeBookmarkApi(bm.documentId);
+                              setRemovingIds((prev) => new Set(prev).add(bm.documentId));
+                              setTimeout(() => {
+                                setBookmarks((prev) => prev.filter((x) => x.documentId !== bm.documentId));
+                                setRemovingIds((prev) => {
+                                  const next = new Set(prev);
+                                  next.delete(bm.documentId);
+                                  return next;
+                                });
+                              }, 300);
+                            } catch (err) {
+                              setAlertMessage(translateError(t, err));
+                            }
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "4px",
+                            color: "var(--mdocs-text-muted, #999)",
+                            fontSize: "1rem",
+                            lineHeight: 1,
+                            borderRadius: 4,
+                            display: "inline-flex",
+                            alignItems: "center",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = "#d32f2f"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--mdocs-text-muted, #999)"; }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  );
+                })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="mdocs-dialog-actions" style={{ justifyContent: "flex-end", marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--mdocs-border, #eee)" }}>
+              <button type="button" onClick={() => setShowBookmarksDialog(false)}>
+                {t("close")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteConfirm && (
+        <ConfirmDialog
+          title={deleteConfirm.type === "folder" ? "删除文件夹" : "删除文档"}
+          message={
+            deleteConfirm.type === "folder"
+              ? `确定要删除「${deleteConfirm.name}」及其下的所有文档和子文件夹吗？此操作不可撤销。`
+              : `确定要删除「${deleteConfirm.name}」吗？`
+          }
+          confirmLabel="删除"
+          cancelLabel="取消"
+          onConfirm={executeDelete}
+          onCancel={() => setDeleteConfirm(null)}
+          danger
+        />
+      )}
+
       {createModal && (
         <div
           className="mdocs-dialog-backdrop"

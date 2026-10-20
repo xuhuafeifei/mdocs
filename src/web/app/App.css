@@ -5025,20 +5025,16 @@ strong.label {
 
 @media (max-width: 768px) {
   .mdocs-dialog-backdrop {
-    align-items: flex-end;
-    padding: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
   }
 
   .mdocs-dialog.card {
-    width: 100%;
-    max-width: 100%;
+    width: min(420px, 100%);
     max-height: min(88vh, 100%);
     overflow: auto;
-    padding: 20px 16px calc(16px + env(safe-area-inset-bottom, 0px));
-    border-radius: 16px 16px 0 0;
-    border-bottom: none;
-    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12);
-    animation: dialog-sheet-in 0.22s ease;
+    padding: 20px 16px;
   }
 
   .mdocs-dialog-hint {
@@ -5066,17 +5062,6 @@ strong.label {
   .mdocs-dialog-actions button {
     width: 100%;
     min-height: 44px;
-  }
-}
-
-@keyframes dialog-sheet-in {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
