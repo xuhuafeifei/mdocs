@@ -22,16 +22,13 @@ function tip(partial: Partial<DocumentDetail> & Pick<DocumentDetail, "headCommit
 }
 
 describe("publishSheetWholeChoice", () => {
-  it("用别人的：以当前 tip 为 remoteCommitId 做 merge", async () => {
-    const getDocument = vi.fn(async () =>
-      tip({ headCommitId: "head-2", content: '{"remote":true}' }),
-    );
-    const updateDocument = vi.fn(async (_id, input) =>
-      tip({
-        headCommitId: "merge-1",
-        content: input.content,
-      }),
-    );
+  it("用别人的：merge PUT 204 后再 GET 详情", async () => {
+    const getDocument = vi
+      .fn()
+      .mockResolvedValueOnce(tip({ headCommitId: "head-2", content: '{"remote":true}' }))
+      .mockResolvedValueOnce(tip({ headCommitId: "merge-1", content: '{"remote":true}' }));
+    // 与线上一致：merge 路径返回 204 → undefined
+    const updateDocument = vi.fn(async () => undefined);
 
     const result = await publishSheetWholeChoice({
       documentId: "doc-1",
@@ -54,6 +51,7 @@ describe("publishSheetWholeChoice", () => {
         },
       },
     });
+    expect(getDocument).toHaveBeenCalledTimes(2);
     expect(result.headCommitId).toBe("merge-1");
   });
 
@@ -61,13 +59,14 @@ describe("publishSheetWholeChoice", () => {
     const getDocument = vi
       .fn()
       .mockResolvedValueOnce(tip({ headCommitId: "head-2", content: '{"v":2}' }))
-      .mockResolvedValueOnce(tip({ headCommitId: "head-3", content: '{"v":3}' }));
+      .mockResolvedValueOnce(tip({ headCommitId: "head-3", content: '{"v":3}' }))
+      .mockResolvedValueOnce(tip({ headCommitId: "merge-2", content: '{"v":3}' }));
     const updateDocument = vi
       .fn()
       .mockRejectedValueOnce(
         new ApiRequestError(409, "VERSION_CONFLICT", "版本冲突，请先合并后再发布"),
       )
-      .mockResolvedValueOnce(tip({ headCommitId: "merge-2", content: '{"v":3}' }));
+      .mockResolvedValueOnce(undefined);
 
     await publishSheetWholeChoice({
       documentId: "doc-1",
@@ -82,6 +81,7 @@ describe("publishSheetWholeChoice", () => {
     expect(updateDocument).toHaveBeenCalledTimes(2);
     expect(updateDocument.mock.calls[1][1].version.merge.remoteCommitId).toBe("head-3");
     expect(updateDocument.mock.calls[1][1].content).toBe('{"v":3}');
+    expect(getDocument).toHaveBeenCalledTimes(3);
   });
 
   it("已与 tip 对齐时选远端直接返回 tip", async () => {

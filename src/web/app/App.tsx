@@ -1062,8 +1062,6 @@ export function App() {
           draft?.localBaseCommitId ??
           editBaseCommitId ??
           activeDocMeta.headCommitId;
-        const remoteCommitId =
-          draft?.conflict?.remoteCommitId ?? mergeConflict?.remoteCommitId;
         const localContent =
           draft?.conflict?.localSnapshotContent ??
           draft?.content ??
@@ -1072,6 +1070,10 @@ export function App() {
           draft?.displayName ??
           editorContentRef.current?.displayName ??
           activeDocMeta.displayName;
+
+        // 与整表 merge 一致：强制覆盖前刷新 tip，避免缓存 remoteCommitId 过期
+        const tip = await getDocumentApi(documentId);
+        const remoteCommitId = tip.headCommitId;
 
         if (!localBaseCommitId || !remoteCommitId || localContent == null) {
           setAlertMessage(t("syncHeadMissing"));
@@ -1208,11 +1210,13 @@ export function App() {
   }
 
   async function handleMergeSuccess(updated: DocumentDetail): Promise<void> {
-    await clearDraftConflict(updated.documentId);
-    await deleteDraft(updated.documentId);
-    setEditorDraftExists(false);
+    // 先关 merge，避免后续 await 期间仍停在合并页（merge PUT 曾返回 204 时尤其易踩）
     setMergeViewOpen(false);
     setConflictModalOpen(false);
+    setMergeConflict(null);
+    setEditorDraftExists(false);
+    await clearDraftConflict(updated.documentId);
+    await deleteDraft(updated.documentId);
     await openDocument(updated.documentId);
     void refreshTree(updated.domainId);
     setMessage(t("published"));
@@ -1932,6 +1936,12 @@ export function App() {
                   onClose={() => setMergeViewOpen(false)}
                   onSuccess={handleMergeSuccess}
                   onError={(msg) => setAlertMessage(msg)}
+                  onForceOverwrite={
+                    visitor && activeDocMeta && visitor.visitorId === activeDocMeta.ownerVisitorId
+                      ? () => void handleForceOverwrite()
+                      : undefined
+                  }
+                  forceBusy={forceOverwriteBusy}
                 />
               </Suspense>
             )}

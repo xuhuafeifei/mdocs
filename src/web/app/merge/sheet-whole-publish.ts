@@ -1,5 +1,6 @@
 /**
  * Sheet 整表二选一发布：发布前刷新 tip，避免冲突页里的 remoteCommitId 过期再 409。
+ * merge 路径的 PUT 返回 204，必须再 GET 详情再交给 onSuccess。
  */
 import type { DocumentDetail } from "../../../shared/types/document";
 import { ApiRequestError } from "../../services/api-request-error";
@@ -24,7 +25,7 @@ export type SheetWholePublishDeps = {
         };
       };
     },
-  ) => Promise<DocumentDetail>;
+  ) => Promise<DocumentDetail | void>;
 };
 
 export async function publishSheetWholeChoice(
@@ -43,14 +44,16 @@ export async function publishSheetWholeChoice(
     // 已与 tip 对齐：选远端无需再写；选本地走线性发布
     if (params.localBaseCommitId === tip.headCommitId) {
       if (params.side === "remote") return tip;
-      return params.updateDocument(params.documentId, {
+      const linear = await params.updateDocument(params.documentId, {
         content,
         displayName: params.displayName,
         version: { localBaseCommitId: tip.headCommitId },
       });
+      return linear ?? (await params.getDocument(params.documentId));
     }
 
-    return params.updateDocument(params.documentId, {
+    // merge PUT → 204 No Content，需再拉详情
+    await params.updateDocument(params.documentId, {
       content,
       displayName: params.displayName,
       version: {
@@ -61,6 +64,7 @@ export async function publishSheetWholeChoice(
         },
       },
     });
+    return params.getDocument(params.documentId);
   };
 
   try {

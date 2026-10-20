@@ -678,6 +678,14 @@
   color: var(--mdocs-text-muted, #666);
 }
 
+.mdocs-sheet-merge-force-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #8c8c8c;
+  line-height: 1.45;
+  text-align: center;
+}
+
 .mdocs-sheet-merge-actions {
   display: flex;
   flex-wrap: wrap;

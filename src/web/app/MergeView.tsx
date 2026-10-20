@@ -30,6 +30,10 @@ import type { DocumentDetail } from "../../shared/types/document";
 import { getPolicy } from "../../shared/file-type-policy";
 import type { FileType } from "../../shared/file-types";
 import { publishSheetWholeChoice } from "./merge/sheet-whole-publish";
+import {
+  isSameMarkdownBody,
+  publishLineMergeDocument,
+} from "./merge/line-merge-publish";
 
 export interface MergeViewProps {
   documentId: string;
@@ -38,8 +42,11 @@ export interface MergeViewProps {
   /** 缺省 md；html 走 raw-text；sheet 走 whole-document */
   fileType?: string;
   onClose: () => void;
-  onSuccess: (doc: DocumentDetail) => void;
+  onSuccess: (doc: DocumentDetail) => void | Promise<void>;
   onError: (message: string) => void;
+  /** 仅文档所有者：整表 merge 页也可强制覆盖 */
+  onForceOverwrite?: () => void;
+  forceBusy?: boolean;
 }
 
 export function MergeView(props: MergeViewProps) {
@@ -106,7 +113,7 @@ function SheetWholeDocumentMerge(props: MergeViewProps) {
         getDocument: getDocumentApi,
         updateDocument: updateDocumentApi,
       });
-      props.onSuccess(updated);
+      await props.onSuccess(updated);
     } catch (err) {
       const msg =
         err instanceof ApiRequestError
@@ -121,6 +128,7 @@ function SheetWholeDocumentMerge(props: MergeViewProps) {
   }
 
   const ready = !loadingRemote;
+  const actionBusy = busy || Boolean(props.forceBusy);
 
   return (
     <div className="mdocs-merge-overlay">
@@ -130,7 +138,7 @@ function SheetWholeDocumentMerge(props: MergeViewProps) {
           <span className="mdocs-merge-conflict-pill pending">{t("sheetMergeModeBadge")}</span>
         </div>
         <div className="mdocs-merge-toolbar-actions">
-          <button type="button" className="secondary" disabled={busy} onClick={props.onClose}>
+          <button type="button" className="secondary" disabled={actionBusy} onClick={props.onClose}>
             {t("cancel")}
           </button>
         </div>
@@ -142,9 +150,11 @@ function SheetWholeDocumentMerge(props: MergeViewProps) {
           <SheetWholeMergePane
             localContent={localContent}
             remoteContent={remoteContent}
-            busy={busy}
+            busy={actionBusy}
             onUseMine={() => void publishSide("local")}
             onUseTheirs={() => void publishSide("remote")}
+            onForceOverwrite={props.onForceOverwrite}
+            forceBusy={props.forceBusy}
           />
         )}
       </div>
@@ -306,28 +316,31 @@ function LineBasedMergeView(
     const body = stripConflictPlaceholders(publishBody);
     setBusy(true);
     try {
+      // 全盘接收「别人的」时直写 tip Lexical，避免 MD↔Lexical 往返丢 list/table，
+      // 也避免旧桥截断后的残缺 MD 写回云端。
+      const tip = await getDocumentApi(props.documentId);
       const content = isRawText
         ? body
-        : (
-            await convertContentApi({
-              content: body,
-              from: "markdown",
-              to: "lexical",
-            })
-          ).content;
-      await updateDocumentApi(props.documentId, {
-        content,
+        : remoteMd && isSameMarkdownBody(body, remoteMd)
+          ? tip.content
+          : (
+              await convertContentApi({
+                content: body,
+                from: "markdown",
+                to: "lexical",
+              })
+            ).content;
+
+      const updated = await publishLineMergeDocument({
+        documentId: props.documentId,
         displayName: props.displayName,
-        version: {
-          localBaseCommitId: props.conflict.localBaseCommitId,
-          merge: {
-            remoteCommitId: props.conflict.remoteCommitId,
-            localSnapshotContent: props.conflict.localSnapshotContent,
-          },
-        },
+        content,
+        localBaseCommitId: props.conflict.localBaseCommitId,
+        localSnapshotContent: props.conflict.localSnapshotContent,
+        getDocument: getDocumentApi,
+        updateDocument: updateDocumentApi,
       });
-      const updated = await getDocumentApi(props.documentId);
-      props.onSuccess(updated);
+      await props.onSuccess(updated);
     } catch (err) {
       props.onError(err instanceof Error ? err.message : String(err));
     } finally {

@@ -84,14 +84,21 @@ export function SheetWholeMergePane(props: {
   busy: boolean;
   onUseMine: () => void;
   onUseTheirs: () => void;
+  /** 仅文档所有者 */
+  onForceOverwrite?: () => void;
+  forceBusy?: boolean;
 }) {
   const { t } = useI18n();
   const localSummary = summarizeSheetContent(props.localContent);
   const remoteSummary = summarizeSheetContent(props.remoteContent);
+  const publishingLabel = props.forceBusy ? t("conflictForceBusy") : t("publishing");
 
   return (
     <div className="mdocs-sheet-merge-pane">
       <p className="mdocs-sheet-merge-hint">{t("sheetMergeHint")}</p>
+      {props.onForceOverwrite ? (
+        <p className="mdocs-sheet-merge-force-hint">{t("conflictForceHint")}</p>
+      ) : null}
       <div className="mdocs-sheet-merge-cards">
         <SummaryCard title={t("mergeLocal")} side="local" summary={localSummary} />
         <SummaryCard title={t("mergeRemote")} side="remote" summary={remoteSummary} />
@@ -103,7 +110,7 @@ export function SheetWholeMergePane(props: {
           disabled={props.busy || !props.localContent.trim()}
           onClick={props.onUseMine}
         >
-          {props.busy ? t("publishing") : t("sheetMergeUseMine")}
+          {props.busy && !props.forceBusy ? publishingLabel : t("sheetMergeUseMine")}
         </button>
         <button
           type="button"
@@ -111,8 +118,18 @@ export function SheetWholeMergePane(props: {
           disabled={props.busy || !props.remoteContent.trim()}
           onClick={props.onUseTheirs}
         >
-          {props.busy ? t("publishing") : t("sheetMergeUseTheirs")}
+          {props.busy && !props.forceBusy ? publishingLabel : t("sheetMergeUseTheirs")}
         </button>
+        {props.onForceOverwrite ? (
+          <button
+            type="button"
+            className="mdocs-conflict-force-btn mdocs-sheet-merge-btn-force"
+            disabled={props.busy || !props.localContent.trim()}
+            onClick={props.onForceOverwrite}
+          >
+            {props.forceBusy ? t("conflictForceBusy") : t("conflictForce")}
+          </button>
+        ) : null}
       </div>
     </div>
   );
