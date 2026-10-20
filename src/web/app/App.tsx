@@ -840,7 +840,9 @@ export function App() {
   }, [phase, documentId]);
 
   /**
-   * 冷启动且地址里没有文档时，回到上次关闭的域 / 文档 / 设置 / 图谱。
+   * 冷启动且地址里没有文档时：
+   * - 上次开着文章 → 打开那篇
+   * - 上次没开文章 → 只恢复上次的域（欢迎页）
    * 地址已带 /doc/:id（刷新或分享链接）则尊重地址。
    */
   useEffect(() => {
@@ -863,6 +865,7 @@ export function App() {
           } else if (session?.documentId) {
             navigate(`/doc/${session.documentId}`);
           }
+          // 否则停在欢迎页，域已在上面恢复
         }
       } finally {
         setSessionReady(true);
@@ -874,12 +877,13 @@ export function App() {
 
   useEffect(() => {
     if (phase !== "ready" || !sessionReady) return;
+    // 只认地址上的文档 id，不用 focus 兜底：退回欢迎页时 focus 可能晚一拍清空，会把旧文章又写回去
     const session = {
       domainId: currentDomainId,
       view,
-      documentId: documentId ?? (focus?.kind === "document" ? focus.documentId : null),
+      documentId: view === "docs" ? (documentId ?? null) : null,
       graph:
-        focus?.kind === "graph"
+        view === "docs" && focus?.kind === "graph"
           ? { scope: focus.scope, resourceId: focus.resourceId, name: focus.name }
           : null,
     };

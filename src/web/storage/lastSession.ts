@@ -1,6 +1,7 @@
 /**
  * 上次关闭时的界面，IndexedDB 里只有一条（id = "current"）。
- * 正文仍走各文档草稿；这里只记打开的域、文档、设置页或图谱。
+ * 正文仍走各文档草稿；这里只记域，以及当时是否开着文档 / 设置 / 图谱。
+ * 冷启动：有 documentId 就打开文章，否则只恢复 domainId。
  */
 const DB_NAME = "mdocs-session";
 const DB_VERSION = 1;
