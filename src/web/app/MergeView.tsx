@@ -24,10 +24,12 @@ import {
   getDocumentMergeContextApi,
   updateDocumentApi,
 } from "../services/endpoints";
+import { ApiRequestError } from "../services/api-request-error";
 import type { DraftConflictRecord } from "../storage/drafts";
 import type { DocumentDetail } from "../../shared/types/document";
 import { getPolicy } from "../../shared/file-type-policy";
 import type { FileType } from "../../shared/file-types";
+import { publishSheetWholeChoice } from "./merge/sheet-whole-publish";
 
 export interface MergeViewProps {
   documentId: string;
@@ -84,30 +86,35 @@ function SheetWholeDocumentMerge(props: MergeViewProps) {
   }, [props.documentId, props.onError, t]);
 
   async function publishSide(side: "local" | "remote"): Promise<void> {
-    const content = side === "local" ? localContent : remoteContent;
-    if (!content.trim()) {
-      props.onError(
-        side === "local" ? t("mergeLoadLocalFailed") : t("mergeLoadRemoteFailed"),
-      );
+    if (side === "local" && !localContent.trim()) {
+      props.onError(t("mergeLoadLocalFailed"));
+      return;
+    }
+    if (side === "remote" && !remoteContent.trim()) {
+      props.onError(t("mergeLoadRemoteFailed"));
       return;
     }
     setBusy(true);
     try {
-      await updateDocumentApi(props.documentId, {
-        content,
+      // 发布前重新拉 tip：冲突页里缓存的 remoteCommitId 可能已落后，再用会 409
+      const updated = await publishSheetWholeChoice({
+        documentId: props.documentId,
         displayName: props.displayName,
-        version: {
-          localBaseCommitId: props.conflict.localBaseCommitId,
-          merge: {
-            remoteCommitId: props.conflict.remoteCommitId,
-            localSnapshotContent: props.conflict.localSnapshotContent,
-          },
-        },
+        side,
+        localContent: props.conflict.localSnapshotContent || localContent,
+        localBaseCommitId: props.conflict.localBaseCommitId,
+        getDocument: getDocumentApi,
+        updateDocument: updateDocumentApi,
       });
-      const updated = await getDocumentApi(props.documentId);
       props.onSuccess(updated);
     } catch (err) {
-      props.onError(err instanceof Error ? err.message : String(err));
+      const msg =
+        err instanceof ApiRequestError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      props.onError(msg);
     } finally {
       setBusy(false);
     }
