@@ -193,6 +193,25 @@ export function App() {
     if (!isNarrow) setMobileNavOpen(false);
   }, [isNarrow]);
 
+  /** 窄屏 push 轨比视口宽：focus 输入会把 shell 横向滚偏，叠 transform 后正文只剩左边一条缝 */
+  const shellRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // shell 只在 ready 后挂载；依赖 phase，避免 loading 时 shellRef 为空就永久跳过
+    if (phase !== "ready" || !isNarrow) return;
+    const shell = shellRef.current;
+    if (!shell) return;
+    const lockX = () => {
+      if (shell.scrollLeft !== 0) shell.scrollLeft = 0;
+    };
+    lockX();
+    shell.addEventListener("scroll", lockX, { passive: true });
+    shell.addEventListener("focusin", lockX);
+    return () => {
+      shell.removeEventListener("scroll", lockX);
+      shell.removeEventListener("focusin", lockX);
+    };
+  }, [isNarrow, phase]);
+
   useEffect(() => installAssetLinkDownloads(), []);
 
   // ---- 评论区展开状态 ----
@@ -1380,7 +1399,7 @@ export function App() {
         </div>
       )}
 
-      <div className="mdocs-shell">
+      <div className="mdocs-shell" ref={shellRef}>
       {/* 根据当前视图渲染设置页或文档页 */}
       {view === "settings" ? (
         <Suspense fallback={<div className="mdocs-main muted" style={{ padding: 24 }}>加载设置…</div>}>

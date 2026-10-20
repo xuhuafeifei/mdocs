@@ -14,7 +14,9 @@
   flex: 1 1 0;
   min-height: 0;
   max-height: 100%;
-  overflow: hidden;
+  /* clip：窄屏 push 轨比视口宽，focus 输入时浏览器会横向 scrollIntoView，hidden 挡不住 */
+  overflow-x: clip;
+  overflow-y: hidden;
   position: relative;
 }
 
