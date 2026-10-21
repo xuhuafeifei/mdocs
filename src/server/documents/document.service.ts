@@ -76,6 +76,7 @@ import type {
 } from "../../shared/types/document.js";
 import { getConfig } from "../config/index.js";
 import { markdownToLexicalJson } from "./markdown-to-lexical.js";
+import { lexicalJsonToMarkdown } from "./lexical-to-markdown.js";
 import { extractPlainTextFromLexical } from "./lexical-text.js";
 import { FILE_TYPE, isGraphFileType } from "../../shared/file-types.js";
 import { isFolderDescPath } from "../../shared/folderDesc.js";
@@ -405,7 +406,7 @@ export function createDocument(params: {
 export function getDocument(
   documentId: string,
   visitorId?: string | null,
-  format?: "json" | "text",
+  format?: "json" | "text" | "md",
 ): DocumentDetail {
   const row = findDocumentById(getDb(), documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
@@ -428,9 +429,13 @@ export function getDocument(
   } else if (policy.textExtract === 'raw') {
     // html 等：返回原始内容（可选剥标签）
     finalContent = content;
+  } else if (format === "text") {
+    finalContent = extractPlainTextFromLexical(content);
+  } else if (format === "md") {
+    finalContent = lexicalJsonToMarkdown(content);
   } else {
-    // lexical：根据 format 决定
-    finalContent = format === 'text' ? extractPlainTextFromLexical(content) : content;
+    // 默认 json：Lexical 原文
+    finalContent = content;
   }
   return {
     ...rowToSummary(row),
@@ -2009,7 +2014,7 @@ export function convertDocumentContent(params: {
     return markdownToLexicalJson(params.content);
   }
   if (params.from === "lexical" && params.to === "markdown") {
-    return extractPlainTextFromLexical(params.content);
+    return lexicalJsonToMarkdown(params.content);
   }
   throw new DocumentError("BAD_REQUEST", "unsupported conversion", 400);
 }

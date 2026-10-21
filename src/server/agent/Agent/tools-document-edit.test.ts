@@ -111,11 +111,11 @@ describe("append_document / replace_document_markdown", () => {
     expect(text).toContain("day2");
   });
 
-  it("replace unique fragment", async () => {
+  it("replace unique fragment preserves surrounding markdown", async () => {
     const created = createDocument({
       actorVisitorId: OWNER,
       fileName: "note.md",
-      content: "hello world",
+      content: "# Title\n\nhello **world** end\n",
       domainId: "public-domain",
       permission: Permission.PUBLIC_WRITE,
       contentFormat: "markdown",
@@ -123,14 +123,15 @@ describe("append_document / replace_document_markdown", () => {
     const deps = { visitorId: OWNER, onEvent: () => {} };
     const result = (await runTool(replaceDocumentMarkdownTool(deps), {
       documentId: created.documentId,
-      find: "world",
-      replace: "mdocs",
+      find: "**world**",
+      replace: "**mdocs**",
     })).details as { status: string; notice: string };
     expect(result.status).toBe("replaced");
     expect(result.notice).toContain("DOCUMENT_CHANGED");
-    expect(getDocument(created.documentId, OWNER, "text").content).toContain(
-      "mdocs",
-    );
+    const md = getDocument(created.documentId, OWNER, "md").content;
+    expect(md).toContain("# Title");
+    expect(md).toContain("**mdocs**");
+    expect(md).not.toContain("**world**");
   });
 
   it("replace fails when ambiguous without occurrence", async () => {

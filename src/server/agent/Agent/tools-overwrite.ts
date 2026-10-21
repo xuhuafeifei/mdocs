@@ -77,10 +77,10 @@ export function overwriteDocumentTool({
     name: "overwrite_document",
     label: "覆写文档正文",
     description:
-      "将完整正文写入指定文档（服务端）。必须先确认目标 fileType：" +
-      "md → content 只能是完整 Markdown；" +
-      "html → content 只能是完整 HTML（禁止传 Markdown，不做 MD↔HTML 转换）。" +
-      "几乎空则直接写入；已有实质正文时本工具会弹出选择卡，选项固定为：「直接覆写」「打开帮写审阅」「取消」。" +
+      "整篇写入完整正文（服务端）。.md 局部修改请优先用 replace_document_markdown / append_document，勿用本工具重吐全文。" +
+      "适用：文档几乎为空、用户明确要求整篇重写、或目标是 html。" +
+      "必须先确认 fileType：md → 完整 Markdown；html → 完整 HTML（禁止传 Markdown，不做 MD↔HTML 转换）。" +
+      "几乎空则直接写入；已有实质正文时弹出选择卡：「直接覆写」「打开帮写审阅」「取消」。" +
       "有正文不是无法覆写，只是要用户点选。",
     parameters: Type.Object({
       documentId: Type.String({ description: "目标文档 documentId" }),

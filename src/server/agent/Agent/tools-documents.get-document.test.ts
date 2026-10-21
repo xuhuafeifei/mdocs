@@ -71,11 +71,11 @@ afterEach(() => {
 });
 
 describe("get_document tool", () => {
-  it("owner 可读正文（默认 text）", async () => {
+  it("owner 可读正文（默认 md）", async () => {
     const created = createDocument({
       actorVisitorId: OWNER,
       fileName: "hello.md",
-      content: "你好世界",
+      content: "# 你好世界",
       contentFormat: "markdown",
       domainId: "public-domain",
       permission: Permission.PUBLIC_READ,
@@ -90,9 +90,28 @@ describe("get_document tool", () => {
     };
     expect(details.documentId).toBe(created.documentId);
     expect(details.fileType).toBe("md");
-    expect(details.format).toBe("text");
+    expect(details.format).toBe("md");
     expect(details.contentTruncated).toBe(false);
-    expect(details.content).toContain("你好世界");
+    expect(details.content).toContain("# 你好世界");
+  });
+
+  it("format=text 返回纯文本", async () => {
+    const created = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "plain.md",
+      content: "# Hi",
+      contentFormat: "markdown",
+      domainId: "public-domain",
+      permission: Permission.PUBLIC_READ,
+    });
+    const result = await runGetDocument(OWNER, {
+      documentId: created.documentId,
+      format: "text",
+    });
+    const details = result.details as { content: string; format: string };
+    expect(details.format).toBe("text");
+    expect(details.content).toContain("Hi");
+    expect(details.content).not.toContain("#");
   });
 
   it("html 文档返回 fileType=html 与 HTML 原文", async () => {

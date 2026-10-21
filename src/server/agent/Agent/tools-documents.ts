@@ -236,23 +236,30 @@ export function getDocumentTool({ visitorId }: ToolDeps): AgentTool {
     name: "get_document",
     label: "读取文档内容",
     description:
-      "按 documentId 读取当前访客有权阅读的文档正文。响应含 fileType。默认 format=text：md 从 Lexical 抽纯文本，html 为 HTML 原文；format=json 返回存盘原文。与 HTTP GET /api/documents/:id 同一套读权限，无额外特权。",
+      "按 documentId 读取当前访客有权阅读的文档正文。响应含 fileType。" +
+      "默认 format=md：.md 从 Lexical 转为 Markdown（改稿/replace 请用此格式抄 find）；" +
+      "format=text 抽纯文本；format=json 返回存盘原文（Lexical）。" +
+      "html 无论 format 均返回 HTML 原文。与 HTTP GET 同一套读权限。",
     parameters: Type.Object({
       documentId: Type.String({ description: "文档 documentId" }),
       format: Type.Optional(
-        Type.Union([Type.Literal("text"), Type.Literal("json")], {
-          description: "text（默认，纯文本）或 json（Lexical）",
-        }),
+        Type.Union(
+          [Type.Literal("md"), Type.Literal("text"), Type.Literal("json")],
+          {
+            description: "md（默认，Markdown）| text（纯文本）| json（Lexical）",
+          },
+        ),
       ),
     }),
     execute: async (_id, params) => {
       const { documentId: rawId, format: rawFormat } = params as {
         documentId: string;
-        format?: "text" | "json";
+        format?: "md" | "text" | "json";
       };
       const documentId = rawId?.trim();
       if (!documentId) throw new Error("documentId is required");
-      const format = rawFormat === "json" ? "json" : "text";
+      const format =
+        rawFormat === "json" ? "json" : rawFormat === "text" ? "text" : "md";
       try {
         assertDocumentAccess(documentId, visitorId, "read");
         const doc = getDocument(documentId, visitorId, format);

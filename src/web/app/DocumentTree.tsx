@@ -425,12 +425,15 @@ function DocRow(props: {
       }}
       onClick={(e) => {
         if (suppressClick) return;
-        props.onOpen(doc, e.altKey ? { openBelow: true } : undefined);
+        // ⌘/Alt+点击 → 下栏打开（Mac ⌘，Win/Linux Alt）
+        const openBelow = e.metaKey || e.altKey;
+        props.onOpen(doc, openBelow ? { openBelow: true } : undefined);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          props.onOpen(doc, e.altKey ? { openBelow: true } : undefined);
+          const openBelow = e.metaKey || e.altKey;
+          props.onOpen(doc, openBelow ? { openBelow: true } : undefined);
         }
       }}
       onContextMenu={(e) => {

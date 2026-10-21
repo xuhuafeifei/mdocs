@@ -191,7 +191,7 @@ export function buildDocumentsRouter(): Router {
 
   /**
    * POST /convert
-   * 内容格式转换（markdown ↔ Lexical；lexical→markdown 为纯文本近似）。
+   * 内容格式转换（markdown ↔ Lexical；lexical→markdown 走 lexicalJsonToMarkdown）。
    */
   router.post("/convert", (req: Request, res: Response) => {
     const body = (req.body ?? {}) as {

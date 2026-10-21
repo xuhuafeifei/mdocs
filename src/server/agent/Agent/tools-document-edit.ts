@@ -6,6 +6,7 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { assertDocumentAccess, DocumentError } from "../../access/access-control.js";
 import { getDocument, updateDocument } from "../../documents/document.service.js";
 import { markdownToLexicalJson } from "../../documents/markdown-to-lexical.js";
+import { lexicalJsonToMarkdown } from "../../documents/lexical-to-markdown.js";
 import { extractPlainTextFromLexical } from "../../documents/lexical-text.js";
 import { FILE_TYPE } from "../../../shared/file-types.js";
 import { asToolResult, type ToolDeps } from "./tool-deps.js";
@@ -107,9 +108,9 @@ export function appendDocumentTool({ visitorId }: ToolDeps): AgentTool {
     name: "append_document",
     label: "追加文档正文",
     description:
-      "在 .md 文档末尾追加 Markdown（不覆写已有内容，无选择卡）。" +
-      "写后直接发布。写成功后请重新 get_document，勿沿用旧读结果。" +
-      "整篇替换用 overwrite_document；改片段用 replace_document_markdown。仅 fileType=md。",
+      "在 .md 文末追加 Markdown（推荐：日记续写、文末加节；不覆写已有内容，无选择卡）。" +
+      "写后直接发布。写成功后请重新 get_document。" +
+      "改已有片段用 replace_document_markdown；仅整篇重写才用 overwrite_document。仅 fileType=md。",
     parameters: Type.Object({
       documentId: Type.String({ description: "目标文档 documentId" }),
       content: Type.String({ description: "追加的 Markdown" }),
@@ -178,10 +179,11 @@ export function replaceDocumentMarkdownTool({ visitorId }: ToolDeps): AgentTool 
     name: "replace_document_markdown",
     label: "替换文档片段",
     description:
-      "在 get_document 纯文本层上精确查找并替换（段落/片段级）。" +
-      "find 默认须恰好出现 1 次；多次时传 occurrence（1-based）。" +
-      "替换后以 Markdown 回写（复杂排版可能简化）。无选择卡，写后直接发布。" +
-      "写成功后请重新 get_document。仅 fileType=md。",
+      "推荐：.md 局部改（改一段/标题/几句）用本工具，不要 overwrite 整篇。" +
+      "在 Markdown 源码层精确查找并替换（与 get_document 默认 format=md 同一层）；" +
+      "find 须为该 MD 中的精确子串，默认恰好出现 1 次，多次时传 occurrence（1-based）。" +
+      "一次改多处：多次调用，每次成功后重新 get_document 再取下一段 find。" +
+      "无选择卡，写后直接发布。仅 fileType=md。",
     parameters: Type.Object({
       documentId: Type.String({ description: "目标文档 documentId" }),
       find: Type.String({ description: "要查找的原文片段（非空）" }),
@@ -212,10 +214,10 @@ export function replaceDocumentMarkdownTool({ visitorId }: ToolDeps): AgentTool 
           documentId,
           visitorId,
         );
-        const plain = extractPlainTextFromLexical(rawLexical);
-        const matchCount = countOccurrences(plain, find);
+        const markdown = lexicalJsonToMarkdown(rawLexical);
+        const matchCount = countOccurrences(markdown, find);
         if (matchCount === 0) {
-          throw new Error("FIND_NOT_FOUND: find 在正文中未出现");
+          throw new Error("FIND_NOT_FOUND: find 在 Markdown 正文中未出现");
         }
         let occurrence = 1;
         if (p.occurrence === undefined || p.occurrence === null) {
@@ -235,11 +237,11 @@ export function replaceDocumentMarkdownTool({ visitorId }: ToolDeps): AgentTool 
             );
           }
         }
-        const nextPlain = replaceNth(plain, find, replace, occurrence);
+        const nextMarkdown = replaceNth(markdown, find, replace, occurrence);
         const updated = updateDocument({
           actorVisitorId: visitorId,
           documentId,
-          content: nextPlain,
+          content: nextMarkdown,
           contentFormat: "markdown",
           version: { localBaseCommitId: headCommitId },
         });
