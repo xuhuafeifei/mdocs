@@ -1870,6 +1870,61 @@
   overflow: hidden;
 }
 
+.mdocs-agent-web-results-snippet.inline,
+.mdocs-agent-web-results-meta.inline {
+  display: block;
+  margin-left: 0;
+  margin-top: 4px;
+}
+
+.mdocs-agent-web-result-item-fold {
+  margin: 0;
+}
+
+.mdocs-agent-web-result-item-fold > summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.mdocs-agent-web-result-item-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mdocs-agent-web-result-item-chevron {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: #8a919f;
+  transition: transform 0.12s ease;
+}
+
+.mdocs-agent-web-result-item-fold[open] > summary .mdocs-agent-web-result-item-chevron {
+  transform: rotate(90deg);
+}
+
+.mdocs-agent-web-result-item-summary {
+  min-width: 0;
+  flex: 1;
+}
+
+.mdocs-agent-web-result-item-body {
+  margin: 8px 0 0 18px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e8eaed;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #4e5969;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 280px;
+  overflow: auto;
+}
+
 .mdocs-agent-tool-call-fold {
   margin-top: 8px;
   width: 100%;
@@ -1984,6 +2039,39 @@
   100% {
     opacity: 0;
   }
+}
+
+/* 打开的选择卡 / Skill 表单：吸在输入框上方，不被长思考顶走 */
+.mdocs-agent-interaction-dock {
+  flex: 0 0 auto;
+  max-height: min(42vh, 340px);
+  overflow-y: auto;
+  margin: 0 0 8px;
+  padding: 10px 8px 8px;
+  border: 1px solid #91caff;
+  border-radius: 12px;
+  background: #f0f7ff;
+  box-shadow: 0 -4px 18px rgba(22, 119, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2;
+}
+
+.mdocs-agent-interaction-dock .mdocs-agent-choice-card {
+  border-color: #69b1ff;
+  background: #fff;
+}
+
+.mdocs-agent-choice-docked-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #86909c;
+}
+
+.mdocs-agent-choice-docked-hint p {
+  margin: 0;
 }
 
 .mdocs-agent-choice-card {

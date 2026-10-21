@@ -5,7 +5,7 @@ import { DEFAULT_DOMAIN_ID } from "../../../shared/domainUi.js";
 import { getConfig } from "../../config/index.js";
 import { atomicWriteJson, withSessionMetaLock } from "./session-meta-lock.js";
 
-export type AgentSessionRole = "user" | "assistant";
+export type AgentSessionRole = "user" | "assistant" | "tool";
 
 export type AgentSessionAssetRef = {
   id: string;
@@ -14,8 +14,9 @@ export type AgentSessionAssetRef = {
   bytes: number;
 };
 
-export interface AgentSessionMessage {
-  role: AgentSessionRole;
+/** 聊天 UI 可见行（不含 tool 交换） */
+export type AgentSessionChatMessage = {
+  role: "user" | "assistant";
   content: string;
   /** user 轮引用的私人 skill 名称（唯一键）；assistant 无此字段 */
   skillNames?: string[];
@@ -23,6 +24,30 @@ export interface AgentSessionMessage {
   skillIds?: string[];
   /** user 轮附件 Ref（无字节） */
   assets?: AgentSessionAssetRef[];
+};
+
+/** 落盘的 toolCall+toolResult，供下一轮 hydrate（当前：get_document / web_*） */
+export type AgentSessionToolMessage = {
+  role: "tool";
+  toolCallId: string;
+  toolName: string;
+  arguments: Record<string, unknown>;
+  resultText: string;
+  isError?: boolean;
+};
+
+export type AgentSessionMessage = AgentSessionChatMessage | AgentSessionToolMessage;
+
+export function isChatVisibleMessage(
+  m: AgentSessionMessage,
+): m is AgentSessionChatMessage {
+  return m.role === "user" || m.role === "assistant";
+}
+
+export function chatVisibleMessages(
+  messages: AgentSessionMessage[],
+): AgentSessionChatMessage[] {
+  return messages.filter(isChatVisibleMessage);
 }
 
 export interface AgentSessionSummary {
@@ -460,8 +485,39 @@ export class AgentSessionManager {
             skillNames?: unknown;
             skillIds?: unknown;
             assets?: unknown;
+            toolCallId?: unknown;
+            toolName?: unknown;
+            arguments?: unknown;
+            resultText?: unknown;
+            isError?: unknown;
           };
-          const role = row.role === "user" ? "user" : row.role === "assistant" ? "assistant" : null;
+          if (row.role === "tool") {
+            const toolCallId =
+              typeof row.toolCallId === "string" ? row.toolCallId.trim() : "";
+            const toolName =
+              typeof row.toolName === "string" ? row.toolName.trim() : "";
+            const resultText =
+              typeof row.resultText === "string" ? row.resultText : "";
+            if (!toolCallId || !toolName) continue;
+            const args =
+              row.arguments &&
+              typeof row.arguments === "object" &&
+              !Array.isArray(row.arguments)
+                ? (row.arguments as Record<string, unknown>)
+                : {};
+            const msg: AgentSessionToolMessage = {
+              role: "tool",
+              toolCallId,
+              toolName,
+              arguments: args,
+              resultText,
+            };
+            if (row.isError === true) msg.isError = true;
+            messages.push(msg);
+            continue;
+          }
+          const role =
+            row.role === "user" ? "user" : row.role === "assistant" ? "assistant" : null;
           const content = typeof row.content === "string" ? row.content : null;
           if (!role || content === null) continue;
           const fromNames = parseSkillRefsField(row.skillNames);
@@ -469,7 +525,7 @@ export class AgentSessionManager {
           const skillNames =
             fromNames.length > 0 ? fromNames : fromIds.length > 0 ? fromIds : [];
           const assets = parseAssetRefsField(row.assets);
-          const msg: AgentSessionMessage = { role, content };
+          const msg: AgentSessionChatMessage = { role, content };
           if (role === "user" && skillNames.length > 0) msg.skillNames = skillNames;
           if (role === "user" && assets.length > 0) msg.assets = assets;
           messages.push(msg);
@@ -815,6 +871,43 @@ export class AgentSessionManager {
       await this.touchLastOpenedUnlocked(sessionId);
     });
   }
+
+  /**
+   * 落盘 tool 交换（get_document / web_search / web_fetch 等）。
+   * 顺序插在 user 与最终 assistant 之间，下一轮 hydrate 成 toolCall+toolResult。
+   */
+  async appendToolExchange(
+    sessionId: string,
+    exchange: {
+      toolCallId: string;
+      toolName: string;
+      arguments: Record<string, unknown>;
+      resultText: string;
+      isError?: boolean;
+    },
+  ): Promise<void> {
+    if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
+    const toolCallId = String(exchange.toolCallId ?? "").trim();
+    const toolName = String(exchange.toolName ?? "").trim();
+    if (!toolCallId || !toolName) return;
+    const row: Record<string, unknown> = {
+      role: "tool",
+      toolCallId,
+      toolName,
+      arguments: exchange.arguments ?? {},
+      resultText: exchange.resultText ?? "",
+      ts: nowIso(),
+    };
+    if (exchange.isError) row.isError = true;
+    await this.runSerialized(async () => {
+      await fs.promises.appendFile(
+        this.jsonlPath(sessionId),
+        JSON.stringify(row) + "\n",
+        "utf8",
+      );
+      await this.touchLastOpenedUnlocked(sessionId);
+    });
+  }
 }
 
 export type AgentSessionKind = "normal" | "coding";
@@ -825,11 +918,12 @@ export async function getAgentSessionForApi(
   documentId?: string | null,
 ): Promise<{
   sessionId: string;
-  messages: AgentSessionMessage[];
+  messages: AgentSessionChatMessage[];
 }> {
-  return new AgentSessionManager(visitorId, { kind }).loadLastOpenedMessages(
-    kind === "coding" ? documentId : undefined,
-  );
+  const { sessionId, messages } = await new AgentSessionManager(visitorId, {
+    kind,
+  }).loadLastOpenedMessages(kind === "coding" ? documentId : undefined);
+  return { sessionId, messages: chatVisibleMessages(messages) };
 }
 
 export async function listAgentSessionsForApi(
@@ -878,10 +972,11 @@ export async function openAgentSessionForApi(
   kind: AgentSessionKind = "normal",
   documentId?: string | null,
 ) {
-  return new AgentSessionManager(visitorId, { kind }).openSession(
-    sessionId,
-    kind === "coding" ? documentId : undefined,
-  );
+  const { sessionId: id, messages } = await new AgentSessionManager(
+    visitorId,
+    { kind },
+  ).openSession(sessionId, kind === "coding" ? documentId : undefined);
+  return { sessionId: id, messages: chatVisibleMessages(messages) };
 }
 
 export async function bindCodingSessionDocumentForApi(

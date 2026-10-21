@@ -80,6 +80,10 @@ export type AgentWebSearchResultItem = {
   title: string;
   url: string;
   snippet: string;
+  /** 长摘要，前端条目展开用 */
+  summary?: string;
+  /** needContent 时的正文，前端条目展开用 */
+  content?: string;
   siteName?: string | null;
   siteIcon?: string | null;
   date?: string | null;

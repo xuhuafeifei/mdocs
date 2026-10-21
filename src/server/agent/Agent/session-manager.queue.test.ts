@@ -3,7 +3,11 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { getConfig } from "../../config/index.js";
-import { AgentSessionManager } from "./session-manager.js";
+import {
+  AgentSessionManager,
+  chatVisibleMessages,
+  getAgentSessionForApi,
+} from "./session-manager.js";
 
 const cleanupDirs: string[] = [];
 
@@ -77,8 +81,34 @@ describe("AgentSessionManager method-level queue", () => {
 
     await mgr.openSession(first.sessionId);
     const { messages } = await mgr.loadLastOpenedMessages();
-    expect(messages.map((m) => m.content)).toEqual(
-      expect.arrayContaining(["anchor", "more", "reply"]),
-    );
+    expect(
+      chatVisibleMessages(messages).map((m) => m.content),
+    ).toEqual(expect.arrayContaining(["anchor", "more", "reply"]));
+  });
+
+  it("appendToolExchange 落盘且 API 过滤 tool 行", async () => {
+    const visitorId = randomUUID();
+    tenantDir(visitorId);
+    const mgr = new AgentSessionManager(visitorId, { kind: "normal" });
+    const { sessionId } = await mgr.createSession();
+    await mgr.appendUser(sessionId, "搜一下");
+    await mgr.appendToolExchange(sessionId, {
+      toolCallId: "tc-1",
+      toolName: "web_search",
+      arguments: { query: "mdocs" },
+      resultText: '{"results":[]}',
+    });
+    await mgr.appendAssistant(sessionId, "没搜到");
+
+    const full = await mgr.loadLastOpenedMessages();
+    expect(full.messages.map((m) => m.role)).toEqual([
+      "user",
+      "tool",
+      "assistant",
+    ]);
+
+    const api = await getAgentSessionForApi(visitorId, "normal");
+    expect(api.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(api.messages.every((m) => "content" in m)).toBe(true);
   });
 });

@@ -61,6 +61,7 @@ import Toolbar from "./Toolbar";
 import { DocChrome } from "./DocChrome";
 import { uploadAssetApi, checkBookmarkApi, addBookmarkApi, removeBookmarkApi, fetchVisitorsDirectoryApi, addDocumentInviteApi, getDocumentInvitesApi, removeDocumentInviteApi } from "../services/endpoints";
 import { useAutoSave } from "./hooks/useAutoSave";
+import { useDocScrollCache } from "./hooks/useDocScrollCache";
 import { usePublishGuard } from "./hooks/usePublishGuard";
 import { localizeDomainName } from "./utils";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
@@ -261,6 +262,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
   // 用于在组件卸载时强制销毁编辑器实例，防止上游 ReactEditor 未调用 destroy 导致内存泄漏
   const editorRef = useRef<IEditor | null>(null);
+  const scrollHostRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
     setEditorSurfaceReady(false);
@@ -272,6 +274,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
     const id = requestAnimationFrame(() => setEditorSurfaceReady(true));
     return () => cancelAnimationFrame(id);
   }, [props.meta.documentId]);
+
+  // 正文撑开后再恢复滚动；进程内 LRU，重启即丢
+  useDocScrollCache(props.meta.documentId, scrollHostRef, Boolean(editor));
 
   // ---- 打开文档信息时异步统计纯文字符数（忽略 md 语法）----
   useEffect(() => {
@@ -1193,7 +1198,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 horizontal
                 style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, minWidth: 0, borderRadius: 0, outline: "none" }}
               >
-                <div className="mdocs-editor-scroll-host">
+                <div className="mdocs-editor-scroll-host" ref={scrollHostRef}>
                   {editorSurfaceReady ? (
                     <Editor
                       key={props.meta.documentId}

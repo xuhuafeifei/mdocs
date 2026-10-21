@@ -85,7 +85,8 @@
   | `src/web/app/AgentChatPanel.tsx` | 历史列表 / 「+」新建 |
   | `src/server/db/repositories/agent-user-skill.repo.ts` | `listAgentUserSkillsByOwner` |
   | `src/server/agent/Agent/user-skills.ts` | `resolveSkillExpandBlocks` `formatSkillExpandBlock` |
-  | `src/server/agent/Agent/hydrate-messages.ts` | `hydrateSessionMessagesToPi` |
+  | `src/server/agent/Agent/hydrate-messages.ts` | `hydrateSessionMessagesToPi`（含落盘 tool 交换） |
+  | `src/server/agent/Agent/session-tool-persist.ts` | `get_document` / `web_search` / `web_fetch` → jsonl `role:tool`；API 仍只回 user/assistant |
 - **需求**：[`../requirements/user-agent-skills/`](../requirements/user-agent-skills/)（已同意）
 
 ### 搜索

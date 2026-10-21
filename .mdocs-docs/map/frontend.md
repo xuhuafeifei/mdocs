@@ -35,13 +35,15 @@
 
 ### Hooks / 本地存储
 
-- **关键词**：`useAutoSave` `useAutoPublish` `IndexedDB` `draft`
+- **关键词**：`useAutoSave` `useAutoPublish` `IndexedDB` `draft` `scroll` `LRU`
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `src/web/app/hooks/useAutoSave.ts` | 自动保存 |
   | `src/web/app/hooks/useAutoPublish.ts` | 自动发布 |
+  | `src/web/app/hooks/useDocScrollCache.ts` | 文档滚动位置记住/恢复 |
   | `src/web/storage/drafts.ts` | `saveDraft` / `getDraft` / `subscribeDraftPresence`；`contentKind` lexical\|html |
+  | `src/web/storage/docScrollCache.ts` | 进程内 LRU（最多 10 篇），刷新/重启即丢；`DocumentEditor` / `SheetEditor` |
 
 ### 异步卸载保护（可复用）
 
@@ -102,6 +104,12 @@
   | `src/web/app/ai-write/AiWriteMarkdownPane.tsx` | `AiWriteMarkdownPane` |
   | `src/web/app/ai-write/markdown-hunks.ts` | `computeLineHunks` |
 - **需求**：[`../requirements/agent-normal-coding-modes/`](../requirements/agent-normal-coding-modes/)
+
+### Agent 选择卡吸底
+
+- **关键词**：`choice_card` `skill_form_card` `interaction-dock` `等待你选择`
+- **结论**：`status=open` 的选择卡 / Skill 表单提到输入框上方 `.mdocs-agent-interaction-dock`；出卡时 `forceScrollToBottom`；时间线只留「已置顶」提示。超时 120s。
+- **定位**：`src/web/app/AgentChatPanel.tsx` · `collectOpenInteractions` / `forceScrollToBottom`
 
 ### 冲突 Merge（inline）
 

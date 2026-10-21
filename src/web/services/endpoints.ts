@@ -825,6 +825,8 @@ export type AgentStreamEvent =
           title: string;
           url: string;
           snippet: string;
+          summary?: string;
+          content?: string;
           siteName?: string | null;
           siteIcon?: string | null;
           date?: string | null;

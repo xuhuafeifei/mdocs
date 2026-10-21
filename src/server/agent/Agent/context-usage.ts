@@ -71,6 +71,12 @@ export async function getAgentContextUsageForApi(
   const { messages } = await new AgentSessionManager(visitorId).loadLastOpenedMessages();
   let messageTokens = 0;
   for (const m of messages) {
+    if (m.role === "tool") {
+      messageTokens += estimateTokens(m.toolName);
+      messageTokens += estimateTokens(JSON.stringify(m.arguments ?? {}));
+      messageTokens += estimateTokens(m.resultText ?? "");
+      continue;
+    }
     messageTokens += estimateTokens(m.content);
   }
   const used = Math.min(limit, systemTokens + toolTokens + messageTokens);

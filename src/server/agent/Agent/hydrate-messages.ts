@@ -6,7 +6,10 @@
  */
 import { randomUUID } from "node:crypto";
 import type { Model } from "@earendil-works/pi-ai";
-import type { AgentSessionMessage } from "./session-manager.js";
+import type {
+  AgentSessionMessage,
+  AgentSessionToolMessage,
+} from "./session-manager.js";
 import { skillRefsOfMessage } from "./session-manager.js";
 import {
   formatSkillExpandBlock,
@@ -32,8 +35,8 @@ type PiAssistantToolMessage = {
     {
       type: "toolCall";
       id: string;
-      name: typeof LOAD_USER_SKILL_TOOL;
-      arguments: { id: string; name: string };
+      name: string;
+      arguments: Record<string, unknown>;
     },
   ];
   api: Model<any>["api"];
@@ -47,9 +50,9 @@ type PiAssistantToolMessage = {
 type PiToolResultMessage = {
   role: "toolResult";
   toolCallId: string;
-  toolName: typeof LOAD_USER_SKILL_TOOL;
+  toolName: string;
   content: [{ type: "text"; text: string }];
-  isError: false;
+  isError: boolean;
   timestamp: number;
 };
 
@@ -124,6 +127,40 @@ function buildSyntheticSkillPair(
   return [assistant, result];
 }
 
+/** 历史落盘的 tool 交换 → Pi toolCall + toolResult */
+function buildPersistedToolPair(
+  model: Model<any>,
+  row: AgentSessionToolMessage,
+  timestamp: number,
+): [PiAssistantToolMessage, PiToolResultMessage] {
+  const assistant: PiAssistantToolMessage = {
+    role: "assistant",
+    content: [
+      {
+        type: "toolCall",
+        id: row.toolCallId,
+        name: row.toolName,
+        arguments: row.arguments ?? {},
+      },
+    ],
+    api: model.api,
+    provider: model.provider,
+    model: model.id,
+    usage: EMPTY_USAGE,
+    stopReason: "toolUse",
+    timestamp,
+  };
+  const result: PiToolResultMessage = {
+    role: "toolResult",
+    toolCallId: row.toolCallId,
+    toolName: row.toolName,
+    content: [{ type: "text", text: row.resultText || "" }],
+    isError: row.isError === true,
+    timestamp,
+  };
+  return [assistant, result];
+}
+
 /**
  * 仅产出本轮应预置的假 tool 对（不含用户原文）。
  * `alreadyExpanded`：历史 hydrate 已展开过的 id，本轮跳过。
@@ -162,6 +199,11 @@ export function hydrateSessionMessagesToPi(
 
   for (let i = 0; i < history.length; i++) {
     const m = history[i]!;
+    if (m.role === "tool") {
+      const [a, r] = buildPersistedToolPair(model, m, ts);
+      out.push(a, r);
+      continue;
+    }
     if (m.role === "assistant") {
       out.push({
         role: "assistant",

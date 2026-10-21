@@ -17,6 +17,13 @@ import {
   toolCallPreparingDetail,
   writeToolBodyText,
 } from "./tool-call-ui.js";
+import { cancelVisitorChoices } from "./choice-pending.js";
+import { cancelVisitorSkillForms } from "./skill-form-pending.js";
+import {
+  extractToolResultText,
+  normalizeToolArguments,
+  shouldPersistToolResult,
+} from "./session-tool-persist.js";
 
 function webResultsFromToolResult(result: unknown): AgentWebSearchResults | undefined {
   const details = (
@@ -35,10 +42,15 @@ function webResultsFromToolResult(result: unknown): AgentWebSearchResults | unde
       const title = String(r.title ?? "").trim();
       const url = String(r.url ?? "").trim();
       if (!title || !url) return null;
+      const snippet = String(r.snippet ?? "").trim();
+      const summary = String(r.summary ?? "").trim();
+      const content = String(r.content ?? "").trim();
       return {
         title,
         url,
-        snippet: String(r.snippet ?? r.summary ?? "").trim(),
+        snippet: snippet || summary.slice(0, 200),
+        summary: summary || undefined,
+        content: content || undefined,
         siteName: (r.siteName as string | null | undefined) ?? null,
         siteIcon: (r.siteIcon as string | null | undefined) ?? null,
         date: (r.date as string | null | undefined) ?? null,
@@ -47,8 +59,6 @@ function webResultsFromToolResult(result: unknown): AgentWebSearchResults | unde
     .filter((x): x is NonNullable<typeof x> => Boolean(x));
   return { query, items };
 }
-import { cancelVisitorChoices } from "./choice-pending.js";
-import { cancelVisitorSkillForms } from "./skill-form-pending.js";
 
 export type PiRunTrack = {
   emittedError: boolean;
@@ -178,6 +188,8 @@ function bindAgentEvents(opts: {
   } = opts;
   const onToolUi = createToolUiEffectsHandler(onEvent);
   const toolStartDetail = new Map<string, string>();
+  /** toolCallId → 启动参数，落盘 tool 交换时用 */
+  const toolStartArgs = new Map<string, Record<string, unknown>>();
   /** contentIndex → 已推过的 preparing 卡片，避免 toolcall_delta 刷屏 */
   const preparingByIndex = new Map<number, PreparingTrack>();
   let appendedUser = false;
@@ -262,6 +274,12 @@ function bindAgentEvents(opts: {
     if (event.type === "tool_execution_start") {
       const detail = toolCallDetailFromArgs(event.toolName, event.args);
       if (detail) toolStartDetail.set(event.toolCallId, detail);
+      if (shouldPersistToolResult(event.toolName)) {
+        toolStartArgs.set(
+          event.toolCallId,
+          normalizeToolArguments(event.args),
+        );
+      }
       onEvent({
         type: "tool_call",
         toolCallId: event.toolCallId,
@@ -295,6 +313,24 @@ function bindAgentEvents(opts: {
         ...(webResults ? { webResults } : {}),
       });
       onToolUi(event);
+
+      if (shouldPersistToolResult(event.toolName)) {
+        const args =
+          toolStartArgs.get(event.toolCallId) ??
+          normalizeToolArguments(undefined);
+        toolStartArgs.delete(event.toolCallId);
+        try {
+          await sessionManager.appendToolExchange(sessionId, {
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            arguments: args,
+            resultText: extractToolResultText(event.result),
+            isError: event.isError === true,
+          });
+        } catch {
+          /* 落盘失败不影响本轮 SSE */
+        }
+      }
     }
   };
 }

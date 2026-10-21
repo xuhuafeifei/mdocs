@@ -311,6 +311,8 @@ type AssistantBlock =
           title: string;
           url: string;
           snippet: string;
+          summary?: string;
+          content?: string;
           siteName?: string | null;
           siteIcon?: string | null;
           date?: string | null;
@@ -507,12 +509,81 @@ type WebSearchResultItem = {
   title: string;
   url: string;
   snippet: string;
+  summary?: string;
+  content?: string;
   siteName?: string | null;
   siteIcon?: string | null;
   date?: string | null;
 };
 
-/** 网页搜索结果：默认可展开看列表，收起只留摘要行 */
+function WebSearchResultItemRow({ item }: { item: WebSearchResultItem }) {
+  const body = (item.content || item.summary || "").trim();
+  const canExpand = Boolean(body && body !== item.snippet.trim());
+  const meta = [item.siteName, item.date ? item.date.slice(0, 10) : ""]
+    .filter(Boolean)
+    .join(" · ");
+
+  const titleLink = (
+    <a
+      className="mdocs-agent-web-results-title"
+      href={item.url}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {item.siteIcon ? (
+        <img
+          className="mdocs-agent-web-results-icon"
+          src={item.siteIcon}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <span className="mdocs-agent-web-results-icon-fallback" aria-hidden />
+      )}
+      <span>{item.title}</span>
+    </a>
+  );
+
+  if (!canExpand) {
+    return (
+      <li className="mdocs-agent-web-results-item">
+        {titleLink}
+        {meta ? <div className="mdocs-agent-web-results-meta">{meta}</div> : null}
+        {item.snippet ? (
+          <p className="mdocs-agent-web-results-snippet">{item.snippet}</p>
+        ) : null}
+      </li>
+    );
+  }
+
+  return (
+    <li className="mdocs-agent-web-results-item">
+      <details className="mdocs-agent-web-result-item-fold">
+        <summary>
+          <ChevronRight
+            size={14}
+            strokeWidth={1.8}
+            className="mdocs-agent-web-result-item-chevron"
+          />
+          <span className="mdocs-agent-web-result-item-summary">
+            {titleLink}
+            {meta ? <span className="mdocs-agent-web-results-meta inline">{meta}</span> : null}
+            {item.snippet ? (
+              <span className="mdocs-agent-web-results-snippet inline">{item.snippet}</span>
+            ) : null}
+          </span>
+        </summary>
+        <div className="mdocs-agent-web-result-item-body">
+          {body}
+        </div>
+      </details>
+    </li>
+  );
+}
+
+/** 网页搜索结果：外层折叠列表；单条可再展开长摘要/正文 */
 function WebSearchResultsFold({
   query,
   items,
@@ -522,7 +593,7 @@ function WebSearchResultsFold({
 }) {
   const [open, setOpen] = useState(true);
   const q = query.trim();
-  const summary = q
+  const foldLabel = q
     ? `网页结果 · ${items.length} 条 · 「${q.length > 36 ? `${q.slice(0, 36)}…` : q}」`
     : `网页结果 · ${items.length} 条`;
 
@@ -535,7 +606,7 @@ function WebSearchResultsFold({
       }}
     >
       <summary>
-        <span className="mdocs-agent-tool-call-fold-label">{summary}</span>
+        <span className="mdocs-agent-tool-call-fold-label">{foldLabel}</span>
         <ChevronRight
           size={14}
           strokeWidth={1.8}
@@ -545,35 +616,7 @@ function WebSearchResultsFold({
       <div className="mdocs-agent-web-results">
         <ol className="mdocs-agent-web-results-list">
           {items.map((item) => (
-            <li key={item.url} className="mdocs-agent-web-results-item">
-              <a
-                className="mdocs-agent-web-results-title"
-                href={item.url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {item.siteIcon ? (
-                  <img
-                    className="mdocs-agent-web-results-icon"
-                    src={item.siteIcon}
-                    alt=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span className="mdocs-agent-web-results-icon-fallback" aria-hidden />
-                )}
-                <span>{item.title}</span>
-              </a>
-              <div className="mdocs-agent-web-results-meta">
-                {[item.siteName, item.date ? item.date.slice(0, 10) : ""]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </div>
-              {item.snippet ? (
-                <p className="mdocs-agent-web-results-snippet">{item.snippet}</p>
-              ) : null}
-            </li>
+            <WebSearchResultItemRow key={item.url} item={item} />
           ))}
         </ol>
       </div>
@@ -989,6 +1032,34 @@ function hasOpenCountdown(messages: ChatMessage[]): boolean {
   return false;
 }
 
+type OpenInteraction =
+  | {
+      kind: "choice";
+      messageId: string;
+      block: Extract<AssistantBlock, { type: "choice_card" }>;
+    }
+  | {
+      kind: "skill_form";
+      messageId: string;
+      block: SkillFormCardState;
+    };
+
+/** 打开的选择卡 / Skill 表单：提到输入框上方吸底，避免埋进长 thinking */
+function collectOpenInteractions(messages: ChatMessage[]): OpenInteraction[] {
+  const out: OpenInteraction[] = [];
+  for (const m of messages) {
+    if (m.role !== "assistant" || !m.blocks?.length) continue;
+    for (const b of m.blocks) {
+      if (b.type === "choice_card" && b.status === "open") {
+        out.push({ kind: "choice", messageId: m.id, block: b });
+      } else if (b.type === "skill_form_card" && b.status === "open") {
+        out.push({ kind: "skill_form", messageId: m.id, block: b });
+      }
+    }
+  }
+  return out;
+}
+
 export const AgentChatPanel = forwardRef<
   AgentChatPanelHandle,
   {
@@ -1270,6 +1341,71 @@ export const AgentChatPanel = forwardRef<
   function scrollToBottomIfStuck() {
     if (!stickToBottomRef.current) return;
     scrollToBottom();
+  }
+
+  /** 选择卡等需用户操作：无视 stick，强制贴底，避免埋在长思考下面 */
+  function forceScrollToBottom() {
+    stickToBottomRef.current = true;
+    requestAnimationFrame(() => {
+      scrollToBottom();
+      setShowJumpBottom(false);
+    });
+  }
+
+  const openInteractions = useMemo(
+    () => collectOpenInteractions(messages),
+    [messages],
+  );
+
+  function resolveChoiceCard(
+    messageId: string,
+    requestId: string,
+    choice: string,
+    status: "selected" | "cancelled" | "expired" | "failed",
+  ): void {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== messageId || !msg.blocks) return msg;
+        return {
+          ...msg,
+          blocks: msg.blocks.map((b) =>
+            b.type === "choice_card" && b.requestId === requestId
+              ? {
+                  ...b,
+                  status,
+                  selected: status === "selected" ? choice : b.selected,
+                }
+              : b,
+          ),
+        };
+      }),
+    );
+  }
+
+  function resolveSkillFormCard(
+    messageId: string,
+    requestId: string,
+    status: "submitted" | "cancelled" | "expired" | "failed",
+    submittedName?: string,
+  ): void {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== messageId || !msg.blocks) return msg;
+        return {
+          ...msg,
+          blocks: msg.blocks.map((b) =>
+            b.type === "skill_form_card" && b.requestId === requestId
+              ? {
+                  ...b,
+                  status,
+                  submittedName:
+                    status === "submitted" ? submittedName : b.submittedName,
+                }
+              : b,
+          ),
+        };
+      }),
+    );
   }
 
   function onListScroll() {
@@ -1629,7 +1765,7 @@ export const AgentChatPanel = forwardRef<
           return { ...m, blocks };
         }),
       );
-      requestAnimationFrame(() => scrollToBottomIfStuck());
+      forceScrollToBottom();
     } else if (event.type === "choice_expired") {
       setMessages((prev) =>
         prev.map((m) => {
@@ -1668,7 +1804,7 @@ export const AgentChatPanel = forwardRef<
           return { ...m, blocks };
         }),
       );
-      requestAnimationFrame(() => scrollToBottomIfStuck());
+      forceScrollToBottom();
     } else if (event.type === "skill_form_expired") {
       setMessages((prev) =>
         prev.map((m) => {
@@ -2543,61 +2679,49 @@ export const AgentChatPanel = forwardRef<
                                 );
                               }
                               if (block.type === "choice_card") {
+                                // 打开中的卡吸底展示，时间线只留提示，避免长 thinking 把卡顶没
+                                if (block.status === "open") {
+                                  return (
+                                    <div
+                                      key={`${m.id}-ch-${bi}`}
+                                      className="mdocs-agent-panel-block mdocs-agent-choice-docked-hint"
+                                    >
+                                      <p>等待你选择（已置顶到输入框上方）</p>
+                                    </div>
+                                  );
+                                }
                                 return (
                                   <div key={`${m.id}-ch-${bi}`} className="mdocs-agent-panel-block">
                                     <ChoiceCardBlock
                                       block={block}
                                       onResolved={(requestId, choice, status) => {
-                                        setMessages((prev) =>
-                                          prev.map((msg) => {
-                                            if (msg.id !== m.id || !msg.blocks) return msg;
-                                            return {
-                                              ...msg,
-                                              blocks: msg.blocks.map((b) =>
-                                                b.type === "choice_card" &&
-                                                b.requestId === requestId
-                                                  ? {
-                                                      ...b,
-                                                      status,
-                                                      selected:
-                                                        status === "selected" ? choice : b.selected,
-                                                    }
-                                                  : b,
-                                              ),
-                                            };
-                                          }),
-                                        );
+                                        resolveChoiceCard(m.id, requestId, choice, status);
                                       }}
                                     />
                                   </div>
                                 );
                               }
                               if (block.type === "skill_form_card") {
+                                if (block.status === "open") {
+                                  return (
+                                    <div
+                                      key={`${m.id}-sf-${bi}`}
+                                      className="mdocs-agent-panel-block mdocs-agent-choice-docked-hint"
+                                    >
+                                      <p>等待你填写（已置顶到输入框上方）</p>
+                                    </div>
+                                  );
+                                }
                                 return (
                                   <div key={`${m.id}-sf-${bi}`} className="mdocs-agent-panel-block">
                                     <SkillFormCardBlock
                                       block={block}
                                       onResolved={(requestId, status, submittedName) => {
-                                        setMessages((prev) =>
-                                          prev.map((msg) => {
-                                            if (msg.id !== m.id || !msg.blocks) return msg;
-                                            return {
-                                              ...msg,
-                                              blocks: msg.blocks.map((b) =>
-                                                b.type === "skill_form_card" &&
-                                                b.requestId === requestId
-                                                  ? {
-                                                      ...b,
-                                                      status,
-                                                      submittedName:
-                                                        status === "submitted"
-                                                          ? submittedName
-                                                          : b.submittedName,
-                                                    }
-                                                  : b,
-                                              ),
-                                            };
-                                          }),
+                                        resolveSkillFormCard(
+                                          m.id,
+                                          requestId,
+                                          status,
+                                          submittedName,
                                         );
                                       }}
                                     />
@@ -2741,6 +2865,34 @@ export const AgentChatPanel = forwardRef<
               </button>
             ) : null}
           </div>
+          {openInteractions.length > 0 ? (
+            <div className="mdocs-agent-interaction-dock" aria-live="polite">
+              {openInteractions.map((item) =>
+                item.kind === "choice" ? (
+                  <ChoiceCardBlock
+                    key={`dock-ch-${item.block.requestId}`}
+                    block={item.block}
+                    onResolved={(requestId, choice, status) => {
+                      resolveChoiceCard(item.messageId, requestId, choice, status);
+                    }}
+                  />
+                ) : (
+                  <SkillFormCardBlock
+                    key={`dock-sf-${item.block.requestId}`}
+                    block={item.block}
+                    onResolved={(requestId, status, submittedName) => {
+                      resolveSkillFormCard(
+                        item.messageId,
+                        requestId,
+                        status,
+                        submittedName,
+                      );
+                    }}
+                  />
+                ),
+              )}
+            </div>
+          ) : null}
           {streamError ? (
             <p className="mdocs-agent-panel-status-warn">{streamError}</p>
           ) : null}

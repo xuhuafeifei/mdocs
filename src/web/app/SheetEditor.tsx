@@ -82,6 +82,7 @@ import {
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { useDocScrollCache } from "./hooks/useDocScrollCache";
 import "./SheetEditor.css";
 
 interface SheetEditorProps {
@@ -271,9 +272,12 @@ export function SheetEditor(props: SheetEditorProps) {
   const displayNameRef = useRef(displayName);
   const docInfoMenuRef = useRef<HTMLDivElement>(null);
   const readerMoreMenuRef = useRef<HTMLDivElement>(null);
+  const scrollHostRef = useRef<HTMLDivElement | null>(null);
   workbookRef.current = workbook;
   displayNameRef.current = displayName;
   anchorRef.current = anchor;
+
+  useDocScrollCache(documentId, scrollHostRef, true);
 
   useEffect(() => {
     const onUp = () => {
@@ -993,7 +997,7 @@ export function SheetEditor(props: SheetEditorProps) {
         </div>
       </div>
 
-      <div className="mdocs-sheet-scroll">
+      <div className="mdocs-sheet-scroll" ref={scrollHostRef}>
         <table className="mdocs-sheet-table">
           <thead>
             <tr>
