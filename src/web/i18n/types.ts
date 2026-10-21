@@ -381,6 +381,10 @@ export type TranslationKey =
   | "versionHistoryRestoreConfirm"
   | "versionHistoryRestored"
   | "versionHistorySheetHint"
+  | "editorSplitOpenBelow"
+  | "editorSplitClose"
+  | "editorSplitResize"
+  | "editorSplitSameDoc"
   // Document info menu
   | "docInfo"
   | "docInfoCreator"

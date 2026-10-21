@@ -115,6 +115,28 @@
   border-left-color: transparent;
 }
 
+.mdocs-tree-rail-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-bottom: 1px solid var(--mdocs-border);
+  opacity: 1;
+  transition: opacity 0.18s ease;
+}
+
+.mdocs-tree-rail.is-closed .mdocs-tree-rail-header {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mdocs-tree-rail-header .mdocs-sidebar-actions {
+  flex: 1 1 0;
+  min-width: 0;
+  border-bottom: none;
+  padding-right: 4px;
+}
+
 .mdocs-tree-rail-body {
   flex: 1 1 0;
   min-height: 0;
@@ -138,9 +160,9 @@
 }
 
 .mdocs-tree-rail-hide {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+  flex: 0 0 auto;
+  align-self: center;
+  margin-right: 8px;
   z-index: 2;
   width: 28px;
   height: 28px;
@@ -4643,6 +4665,13 @@ button.small {
   flex-direction: column;
 }
 
+.mdocs-context-label {
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  color: var(--mdocs-text-secondary, #6b7280);
+  user-select: none;
+}
+
 .mdocs-context-item {
   text-align: left;
   border: none;
@@ -4708,6 +4737,150 @@ button.small {
   overflow: hidden;
   position: relative;
   background: #ffffff;
+}
+
+/* PC 中间正文上下分屏 */
+.mdocs-main-editor-stack {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mdocs-main-editor-stack.is-split {
+  gap: 0;
+}
+
+.mdocs-editor-split-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.mdocs-main-editor-stack:not(.is-split) .mdocs-editor-split-pane--primary {
+  flex: 1 1 0;
+}
+
+.mdocs-editor-split-pane.is-focused {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mdocs-accent, #2f6fed) 35%, transparent);
+}
+
+.mdocs-editor-split-pane .mdocs-editor-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mdocs-editor-split-pane .mdocs-editor-with-comments {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.mdocs-editor-split-handle {
+  flex: 0 0 6px;
+  cursor: row-resize;
+  background: var(--mdocs-border, #e8e8e8);
+  position: relative;
+  z-index: 2;
+}
+
+.mdocs-editor-split-handle:hover,
+.mdocs-editor-split-handle:active {
+  background: var(--mdocs-accent, #2f6fed);
+}
+
+/* 下栏关闭：仅一条细线，点击关闭分屏；tooltip 向上弹出，避免被正文 overflow 裁切 */
+.mdocs-main-editor-stack.is-split .mdocs-editor-split-pane--secondary {
+  overflow: visible;
+}
+
+.mdocs-main-editor-stack.is-split .mdocs-editor-split-pane--secondary .mdocs-editor-pane {
+  overflow: visible;
+}
+
+.mdocs-main-editor-stack.is-split
+  .mdocs-editor-split-pane--secondary
+  .mdocs-editor-with-comments {
+  overflow: hidden;
+}
+
+.mdocs-editor-split-close-line {
+  flex: 0 0 3px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  background: var(--mdocs-border, #e5e5e5);
+  transition: flex-basis 0.12s ease, background 0.12s ease;
+  z-index: 8;
+}
+
+.mdocs-editor-split-close-line:hover,
+.mdocs-editor-split-close-line:focus-visible {
+  flex: 0 0 5px;
+  background: var(--mdocs-danger, #c0392b);
+  outline: none;
+}
+
+.mdocs-editor-split-close-line.mdocs-tooltip::before,
+.mdocs-editor-split-close-line.mdocs-tooltip::after {
+  white-space: nowrap;
+  z-index: 20;
+}
+
+/*
+ * 分屏：文档顶栏在文档流里收起（始终在 Lobe 工具条之上）。
+ * 仅顶缘热区（~10px）悬停才展开；移入整块正文不触发。
+ */
+.mdocs-editor-header-hotzone {
+  display: none;
+}
+
+.mdocs-main-editor-stack.is-split .mdocs-editor-header-wrap {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mdocs-main-editor-stack.is-split .mdocs-editor-header-hotzone {
+  display: block;
+  flex: 0 0 10px;
+  cursor: default;
+}
+
+.mdocs-main-editor-stack.is-split .mdocs-editor-toolbar {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    max-height 0.18s ease,
+    padding 0.18s ease,
+    opacity 0.15s ease,
+    border-bottom-width 0.15s ease;
+}
+
+/* 悬停热区或已展开的顶栏（含下拉 focus）时展开 */
+.mdocs-main-editor-stack.is-split .mdocs-editor-header-wrap:hover .mdocs-editor-toolbar,
+.mdocs-main-editor-stack.is-split .mdocs-editor-toolbar:focus-within {
+  max-height: 72px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--mdocs-border);
+  opacity: 1;
+  overflow: visible;
+  pointer-events: auto;
 }
 
 .mdocs-empty {

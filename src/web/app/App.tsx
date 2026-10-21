@@ -93,6 +93,15 @@ import { useDocumentVersion } from "./hooks/useDocumentVersion";
 import { aiWriteResultToHtml, htmlToAiWriteSeed } from "./ai-write/htmlAiWrite";
 import { installAssetLinkDownloads } from "./assetLinkDownload";
 import { FILE_TYPE } from "../../shared/file-types";
+import { EditorPaneHost } from "./EditorPaneHost";
+import {
+  loadEditorSplitOpen,
+  loadEditorSplitRatio,
+  loadEditorSplitSecondaryId,
+  saveEditorSplitOpen,
+  saveEditorSplitRatio,
+  saveEditorSplitSecondaryId,
+} from "./editorSplitStorage";
 import mdocsLogo from "../assets/mdocs-logo.svg";
 import deepseekLogoUrl from "../assets/deepseek.svg";
 import "./App.css";
@@ -101,15 +110,6 @@ import "./domain.css";
 import "./comments.css";
 
 /** 重依赖按需加载：首屏只拉壳，编辑器/助手/设置进独立 chunk */
-const DocumentEditor = lazy(() =>
-  import("./DocumentEditor").then((m) => ({ default: m.DocumentEditor })),
-);
-const HtmlEditor = lazy(() =>
-  import("./HtmlEditor").then((m) => ({ default: m.HtmlEditor })),
-);
-const SheetEditor = lazy(() =>
-  import("./SheetEditor").then((m) => ({ default: m.SheetEditor })),
-);
 const SettingsPage = lazy(() =>
   import("./SettingsPage").then((m) => ({ default: m.SettingsPage })),
 );
@@ -201,6 +201,7 @@ export function App() {
 
   useEffect(() => {
     if (!isNarrow) setMobileNavOpen(false);
+    if (isNarrow) clearEditorSplit();
   }, [isNarrow]);
 
   /** 窄屏 push 轨比视口宽：focus 输入会把 shell 横向滚偏，叠 transform 后正文只剩左边一条缝 */
@@ -264,7 +265,7 @@ export function App() {
 
   const [focus, setFocus] = useState<AppFocus>(null);
 
-  // 从焦点派生活动文档 ID（仅 document 焦点时有效）
+  // 从焦点派生活动文档 ID（仅 document 焦点时有效）；分屏时可能是下栏
   const activeDocumentId = focus?.kind === "document" ? focus.documentId : null;
   const [activeDocMeta, setActiveDocMeta] = useState<ActiveDocumentMeta | null>(null);
   const [editorContent, setEditorContent] = useState<{
@@ -274,6 +275,29 @@ export function App() {
   } | null>(null);
   const editorContentRef = useRef(editorContent);
   editorContentRef.current = editorContent;
+
+  /** PC 中间上下分屏（下栏） */
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [splitRatio, setSplitRatio] = useState(() => loadEditorSplitRatio());
+  const [focusedPane, setFocusedPane] = useState<"primary" | "secondary">("primary");
+  const [secondaryMeta, setSecondaryMeta] = useState<ActiveDocumentMeta | null>(null);
+  const [secondaryContent, setSecondaryContent] = useState<{
+    documentId: string;
+    content: string;
+    displayName: string;
+  } | null>(null);
+  const [secondaryRevision, setSecondaryRevision] = useState(0);
+  const [secondaryDraftExists, setSecondaryDraftExists] = useState(false);
+  const splitDragRef = useRef<{ startY: number; startRatio: number } | null>(null);
+  const mainSplitRef = useRef<HTMLDivElement | null>(null);
+  const focusedDocMeta =
+    splitOpen && focusedPane === "secondary" && secondaryMeta
+      ? secondaryMeta
+      : activeDocMeta;
+  const pcSplitActive =
+    !isNarrow &&
+    splitOpen &&
+    Boolean(activeDocMeta && editorContent && secondaryMeta && secondaryContent);
   const [contentRevision, setContentRevision] = useState(0);
   const [editBaseCommitId, setEditBaseCommitId] = useState<string | null>(null);
 
@@ -732,9 +756,20 @@ export function App() {
   /** 版本历史恢复：对齐 head + 正文，清本地草稿。 */
   async function handleVersionRestored(doc: DocumentDetail): Promise<void> {
     await deleteDraft(doc.documentId);
-    if (activeDocMeta?.documentId !== doc.documentId) return;
-    setActiveDocMeta(documentDetailToMeta(doc));
-    loadEditorFromServer(doc);
+    if (activeDocMeta?.documentId === doc.documentId) {
+      setActiveDocMeta(documentDetailToMeta(doc));
+      loadEditorFromServer(doc);
+    }
+    if (secondaryMeta?.documentId === doc.documentId) {
+      setSecondaryMeta(documentDetailToMeta(doc));
+      setSecondaryContent({
+        documentId: doc.documentId,
+        content: doc.content,
+        displayName: doc.displayName,
+      });
+      setSecondaryRevision((r) => r + 1);
+      setSecondaryDraftExists(false);
+    }
   }
 
   function loadEditorFromDraft(docId: string, draft: NonNullable<Awaited<ReturnType<typeof getDraft>>>): void {
@@ -777,6 +812,24 @@ export function App() {
         loadEditorFromServer(doc);
       }
     }
+    if (secondaryMeta?.documentId === docId) {
+      setSecondaryMeta(documentDetailToMeta(doc));
+      setSecondaryDraftExists(false);
+      const serverMatchesPublished =
+        publishedContent !== undefined && doc.content === publishedContent;
+      const prev = secondaryContent;
+      const serverMatchesLoaded = prev?.documentId === docId && prev.content === doc.content;
+      if (!(serverMatchesPublished || serverMatchesLoaded)) {
+        setSecondaryContent({
+          documentId: doc.documentId,
+          content: doc.content,
+          displayName: doc.displayName,
+        });
+        setSecondaryRevision((r) => r + 1);
+      } else if (prev && prev.displayName !== doc.displayName) {
+        setSecondaryContent({ ...prev, displayName: doc.displayName });
+      }
+    }
     return doc;
   }
 
@@ -784,13 +837,31 @@ export function App() {
    * 打开文档：GET 写入 activeDocMeta；正文互斥来自草稿或 GET。
    */
   // ---- 知识图谱 ----
+  function clearEditorSplit(): void {
+    setSplitOpen(false);
+    saveEditorSplitOpen(false);
+    setSecondaryMeta(null);
+    setSecondaryContent(null);
+    setSecondaryDraftExists(false);
+    saveEditorSplitSecondaryId(null);
+    setFocusedPane("primary");
+  }
+
+  function closeSecondaryPane(): void {
+    clearEditorSplit();
+    if (activeDocMeta) {
+      setFocus({ kind: "document", documentId: activeDocMeta.documentId });
+    }
+  }
+
   function openGraph(
     resourceId: string,
     name: string,
     scope: "folder" | "domain" = "folder",
   ): void {
     console.log("[openGraph]", scope, resourceId, name);
-    // 切到图谱焦点：清文档焦点（activeDocMeta 清空，编辑器卸载）
+    // 切到图谱焦点：清文档焦点（activeDocMeta 清空，编辑器卸载）+ 清分屏
+    clearEditorSplit();
     setActiveDocMeta(null);
     setEditorContent(null);
     setFocus({ kind: "graph", scope, resourceId, name });
@@ -814,11 +885,81 @@ export function App() {
     }
   }, [createDropdownOpen]);
 
+  async function loadDocIntoSecondary(docId: string): Promise<void> {
+    try {
+      const draft = await getDraft(docId);
+      const doc = await getDocumentApi(docId);
+      if (doc.domainId !== currentDomainId) {
+        localStorage.setItem("mdocs.currentDomainId", doc.domainId);
+        setCurrentDomainId(doc.domainId);
+        void refreshTree(doc.domainId);
+      }
+      if (doc.headCommitId && draft && !draft.published) {
+        if (draft.publishError === DRAFT_PUBLISH_ERROR.SYNC_HEAD_MISSING) {
+          await clearDraftPublishError(docId);
+        }
+        if (!draft.localBaseCommitId) {
+          await saveDraftRecord({ ...draft, localBaseCommitId: doc.headCommitId });
+        }
+      }
+      setSecondaryMeta(documentDetailToMeta(doc));
+      if (draft && !draft.published) {
+        setSecondaryContent({
+          documentId: docId,
+          content: draft.content,
+          displayName: draft.displayName,
+        });
+        setSecondaryDraftExists(true);
+      } else {
+        setSecondaryContent({
+          documentId: doc.documentId,
+          content: doc.content,
+          displayName: doc.displayName,
+        });
+        setSecondaryDraftExists(false);
+      }
+      setSecondaryRevision((r) => r + 1);
+      setSplitOpen(true);
+      saveEditorSplitOpen(true);
+      saveEditorSplitSecondaryId(docId);
+      setFocusedPane("secondary");
+      setFocus({ kind: "document", documentId: docId });
+      setView("docs");
+      // URL 仍指向上栏文档，避免 /doc/:id effect 把下栏文加载进 primary
+    } catch (err) {
+      setAlertMessage(translateError(t, err));
+    }
+  }
+
+  /** 在下方打开（PC 分屏下栏）；禁止与上栏同 id */
+  async function openDocumentBelow(docId: string): Promise<void> {
+    if (isNarrow) {
+      void openDocument(docId);
+      return;
+    }
+    if (activeDocMeta?.documentId === docId) {
+      setMessage(t("editorSplitSameDoc"));
+      window.setTimeout(() => setMessage(null), 2000);
+      return;
+    }
+    if (secondaryMeta?.documentId === docId && splitOpen) {
+      setFocusedPane("secondary");
+      return;
+    }
+    if (!activeDocMeta) {
+      // 尚无上栏：先当普通打开
+      void openDocument(docId);
+      return;
+    }
+    await loadDocIntoSecondary(docId);
+  }
+
   async function openDocument(docId: string): Promise<void> {
     expectedDocIdRef.current = docId;
     setView("docs");
     // 切到文档焦点：清图谱焦点
     setFocus({ kind: "document", documentId: docId });
+    setFocusedPane("primary");
     try {
       const draft = await getDraft(docId);
       if (expectedDocIdRef.current !== docId) return;
@@ -840,6 +981,15 @@ export function App() {
         if (!draft.localBaseCommitId) {
           await saveDraftRecord({ ...draft, localBaseCommitId: doc.headCommitId });
         }
+      }
+
+      // 禁止与下栏同 id
+      if (splitOpen && secondaryMeta?.documentId === docId) {
+        setSecondaryMeta(null);
+        setSecondaryContent(null);
+        setSplitOpen(false);
+        saveEditorSplitOpen(false);
+        saveEditorSplitSecondaryId(null);
       }
 
       setActiveDocMeta(documentDetailToMeta(doc));
@@ -864,14 +1014,22 @@ export function App() {
     // 只有在应用完全初始化后才处理文档打开
     if (phase !== "ready") return;
     if (documentId) {
-      // URL 中有文档 ID，尝试打开该文档
-      void openDocument(documentId);
+      // URL 中有文档 ID，尝试打开该文档（上栏）
+      void openDocument(documentId).then(() => {
+        if (isNarrow) return;
+        const wantSplit = loadEditorSplitOpen();
+        const secId = loadEditorSplitSecondaryId();
+        if (wantSplit && secId && secId !== documentId) {
+          void loadDocIntoSecondary(secId);
+        }
+      });
     } else {
       // 无文档 ID → 无焦点（欢迎页）
       setFocus(null);
       setActiveDocMeta(null);
       setEditorContent(null);
       setEditBaseCommitId(null);
+      clearEditorSplit();
     }
     // 注意：openDocument 在 effect 内部定义，eslint 会提示缺少依赖
     // 但将 openDocument 加入依赖会导致无限循环，因此忽略该规则
@@ -1150,7 +1308,9 @@ export function App() {
     return getDocumentTaskQueue(documentId).execute(async () => {
       const draftForPublish = await getDraft(documentId);
       const localBaseCommitId =
-        draftForPublish?.localBaseCommitId ?? activeDocMeta?.headCommitId;
+        draftForPublish?.localBaseCommitId ??
+        (activeDocMeta?.documentId === documentId ? activeDocMeta.headCommitId : undefined) ??
+        (secondaryMeta?.documentId === documentId ? secondaryMeta.headCommitId : undefined);
       if (!localBaseCommitId) {
         setAlertMessage(t("syncHeadMissing"));
         throw new Error("missing localBaseCommitId");
@@ -1410,6 +1570,91 @@ export function App() {
     }
   }
 
+  /**
+   * 新建文章 / 新建目录（侧栏与贴左助手时的右侧目录共用）。
+   * `showExtras`：搜索 + 图谱（仅左侧完整侧栏）。
+   */
+  function renderSidebarCreateActions(opts: { showExtras: boolean }) {
+    return (
+      <div className="mdocs-sidebar-actions" ref={createDropdownRef}>
+        <button
+          type="button"
+          className="mdocs-sidebar-create-btn"
+          onClick={() => setCreateDropdownOpen((v) => !v)}
+        >
+          <FileText size={15} strokeWidth={1.75} />
+          {t("newArticle")}
+        </button>
+        {createDropdownOpen ? (
+          <div className="mdocs-create-dropdown">
+            <button
+              type="button"
+              className="mdocs-create-dropdown-item"
+              onClick={() => {
+                setCreateDropdownOpen(false);
+                openNewDocumentModal();
+              }}
+            >
+              <FileText size={14} strokeWidth={1.5} />
+              Markdown
+            </button>
+            <button
+              type="button"
+              className="mdocs-create-dropdown-item"
+              onClick={() => {
+                setCreateDropdownOpen(false);
+                openNewDocumentModal(undefined, "html");
+              }}
+            >
+              <Code size={14} strokeWidth={1.5} />
+              HTML
+            </button>
+            <button
+              type="button"
+              className="mdocs-create-dropdown-item"
+              onClick={() => {
+                setCreateDropdownOpen(false);
+                openNewDocumentModal(undefined, "sheet");
+              }}
+            >
+              <Table size={14} strokeWidth={1.5} />
+              {t("sheetDocument")}
+            </button>
+          </div>
+        ) : null}
+        <button
+          type="button"
+          className="mdocs-sidebar-create-btn"
+          onClick={() => {
+            setCreateDropdownOpen(false);
+            openNewFolderModal();
+          }}
+        >
+          <FolderPlus size={15} strokeWidth={1.75} />
+          {t("newDirectory")}
+        </button>
+        {opts.showExtras ? (
+          <>
+            <span
+              className="mdocs-sidebar-icon mdocs-tooltip"
+              data-tooltip={t("docSearch")}
+              onClick={() => setDocSearchOpen(true)}
+            >
+              <Search size={18} strokeWidth={1.75} />
+            </span>
+            <span
+              className="mdocs-sidebar-icon mdocs-tooltip"
+              data-tooltip="知识图谱"
+              onClick={() => openGraph(currentDomainId, "知识图谱", "domain")}
+            >
+              <Network size={18} strokeWidth={1.75} />
+            </span>
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
   /** 侧栏 / 贴左右侧轨共用的纯文档树（无 chrome）。 */
   function renderSidebarDocumentTree() {
     return (
@@ -1419,9 +1664,13 @@ export function App() {
         graphFocusAnchorId={focus?.kind === "graph" ? focus.resourceId : null}
         selectedParentPath={selectedCreateParentPath}
         revealNodeId={revealFolderId}
-        onOpen={(node) => {
+        onOpen={(node, opts) => {
           setRevealFolderId(null);
           if (isNarrow) setMobileNavOpen(false);
+          if (opts?.openBelow && !isNarrow) {
+            void openDocumentBelow(node.documentId);
+            return;
+          }
           guardNavigate(() => navigate(`/doc/${node.documentId}`));
         }}
         onOpenFolder={(folderPath, descDocumentId) => {
@@ -1438,11 +1687,8 @@ export function App() {
         onContextMenu={setMenu}
         onMoveDocument={handleMoveDocument}
         onDeselect={() => {
-          closeGraph();
-          guardNavigate(() => {
-            setSelectedCreateParentPath("");
-            navigate("/");
-          });
+          // 仅清树「新建目标」选中高亮，不卸载当前正文 / 图谱
+          setSelectedCreateParentPath("");
         }}
         onOpenGraph={(node, parentFolderId) => {
           if (node.type === "folder") {
@@ -1570,9 +1816,9 @@ export function App() {
                   domainId={currentDomainId || null}
                   domains={domains}
                   localizeDomainName={(name) => localizeDomainName(name, lang, t)}
-                  documentId={activeDocMeta?.documentId ?? null}
-                  documentTitle={activeDocMeta?.displayName ?? null}
-                  documentPath={activeDocMeta?.relativePath ?? null}
+                  documentId={focusedDocMeta?.documentId ?? null}
+                  documentTitle={focusedDocMeta?.displayName ?? null}
+                  documentPath={focusedDocMeta?.relativePath ?? null}
                   graphFileId={focus?.kind === "graph" ? `${focus.resourceId}.graph-file` : null}
                   graphLabel={focus?.kind === "graph" ? focus.name : null}
                   onOpenDocument={(docId) => {
@@ -1631,50 +1877,7 @@ export function App() {
               </button>
             </header>
 
-            {/* 新建文档/文件夹图标 */}
-            <div className="mdocs-sidebar-actions" ref={createDropdownRef}>
-              <button
-                type="button"
-                className="mdocs-sidebar-create-btn"
-                onClick={() => setCreateDropdownOpen((v) => !v)}
-              >
-                <FileText size={15} strokeWidth={1.75} />
-                {t("newArticle")}
-              </button>
-              {createDropdownOpen && (
-                <div className="mdocs-create-dropdown">
-                  <button type="button" className="mdocs-create-dropdown-item" onClick={() => { setCreateDropdownOpen(false); openNewDocumentModal(); }}>
-                    <FileText size={14} strokeWidth={1.5} />
-                    Markdown
-                  </button>
-                  <button type="button" className="mdocs-create-dropdown-item" onClick={() => { setCreateDropdownOpen(false); openNewDocumentModal(undefined, "html"); }}>
-                    <Code size={14} strokeWidth={1.5} />
-                    HTML
-                  </button>
-                  <button type="button" className="mdocs-create-dropdown-item" onClick={() => { setCreateDropdownOpen(false); openNewDocumentModal(undefined, "sheet"); }}>
-                    <Table size={14} strokeWidth={1.5} />
-                    {t("sheetDocument")}
-                  </button>
-                </div>
-              )}
-              <button
-                type="button"
-                className="mdocs-sidebar-create-btn"
-                onClick={() => {
-                  setCreateDropdownOpen(false);
-                  openNewFolderModal();
-                }}
-              >
-                <FolderPlus size={15} strokeWidth={1.75} />
-                {t("newDirectory")}
-              </button>
-              <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip={t("docSearch")} onClick={() => setDocSearchOpen(true)}>
-                <Search size={18} strokeWidth={1.75} />
-              </span>
-              <span className="mdocs-sidebar-icon mdocs-tooltip" data-tooltip="知识图谱" onClick={() => openGraph(currentDomainId, "知识图谱", "domain")}>
-                <Network size={18} strokeWidth={1.75} />
-              </span>
-            </div>
+            {renderSidebarCreateActions({ showExtras: true })}
 
             {/* 文档树：递归渲染文件夹和文档 */}
             {renderSidebarDocumentTree()}
@@ -1752,105 +1955,71 @@ export function App() {
                 }}
               />
             ) : activeDocMeta && editorContent && editorContent.documentId === activeDocMeta.documentId ? (
-              activeDocMeta.fileType === "html" || activeDocMeta.fileType === "sheet" ? (
-                <div className="mdocs-editor-with-comments">
-                  <div className="mdocs-editor-container">
-                    <Suspense
-                      fallback={
-                        <div className="muted" style={{ padding: 24 }}>
-                          加载编辑器…
-                        </div>
-                      }
-                    >
-                      {activeDocMeta.fileType === "sheet" ? (
-                        <SheetEditor
-                          key={activeDocMeta.documentId}
-                          meta={activeDocMeta}
-                          initialContent={editorContent.content}
-                          initialDisplayName={editorContent.displayName}
-                          contentRevision={contentRevision}
-                          canEdit={Boolean(visitor && (activeDocMeta.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDocMeta.permission) || activeDocMeta.invitedEdit === true))}
-                          domains={domains}
-                          currentDomainId={currentDomainId}
-                          onDomainChange={(domainId) => {
-                            guardNavigate(() => {
-                              localStorage.setItem("mdocs.currentDomainId", domainId);
-                              setCurrentDomainId(domainId);
-                              setActiveDocMeta(null);
-                              setEditorContent(null);
-                              setSelectedCreateParentPath("");
-                              navigate("/");
-                              void refreshTree(domainId);
-                            });
-                          }}
-                          onDomainsChange={setDomains}
-                          onContentChange={(c) => {
-                            setEditorContent((prev) => (prev ? { ...prev, content: c } : prev));
-                          }}
-                          onDraftExistsChange={setEditorDraftExists}
-                          hasLocalDraft={editorDraftExists}
-                          onPublish={publishDocument}
-                          syncBehind={syncBehind}
-                          onSyncClick={() => void handleSyncClick()}
-                          onDelete={async () => {
-                            requestDeleteDocument(activeDocMeta.documentId, activeDocMeta.relativePath);
-                          }}
-                          canManageInvites={Boolean(visitor && visitor.visitorId === activeDocMeta.ownerVisitorId)}
-                          onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
-                          commentPanelOpen={commentPanelOpen}
-                          commentCount={commentCount}
-                          onShowToast={setMessage}
-                          onVersionRestored={(doc) => void handleVersionRestored(doc)}
-                          readerChrome={isNarrow}
-                          onOpenMobileNav={() => setMobileNavOpen(true)}
-                        />
-                      ) : (
-                        <HtmlEditor
-                          key={activeDocMeta.documentId}
-                          meta={activeDocMeta}
-                          initialContent={editorContent.content}
-                          initialDisplayName={editorContent.displayName}
-                          contentRevision={contentRevision}
-                          canEdit={Boolean(visitor && (activeDocMeta.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDocMeta.permission) || activeDocMeta.invitedEdit === true))}
-                          domains={domains}
-                          currentDomainId={currentDomainId}
-                          onDomainChange={(domainId) => {
-                            guardNavigate(() => {
-                              localStorage.setItem("mdocs.currentDomainId", domainId);
-                              setCurrentDomainId(domainId);
-                              setActiveDocMeta(null);
-                              setEditorContent(null);
-                              setSelectedCreateParentPath("");
-                              navigate("/");
-                              void refreshTree(domainId);
-                            });
-                          }}
-                          onDomainsChange={setDomains}
-                          onContentChange={(c) => {
-                            setEditorContent((prev) => (prev ? { ...prev, content: c } : prev));
-                          }}
-                          onDraftExistsChange={setEditorDraftExists}
-                          hasLocalDraft={editorDraftExists}
-                          onPublish={publishDocument}
-                          syncBehind={syncBehind}
-                          onSyncClick={() => void handleSyncClick()}
-                          canManageInvites={Boolean(visitor && visitor.visitorId === activeDocMeta.ownerVisitorId)}
-                          onDelete={async () => {
-                            requestDeleteDocument(activeDocMeta.documentId, activeDocMeta.relativePath);
-                          }}
-                          onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
-                          commentPanelOpen={commentPanelOpen}
-                          commentCount={commentCount}
-                          onAiWrite={isNarrow ? undefined : () => void openAiWriteForCurrentDoc()}
-                          onShowToast={setMessage}
-                          onVersionRestored={(doc) => void handleVersionRestored(doc)}
-                          readerChrome={isNarrow}
-                          onOpenMobileNav={() => setMobileNavOpen(true)}
-                        />
-                      )}
-                    </Suspense>
-                  </div>
-                  {commentPanelOpen && (
+              <div
+                className={"mdocs-main-editor-stack" + (pcSplitActive ? " is-split" : "")}
+                ref={mainSplitRef}
+                style={
+                  pcSplitActive
+                    ? ({ ["--mdocs-split-ratio" as string]: String(splitRatio) } as CSSProperties)
+                    : undefined
+                }
+              >
+                <div
+                  className={
+                    "mdocs-editor-split-pane mdocs-editor-split-pane--primary" +
+                    (focusedPane === "primary" ? " is-focused" : "")
+                  }
+                  style={pcSplitActive ? { flex: `${splitRatio} 1 0` } : undefined}
+                >
+                  <EditorPaneHost
+                    meta={activeDocMeta}
+                    editorContent={editorContent}
+                    contentRevision={contentRevision}
+                    visitorId={visitor?.visitorId}
+                    domains={domains}
+                    currentDomainId={currentDomainId}
+                    onDomainChange={(domainId) => {
+                      guardNavigate(() => {
+                        localStorage.setItem("mdocs.currentDomainId", domainId);
+                        setCurrentDomainId(domainId);
+                        setActiveDocMeta(null);
+                        setEditorContent(null);
+                        clearEditorSplit();
+                        setSelectedCreateParentPath("");
+                        navigate("/");
+                        void refreshTree(domainId);
+                      });
+                    }}
+                    onDomainsChange={setDomains}
+                    onContentChange={(c) => {
+                      setEditorContent((prev) => (prev ? { ...prev, content: c } : prev));
+                    }}
+                    onDraftExistsChange={setEditorDraftExists}
+                    hasLocalDraft={editorDraftExists}
+                    onPublish={publishDocument}
+                    syncBehind={syncBehind}
+                    onSyncClick={() => void handleSyncClick()}
+                    onConflictModalRequest={() => setConflictModalOpen(true)}
+                    onMergeRequest={() => setMergeViewOpen(true)}
+                    onDeleteDocument={(id, p) => requestDeleteDocument(id, p)}
+                    onDeleteFolder={(id, p) => requestDeleteFolder(id, p)}
+                    saveBeforeNavRef={saveBeforeNavRef}
+                    exportMarkdownRef={exportMarkdownRef}
+                    onShowToast={setMessage}
+                    onShowError={setAlertMessage}
+                    onVersionRestored={(doc) => void handleVersionRestored(doc)}
+                    onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
+                    commentPanelOpen={commentPanelOpen && focusedPane === "primary"}
+                    commentCount={commentCount}
+                    onAiWrite={isNarrow ? undefined : () => void openAiWriteForCurrentDoc()}
+                    readerChrome={isNarrow}
+                    onOpenMobileNav={() => setMobileNavOpen(true)}
+                    onFocusPane={() => {
+                      setFocusedPane("primary");
+                      if (activeDocMeta) setFocus({ kind: "document", documentId: activeDocMeta.documentId });
+                    }}
+                  />
+                  {commentPanelOpen && focusedPane === "primary" ? (
                     <CommentsPanel
                       documentId={activeDocMeta.documentId}
                       visitorId={visitor?.visitorId}
@@ -1858,85 +2027,128 @@ export function App() {
                       documentOwnerId={activeDocMeta.ownerVisitorId}
                       onClose={() => setCommentPanelOpen(false)}
                     />
-                  )}
+                  ) : null}
                 </div>
-              ) : (
-              <div className="mdocs-editor-with-comments">
-                {/* 编辑器区域 */}
-                <div className="mdocs-editor-container">
-                  <Suspense
-                    fallback={
-                      <div className="muted" style={{ padding: 24 }}>
-                        加载编辑器…
-                      </div>
-                    }
-                  >
-                    <DocumentEditor
-                      key={activeDocMeta.documentId}
-                      meta={activeDocMeta}
-                      initialContent={editorContent.content}
-                      initialDisplayName={editorContent.displayName}
-                      contentRevision={contentRevision}
-                      canEdit={Boolean(visitor && (activeDocMeta.ownerVisitorId === visitor.visitorId || isPublicWritePermission(activeDocMeta.permission) || activeDocMeta.invitedEdit === true))}
-                      domains={domains}
-                      currentDomainId={currentDomainId}
-                      onDomainChange={(domainId) => {
-                        guardNavigate(() => {
-                          localStorage.setItem("mdocs.currentDomainId", domainId);
-                          setCurrentDomainId(domainId);
-                          setActiveDocMeta(null);
-                          setEditorContent(null);
-                          setSelectedCreateParentPath("");
-                          navigate("/");
-                          void refreshTree(domainId);
-                        });
+                {pcSplitActive && secondaryMeta && secondaryContent ? (
+                  <>
+                    <div
+                      className="mdocs-editor-split-handle"
+                      role="separator"
+                      aria-orientation="horizontal"
+                      aria-label={t("editorSplitResize")}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        if (!mainSplitRef.current) return;
+                        splitDragRef.current = { startY: e.clientY, startRatio: splitRatio };
+                        let last = splitRatio;
+                        const onMove = (ev: MouseEvent) => {
+                          const drag = splitDragRef.current;
+                          if (!drag || !mainSplitRef.current) return;
+                          const h = mainSplitRef.current.getBoundingClientRect().height;
+                          if (h <= 0) return;
+                          const next = drag.startRatio + (ev.clientY - drag.startY) / h;
+                          last = Math.min(0.75, Math.max(0.25, next));
+                          setSplitRatio(last);
+                        };
+                        const onUp = () => {
+                          splitDragRef.current = null;
+                          window.removeEventListener("mousemove", onMove);
+                          window.removeEventListener("mouseup", onUp);
+                          saveEditorSplitRatio(last);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
                       }}
-                      onDomainsChange={setDomains}
-                      onPublish={publishDocument}
-                      syncBehind={syncBehind}
-                      onSyncClick={() => void handleSyncClick()}
-                      onDraftExistsChange={setEditorDraftExists}
-                      hasLocalDraft={editorDraftExists}
-                      onConflictModalRequest={() => setConflictModalOpen(true)}
-                      onMergeRequest={() => setMergeViewOpen(true)}
-                      canManageInvites={Boolean(visitor && visitor.visitorId === activeDocMeta.ownerVisitorId)}
-                      onDelete={async () => {
-                        if (
-                          activeDocMeta.fileType === "folder_desc" ||
-                          isFolderDescPath(activeDocMeta.relativePath)
-                        ) {
-                          const folderPath = activeDocMeta.relativePath.replace(/\/___desc___\.md$/, "");
-                          requestDeleteFolder(activeDocMeta.documentId, folderPath);
-                        } else {
-                          requestDeleteDocument(activeDocMeta.documentId, activeDocMeta.relativePath);
-                        }
+                      onDoubleClick={() => {
+                        setSplitRatio(0.5);
+                        saveEditorSplitRatio(0.5);
                       }}
-                      saveBeforeNavRef={saveBeforeNavRef}
-                      exportMarkdownRef={exportMarkdownRef}
-                      onShowToast={setMessage}
-                      onShowError={setAlertMessage}
-                      onVersionRestored={(doc) => void handleVersionRestored(doc)}
-                      onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
-                      commentPanelOpen={commentPanelOpen}
-                      commentCount={commentCount}
-                      onAiWrite={isNarrow ? undefined : () => void openAiWriteForCurrentDoc()}
-                      readerChrome={isNarrow}
-                      onOpenMobileNav={() => setMobileNavOpen(true)}
                     />
-                  </Suspense>
-                </div>
-
-                {commentPanelOpen && (
-                  <CommentsPanel
-                    documentId={activeDocMeta.documentId}
-                    visitorId={visitor?.visitorId}
-                    visitorName={visitor?.visitorName}
-                    documentOwnerId={activeDocMeta.ownerVisitorId}
-                    onClose={() => setCommentPanelOpen(false)}
-                  />
-                )}
+                    <div
+                      className={
+                        "mdocs-editor-split-pane mdocs-editor-split-pane--secondary" +
+                        (focusedPane === "secondary" ? " is-focused" : "")
+                      }
+                      style={{ flex: `${1 - splitRatio} 1 0` }}
+                    >
+                      <EditorPaneHost
+                        meta={secondaryMeta}
+                        editorContent={secondaryContent}
+                        contentRevision={secondaryRevision}
+                        visitorId={visitor?.visitorId}
+                        domains={domains}
+                        currentDomainId={currentDomainId}
+                        onDomainChange={(domainId) => {
+                          guardNavigate(() => {
+                            localStorage.setItem("mdocs.currentDomainId", domainId);
+                            setCurrentDomainId(domainId);
+                            setActiveDocMeta(null);
+                            setEditorContent(null);
+                            clearEditorSplit();
+                            setSelectedCreateParentPath("");
+                            navigate("/");
+                            void refreshTree(domainId);
+                          });
+                        }}
+                        onDomainsChange={setDomains}
+                        onContentChange={(c) => {
+                          setSecondaryContent((prev) => (prev ? { ...prev, content: c } : prev));
+                        }}
+                        onDraftExistsChange={setSecondaryDraftExists}
+                        hasLocalDraft={secondaryDraftExists}
+                        onPublish={publishDocument}
+                        syncBehind={false}
+                        onSyncClick={() => undefined}
+                        onDeleteDocument={(id, p) => requestDeleteDocument(id, p)}
+                        onDeleteFolder={(id, p) => requestDeleteFolder(id, p)}
+                        onShowToast={setMessage}
+                        onShowError={setAlertMessage}
+                        onVersionRestored={(doc) => void handleVersionRestored(doc)}
+                        onToggleComments={() => {
+                          setFocusedPane("secondary");
+                          setCommentPanelOpen(!commentPanelOpen);
+                        }}
+                        commentPanelOpen={commentPanelOpen && focusedPane === "secondary"}
+                        commentCount={commentCount}
+                        onAiWrite={
+                          isNarrow
+                            ? undefined
+                            : () => {
+                                setFocusedPane("secondary");
+                                void openAiWriteForDocument({
+                                  documentId: secondaryMeta.documentId,
+                                  displayName: secondaryContent.displayName,
+                                });
+                              }
+                        }
+                        readerChrome={false}
+                        onFocusPane={() => {
+                          setFocusedPane("secondary");
+                          setFocus({ kind: "document", documentId: secondaryMeta.documentId });
+                        }}
+                        splitChrome={
+                          <button
+                            type="button"
+                            className="mdocs-editor-split-close-line mdocs-tooltip"
+                            aria-label={t("editorSplitClose")}
+                            data-tooltip={t("editorSplitClose")}
+                            onClick={closeSecondaryPane}
+                          />
+                        }
+                      />
+                      {commentPanelOpen && focusedPane === "secondary" ? (
+                        <CommentsPanel
+                          documentId={secondaryMeta.documentId}
+                          visitorId={visitor?.visitorId}
+                          visitorName={visitor?.visitorName}
+                          documentOwnerId={secondaryMeta.ownerVisitorId}
+                          onClose={() => setCommentPanelOpen(false)}
+                        />
+                      ) : null}
+                    </div>
+                  </>
+                ) : null}
               </div>
-              )
             ) : (
               <div className="mdocs-welcome">
                 {isNarrow ? (
@@ -2037,7 +2249,7 @@ export function App() {
 
           </main>
 
-          {/* 贴左助手时：右侧挤占式纯目录（可收起，带动画） */}
+          {/* 贴左助手时：右侧挤占式目录（可收起；仅新建文章/目录，无搜索/图谱） */}
           {agentDockLayout ? (
             <aside
               className={
@@ -2046,16 +2258,19 @@ export function App() {
               aria-label="文档目录"
               aria-hidden={!agentTreeRailOpen}
             >
-              <button
-                type="button"
-                className="mdocs-tree-rail-hide"
-                title="隐藏目录"
-                aria-label="隐藏目录"
-                tabIndex={agentTreeRailOpen ? 0 : -1}
-                onClick={() => setAgentTreeRailOpenPersist(false)}
-              >
-                <PanelRightClose size={16} strokeWidth={1.75} aria-hidden />
-              </button>
+              <div className="mdocs-tree-rail-header">
+                {renderSidebarCreateActions({ showExtras: false })}
+                <button
+                  type="button"
+                  className="mdocs-tree-rail-hide"
+                  title="隐藏目录"
+                  aria-label="隐藏目录"
+                  tabIndex={agentTreeRailOpen ? 0 : -1}
+                  onClick={() => setAgentTreeRailOpenPersist(false)}
+                >
+                  <PanelRightClose size={16} strokeWidth={1.75} aria-hidden />
+                </button>
+              </div>
               <div className="mdocs-tree-rail-body">{renderSidebarDocumentTree()}</div>
               <button
                 type="button"
@@ -2078,10 +2293,17 @@ export function App() {
               node={menu.node}
               parentPath={menu.parentPath}
               onClose={() => setMenu(null)}
-              onCreateChild={(parent) => openNewDocumentModal(parent)}
+              onCreateChild={(parent, fileType) => openNewDocumentModal(parent, fileType)}
               onCreateFolder={(parent) => openNewFolderModal(parent)}
               onDeleteDocument={(doc) => requestDeleteDocument(doc.documentId, doc.path)}
               onDeleteFolder={(folder) => requestDeleteFolder(folder.documentId, folder.folderDisplayName || folder.name)}
+              onOpenBelow={
+                isNarrow
+                  ? undefined
+                  : (docId) => {
+                      void openDocumentBelow(docId);
+                    }
+              }
             />
           )}
 
@@ -2460,9 +2682,9 @@ export function App() {
                 domainId={currentDomainId || null}
                 domains={domains}
                 localizeDomainName={(name) => localizeDomainName(name, lang, t)}
-                documentId={activeDocMeta?.documentId ?? null}
-                documentTitle={activeDocMeta?.displayName ?? null}
-                documentPath={activeDocMeta?.relativePath ?? null}
+                documentId={focusedDocMeta?.documentId ?? null}
+                documentTitle={focusedDocMeta?.displayName ?? null}
+                documentPath={focusedDocMeta?.relativePath ?? null}
                 graphFileId={focus?.kind === "graph" ? `${focus.resourceId}.graph-file` : null}
                 graphLabel={focus?.kind === "graph" ? focus.name : null}
                 anchorStyle={

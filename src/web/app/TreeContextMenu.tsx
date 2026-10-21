@@ -1,7 +1,7 @@
 /**
  * 文档树右键上下文菜单
  * 在侧边栏树节点上右键时弹出，支持：
- * 1. 在当前位置新建文档
+ * 1. 在当前位置新建文档（Markdown / HTML / 表格）
  * 2. 在当前位置新建目录
  * 3. 删除文档 / 文件夹
  * 4. 复制 documentId
@@ -13,16 +13,20 @@ import { useI18n } from "../i18n";
 import type { TreeNode } from "../../shared/types/tree";
 import { copyTextToClipboard } from "./copyText";
 
+export type CreateDocFileType = "md" | "html" | "sheet";
+
 export function TreeContextMenu(props: {
   x: number;
   y: number;
   node: TreeNode;
   parentPath: string;
   onClose: () => void;
-  onCreateChild: (parentPath: string) => void;
+  onCreateChild: (parentPath: string, fileType: CreateDocFileType) => void;
   onCreateFolder: (parentPath: string) => void;
   onDeleteDocument: (node: Extract<TreeNode, { type: "document" }>) => void;
   onDeleteFolder: (node: Extract<TreeNode, { type: "folder" }>) => void;
+  /** PC：在中间下栏打开该文档 */
+  onOpenBelow?: (documentId: string) => void;
 }) {
   const { t } = useI18n();
 
@@ -50,6 +54,7 @@ export function TreeContextMenu(props: {
   }, [props.onClose]);
 
   const isFolder = props.node.type === "folder";
+  const parent = isFolder ? props.node.path : props.parentPath;
 
   let folderHuman = "";
   if (props.node.type === "folder") {
@@ -81,34 +86,61 @@ export function TreeContextMenu(props: {
       ? (props.node.descDocumentId || props.node.documentId)
       : props.node.documentId;
 
+  function createDoc(fileType: CreateDocFileType): void {
+    props.onCreateChild(parent, fileType);
+    props.onClose();
+  }
+
   return (
     <div
       ref={ref}
       className="mdocs-context-menu card"
       style={{ left: props.x, top: props.y }}
     >
+      <div className="mdocs-context-label">{createLabel}</div>
       <button
         type="button"
         className="mdocs-context-item"
-        onClick={() => {
-          const parent = isFolder ? props.node.path : props.parentPath;
-          props.onCreateChild(parent);
-          props.onClose();
-        }}
+        onClick={() => createDoc("md")}
       >
-        {createLabel}
+        {t("myDocumentsFileTypeMd")}
+      </button>
+      <button
+        type="button"
+        className="mdocs-context-item"
+        onClick={() => createDoc("html")}
+      >
+        {t("myDocumentsFileTypeHtml")}
+      </button>
+      <button
+        type="button"
+        className="mdocs-context-item"
+        onClick={() => createDoc("sheet")}
+      >
+        {t("myDocumentsFileTypeSheet")}
       </button>
       <button
         type="button"
         className="mdocs-context-item"
         onClick={() => {
-          const parent = isFolder ? props.node.path : props.parentPath;
           props.onCreateFolder(parent);
           props.onClose();
         }}
       >
         {createFolderLabel}
       </button>
+      {props.onOpenBelow && props.node.type === "document" ? (
+        <button
+          type="button"
+          className="mdocs-context-item"
+          onClick={() => {
+            props.onOpenBelow?.(props.node.documentId);
+            props.onClose();
+          }}
+        >
+          {t("editorSplitOpenBelow")}
+        </button>
+      ) : null}
       <div className="mdocs-context-divider" />
       <button
         type="button"

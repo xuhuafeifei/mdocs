@@ -385,6 +385,10 @@ export const zh: Record<TranslationKey, string> = {
   versionHistoryRestoreConfirm: "确认恢复？将覆盖未发布草稿。",
   versionHistoryRestored: "已恢复到所选版本",
   versionHistorySheetHint: "表格版本预览仅显示工作表摘要；恢复后在编辑器中查看完整内容。",
+  editorSplitOpenBelow: "在下方打开",
+  editorSplitClose: "关闭下栏",
+  editorSplitResize: "拖动调整上下分屏比例",
+  editorSplitSameDoc: "同一文档不能上下双开",
   // Document info menu
   docInfo: "文档信息",
   docInfoCreator: "创建者",

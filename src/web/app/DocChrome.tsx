@@ -274,128 +274,55 @@ export function DocChrome(props: DocChromeProps) {
   }
 
   return (
-    <div className={toolbarClass} style={toolbarStyle}>
-      <div className="mdocs-editor-toolbar-leading">
-        <input
-          className="mdocs-editor-title-input"
-          value={props.displayName}
-          onChange={(e) => props.onDisplayNameChange(e.target.value)}
-          onBlur={props.onDisplayNameBlur}
-          placeholder={t("displayNamePlaceholder")}
-          disabled={!props.editing}
-        />
-        <DomainSelect
-          domains={domains}
-          value={props.currentDomainId}
-          onChange={props.onDomainChange}
-          onDomainsChange={props.onDomainsChange}
-          ariaLabel={t("currentDomainAria")}
-          localizeName={(name: string) => localizeDomainName(name, lang, t)}
-        />
-        {showAiWrite ? (
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => props.onAiWrite?.()}
-            style={{
-              padding: "4px 10px",
-              whiteSpace: "nowrap",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <img src={deepseekLogoUrl} alt="" width={16} height={16} style={{ display: "block" }} />
-            帮写
-          </button>
-        ) : null}
-        {props.leadingExtra}
-      </div>
-      <span className="mdocs-editor-toolbar-spacer" aria-hidden />
-      <div className="mdocs-editor-toolbar-trailing">
-        {props.onToggleBookmark ? (
-          <button
-            type="button"
-            className="ghost mdocs-tooltip mdocs-tooltip-bottom"
-            onClick={() => props.onToggleBookmark?.()}
-            disabled={props.bookmarkBusy}
-            data-tooltip={props.isBookmarked ? "取消收藏" : "收藏"}
-            style={{
-              padding: "4px 8px",
-              minWidth: "auto",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 4,
-              opacity: props.bookmarkBusy ? 0.5 : 1,
-            }}
-          >
-            <Star
-              size={18}
-              strokeWidth={1.5}
-              style={{
-                color: props.isBookmarked ? "#faad14" : "var(--mdocs-text-secondary, #6b7280)",
-                fill: props.isBookmarked ? "#faad14" : "none",
-              }}
-            />
-            {props.isBookmarked ? <span>已收藏</span> : null}
-          </button>
-        ) : null}
-        <div className="mdocs-editor-toolbar-actions">
-          {props.onSyncClick ? (
+    <div className="mdocs-editor-header-wrap">
+      {/* 分屏时 CSS 把它当成顶缘热区；非分屏 display:none */}
+      <div className="mdocs-editor-header-hotzone" aria-hidden />
+      <div className={toolbarClass} style={toolbarStyle}>
+        <div className="mdocs-editor-toolbar-leading">
+          <input
+            className="mdocs-editor-title-input"
+            value={props.displayName}
+            onChange={(e) => props.onDisplayNameChange(e.target.value)}
+            onBlur={props.onDisplayNameBlur}
+            placeholder={t("displayNamePlaceholder")}
+            disabled={!props.editing}
+          />
+          <DomainSelect
+            domains={domains}
+            value={props.currentDomainId}
+            onChange={props.onDomainChange}
+            onDomainsChange={props.onDomainsChange}
+            ariaLabel={t("currentDomainAria")}
+            localizeName={(name: string) => localizeDomainName(name, lang, t)}
+          />
+          {showAiWrite ? (
             <button
               type="button"
-              className={
-                "mdocs-sync-btn mdocs-tooltip mdocs-tooltip-bottom" +
-                (props.syncBehind ? " behind" : "")
-              }
-              data-tooltip={props.syncBehind ? t("syncBehindHint") : t("syncPull")}
-              onClick={() => void props.onSyncClick?.()}
-              style={{ display: "flex", alignItems: "center", gap: 4 }}
+              className="secondary"
+              onClick={() => props.onAiWrite?.()}
+              style={{
+                padding: "4px 10px",
+                whiteSpace: "nowrap",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
             >
-              <RefreshCw size={16} strokeWidth={1.5} />
-              <span>{t("syncPull")}</span>
+              <img src={deepseekLogoUrl} alt="" width={16} height={16} style={{ display: "block" }} />
+              帮写
             </button>
           ) : null}
-          {showDocActions ? (
-            <>
-              {saveStatus}
-              {props.onPublish ? (
-                <button
-                  type="button"
-                  className="primary mdocs-tooltip mdocs-tooltip-bottom"
-                  disabled={props.busy}
-                  data-tooltip={publishTooltip}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => props.onPublish?.()}
-                >
-                  {props.busy ? t("publishing") : t("publish")}
-                </button>
-              ) : null}
-              {props.onDelete ? (
-                <button
-                  type="button"
-                  className="danger"
-                  disabled={props.busy}
-                  onClick={() => props.onDelete?.()}
-                >
-                  {t("delete")}
-                </button>
-              ) : null}
-            </>
-          ) : null}
-          {!props.editing && props.canEdit && props.onEnterEdit && !props.actionsAlwaysVisible ? (
-            <button type="button" className="primary" onClick={() => props.onEnterEdit?.()}>
-              {t("edit")}
-            </button>
-          ) : null}
-          {props.trailingExtra}
-          {showComments ? (
+          {props.leadingExtra}
+        </div>
+        <span className="mdocs-editor-toolbar-spacer" aria-hidden />
+        <div className="mdocs-editor-toolbar-trailing">
+          {props.onToggleBookmark ? (
             <button
               type="button"
               className="ghost mdocs-tooltip mdocs-tooltip-bottom"
-              onClick={() => props.onToggleComments?.()}
-              data-tooltip="评论"
+              onClick={() => props.onToggleBookmark?.()}
+              disabled={props.bookmarkBusy}
+              data-tooltip={props.isBookmarked ? "取消收藏" : "收藏"}
               style={{
                 padding: "4px 8px",
                 minWidth: "auto",
@@ -403,51 +330,128 @@ export function DocChrome(props: DocChromeProps) {
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 4,
-                background: props.commentPanelOpen
-                  ? "var(--mdocs-hover-bg, #f0f0f0)"
-                  : undefined,
+                opacity: props.bookmarkBusy ? 0.5 : 1,
               }}
             >
-              <MessageSquare
+              <Star
                 size={18}
                 strokeWidth={1.5}
-                style={{ color: "var(--mdocs-text-secondary, #6b7280)" }}
+                style={{
+                  color: props.isBookmarked ? "#faad14" : "var(--mdocs-text-secondary, #6b7280)",
+                  fill: props.isBookmarked ? "#faad14" : "none",
+                }}
               />
-              {props.commentCount && props.commentCount > 0 ? (
-                <span style={{ fontSize: "0.85rem" }}>{props.commentCount}</span>
-              ) : null}
+              {props.isBookmarked ? <span>已收藏</span> : null}
             </button>
           ) : null}
-          {props.onToggleDocInfo ? (
-            <div
-              ref={props.docInfoMenuRef}
-              className="mdocs-tooltip mdocs-tooltip-bottom"
-              data-tooltip={t("docInfo")}
-              style={{ position: "relative" }}
-            >
+          <div className="mdocs-editor-toolbar-actions">
+            {props.onSyncClick ? (
               <button
                 type="button"
-                className="secondary"
-                onClick={() => props.onToggleDocInfo?.()}
+                className={
+                  "mdocs-sync-btn mdocs-tooltip mdocs-tooltip-bottom" +
+                  (props.syncBehind ? " behind" : "")
+                }
+                data-tooltip={props.syncBehind ? t("syncBehindHint") : t("syncPull")}
+                onClick={() => void props.onSyncClick?.()}
+                style={{ display: "flex", alignItems: "center", gap: 4 }}
+              >
+                <RefreshCw size={16} strokeWidth={1.5} />
+                <span>{t("syncPull")}</span>
+              </button>
+            ) : null}
+            {showDocActions ? (
+              <>
+                {saveStatus}
+                {props.onPublish ? (
+                  <button
+                    type="button"
+                    className="primary mdocs-tooltip mdocs-tooltip-bottom"
+                    disabled={props.busy}
+                    data-tooltip={publishTooltip}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => props.onPublish?.()}
+                  >
+                    {props.busy ? t("publishing") : t("publish")}
+                  </button>
+                ) : null}
+                {props.onDelete ? (
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={props.busy}
+                    onClick={() => props.onDelete?.()}
+                  >
+                    {t("delete")}
+                  </button>
+                ) : null}
+              </>
+            ) : null}
+            {!props.editing && props.canEdit && props.onEnterEdit && !props.actionsAlwaysVisible ? (
+              <button type="button" className="primary" onClick={() => props.onEnterEdit?.()}>
+                {t("edit")}
+              </button>
+            ) : null}
+            {props.trailingExtra}
+            {showComments ? (
+              <button
+                type="button"
+                className="ghost mdocs-tooltip mdocs-tooltip-bottom"
+                onClick={() => props.onToggleComments?.()}
+                data-tooltip="评论"
                 style={{
                   padding: "4px 8px",
                   minWidth: "auto",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  gap: 4,
+                  background: props.commentPanelOpen
+                    ? "var(--mdocs-hover-bg, #f0f0f0)"
+                    : undefined,
                 }}
               >
-                <TextAlignJustify
+                <MessageSquare
                   size={18}
                   strokeWidth={1.5}
                   style={{ color: "var(--mdocs-text-secondary, #6b7280)" }}
                 />
+                {props.commentCount && props.commentCount > 0 ? (
+                  <span style={{ fontSize: "0.85rem" }}>{props.commentCount}</span>
+                ) : null}
               </button>
-              {props.docInfoOpen ? (
-                <div className="mdocs-doc-info-dropdown">{props.docInfoMenu}</div>
-              ) : null}
-            </div>
-          ) : null}
+            ) : null}
+            {props.onToggleDocInfo ? (
+              <div
+                ref={props.docInfoMenuRef}
+                className="mdocs-tooltip mdocs-tooltip-bottom"
+                data-tooltip={t("docInfo")}
+                style={{ position: "relative" }}
+              >
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => props.onToggleDocInfo?.()}
+                  style={{
+                    padding: "4px 8px",
+                    minWidth: "auto",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <TextAlignJustify
+                    size={18}
+                    strokeWidth={1.5}
+                    style={{ color: "var(--mdocs-text-secondary, #6b7280)" }}
+                  />
+                </button>
+                {props.docInfoOpen ? (
+                  <div className="mdocs-doc-info-dropdown">{props.docInfoMenu}</div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

@@ -86,7 +86,10 @@ export function DocumentTree(props: {
   revealNodeId?: string | null;
   /** Folder path used as default parent for "New document" / "New folder" from the sidebar. */
   selectedParentPath: string;
-  onOpen: (node: Extract<TreeNode, { type: "document" }>) => void;
+  onOpen: (
+    node: Extract<TreeNode, { type: "document" }>,
+    opts?: { openBelow?: boolean },
+  ) => void;
   onOpenFolder: (folderPath: string, descDocumentId: string | null | undefined) => void;
   onContextMenu: (payload: TreeContextMenu) => void;
   onDeselect?: () => void;
@@ -269,7 +272,10 @@ type TreeShared = {
   beginDragSession: (documentId: string) => void;
   endDragSession: () => void;
   draggingId: string | null;
-  onOpen: (node: Extract<TreeNode, { type: "document" }>) => void;
+  onOpen: (
+    node: Extract<TreeNode, { type: "document" }>,
+    opts?: { openBelow?: boolean },
+  ) => void;
   onOpenFolder: (folderPath: string, descDocumentId: string | null | undefined) => void;
   onContextMenu: (payload: TreeContextMenu) => void;
   onMoveDocument?: (documentId: string, parentId: string | null) => void | Promise<void>;
@@ -347,7 +353,10 @@ function DocRow(props: {
   beginDragSession: (documentId: string) => void;
   endDragSession: () => void;
   draggingId: string | null;
-  onOpen: (node: Extract<TreeNode, { type: "document" }>) => void;
+  onOpen: (
+    node: Extract<TreeNode, { type: "document" }>,
+    opts?: { openBelow?: boolean },
+  ) => void;
   onContextMenu: (payload: TreeContextMenu) => void;
   onMoveDocument?: (documentId: string, parentId: string | null) => void | Promise<void>;
   onOpenGraph?: (node: TreeNode, parentFolderId?: string) => void;
@@ -414,14 +423,14 @@ function DocRow(props: {
         if (!documentId || documentId === doc.documentId) return;
         void props.onMoveDocument(documentId, parentId);
       }}
-      onClick={() => {
+      onClick={(e) => {
         if (suppressClick) return;
-        props.onOpen(doc);
+        props.onOpen(doc, e.altKey ? { openBelow: true } : undefined);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          props.onOpen(doc);
+          props.onOpen(doc, e.altKey ? { openBelow: true } : undefined);
         }
       }}
       onContextMenu={(e) => {
@@ -518,7 +527,10 @@ function FolderRow(props: {
   beginDragSession: (documentId: string) => void;
   endDragSession: () => void;
   draggingId: string | null;
-  onOpen: (node: Extract<TreeNode, { type: "document" }>) => void;
+  onOpen: (
+    node: Extract<TreeNode, { type: "document" }>,
+    opts?: { openBelow?: boolean },
+  ) => void;
   onOpenFolder: (folderPath: string, descDocumentId: string | null | undefined) => void;
   onContextMenu: (payload: TreeContextMenu) => void;
   onMoveDocument?: (documentId: string, parentId: string | null) => void | Promise<void>;

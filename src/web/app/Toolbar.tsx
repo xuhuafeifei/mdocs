@@ -170,6 +170,8 @@ const Toolbar: FC<ToolbarProps> = ({
   const items = useMemo(
     () =>
       [
+        // 大纲开关放最前；面板默认隐藏，由 OutlineProvider defaultVisible 控制
+        ...(outlineToggle && outlineAction ? [outlineAction, { type: "divider" as const }] : []),
         {
           disabled: !editorState.canUndo,
           icon: Undo2Icon,
@@ -303,8 +305,6 @@ const Toolbar: FC<ToolbarProps> = ({
             }, ".pdf,.zip,.txt,.md,.csv,.html,.htm,audio/*,*/*");
           },
         },
-        // 大纲切换按钮（可选）
-        ...(outlineToggle && outlineAction ? [{ type: "divider" as const }, outlineAction] : []),
       ].filter(Boolean) as ChatInputActionsProps["items"],
     [editor, editorState, outlineAction, outlineToggle],
   );

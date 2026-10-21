@@ -1203,7 +1203,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           }}
         />
       ) : null}
-      <OutlineProvider>
+      <OutlineProvider defaultVisible={false}>
         <Block flex={1} style={{ minHeight: 0 }}>
           <div
             style={{

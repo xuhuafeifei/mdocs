@@ -389,6 +389,10 @@ export const en: Record<TranslationKey, string> = {
   versionHistoryRestoreConfirm: "Confirm restore? Unsaved drafts will be overwritten.",
   versionHistoryRestored: "Restored to selected version",
   versionHistorySheetHint: "Sheet preview shows a summary only; restore to view full content in the editor.",
+  editorSplitOpenBelow: "Open below",
+  editorSplitClose: "Close lower pane",
+  editorSplitResize: "Drag to resize split",
+  editorSplitSameDoc: "Cannot open the same document in both panes",
   // Document info menu
   docInfo: "Document info",
   docInfoCreator: "Creator",

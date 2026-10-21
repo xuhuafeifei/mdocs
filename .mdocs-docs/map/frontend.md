@@ -2,6 +2,13 @@
 
 人读长文：[`../archive/frontend-structure.md`](../archive/frontend-structure.md)
 
+### 中间上下分屏（PC）
+
+- **关键词**：`editor split` `上下分屏` `openBelow` `Alt+click`
+- **结论**：仅 PC；上/下均可编；类型可混；同 id 禁止双开；URL 跟上栏。
+- **定位**：`EditorPaneHost.tsx` · `editorSplitStorage.ts` · `App.tsx`（`openDocumentBelow`）
+- **需求**：[`../requirements/editor-vertical-split/`](../requirements/editor-vertical-split/)
+
 ### App shell / 路由
 
 - **关键词**：`App` `DocumentTree` `开始写作` `工作空间` `react-router` `mdocs-shell` `mdocs-sidebar-list` `DocSearchOverlay` `⌘K`
