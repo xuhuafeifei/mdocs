@@ -197,23 +197,105 @@ export function chmodPackageBins(pkgRoot: string): void {
   }
 }
 
-/** 只补差量依赖：不删 node_modules；新依赖（如 node-llama-cpp）必须装上 */
-function installDepsPreferOffline(pkgRoot: string, registry: string): void {
-  log("安装/同步依赖（保留已有 node_modules）…");
-  // 不用 --prefer-offline：新增原生依赖未进本地缓存时会漏装，语义索引会报 Cannot find package
-  const r = npm(
+function npmInstallProd(pkgRoot: string, registry: string): {
+  status: number;
+  stdout: string;
+  stderr: string;
+} {
+  return npm(
     [
       "install",
       "--omit=dev",
       "--no-audit",
       "--no-fund",
       "--legacy-peer-deps",
+      "--prefer-online",
       `--registry=${registry}`,
+      "--fetch-retries=5",
+      "--fetch-timeout=300000",
     ],
     pkgRoot,
   );
+}
+
+/**
+ * 别名包 `@lobehub/editor → npm:@fgbg/lobe-editor@…` 在残留 node_modules /
+ * 陈旧 packument 下，npm arborist 会抛 `reading 'matches'` 或 ETARGET。
+ * 用空 cache 单独 pack 目标版本，再落到 node_modules/@lobehub/editor。
+ */
+function forceInstallAliasedLobeEditor(pkgRoot: string, registry: string): void {
+  const pkg = readPackageJson(pkgRoot) as PackageJson & {
+    dependencies?: Record<string, string>;
+  };
+  const want = pkg.dependencies?.["@lobehub/editor"];
+  if (!want) return;
+  const m = /^npm:(@[^@]+@.+)$/.exec(want.trim());
+  const realSpec = m?.[1] ?? want.trim();
+  log(`强制安装别名编辑器 ${realSpec} → node_modules/@lobehub/editor …`);
+
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), "mdocs-lobe-"));
+  try {
+    const tgz = withFreshNpmCache((cacheDir) => {
+      const r = npm(
+        [
+          "pack",
+          realSpec,
+          `--registry=${registry}`,
+          `--pack-destination=${work}`,
+          `--cache=${cacheDir}`,
+          "--prefer-online",
+          "--fetch-retries=5",
+          "--fetch-timeout=300000",
+        ],
+        work,
+      );
+      if (r.status !== 0) {
+        fail(`npm pack ${realSpec} 失败：${r.stderr || r.stdout}`);
+      }
+      const lines = r.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+      const tgzName = lines[lines.length - 1];
+      if (!tgzName?.endsWith(".tgz")) fail(`npm pack 未产出 tgz：${r.stdout}`);
+      return path.isAbsolute(tgzName) ? tgzName : path.join(work, tgzName);
+    });
+    const extractDir = path.join(work, "extract");
+    fs.mkdirSync(extractDir);
+    const tar = spawnSync("tar", ["-xzf", tgz, "-C", extractDir], { encoding: "utf8" });
+    if (tar.status !== 0) fail(`解压 lobe-editor 失败：${tar.stderr || tar.stdout}`);
+    const inner = path.join(extractDir, "package");
+    if (!fs.existsSync(inner)) fail("lobe-editor tgz 内无 package/");
+    const dest = path.join(pkgRoot, "node_modules", "@lobehub", "editor");
+    fs.rmSync(dest, { recursive: true, force: true });
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.cpSync(inner, dest, { recursive: true });
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
+}
+
+/**
+ * 只补差量依赖：不删 node_modules；新依赖（如 node-llama-cpp）必须装上。
+ * 必须复用 ~/.npm（尤其 `_prebuilds`）；空 cache 会导致 native 包重下预编译超时，
+ * 再回落 node-gyp 在 2G 内存机上 OOM。
+ */
+function installDepsPreferOffline(pkgRoot: string, registry: string): void {
+  log("安装/同步依赖（保留已有 node_modules）…");
+  // 不用 --prefer-offline：新增原生依赖未进本地缓存时会漏装，语义索引会报 Cannot find package
+  let r = npmInstallProd(pkgRoot, registry);
   if (r.status !== 0) {
-    fail(`npm install 失败：${r.stderr || r.stdout}`);
+    const msg = r.stderr || r.stdout || "";
+    if (/reading 'matches'|ETARGET|No matching version/i.test(msg)) {
+      log("npm install 异常（别名包/缓存），改走强制 pack 编辑器后重试…");
+      for (const rel of ["node_modules/@lobehub/editor", "node_modules/@fgbg/lobe-editor"]) {
+        fs.rmSync(path.join(pkgRoot, rel), { recursive: true, force: true });
+      }
+      forceInstallAliasedLobeEditor(pkgRoot, registry);
+      r = npmInstallProd(pkgRoot, registry);
+      if (r.status !== 0) {
+        fail(`npm install 失败：${r.stderr || r.stdout || msg}`);
+      }
+    } else {
+      fail(`npm install 失败：${msg}`);
+    }
   }
   if (r.stdout) log(r.stdout);
   ensureListedDependency(pkgRoot, "node-llama-cpp", registry);
@@ -287,7 +369,10 @@ function ensureListedDependency(
       "--no-audit",
       "--no-fund",
       "--legacy-peer-deps",
+      "--prefer-online",
       `--registry=${registry}`,
+      "--fetch-retries=5",
+      "--fetch-timeout=300000",
     ],
     pkgRoot,
   );

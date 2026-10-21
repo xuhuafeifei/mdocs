@@ -36,6 +36,7 @@ vi.mock("../storage/file-store.js", () => ({
   writeCommitBlob: () => ({ blobRef: "ab/mock", bytes: 0 }),
   deleteDocumentFile: () => {},
   renameDocumentFile: () => {},
+  renameDocumentFileIfPresent: () => {},
   sha256: () => "mock-hash",
 }));
 
@@ -479,6 +480,36 @@ describe("moveDocument", () => {
     });
     expect(again.parentId).toBe(folderId);
     expect(again.relativePath).toBe("keep/c.md");
+  });
+
+  it("moves folder subtree: dir has no disk ext, children paths rewrite", () => {
+    const destId = createFolderInDb("public-domain", "dest");
+    const srcId = createFolderInDb("public-domain", "src-pack");
+    const nestedId = createFolderInDb("public-domain", "nested", srcId);
+    const leaf = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "leaf.md",
+      content: "{}",
+      domainId: "public-domain",
+      parentId: nestedId,
+    });
+    expect(leaf.relativePath).toBe("src-pack/nested/leaf.md");
+
+    const moved = moveDocument({
+      actorVisitorId: OWNER,
+      documentId: srcId,
+      parentId: destId,
+    });
+    expect(moved.parentId).toBe(destId);
+    expect(moved.relativePath).toBe("dest/src-pack");
+
+    const folderRow = findDocumentById(testDbRef.db!, srcId);
+    const nestedRow = findDocumentById(testDbRef.db!, nestedId);
+    const leafRow = findDocumentById(testDbRef.db!, leaf.documentId);
+    expect(folderRow?.parent_id).toBe(destId);
+    expect(folderRow?.relative_path).toBe("dest/src-pack");
+    expect(nestedRow?.relative_path).toBe("dest/src-pack/nested");
+    expect(leafRow?.relative_path).toBe("dest/src-pack/nested/leaf.md");
   });
 });
 

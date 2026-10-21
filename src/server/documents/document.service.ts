@@ -1316,8 +1316,11 @@ function moveFolder(params: {
   }
 
   const now = new Date().toISOString();
+  // dir 无盘上独立文件；resolveDocAbsolutePath 还要求 .md/.html/… 后缀，
+  // 对无后缀的目录 path 会抛「must end with .md…」。只搬真实文件。
   const diskOps = plans
     .filter((p) => p.row.relative_path !== p.newPath)
+    .filter((p) => p.row.file_type !== FILE_TYPE.FOLDER)
     .sort((a, b) => b.row.relative_path.length - a.row.relative_path.length);
 
   const doneDisk: Array<{ from: string; to: string }> = [];
