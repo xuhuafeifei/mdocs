@@ -60,6 +60,29 @@
   transition: width 0.2s ease-out;
 }
 
+/* PC 智能助手贴左：替换文档树，右缘可拖宽 */
+.mdocs-agent-dock {
+  --mdocs-agent-dock-width: 360px;
+  background: #fff;
+  border-right: 1px solid var(--mdocs-border);
+  display: flex;
+  flex-direction: column;
+  width: var(--mdocs-agent-dock-width);
+  flex: 0 0 var(--mdocs-agent-dock-width);
+  height: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+  overflow: hidden;
+  position: relative;
+}
+
+.mdocs-agent-dock .mdocs-agent-panel--embedded {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
 .mdocs-sidebar-collapsed {
   width: 64px;
   flex-basis: 64px;

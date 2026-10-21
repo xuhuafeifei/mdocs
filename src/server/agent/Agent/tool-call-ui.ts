@@ -15,6 +15,8 @@ const TOOL_LABELS: Record<string, string> = {
   move_document: "移动文档",
   rename_document: "重命名文档",
   overwrite_document: "覆写文档",
+  append_document: "追加文档正文",
+  replace_document_markdown: "替换文档片段",
   get_working_document: "读取帮写工作稿",
   set_markdown_document: "写入帮写正文",
   get_now: "获取当前时间",
@@ -42,6 +44,8 @@ const TOOL_LABELS: Record<string, string> = {
 /** 会写入实质内容、卡片里要给可滚动预览的工具 */
 const WRITE_TOOLS = new Set([
   "overwrite_document",
+  "append_document",
+  "replace_document_markdown",
   "set_markdown_document",
   "sheet_overwrite",
   "sheet_set_cells",
@@ -171,6 +175,14 @@ export function writeToolBodyText(toolName: string, source: unknown): string {
   if (toolName === "overwrite_document") {
     return String(a.content ?? a.markdown ?? "");
   }
+  if (toolName === "append_document") {
+    return String(a.content ?? "");
+  }
+  if (toolName === "replace_document_markdown") {
+    const find = String(a.find ?? "");
+    const replace = String(a.replace ?? "");
+    return `find:\n${find}\n\nreplace:\n${replace}`;
+  }
   if (toolName === "sheet_overwrite") {
     const cols = Array.isArray(a.columns)
       ? a.columns.map((c) => String(c ?? ""))
@@ -209,7 +221,10 @@ export function toolCallPreparingDetail(
     const meta = hint ? `正在写入 · ${hint}` : "正在写入…";
     // 帮写/覆写正文：全文增量生长；表格等仍用尾巴闪过
     const mode =
-      toolName === "set_markdown_document" || toolName === "overwrite_document"
+      toolName === "set_markdown_document" ||
+      toolName === "overwrite_document" ||
+      toolName === "append_document" ||
+      toolName === "replace_document_markdown"
         ? "grow"
         : "tail";
     return formatWriteToolDetail(meta, body, mode);

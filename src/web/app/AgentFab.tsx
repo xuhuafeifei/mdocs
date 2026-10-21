@@ -42,6 +42,61 @@ export function saveAgentPanelWidth(width: number): void {
     // 隐私模式或配额满时忽略，本次会话仍用内存宽度
   }
 }
+
+/** PC 贴左栏：独立于浮窗宽度 */
+export const AGENT_DOCK_WIDTH_DEFAULT = 360;
+export const AGENT_DOCK_WIDTH_MIN = 280;
+export const AGENT_DOCK_WIDTH_MAX = 560;
+const AGENT_DOCK_WIDTH_KEY = "mdocs.agentDockWidth";
+const AGENT_DOCKED_KEY = "mdocs.agentDocked";
+
+export function clampAgentDockWidth(width: number): number {
+  const viewportCap =
+    typeof window === "undefined"
+      ? AGENT_DOCK_WIDTH_MAX
+      : Math.max(
+          AGENT_DOCK_WIDTH_MIN,
+          Math.min(AGENT_DOCK_WIDTH_MAX, Math.floor(window.innerWidth * 0.45)),
+        );
+  if (!Number.isFinite(width)) {
+    return Math.min(AGENT_DOCK_WIDTH_DEFAULT, viewportCap);
+  }
+  return Math.min(viewportCap, Math.max(AGENT_DOCK_WIDTH_MIN, Math.round(width)));
+}
+
+export function loadAgentDockWidth(): number {
+  try {
+    const raw = localStorage.getItem(AGENT_DOCK_WIDTH_KEY);
+    if (!raw) return clampAgentDockWidth(AGENT_DOCK_WIDTH_DEFAULT);
+    return clampAgentDockWidth(Number(raw));
+  } catch {
+    return clampAgentDockWidth(AGENT_DOCK_WIDTH_DEFAULT);
+  }
+}
+
+export function saveAgentDockWidth(width: number): void {
+  try {
+    localStorage.setItem(AGENT_DOCK_WIDTH_KEY, String(clampAgentDockWidth(width)));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadAgentDocked(): boolean {
+  try {
+    return localStorage.getItem(AGENT_DOCKED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function saveAgentDocked(docked: boolean): void {
+  try {
+    localStorage.setItem(AGENT_DOCKED_KEY, docked ? "true" : "false");
+  } catch {
+    /* ignore */
+  }
+}
 /** 超过该像素位移才算拖动（否则松开视为点击开关面板） */
 const CLICK_SLOP = 3;
 

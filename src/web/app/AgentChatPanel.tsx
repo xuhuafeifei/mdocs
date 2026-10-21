@@ -1,4 +1,4 @@
-import { ArrowDown, Check, ChevronDown, ChevronRight, Copy, History, Link2, Maximize2, Minimize2, Network, Pencil, Pin, Plus, X } from "lucide-react";
+import { ArrowDown, Check, ChevronDown, ChevronRight, Copy, History, Link2, Maximize2, Minimize2, Network, PanelLeft, PanelLeftClose, Pencil, Pin, Plus, X } from "lucide-react";
 import {
   forwardRef,
   memo,
@@ -18,6 +18,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import deepseekLogoUrl from "../assets/deepseek.svg";
 import {
+  clampAgentDockWidth,
   clampAgentPanelWidth,
   loadAgentPanelWidth,
   saveAgentPanelWidth,
@@ -1096,8 +1097,15 @@ export const AgentChatPanel = forwardRef<
       documentId: string;
       displayName: string;
     }) => void | Promise<void>;
-    /** 嵌在帮写左栏：去掉浮层定位和关闭 */
+    /** 嵌在帮写左栏或 PC 贴左列：去掉浮层定位 */
     embedded?: boolean;
+    /** PC 贴左（embedded 于主壳左列）；与帮写 embedded 区分 */
+    docked?: boolean;
+    /** PC：浮窗 ↔ 贴左 */
+    onToggleDock?: () => void;
+    /** 贴左栏当前宽度（px） */
+    dockWidth?: number;
+    onDockWidthChange?: (width: number) => void;
     mode?: "normal" | "coding";
     workingMarkdown?: string;
     baseMarkdown?: string;
@@ -1126,6 +1134,10 @@ export const AgentChatPanel = forwardRef<
     onDocumentOverwritten,
     onOpenCoding,
     embedded = false,
+    docked = false,
+    onToggleDock,
+    dockWidth,
+    onDockWidthChange,
     mode = "normal",
     workingMarkdown,
     baseMarkdown,
@@ -1135,6 +1147,8 @@ export const AgentChatPanel = forwardRef<
   } = props;
   const sessionMode = mode === "coding" ? "coding" : "normal";
   const coding = sessionMode === "coding";
+  const showClose = !embedded || docked;
+  const showDockToggle = Boolean(onToggleDock) && !coding;
   const userInitial = (visitorName?.trim().charAt(0) || "我").toUpperCase();
   const [historyOpen, setHistoryOpen] = useState(false);
   /** 历史列表：当前工作空间 / 全部 */
@@ -1267,6 +1281,14 @@ export const AgentChatPanel = forwardRef<
     function onMove(e: PointerEvent) {
       const drag = resizeDragRef.current;
       if (!drag) return;
+      // 贴左：只拖右缘，宽度交给父组件
+      if (docked && onDockWidthChange) {
+        if (drag.edge !== "right") return;
+        onDockWidthChange(
+          clampAgentDockWidth(drag.startW + (e.clientX - drag.startX)),
+        );
+        return;
+      }
       const dx = e.clientX - drag.startX;
       let nextW = drag.edge === "right" ? drag.startW + dx : drag.startW - dx;
       nextW = clampAgentPanelWidth(nextW);
@@ -1292,7 +1314,7 @@ export const AgentChatPanel = forwardRef<
       resizeDragRef.current = null;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
-      saveAgentPanelWidth(panelWidthRef.current);
+      if (!docked) saveAgentPanelWidth(panelWidthRef.current);
     }
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -1302,17 +1324,19 @@ export const AgentChatPanel = forwardRef<
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
-  }, []);
+  }, [docked, onDockWidthChange]);
 
   function onResizePointerDown(edge: "left" | "right", e: ReactPointerEvent<HTMLDivElement>) {
-    if (embedded || fullscreen) return;
+    if (fullscreen) return;
+    if (embedded && !docked) return;
+    if (docked && edge !== "right") return;
     e.preventDefault();
     const rect = panelRef.current?.getBoundingClientRect();
     if (!rect) return;
     resizeDragRef.current = {
       edge,
       startX: e.clientX,
-      startW: rect.width,
+      startW: docked && dockWidth != null ? dockWidth : rect.width,
       startLeft: rect.left,
     };
     document.body.style.cursor = "col-resize";
@@ -2318,7 +2342,18 @@ export const AgentChatPanel = forwardRef<
             }
       }
     >
-      {embedded || fullscreen ? null : (
+      {fullscreen || (embedded && !docked) ? null : docked ? (
+        <div
+          className="mdocs-agent-panel-resize mdocs-agent-panel-resize-right"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整贴左栏宽度"
+          aria-valuenow={dockWidth ?? 360}
+          aria-valuemin={280}
+          aria-valuemax={560}
+          onPointerDown={(e) => onResizePointerDown("right", e)}
+        />
+      ) : (
         <>
           <div
             className="mdocs-agent-panel-resize mdocs-agent-panel-resize-left"
@@ -2367,7 +2402,22 @@ export const AgentChatPanel = forwardRef<
           >
             <History size={16} strokeWidth={1.8} />
           </button>
-          {embedded || !onToggleFullscreen ? null : (
+          {showDockToggle ? (
+            <button
+              type="button"
+              className={"mdocs-agent-panel-icon-btn" + (docked ? " active" : "")}
+              title={docked ? "浮窗（恢复目录）" : "贴左（替换目录）"}
+              aria-label={docked ? "浮窗（恢复目录）" : "贴左（替换目录）"}
+              onClick={onToggleDock}
+            >
+              {docked ? (
+                <PanelLeftClose size={16} strokeWidth={1.8} />
+              ) : (
+                <PanelLeft size={16} strokeWidth={1.8} />
+              )}
+            </button>
+          ) : null}
+          {onToggleFullscreen && !docked && !embedded ? (
             <button
               type="button"
               className="mdocs-agent-panel-icon-btn"
@@ -2381,8 +2431,8 @@ export const AgentChatPanel = forwardRef<
                 <Maximize2 size={16} strokeWidth={1.8} />
               )}
             </button>
-          )}
-          {embedded ? null : (
+          ) : null}
+          {showClose ? (
             <button
               type="button"
               className="mdocs-agent-panel-icon-btn"
@@ -2392,7 +2442,7 @@ export const AgentChatPanel = forwardRef<
             >
               <X size={16} strokeWidth={1.8} />
             </button>
-          )}
+          ) : null}
         </div>
       </header>
 

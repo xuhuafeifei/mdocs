@@ -110,6 +110,6 @@ describe("overwrite_document tool", () => {
         contentFormat: "markdown",
         version: { localBaseCommitId: created.headCommitId },
       }),
-    ).toThrow(/html 文档不支持 contentFormat=markdown/);
+    ).toThrow(/不支持 contentFormat=markdown/);
   });
 });

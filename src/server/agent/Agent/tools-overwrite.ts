@@ -10,6 +10,7 @@ import {
 import { asToolResult, type ToolDeps } from "./tool-deps.js";
 import { FILE_TYPE } from "../../../shared/file-types.js";
 import { canOverwrite, getPolicy } from "../../../shared/file-type-policy.js";
+import { documentChangedNotice } from "./session-tool-persist.js";
 
 const OVERWRITE_OPTION = "直接覆写";
 const OPEN_CODING_OPTION = "打开帮写审阅";
@@ -55,6 +56,11 @@ function doOverwrite(params: {
     overwritten: true,
     localBaseCommitId: params.localBaseCommitId,
     fileType: params.fileType,
+    notice: documentChangedNotice({
+      documentId: updated.documentId,
+      headCommitId: updated.headCommitId ?? null,
+      displayName: updated.displayName,
+    }),
   });
 }
 

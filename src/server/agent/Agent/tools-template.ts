@@ -30,6 +30,7 @@ import {
 } from "./tools-documents.js";
 import { askUserChoiceTool } from "./tools-choice.js";
 import { overwriteDocumentTool } from "./tools-overwrite.js";
+import { documentEditTools } from "./tools-document-edit.js";
 import { sheetTools } from "./tools-sheet.js";
 import {
   getWorkingDocumentTool,
@@ -86,7 +87,7 @@ export function choiceTools(deps: ToolDeps): AgentTool[] {
 }
 
 export function overwriteTools(deps: ToolDeps): AgentTool[] {
-  return [overwriteDocumentTool(deps)];
+  return [overwriteDocumentTool(deps), ...documentEditTools(deps)];
 }
 
 export function codingWriteTools(deps: ToolDeps): AgentTool[] {

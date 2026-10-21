@@ -23,6 +23,8 @@ import {
   extractToolResultText,
   normalizeToolArguments,
   shouldPersistToolResult,
+  slimPersistArguments,
+  slimPersistResultText,
 } from "./session-tool-persist.js";
 
 function webResultsFromToolResult(result: unknown): AgentWebSearchResults | undefined {
@@ -323,8 +325,10 @@ function bindAgentEvents(opts: {
           await sessionManager.appendToolExchange(sessionId, {
             toolCallId: event.toolCallId,
             toolName: event.toolName,
-            arguments: args,
-            resultText: extractToolResultText(event.result),
+            arguments: slimPersistArguments(event.toolName, args),
+            resultText: event.isError
+              ? extractToolResultText(event.result)
+              : slimPersistResultText(event.toolName, event.result),
             isError: event.isError === true,
           });
         } catch {

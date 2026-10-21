@@ -51,7 +51,15 @@ import { DocumentTree, type TreeContextMenu as TreeContextMenuPayload } from "./
 import { GraphPage } from "./GraphPage";
 import { TreeContextMenu } from "./TreeContextMenu";
 import { DomainSelect } from "./DomainSelect";
-import { AgentFab, agentPanelAnchorStyle, useAgentFabPosition } from "./AgentFab";
+import {
+  AgentFab,
+  agentPanelAnchorStyle,
+  loadAgentDocked,
+  loadAgentDockWidth,
+  saveAgentDocked,
+  saveAgentDockWidth,
+  useAgentFabPosition,
+} from "./AgentFab";
 import { MessageDialog } from "./MessageDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DocSearchOverlay } from "./DocSearchOverlay";
@@ -368,11 +376,26 @@ export function App() {
     layoutRef: mobileNavLayoutRef,
   });
 
-  // ---- 上手助手浮层 ----
+  // ---- 上手助手浮层 / PC 贴左 ----
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const [agentPanelFullscreen, setAgentPanelFullscreen] = useState(false);
+  const [agentDocked, setAgentDocked] = useState(() => loadAgentDocked());
+  const [agentDockWidth, setAgentDockWidth] = useState(() => loadAgentDockWidth());
   const [agentFabPos, setAgentFabPos] = useAgentFabPosition();
   const agentPanelRef = useRef<AgentChatPanelHandle | null>(null);
+  /** PC 且偏好贴左且面板打开 → 左列替换文档树 */
+  const agentDockLayout = agentDocked && agentPanelOpen && !isNarrow;
+
+  function setAgentDockedPersist(next: boolean): void {
+    setAgentDocked(next);
+    saveAgentDocked(next);
+    if (next) setAgentPanelFullscreen(false);
+  }
+
+  function setAgentDockWidthPersist(width: number): void {
+    setAgentDockWidth(width);
+    saveAgentDockWidth(width);
+  }
 
   // ---- 帮写全屏层 ----
   const [aiWriteOpen, setAiWriteOpen] = useState(false);
@@ -1433,19 +1456,64 @@ export function App() {
               : undefined
           }
         >
-          {/* ========== 左侧边栏 ========== */}
+          {/* ========== 左侧：文档树，或 PC 贴左助手 ========== */}
           <aside
             className={
-              "mdocs-sidebar" +
-              (isNarrow
-                ? mobileNavOpen
-                  ? " mdocs-sidebar--drawer-open"
-                  : " mdocs-sidebar--drawer"
-                : sidebarCollapsed
-                  ? " mdocs-sidebar-collapsed"
-                  : "")
+              agentDockLayout
+                ? "mdocs-agent-dock"
+                : "mdocs-sidebar" +
+                  (isNarrow
+                    ? mobileNavOpen
+                      ? " mdocs-sidebar--drawer-open"
+                      : " mdocs-sidebar--drawer"
+                    : sidebarCollapsed
+                      ? " mdocs-sidebar-collapsed"
+                      : "")
+            }
+            style={
+              agentDockLayout
+                ? ({
+                    ["--mdocs-agent-dock-width" as string]: `${agentDockWidth}px`,
+                  } as CSSProperties)
+                : undefined
             }
           >
+            {agentDockLayout ? (
+              <Suspense fallback={null}>
+                <AgentChatPanel
+                  ref={agentPanelRef}
+                  open={agentPanelOpen}
+                  onClose={() => {
+                    setAgentPanelOpen(false);
+                    setAgentPanelFullscreen(false);
+                  }}
+                  visitorName={visitor?.visitorName}
+                  embedded
+                  docked
+                  dockWidth={agentDockWidth}
+                  onDockWidthChange={setAgentDockWidthPersist}
+                  onToggleDock={() => setAgentDockedPersist(false)}
+                  domainId={currentDomainId || null}
+                  domains={domains}
+                  localizeDomainName={(name) => localizeDomainName(name, lang, t)}
+                  documentId={activeDocMeta?.documentId ?? null}
+                  documentTitle={activeDocMeta?.displayName ?? null}
+                  documentPath={activeDocMeta?.relativePath ?? null}
+                  graphFileId={focus?.kind === "graph" ? `${focus.resourceId}.graph-file` : null}
+                  graphLabel={focus?.kind === "graph" ? focus.name : null}
+                  onOpenDocument={(docId) => {
+                    setView("docs");
+                    void guardNavigate(() => navigate(`/doc/${docId}`));
+                  }}
+                  onTreeChanged={() => void refreshTree()}
+                  onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
+                  onOpenCoding={
+                    isNarrow ? undefined : (payload) => void openAiWriteForDocument(payload)
+                  }
+                />
+              </Suspense>
+            ) : (
+              <>
             {/* 品牌 Logo 区域 */}
             <header className="mdocs-sidebar-header">
               <div className="mdocs-brand">
@@ -1657,6 +1725,8 @@ export function App() {
               </button>
               )}
             </footer>
+              </>
+            )}
           </aside>
 
           {/* ========== 主内容区 ========== */}
@@ -2320,7 +2390,7 @@ export function App() {
             position={agentFabPos}
             onPositionChange={setAgentFabPos}
           />
-          {agentPanelOpen ? (
+          {agentPanelOpen && !agentDockLayout ? (
             <Suspense fallback={null}>
               <AgentChatPanel
                 ref={agentPanelRef}
@@ -2333,6 +2403,14 @@ export function App() {
                 fullscreen={isNarrow || agentPanelFullscreen}
                 onToggleFullscreen={
                   isNarrow ? undefined : () => setAgentPanelFullscreen((v) => !v)
+                }
+                onToggleDock={
+                  isNarrow
+                    ? undefined
+                    : () => {
+                        setAgentDockedPersist(true);
+                        setAgentPanelFullscreen(false);
+                      }
                 }
                 domainId={currentDomainId || null}
                 domains={domains}

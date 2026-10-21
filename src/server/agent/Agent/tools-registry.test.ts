@@ -73,6 +73,8 @@ describe("createToolsForMode", () => {
       ...STRUCTURE_NAMES,
       "ask_user_choice",
       "overwrite_document",
+      "append_document",
+      "replace_document_markdown",
       ...USER_SKILL_NAMES,
     ]);
   });
@@ -101,6 +103,8 @@ describe("createToolsForMode", () => {
       ...STRUCTURE_NAMES,
       "ask_user_choice",
       "overwrite_document",
+      "append_document",
+      "replace_document_markdown",
       ...USER_SKILL_NAMES,
     ]);
   });

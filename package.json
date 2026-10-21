@@ -1,6 +1,6 @@
 {
   "name": "@fgbg/mdocs",
-  "version": "2.0.9",
+  "version": "2.0.10",
   "description": "A Markdown knowledge base for small teams",
   "license": "MIT",
   "type": "module",

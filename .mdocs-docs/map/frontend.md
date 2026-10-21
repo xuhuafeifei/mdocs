@@ -111,6 +111,18 @@
 - **结论**：`status=open` 的选择卡 / Skill 表单提到输入框上方 `.mdocs-agent-interaction-dock`；出卡时 `forceScrollToBottom`；时间线只留「已置顶」提示。超时 120s。
 - **定位**：`src/web/app/AgentChatPanel.tsx` · `collectOpenInteractions` / `forceScrollToBottom`
 
+### Agent PC 贴左
+
+- **关键词**：`agentDocked` `mdocs-agent-dock` `贴左` `浮窗` `替换目录`
+- **结论**：仅 PC；贴左时左列用 `.mdocs-agent-dock` 挂 `embedded` 助手，隐藏文档树；右缘拖宽；`mdocs.agentDocked` / `mdocs.agentDockWidth`；贴左开文不关面板。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/web/app/App.tsx` | `agentDockLayout` |
+  | `src/web/app/AgentFab.tsx` | `loadAgentDocked` / `clampAgentDockWidth` |
+  | `src/web/app/AgentChatPanel.tsx` | `docked` / `onToggleDock` |
+- **需求**：[`../requirements/agent-dock-left/`](../requirements/agent-dock-left/)
+
 ### 冲突 Merge（inline）
 
 - **关键词**：`MergeView` `MergeInlinePane` `接收` `拒绝` `全部用我的` `三路 diff`
