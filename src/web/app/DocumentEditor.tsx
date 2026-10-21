@@ -45,9 +45,9 @@ import {
 } from "@lobehub/editor";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
-import { Heading1Icon, Heading2Icon, Heading3Icon, MinusIcon, Network, SigmaIcon, Table2Icon, ShieldUser, Users, Star, Workflow } from "lucide-react";
+import { Heading1Icon, Heading2Icon, Heading3Icon, History, MinusIcon, Network, SigmaIcon, Table2Icon, ShieldUser, Users, Star, Workflow } from "lucide-react";
 
-import type { ActiveDocumentMeta } from "../../shared/types/document";
+import type { ActiveDocumentMeta, DocumentDetail } from "../../shared/types/document";
 import { getDocumentTaskQueue } from "./documentTaskQueue";
 import type { DomainSummary } from "../../shared/types/domain";
 import {
@@ -66,6 +66,7 @@ import { usePublishGuard } from "./hooks/usePublishGuard";
 import { localizeDomainName } from "./utils";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { VisitorPickerModal } from "./VisitorPickerModal";
+import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { countDocumentPlainChars } from "./docPlainCharCount";
 
 function safeLexicalJsonString(editor: IEditor): string | null {
@@ -164,6 +165,8 @@ interface DocumentEditorProps {
   exportMarkdownRef?: React.MutableRefObject<(() => string) | undefined>;
   /** Toast message callback */
   onShowToast?: (message: string) => void;
+  /** 版本恢复成功：App 刷新 meta + 正文并清草稿 */
+  onVersionRestored?: (doc: DocumentDetail) => void;
   /** Error dialog callback (upload failures etc.) */
   onShowError?: (message: string) => void;
   /** 评论面板切换 */
@@ -195,6 +198,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [existingInvites, setExistingInvites] = useState<Map<string, string>>(new Map());
   const [inviteBusy, setInviteBusy] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
   /** 文档信息「字符数」；null = 计算中 */
   const [plainCharCount, setPlainCharCount] = useState<number | null>(null);
   const plainCharGenRef = useRef(0);
@@ -1025,6 +1029,19 @@ export function DocumentEditor(props: DocumentEditorProps) {
           <ShieldUser size={14} />
           <span>{t("docInfoChangePermission")}</span>
         </button>
+        <button
+          type="button"
+          style={menuItemStyle}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+          onClick={() => {
+            onClose();
+            setShowVersionHistory(true);
+          }}
+        >
+          <History size={14} />
+          <span>{t("versionHistoryTitle")}</span>
+        </button>
       </>
     );
   }
@@ -1173,6 +1190,19 @@ export function DocumentEditor(props: DocumentEditorProps) {
         }}
       />
       )}
+      {showVersionHistory ? (
+        <VersionHistoryPanel
+          documentId={props.meta.documentId}
+          fileType={props.meta.fileType || "md"}
+          canRestore={props.canEdit}
+          onClose={() => setShowVersionHistory(false)}
+          onRestored={(doc) => {
+            setShowVersionHistory(false);
+            props.onVersionRestored?.(doc);
+            props.onShowToast?.(t("versionHistoryRestored"));
+          }}
+        />
+      ) : null}
       <OutlineProvider>
         <Block flex={1} style={{ minHeight: 0 }}>
           <div

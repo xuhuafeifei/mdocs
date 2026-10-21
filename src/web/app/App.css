@@ -37,6 +37,7 @@
 }
 
 .mdocs-layout {
+  position: relative;
   display: flex;
   flex-direction: row;
   align-items: stretch;
@@ -81,6 +82,138 @@
 .mdocs-agent-dock .mdocs-agent-panel--embedded {
   flex: 1 1 0;
   min-height: 0;
+}
+
+/* 贴左助手时右侧挤占式纯目录：与正文分宽，收起/展开带动画 */
+.mdocs-tree-rail {
+  --mdocs-tree-rail-width: 240px;
+  --mdocs-tree-rail-peek: 28px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: var(--mdocs-tree-rail-width);
+  flex: 0 0 var(--mdocs-tree-rail-width);
+  height: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+  background: #fafafa;
+  border-left: 1px solid var(--mdocs-border);
+  overflow: hidden;
+  transition:
+    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    flex-basis 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.mdocs-tree-rail.is-closed {
+  width: var(--mdocs-tree-rail-peek);
+  flex-basis: var(--mdocs-tree-rail-peek);
+  background: transparent;
+  border-left-color: transparent;
+}
+
+.mdocs-tree-rail-body {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  opacity: 1;
+  transition: opacity 0.18s ease;
+}
+
+.mdocs-tree-rail.is-closed .mdocs-tree-rail-body {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mdocs-tree-rail .mdocs-sidebar-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 4px;
+}
+
+.mdocs-tree-rail-hide {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  background: #fff;
+  color: #667085;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  opacity: 1;
+  transition: opacity 0.15s ease;
+}
+
+.mdocs-tree-rail-hide:hover {
+  color: #344054;
+  border-color: #d0d5dd;
+  background: #f8fafc;
+}
+
+.mdocs-tree-rail.is-closed .mdocs-tree-rail-hide {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 收起后右缘绿色吸附条 */
+.mdocs-tree-rail-peek {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  writing-mode: vertical-rl;
+  letter-spacing: 0.18em;
+  padding: 0;
+  border: none;
+  border-radius: 10px 0 0 10px;
+  background: linear-gradient(180deg, #ecfdf3 0%, #d1fadf 100%);
+  color: #039855;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow:
+    -3px 0 0 rgba(3, 152, 85, 0.22),
+    -6px 0 18px rgba(3, 152, 85, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(6px);
+  transition:
+    opacity 0.2s ease 0.05s,
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.mdocs-tree-rail.is-closed .mdocs-tree-rail-peek {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.mdocs-tree-rail-peek:hover {
+  background: linear-gradient(180deg, #039855 0%, #027a48 100%);
+  color: #fff;
+  box-shadow:
+    -3px 0 0 rgba(3, 152, 85, 0.35),
+    -8px 0 22px rgba(3, 152, 85, 0.28);
 }
 
 .mdocs-sidebar-collapsed {
@@ -701,6 +834,55 @@
 .mdocs-agent-panel-context:focus-visible::after {
   opacity: 1;
   transform: translateY(0);
+}
+
+.mdocs-agent-composer-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 0 0 4px;
+  flex-shrink: 0;
+}
+
+.mdocs-agent-composer-tools .mdocs-agent-skill-ref {
+  margin: 0;
+}
+
+.mdocs-agent-panel-compacting {
+  flex-shrink: 0;
+  margin: 0 12px 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #eff4ff;
+  color: #3370ff;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.mdocs-agent-panel-compact-summary {
+  font-size: 13px;
+  color: #667085;
+}
+
+.mdocs-agent-panel-compact-summary summary {
+  cursor: pointer;
+  user-select: none;
+  color: #8a919f;
+}
+
+.mdocs-agent-panel-compact-summary-body {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
 }
 
 .mdocs-agent-panel-actions {
@@ -5242,6 +5424,136 @@ strong.label {
     width: 100%;
     min-height: 44px;
   }
+}
+
+/* 文章版本历史：大弹窗 + 左侧列表 + 右侧 Lobe 只读预览 */
+.mdocs-version-history-dialog {
+  width: min(960px, 96vw);
+  max-height: min(88vh, 900px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mdocs-version-history-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid var(--mdocs-border, #eee);
+  flex: 0 0 auto;
+}
+
+.mdocs-version-history-head h1 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.mdocs-version-history-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--mdocs-text-muted, #888);
+  line-height: 1.45;
+  max-width: 52em;
+}
+
+.mdocs-version-history-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mdocs-version-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  width: 240px;
+  flex: 0 0 240px;
+  overflow-y: auto;
+  border-right: 1px solid var(--mdocs-border, #eee);
+  background: #fafafa;
+}
+
+.mdocs-version-history-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mdocs-version-history-item:hover {
+  background: var(--mdocs-hover-bg, #f0f0f0);
+}
+
+.mdocs-version-history-item.is-active {
+  background: #fff;
+  box-shadow: inset 3px 0 0 var(--mdocs-accent, #2f6fed);
+}
+
+.mdocs-version-history-item-time {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.mdocs-version-history-item-meta {
+  font-size: 12px;
+}
+
+.mdocs-version-history-preview {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 360px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--mdocs-surface, #fff);
+}
+
+.mdocs-version-preview-editor {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px 24px;
+}
+
+.mdocs-version-preview-editor .mdocs-document-editor-root {
+  min-height: 280px;
+}
+
+.mdocs-version-preview-html {
+  flex: 1 1 0;
+  width: 100%;
+  border: none;
+  background: #fff;
+}
+
+.mdocs-version-preview-sheet {
+  margin: 16px;
+  padding: 12px;
+  font-size: 13px;
+  background: #fafafa;
+  border-radius: 6px;
+  white-space: pre-wrap;
+}
+
+.mdocs-version-history-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--mdocs-border, #eee);
+  flex: 0 0 auto;
+  background: #fafafa;
 }
 
 /* === Message dialog (alert) === */

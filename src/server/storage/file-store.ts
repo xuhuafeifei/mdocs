@@ -85,6 +85,18 @@ export function renameDocumentFile(
   fs.renameSync(fromAbs, toAbs);
 }
 
+/** 源文件不存在则跳过（目录节点常无盘文件）；目标已存在仍抛错。 */
+export function renameDocumentFileIfPresent(
+  domainId: string,
+  fromRelativePath: string,
+  toRelativePath: string,
+): void {
+  if (fromRelativePath === toRelativePath) return;
+  const fromAbs = resolveDocAbsolutePath(domainId, fromRelativePath);
+  if (!fs.existsSync(fromAbs)) return;
+  renameDocumentFile(domainId, fromRelativePath, toRelativePath);
+}
+
 /**
  * 将一次 publish 的正文写入历史快照区（与「当前工作区 .md」分开存放）。
  *

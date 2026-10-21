@@ -97,6 +97,27 @@ export function saveAgentDocked(docked: boolean): void {
     /* ignore */
   }
 }
+
+/** 贴左时右侧覆盖目录是否展开 */
+const AGENT_TREE_RAIL_OPEN_KEY = "mdocs.agentTreeRailOpen";
+
+export function loadAgentTreeRailOpen(): boolean {
+  try {
+    const raw = localStorage.getItem(AGENT_TREE_RAIL_OPEN_KEY);
+    if (raw === null) return true;
+    return raw !== "false";
+  } catch {
+    return true;
+  }
+}
+
+export function saveAgentTreeRailOpen(open: boolean): void {
+  try {
+    localStorage.setItem(AGENT_TREE_RAIL_OPEN_KEY, open ? "true" : "false");
+  } catch {
+    /* ignore */
+  }
+}
 /** 超过该像素位移才算拖动（否则松开视为点击开关面板） */
 const CLICK_SLOP = 3;
 

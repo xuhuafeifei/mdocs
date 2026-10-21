@@ -22,7 +22,24 @@
   | `src/shared/sheetDocument.ts` | workbook JSON（`sheets[]`）/ 行列与表标签 mutate |
   | `src/web/app/MergeView.tsx` | 冲突 merge；`fileType` → raw-text 管道 |
 - **布局约定**：shell 只承载 layout；侧栏头尾 `flex: 0 0 auto`，仅 list `overflow-y: auto`（见 [`../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md`](../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md)）
-- **需求**：同域拖拽移动见 [`../requirements/document-move/`](../requirements/document-move/)（已同意）；HTML 文档见 [`../requirements/html-documents/`](../requirements/html-documents/)；文章搜索浮层见 [`../requirements/search-title-index/`](../requirements/search-title-index/)
+- **需求**：同域拖拽移动见 [`../requirements/document-move/`](../requirements/document-move/)（已同意，含目录子树）；HTML 文档见 [`../requirements/html-documents/`](../requirements/html-documents/)；文章搜索浮层见 [`../requirements/search-title-index/`](../requirements/search-title-index/)
+
+### 文章版本历史
+
+- **关键词**：`version history` `restoreDocumentVersion` `commits` `版本历史`
+- **结论**：文档信息菜单打开面板；恢复 = 旧 blob 新 commit（parent=原 head）。
+- **定位**：`VersionHistoryPanel.tsx` · `restoreDocumentVersionApi`
+- **需求**：[`../requirements/document-version-restore/`](../requirements/document-version-restore/)
+
+### 设置 · 回收站 / 多 CLI Token
+
+- **关键词**：`trash` `回收站` `restore` `cliToken` `多 Token`
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/web/app/SettingsPage.tsx` | tab `trash`；CLI 启停/硬删 |
+  | `src/web/app/TrashPanel.tsx` | `listDeletedDocumentsApi` / `restoreDocumentApi` |
+- **需求**：[`../requirements/document-trash-ui/`](../requirements/document-trash-ui/)；[`../requirements/cli-multi-token/`](../requirements/cli-multi-token/)
 
 ### API 客户端
 
@@ -113,14 +130,15 @@
 
 ### Agent PC 贴左
 
-- **关键词**：`agentDocked` `mdocs-agent-dock` `贴左` `浮窗` `替换目录`
-- **结论**：仅 PC；贴左时左列用 `.mdocs-agent-dock` 挂 `embedded` 助手，隐藏文档树；右缘拖宽；`mdocs.agentDocked` / `mdocs.agentDockWidth`；贴左开文不关面板。
+- **关键词**：`agentDocked` `mdocs-agent-dock` `mdocs-tree-rail` `agentTreeRailOpen` `贴左` `浮窗` `挤占目录`
+- **结论**：仅 PC；贴左时左列助手、中间正文、右侧 `.mdocs-tree-rail` 纯目录；浮窗时目录回左完整侧栏；右缘拖宽；贴左开文不关面板。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/web/app/App.tsx` | `agentDockLayout` |
+  | `src/web/app/App.tsx` | `agentDockLayout` `renderSidebarDocumentTree` |
   | `src/web/app/AgentFab.tsx` | `loadAgentDocked` / `clampAgentDockWidth` |
   | `src/web/app/AgentChatPanel.tsx` | `docked` / `onToggleDock` |
+  | `src/web/app/App.css` | `.mdocs-tree-rail` |
 - **需求**：[`../requirements/agent-dock-left/`](../requirements/agent-dock-left/)
 
 ### 冲突 Merge（inline）

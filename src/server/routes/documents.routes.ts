@@ -5,10 +5,12 @@ import {
   createDocument,
   convertDocumentContent,
   getDocument,
+  getDocumentCommit,
   getDocumentInvites,
   getDocumentMergeContext,
   getDocumentSyncStatus,
   listDeletedDocuments,
+  listDocumentCommits,
   listDocuments,
   listFolderChildren,
   moveDocument,
@@ -16,6 +18,7 @@ import {
   removeFolder,
   removeDocumentInvite,
   restoreDocumentFromAudit,
+  restoreDocumentVersion,
   updateDocument,
 } from "../documents/document.service.js";
 import { findDomainByName } from "../db/repositories/domain.repo.js";
@@ -299,6 +302,65 @@ export function buildDocumentsRouter(): Router {
         res.json({ data: ctx });
       } catch (err) {
         respondError(res, err, "documents-route.merge-context");
+      }
+    },
+  );
+
+  /**
+   * GET /:documentId/commits
+   * 文档版本列表（发布快照）。需 read。
+   */
+  router.get(
+    "/:documentId/commits",
+    requireDocumentAccess("read"),
+    (req: Request, res: Response) => {
+      try {
+        const items = listDocumentCommits(req.params.documentId!);
+        res.json({ data: items });
+      } catch (err) {
+        respondError(res, err, "documents-route.commits.list");
+      }
+    },
+  );
+
+  /**
+   * GET /:documentId/commits/:commitId
+   * 预览某版本正文。需 read。
+   */
+  router.get(
+    "/:documentId/commits/:commitId",
+    requireDocumentAccess("read"),
+    (req: Request, res: Response) => {
+      try {
+        const detail = getDocumentCommit(req.params.documentId!, req.params.commitId!);
+        res.json({ data: detail });
+      } catch (err) {
+        respondError(res, err, "documents-route.commits.get");
+      }
+    },
+  );
+
+  /**
+   * POST /:documentId/commits/:commitId/restore
+   * 将该版正文作为新 commit 发布。需 edit。
+   */
+  router.post(
+    "/:documentId/commits/:commitId/restore",
+    requireDocumentAccess("edit"),
+    (req: Request, res: Response) => {
+      if (!req.visitor) {
+        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+        return;
+      }
+      try {
+        const doc = restoreDocumentVersion({
+          actorVisitorId: req.visitor.visitor_id,
+          documentId: req.params.documentId!,
+          commitId: req.params.commitId!,
+        });
+        res.json({ data: doc });
+      } catch (err) {
+        respondError(res, err, "documents-route.commits.restore");
       }
     },
   );

@@ -324,6 +324,45 @@ export function moveDocumentApi(
   });
 }
 
+export type DocumentCommitSummary = {
+  commitId: string;
+  createdAt: string;
+  authorVisitorId: string;
+  authorVisitorName: string | null;
+  contentHash: string;
+  isHead: boolean;
+};
+
+export type DocumentCommitDetail = DocumentCommitSummary & {
+  content: string;
+};
+
+export function listDocumentCommitsApi(documentId: string): Promise<DocumentCommitSummary[]> {
+  return api<DocumentCommitSummary[]>(
+    `/api/documents/${encodeURIComponent(documentId)}/commits`,
+  );
+}
+
+export function getDocumentCommitApi(
+  documentId: string,
+  commitId: string,
+): Promise<DocumentCommitDetail> {
+  return api<DocumentCommitDetail>(
+    `/api/documents/${encodeURIComponent(documentId)}/commits/${encodeURIComponent(commitId)}`,
+  );
+}
+
+/** 将历史版正文作为新 commit 发布。 */
+export function restoreDocumentVersionApi(
+  documentId: string,
+  commitId: string,
+): Promise<DocumentDetail> {
+  return api<DocumentDetail>(
+    `/api/documents/${encodeURIComponent(documentId)}/commits/${encodeURIComponent(commitId)}/restore`,
+    { method: "POST", body: "{}" },
+  );
+}
+
 /**
  * 获取文档的协作者邀请列表。
  */
@@ -455,12 +494,50 @@ export function listCliTokensApi(): Promise<{
   return api<{ tokenId: string; name: string; revoked: boolean; createdAt: string }[]>("/api/cli/tokens");
 }
 
+/** 停用或重新启用 CLI Token（软开关）。 */
+export function setCliTokenRevokedApi(tokenId: string, revoked: boolean): Promise<void> {
+  return api<void>(`/api/cli/tokens/${encodeURIComponent(tokenId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ revoked }),
+  });
+}
+
 /**
- * 吊销指定的 CLI Token。
+ * 硬删除 CLI Token（不可恢复）。
+ * @deprecated 旧名 revoke；语义已改为硬删。
  */
 export function revokeCliTokenApi(tokenId: string): Promise<void> {
+  return deleteCliTokenApi(tokenId);
+}
+
+/** 硬删除 CLI Token。 */
+export function deleteCliTokenApi(tokenId: string): Promise<void> {
   return api<void>(`/api/cli/tokens/${encodeURIComponent(tokenId)}`, {
     method: "DELETE",
+  });
+}
+
+export type DeletedDocumentListItem = {
+  auditId: number;
+  documentId: string;
+  deletedAt: string;
+  relativePath: string;
+  displayName: string;
+  domainId: string;
+  fileType: string;
+  viaFolderDelete: boolean;
+  restorable: boolean;
+};
+
+export function listDeletedDocumentsApi(limit?: number): Promise<DeletedDocumentListItem[]> {
+  const q = limit != null ? `?limit=${encodeURIComponent(String(limit))}` : "";
+  return api<DeletedDocumentListItem[]>(`/api/documents/deleted${q}`);
+}
+
+export function restoreDocumentApi(auditId: number): Promise<DocumentDetail> {
+  return api<DocumentDetail>("/api/documents/restore", {
+    method: "POST",
+    body: JSON.stringify({ auditId }),
   });
 }
 
@@ -860,6 +937,8 @@ export type AgentStreamEvent =
       displayName: string;
     }
   | { type: "context_usage"; percent: number; used: number; limit: number }
+  | { type: "context_compacting" }
+  | { type: "context_compacted"; percent: number; used: number; limit: number }
   | { type: "tree_changed"; reason: string }
   /** AI 覆写文档成功，前端若打开该文档应拉取最新内容 */
   | {
@@ -1023,6 +1102,30 @@ export function openAgentSessionApi(
       sessionId,
       mode,
       ...(mode === "coding" ? { documentId: documentId ?? null } : {}),
+    }),
+  });
+}
+
+export type AgentSessionCompactResult = {
+  compacted: boolean;
+  reason?: "below_threshold" | "nothing_to_compact" | "llm_failed" | "missing_api_key";
+  percent: number;
+  used: number;
+  limit: number;
+  sessionId: string;
+};
+
+/** 主动压缩当前（或指定）session 上下文；不要求已到 85% */
+export function compactAgentSessionApi(
+  mode: "normal" | "coding" = "normal",
+  opts?: { sessionId?: string; documentId?: string | null },
+): Promise<AgentSessionCompactResult> {
+  return api<AgentSessionCompactResult>("/api/agent/session/compact", {
+    method: "POST",
+    body: JSON.stringify({
+      mode,
+      ...(opts?.sessionId ? { sessionId: opts.sessionId } : {}),
+      ...(mode === "coding" ? { documentId: opts?.documentId ?? null } : {}),
     }),
   });
 }
@@ -1234,13 +1337,15 @@ export async function streamAgentChatApi(
         error?: { message?: string; code?: string };
       };
       if (errBody.error?.message) messageText = errBody.error.message;
-      if (errBody.error?.code === "RUN_ACTIVE") {
+      const code = errBody.error?.code;
+      if (code === "RUN_ACTIVE" || code === "SESSION_COMPACTING") {
         const err = new Error(messageText) as Error & { code?: string };
-        err.code = "RUN_ACTIVE";
+        err.code = code;
         throw err;
       }
     } catch (e) {
-      if (e instanceof Error && (e as Error & { code?: string }).code === "RUN_ACTIVE") throw e;
+      const code = e instanceof Error ? (e as Error & { code?: string }).code : undefined;
+      if (code === "RUN_ACTIVE" || code === "SESSION_COMPACTING") throw e;
     }
     throw new Error(messageText);
   }

@@ -135,6 +135,15 @@ export async function runOnboardingChat(params: {
   const sessionManager = new AgentSessionManager(visitorId, {
     kind: mode === "coding" ? "coding" : "normal",
   });
+
+  const { maybeCompactBeforeChat } = await import("./context-compact.js");
+  await maybeCompactBeforeChat({
+    visitorId,
+    kind: mode === "coding" ? "coding" : "normal",
+    documentId: mode === "coding" ? params.documentId ?? null : undefined,
+    onEvent,
+  });
+
   const { sessionId, messages: history } =
     await sessionManager.loadLastOpenedMessages(
       mode === "coding" ? params.documentId ?? null : undefined,
@@ -219,7 +228,7 @@ export async function runOnboardingChat(params: {
 
 // —— 装配 helpers ——
 
-function createAgentModel(cfg: VisitorAgentConfig) {
+export function createAgentModel(cfg: VisitorAgentConfig) {
   const providerId = cfg.providerId ?? `mdocs-${cfg.id.slice(0, 8)}`;
   const apiKey = cfg.apiKey;
   const auth = {

@@ -5,8 +5,8 @@
  * 帮写 / 评论由政策 aiWrite、comments 开放（落盘管道在 App）。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ShieldUser, Star, Users } from "lucide-react";
-import type { ActiveDocumentMeta } from "../../shared/types/document";
+import { History, ShieldUser, Star, Users } from "lucide-react";
+import type { ActiveDocumentMeta, DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
 import {
   DocumentPermission,
@@ -34,6 +34,7 @@ import {
 } from "../services/endpoints";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { VisitorPickerModal } from "./VisitorPickerModal";
+import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { countDocumentPlainChars } from "./docPlainCharCount";
 import "./HtmlEditor.css";
 
@@ -66,6 +67,7 @@ interface HtmlEditorProps {
   commentCount?: number;
   onAiWrite?: () => void;
   onShowToast?: (message: string) => void;
+  onVersionRestored?: (doc: DocumentDetail) => void;
   readerChrome?: boolean;
   onOpenMobileNav?: () => void;
 }
@@ -91,6 +93,7 @@ export function HtmlEditor(props: HtmlEditorProps) {
   const [permissionBusy, setPermissionBusy] = useState(false);
   const [showInvitePicker, setShowInvitePicker] = useState(false);
   const [existingInvites, setExistingInvites] = useState<Map<string, string>>(new Map());
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [plainCharCount, setPlainCharCount] = useState<number | null>(null);
   const plainCharGenRef = useRef(0);
 
@@ -433,6 +436,23 @@ export function HtmlEditor(props: HtmlEditorProps) {
           <ShieldUser size={14} />
           <span>{t("docInfoChangePermission")}</span>
         </button>
+        <button
+          type="button"
+          style={menuItemStyle}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "none";
+          }}
+          onClick={() => {
+            onClose();
+            setShowVersionHistory(true);
+          }}
+        >
+          <History size={14} />
+          <span>{t("versionHistoryTitle")}</span>
+        </button>
       </>
     );
   }
@@ -656,6 +676,19 @@ export function HtmlEditor(props: HtmlEditorProps) {
           }}
         />
       )}
+      {showVersionHistory ? (
+        <VersionHistoryPanel
+          documentId={props.meta.documentId}
+          fileType="html"
+          canRestore={props.canEdit}
+          onClose={() => setShowVersionHistory(false)}
+          onRestored={(doc) => {
+            setShowVersionHistory(false);
+            props.onVersionRestored?.(doc);
+            props.onShowToast?.(t("versionHistoryRestored"));
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -13,6 +13,8 @@ import {
   startAgentRun,
   subscribeAgentRun,
 } from "../agent/Agent/run-manager.js";
+import { SessionCompactingError } from "../agent/Agent/context-compact-lock.js";
+import { compactAgentSession } from "../agent/Agent/context-compact.js";
 import {
   getAgentSessionForApi,
   createAgentSessionForApi,
@@ -450,6 +452,54 @@ export function buildAgentRouter(): Router {
     res.json({ data });
   });
 
+  router.post("/session/compact", async (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const mode = parseAgentMode(req.body?.mode ?? req.query?.mode);
+    const documentId =
+      mode === "coding"
+        ? parseDocumentId(req.body?.documentId ?? req.query?.documentId)
+        : undefined;
+    const sessionId =
+      typeof req.body?.sessionId === "string" && req.body.sessionId.trim()
+        ? req.body.sessionId.trim()
+        : undefined;
+    try {
+      const result = await compactAgentSession({
+        visitorId: req.visitor.visitor_id,
+        kind: mode === "coding" ? "coding" : "normal",
+        documentId: documentId ?? null,
+        sessionId,
+        force: true,
+      });
+      res.json({
+        data: {
+          compacted: result.compacted,
+          reason: result.reason,
+          percent: result.usage.percent,
+          used: result.usage.used,
+          limit: result.usage.limit,
+          sessionId: result.sessionId,
+        },
+      });
+    } catch (err) {
+      if (err instanceof SessionCompactingError) {
+        res.status(409).json({
+          error: {
+            code: "SESSION_COMPACTING",
+            message: "正在压缩上下文，请稍后再试",
+          },
+        });
+        return;
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error("session compact failed: %s", msg);
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: msg } });
+    }
+  });
+
   router.post("/session/rename", async (req, res) => {
     if (!req.visitor) {
       res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
@@ -793,6 +843,15 @@ export function buildAgentRouter(): Router {
         references,
       });
     } catch (err) {
+      if (err instanceof SessionCompactingError) {
+        res.status(409).json({
+          error: {
+            code: "SESSION_COMPACTING",
+            message: "正在压缩上下文，请稍后再试",
+          },
+        });
+        return;
+      }
       if (err instanceof AgentRunActiveError) {
         res.status(409).json({
           error: {

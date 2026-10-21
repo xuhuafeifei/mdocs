@@ -40,6 +40,22 @@ export function revokeCliToken(db: Database.Database, tokenId: string): void {
   db.prepare(`UPDATE cli_tokens SET revoked = 1 WHERE token_id = ?`).run(tokenId);
 }
 
+export function setCliTokenRevoked(
+  db: Database.Database,
+  tokenId: string,
+  revoked: boolean,
+): void {
+  db.prepare(`UPDATE cli_tokens SET revoked = ? WHERE token_id = ?`).run(
+    revoked ? 1 : 0,
+    tokenId,
+  );
+}
+
+/** 物理删除 Token 行；hash 消失后旧明文不可恢复。 */
+export function deleteCliTokenRow(db: Database.Database, tokenId: string): void {
+  db.prepare(`DELETE FROM cli_tokens WHERE token_id = ?`).run(tokenId);
+}
+
 export function revokeAllCliTokensByVisitor(db: Database.Database, visitorId: string): void {
   db.prepare(`UPDATE cli_tokens SET revoked = 1 WHERE visitor_id = ?`).run(visitorId);
 }

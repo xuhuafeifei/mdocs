@@ -56,6 +56,21 @@ export function findCommitById(db: Database.Database, commitId: string): CommitR
     .get(commitId);
 }
 
+/** 某文档全部提交，按创建时间倒序。 */
+export function listCommitsByDocument(
+  db: Database.Database,
+  documentId: string,
+): CommitRow[] {
+  return db
+    .prepare<string, CommitRow>(
+      `SELECT commit_id, document_id, content_hash, blob_ref, author_visitor_id, created_at
+       FROM document_commits
+       WHERE document_id = ?
+       ORDER BY created_at DESC`,
+    )
+    .all(documentId);
+}
+
 /** 列出某提交节点的全部直接父节点 id。 */
 export function listParentCommitIds(
   db: Database.Database,

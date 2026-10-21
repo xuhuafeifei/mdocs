@@ -19,6 +19,7 @@ import {
   Settings2,
   Sparkles,
   Star,
+  Trash2,
   Users,
 } from "lucide-react";
 import { useI18n } from "../i18n";
@@ -32,6 +33,7 @@ import { MemberTemplatesPanel } from "./MemberTemplatesPanel";
 import { AgentConfigPanel } from "./AgentConfigPanel";
 import { AgentUserSkillsPanel } from "./AgentUserSkillsPanel";
 import { EmbeddingIndexPanel } from "./EmbeddingIndexPanel";
+import { TrashPanel } from "./TrashPanel";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 import { useIsNarrowViewport } from "./hooks/useIsNarrowViewport";
 import { copyTextToClipboard } from "./copyText";
@@ -40,6 +42,8 @@ import {
   createCliTokenApi,
   generateRecoveryCodeApi,
   listCliTokensApi,
+  setCliTokenRevokedApi,
+  deleteCliTokenApi,
   fetchBookmarksApi,
   fetchMyDocumentsApi,
   getDocumentInvitesApi,
@@ -85,7 +89,16 @@ function formatMyDocFileType(
   return fileType || "—";
 }
 
-type SettingsTab = "general" | "bookmarks" | "myDocuments" | "embeddingIndex" | "domainManagement" | "memberTemplates" | "savePublish" | "agentConfig";
+type SettingsTab =
+  | "general"
+  | "bookmarks"
+  | "myDocuments"
+  | "trash"
+  | "embeddingIndex"
+  | "domainManagement"
+  | "memberTemplates"
+  | "savePublish"
+  | "agentConfig";
 
 const SETTINGS_NAV: Array<{
   id: SettingsTab;
@@ -97,6 +110,7 @@ const SETTINGS_NAV: Array<{
   { id: "general", labelKey: "general", keywords: ["设置", "语言", "settings", "language"], Icon: Settings2 },
   { id: "bookmarks", labelKey: "bookmarkTitle", keywords: ["收藏", "bookmark", "star"], Icon: Star },
   { id: "myDocuments", labelKey: "myDocuments", keywords: ["文章", "文档", "documents", "articles"], Icon: FileText },
+  { id: "trash", labelKey: "trashTitle", keywords: ["回收站", "删除", "恢复", "trash", "recycle"], Icon: Trash2 },
   { id: "embeddingIndex", labelKey: "embeddingIndex", keywords: ["语义", "索引", "embedding", "vector", "检索"], Icon: ScanSearch },
   { id: "domainManagement", labelKey: "domainManagement", keywords: ["域", "工作空间", "workspace", "domain"], Icon: LayoutGrid },
   { id: "memberTemplates", labelKey: "memberTemplates", keywords: ["成员", "模板", "members", "template", "邀请"], Icon: Users },
@@ -167,15 +181,17 @@ export function SettingsPage(props: {
         ? t("bookmarkTitle")
         : tab === "myDocuments"
           ? t("myDocuments")
-          : tab === "embeddingIndex"
-            ? t("embeddingIndex")
-            : tab === "domainManagement"
-              ? t("domainManagement")
-              : tab === "memberTemplates"
-                ? t("memberTemplates")
-                : tab === "agentConfig"
-                  ? t("agentConfig")
-                  : t("saveAndPublish");
+          : tab === "trash"
+            ? t("trashTitle")
+            : tab === "embeddingIndex"
+              ? t("embeddingIndex")
+              : tab === "domainManagement"
+                ? t("domainManagement")
+                : tab === "memberTemplates"
+                  ? t("memberTemplates")
+                  : tab === "agentConfig"
+                    ? t("agentConfig")
+                    : t("saveAndPublish");
 
   // ---- CLI Token 相关状态 ----
   // CLI Token 列表
@@ -184,11 +200,9 @@ export function SettingsPage(props: {
   const [cliTokensLoading, setCliTokensLoading] = useState(true);
   // 创建/重置后返回的原始 token（仅展示一次，关闭后清空）
   const [cliTokenResult, setCliTokenResult] = useState<{ token: string; name: string } | null>(null);
-  // 是否正在重置
   const [cliTokenBusy, setCliTokenBusy] = useState(false);
-  // 是否显示重置确认弹窗
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  // 是否刚复制成功（用于按钮文字切换与卡内提示）
+  /** 待硬删的 tokenId；非空则弹出确认 */
+  const [deleteTokenId, setDeleteTokenId] = useState<string | null>(null);
   const [cliTokenCopied, setCliTokenCopied] = useState(false);
   const [cliTokenCopyFailed, setCliTokenCopyFailed] = useState(false);
 
@@ -406,28 +420,32 @@ export function SettingsPage(props: {
     }
   }
 
-  /**
-   * 创建或重置 CLI Token。
-   * 创建前会自动吊销所有已有 Token。
-   * 生成的原始 token 仅在创建/重置时展示一次。
-   */
-  function handleCreateOrResetCliToken(): void {
-    // 如果已有活跃 token，则先弹出确认弹窗
-    const hasActive = cliTokens.some((t) => !t.revoked);
-    if (hasActive) {
-      setShowResetConfirm(true);
-      return;
-    }
-    doResetCliToken();
-  }
-
-  async function doResetCliToken(): Promise<void> {
+  async function handleCreateCliToken(): Promise<void> {
     try {
       setCliTokenBusy(true);
       const result = await createCliTokenApi();
-      // 把原始 token 保存为结果，供 UI 展示
       setCliTokenResult({ token: result.token, name: result.name });
-      // 重新加载列表
+      await loadCliTokens();
+    } finally {
+      setCliTokenBusy(false);
+    }
+  }
+
+  async function handleToggleCliToken(tokenId: string, revoked: boolean): Promise<void> {
+    try {
+      setCliTokenBusy(true);
+      await setCliTokenRevokedApi(tokenId, revoked);
+      await loadCliTokens();
+    } finally {
+      setCliTokenBusy(false);
+    }
+  }
+
+  async function handleDeleteCliToken(tokenId: string): Promise<void> {
+    try {
+      setCliTokenBusy(true);
+      await deleteCliTokenApi(tokenId);
+      setDeleteTokenId(null);
       await loadCliTokens();
     } finally {
       setCliTokenBusy(false);
@@ -693,33 +711,55 @@ export function SettingsPage(props: {
                   <span className="mdocs-settings-item-info">
                     <span className="mdocs-settings-card-title">{t("cliToken")}</span>
                     <span className="mdocs-settings-item-desc">{t("cliTokenDesc")}</span>
-                    {/* 已有 Token 列表 */}
-                    {!cliTokensLoading && cliTokens.length > 0 && (
-                      <span className="mdocs-settings-item-desc" style={{ marginTop: 8, fontSize: "0.85em", opacity: 0.8 }}>
-                        {cliTokens.map((token) => (
-                          <span key={token.tokenId} style={{ display: "block" }}>
-                            {token.name} — {new Date(token.createdAt).toLocaleString()}{" "}
-                            {token.revoked ? `(${t("cliTokenRevoked")})` : `(${t("cliTokenActive")})`}
-                          </span>
-                        ))}
-                      </span>
-                    )}
                   </span>
-                  {/* 无 token 显示创建，有则显示重置 */}
                   <button
                     type="button"
-                    className={"secondary"}
-                    onClick={handleCreateOrResetCliToken}
+                    className="secondary"
+                    onClick={() => void handleCreateCliToken()}
                     disabled={cliTokenBusy || cliTokensLoading}
                   >
-                    {cliTokenBusy
-                      ? "…"
-                      : cliTokens.some((t) => !t.revoked)
-                        ? t("cliTokenReset")
-                        : t("cliTokenCreate")}
+                    {cliTokenBusy ? "…" : t("cliTokenCreate")}
                   </button>
                 </div>
-                {/* 生成结果紧贴本卡按钮下方 */}
+                {!cliTokensLoading && cliTokens.length > 0 && (
+                  <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {cliTokens.map((token) => (
+                      <div
+                        key={token.tokenId}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 8,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span className="mdocs-settings-item-desc" style={{ fontSize: "0.85em" }}>
+                          {token.name} — {new Date(token.createdAt).toLocaleString()}{" "}
+                          {token.revoked ? `(${t("cliTokenRevoked")})` : `(${t("cliTokenActive")})`}
+                        </span>
+                        <span style={{ display: "flex", gap: 6 }}>
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={cliTokenBusy}
+                            onClick={() => void handleToggleCliToken(token.tokenId, !token.revoked)}
+                          >
+                            {token.revoked ? t("cliTokenEnable") : t("cliTokenDisable")}
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={cliTokenBusy}
+                            onClick={() => setDeleteTokenId(token.tokenId)}
+                          >
+                            {t("cliTokenDelete")}
+                          </button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {cliTokenResult && (
                   <div className="mdocs-settings-secret-result mdocs-settings-secret-result--ok">
                     <div className="mdocs-settings-secret-result-head">
@@ -927,6 +967,8 @@ export function SettingsPage(props: {
                 )}
               </div>
             </div>
+        ) : tab === "trash" ? (
+          <TrashPanel onRestored={(docId) => props.onOpenDocument(docId)} />
         ) : tab === "myDocuments" ? (
           <div className="mdocs-settings mdocs-my-docs">
             <div className="mdocs-settings-header">
@@ -1283,19 +1325,17 @@ export function SettingsPage(props: {
         )}
       </main>
 
-      {/* CLI Token 重置确认弹窗 */}
-      {showResetConfirm && (
+      {deleteTokenId && (
         <ConfirmDialog
           title={t("cliToken")}
-          message={t("cliTokenResetConfirm")}
-          confirmLabel={t("cliTokenReset")}
+          message={t("cliTokenDeleteConfirm")}
+          confirmLabel={t("cliTokenDelete")}
           cancelLabel={t("cancel")}
           busy={cliTokenBusy}
           onConfirm={() => {
-            setShowResetConfirm(false);
-            doResetCliToken();
+            void handleDeleteCliToken(deleteTokenId);
           }}
-          onCancel={() => setShowResetConfirm(false)}
+          onCancel={() => setDeleteTokenId(null)}
         />
       )}
 

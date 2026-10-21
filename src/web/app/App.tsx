@@ -9,7 +9,7 @@
  * 6. 全局消息提示与冲突处理
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, Search, Star, Table } from "lucide-react";
+import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, PanelRightClose, Search, Star, Table } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -56,8 +56,10 @@ import {
   agentPanelAnchorStyle,
   loadAgentDocked,
   loadAgentDockWidth,
+  loadAgentTreeRailOpen,
   saveAgentDocked,
   saveAgentDockWidth,
+  saveAgentTreeRailOpen,
   useAgentFabPosition,
 } from "./AgentFab";
 import { MessageDialog } from "./MessageDialog";
@@ -381,6 +383,7 @@ export function App() {
   const [agentPanelFullscreen, setAgentPanelFullscreen] = useState(false);
   const [agentDocked, setAgentDocked] = useState(() => loadAgentDocked());
   const [agentDockWidth, setAgentDockWidth] = useState(() => loadAgentDockWidth());
+  const [agentTreeRailOpen, setAgentTreeRailOpen] = useState(() => loadAgentTreeRailOpen());
   const [agentFabPos, setAgentFabPos] = useAgentFabPosition();
   const agentPanelRef = useRef<AgentChatPanelHandle | null>(null);
   /** PC 且偏好贴左且面板打开 → 左列替换文档树 */
@@ -395,6 +398,11 @@ export function App() {
   function setAgentDockWidthPersist(width: number): void {
     setAgentDockWidth(width);
     saveAgentDockWidth(width);
+  }
+
+  function setAgentTreeRailOpenPersist(open: boolean): void {
+    setAgentTreeRailOpen(open);
+    saveAgentTreeRailOpen(open);
   }
 
   // ---- 帮写全屏层 ----
@@ -719,6 +727,14 @@ export function App() {
     });
     setContentRevision((r) => r + 1);
     setEditorDraftExists(false);
+  }
+
+  /** 版本历史恢复：对齐 head + 正文，清本地草稿。 */
+  async function handleVersionRestored(doc: DocumentDetail): Promise<void> {
+    await deleteDraft(doc.documentId);
+    if (activeDocMeta?.documentId !== doc.documentId) return;
+    setActiveDocMeta(documentDetailToMeta(doc));
+    loadEditorFromServer(doc);
   }
 
   function loadEditorFromDraft(docId: string, draft: NonNullable<Awaited<ReturnType<typeof getDraft>>>): void {
@@ -1394,6 +1410,64 @@ export function App() {
     }
   }
 
+  /** 侧栏 / 贴左右侧轨共用的纯文档树（无 chrome）。 */
+  function renderSidebarDocumentTree() {
+    return (
+      <DocumentTree
+        nodes={tree}
+        activeDocumentId={activeDocumentId}
+        graphFocusAnchorId={focus?.kind === "graph" ? focus.resourceId : null}
+        selectedParentPath={selectedCreateParentPath}
+        revealNodeId={revealFolderId}
+        onOpen={(node) => {
+          setRevealFolderId(null);
+          if (isNarrow) setMobileNavOpen(false);
+          guardNavigate(() => navigate(`/doc/${node.documentId}`));
+        }}
+        onOpenFolder={(folderPath, descDocumentId) => {
+          guardNavigate(() => {
+            setRevealFolderId(null);
+            setSelectedCreateParentPath(folderPath);
+            if (descDocumentId) {
+              closeGraph();
+              if (isNarrow) setMobileNavOpen(false);
+              navigate(`/doc/${descDocumentId}`);
+            }
+          });
+        }}
+        onContextMenu={setMenu}
+        onMoveDocument={handleMoveDocument}
+        onDeselect={() => {
+          closeGraph();
+          guardNavigate(() => {
+            setSelectedCreateParentPath("");
+            navigate("/");
+          });
+        }}
+        onOpenGraph={(node, parentFolderId) => {
+          if (node.type === "folder") {
+            openGraph(node.documentId, node.name);
+          } else if (parentFolderId) {
+            const parent = tree.find((n) => n.documentId === parentFolderId) as
+              | Extract<TreeNode, { type: "folder" }>
+              | undefined;
+            openGraph(parentFolderId, parent?.name ?? "图谱");
+          }
+        }}
+        onGenerateGraph={async (node, parentFolderId) => {
+          const folderId = node.type === "folder" ? node.documentId : parentFolderId;
+          if (!folderId) return;
+          const folderName =
+            node.type === "folder"
+              ? node.name
+              : ((tree.find((n) => n.documentId === parentFolderId) as { name?: string } | undefined)
+                  ?.name ?? "图谱");
+          openGraph(folderId, folderName);
+        }}
+      />
+    );
+  }
+
   // ========== 渲染阶段判断 ==========
 
   // 如果还在加载中，显示「加载中...」
@@ -1603,72 +1677,7 @@ export function App() {
             </div>
 
             {/* 文档树：递归渲染文件夹和文档 */}
-            <DocumentTree
-              nodes={tree}
-              activeDocumentId={activeDocumentId}
-              graphFocusAnchorId={focus?.kind === "graph" ? focus.resourceId : null}
-              selectedParentPath={selectedCreateParentPath}
-              revealNodeId={revealFolderId}
-              // 点击文档节点：先保存草稿再导航到文档
-              onOpen={(node) => {
-                setRevealFolderId(null);
-                if (isNarrow) setMobileNavOpen(false);
-                guardNavigate(() => navigate(`/doc/${node.documentId}`));
-              }}
-              // 点击文件夹：更新父路径，如果有描述文档则打开
-              onOpenFolder={(folderPath, descDocumentId) => {
-                guardNavigate(() => {
-                  setRevealFolderId(null);
-                  setSelectedCreateParentPath(folderPath);
-                  if (descDocumentId) {
-                    closeGraph();
-                    if (isNarrow) setMobileNavOpen(false);
-                    navigate(`/doc/${descDocumentId}`);
-                  }
-                });
-              }}
-              // 右键菜单回调
-              onContextMenu={setMenu}
-              onMoveDocument={handleMoveDocument}
-              // 点击空白处取消选中，返回首页
-              onDeselect={() => {
-                closeGraph();
-                guardNavigate(() => {
-                  setSelectedCreateParentPath("");
-                  navigate("/");
-                });
-              }}
-              // 知识图谱
-              onOpenGraph={(node, parentFolderId) => {
-                if (node.type === "folder") {
-                  openGraph(node.documentId, node.name);
-                } else {
-                  // 文件 → 打开父目录的图谱
-                  if (parentFolderId) {
-                    // 通过 parentFolderId 找父目录名称有点麻烦，先直接打开
-                    // TODO: 传父目录名称，并且定位到该文件相关节点
-                    const parent = tree.find(n => n.documentId === parentFolderId) as
-                      | Extract<TreeNode, { type: "folder" }>
-                      | undefined;
-                    openGraph(parentFolderId, parent?.name ?? "图谱");
-                  }
-                }
-              }}
-              onGenerateGraph={async (node, parentFolderId) => {
-                const folderId =
-                  node.type === "folder" ? node.documentId : parentFolderId;
-                if (!folderId) return;
-
-                const folderName =
-                  node.type === "folder"
-                    ? node.name
-                    : (tree.find((n) => n.documentId === parentFolderId) as any)?.name ??
-                      "图谱";
-
-                // 直接打开图谱页，用户可以在里面点生成按钮
-                openGraph(folderId, folderName);
-              }}
-            />
+            {renderSidebarDocumentTree()}
 
             {/* 底部访客信息：点击进入设置页 */}
             <footer className="mdocs-sidebar-footer">
@@ -1791,6 +1800,7 @@ export function App() {
                           commentPanelOpen={commentPanelOpen}
                           commentCount={commentCount}
                           onShowToast={setMessage}
+                          onVersionRestored={(doc) => void handleVersionRestored(doc)}
                           readerChrome={isNarrow}
                           onOpenMobileNav={() => setMobileNavOpen(true)}
                         />
@@ -1833,6 +1843,7 @@ export function App() {
                           commentCount={commentCount}
                           onAiWrite={isNarrow ? undefined : () => void openAiWriteForCurrentDoc()}
                           onShowToast={setMessage}
+                          onVersionRestored={(doc) => void handleVersionRestored(doc)}
                           readerChrome={isNarrow}
                           onOpenMobileNav={() => setMobileNavOpen(true)}
                         />
@@ -1904,6 +1915,7 @@ export function App() {
                       exportMarkdownRef={exportMarkdownRef}
                       onShowToast={setMessage}
                       onShowError={setAlertMessage}
+                      onVersionRestored={(doc) => void handleVersionRestored(doc)}
                       onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
                       commentPanelOpen={commentPanelOpen}
                       commentCount={commentCount}
@@ -2024,6 +2036,39 @@ export function App() {
             )}
 
           </main>
+
+          {/* 贴左助手时：右侧挤占式纯目录（可收起，带动画） */}
+          {agentDockLayout ? (
+            <aside
+              className={
+                "mdocs-tree-rail" + (agentTreeRailOpen ? " is-open" : " is-closed")
+              }
+              aria-label="文档目录"
+              aria-hidden={!agentTreeRailOpen}
+            >
+              <button
+                type="button"
+                className="mdocs-tree-rail-hide"
+                title="隐藏目录"
+                aria-label="隐藏目录"
+                tabIndex={agentTreeRailOpen ? 0 : -1}
+                onClick={() => setAgentTreeRailOpenPersist(false)}
+              >
+                <PanelRightClose size={16} strokeWidth={1.75} aria-hidden />
+              </button>
+              <div className="mdocs-tree-rail-body">{renderSidebarDocumentTree()}</div>
+              <button
+                type="button"
+                className="mdocs-tree-rail-peek"
+                title="显示目录"
+                aria-label="显示目录"
+                tabIndex={agentTreeRailOpen ? -1 : 0}
+                onClick={() => setAgentTreeRailOpenPersist(true)}
+              >
+                目录
+              </button>
+            </aside>
+          ) : null}
 
           {/* ========== 右键菜单浮层 ========== */}
           {menu && (

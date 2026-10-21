@@ -51,13 +51,15 @@
 
 ### CLI Token
 
-- **关键词**：`x-cli-token` `cli_tokens` `MDOCS_TOKEN`
+- **关键词**：`x-cli-token` `cli_tokens` `MDOCS_TOKEN` `多 Token` `启停` `硬删`
+- **结论**：可同时多个活跃；`revoked` 软停用可再开；`DELETE` 硬删行不可恢复；签发不再 revokeAll。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `src/server/identity/auth.middleware.ts` | 先 visitor 再 cli |
-  | `src/server/identity/cli-token.service.ts` | 解析 / 吊销 |
-  | `src/server/routes/cli-tokens.routes.ts` | 设置页 CRUD |
+  | `src/server/identity/cli-token.service.ts` | `createCliToken` `setCliTokenRevoked` `deleteCliToken` |
+  | `src/server/routes/cli-tokens.routes.ts` | GET/POST/PATCH/DELETE |
+- **需求**：[`../requirements/cli-multi-token/`](../requirements/cli-multi-token/)
 
 ### 登录态失效（修复记录）
 

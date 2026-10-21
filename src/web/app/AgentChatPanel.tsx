@@ -32,6 +32,7 @@ import { documentIdFromAgentHref } from "./agent-doc-link";
 import { fileMarkKind, fileMarkLabel } from "./agent-file-mark";
 import {
   type AgentDocumentTableRow,
+  compactAgentSessionApi,
   createAgentSessionApi,
   fetchAgentContextUsageApi,
   fetchAgentSessionApi,
@@ -346,6 +347,12 @@ const ASK_SUGGESTIONS = ["如何发布文档？", "草稿是什么？", "如何�
 
 /** 帮写空态引导：偏改稿/写作，和 Ask 上手答疑区分开 */
 const CODING_SUGGESTIONS = ["润色当前文稿", "补写开头引言", "把这段改得更简洁"];
+
+const CONTEXT_COMPACT_PREFIX = "【系统·上下文压缩】";
+
+function isContextCompactSummary(content: string): boolean {
+  return content.startsWith(CONTEXT_COMPACT_PREFIX);
+}
 
 function toChatMessages(
   sessionId: string,
@@ -1196,6 +1203,7 @@ export const AgentChatPanel = forwardRef<
   const [sending, setSending] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [contextUsage, setContextUsage] = useState<AgentContextUsage | null>(null);
+  const [contextCompacting, setContextCompacting] = useState(false);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [forceClosing, setForceClosing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -1475,6 +1483,50 @@ export const AgentChatPanel = forwardRef<
       setContextUsage(usage);
     } catch {
       /* ignore */
+    }
+  }
+
+  async function onCompactContext() {
+    if (contextCompacting || sending || !status?.enabled) return;
+    setContextCompacting(true);
+    setStreamError(null);
+    try {
+      const result = await compactAgentSessionApi(sessionMode, {
+        sessionId: sessionId ?? undefined,
+        documentId: coding ? documentId : undefined,
+      });
+      setContextUsage({
+        percent: result.percent,
+        used: result.used,
+        limit: result.limit,
+      });
+      if (result.compacted) {
+        const opened = await openAgentSessionApi(
+          result.sessionId,
+          sessionMode,
+          coding ? documentId : undefined,
+        );
+        setSessionId(opened.sessionId);
+        setMessages(toChatMessages(opened.sessionId, opened.messages));
+      } else if (result.reason === "nothing_to_compact") {
+        setStreamError("暂无可压缩的更早对话");
+      } else if (result.reason === "llm_failed" || result.reason === "missing_api_key") {
+        setStreamError("压缩失败，请稍后重试");
+      }
+    } catch (err) {
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? String((err as { code?: unknown }).code ?? "")
+          : "";
+      setStreamError(
+        code === "SESSION_COMPACTING"
+          ? "正在压缩上下文，请稍后再试"
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      );
+    } finally {
+      setContextCompacting(false);
     }
   }
 
@@ -1865,10 +1917,21 @@ export const AgentChatPanel = forwardRef<
         used: event.used,
         limit: event.limit,
       });
+    } else if (event.type === "context_compacting") {
+      setContextCompacting(true);
+    } else if (event.type === "context_compacted") {
+      setContextCompacting(false);
+      setContextUsage({
+        percent: event.percent,
+        used: event.used,
+        limit: event.limit,
+      });
     } else if (event.type === "error") {
       hadError = true;
+      setContextCompacting(false);
       setStreamError(event.message);
     } else if (event.type === "done") {
+      setContextCompacting(false);
       activeRunIdRef.current = null;
     }
     return hadError;
@@ -1992,7 +2055,7 @@ export const AgentChatPanel = forwardRef<
   async function sendMessage(raw: string) {
     const text = raw.trim();
     const assetIds = pendingAttachments.map((a) => a.id);
-    if ((!text && assetIds.length === 0) || sending) return;
+    if ((!text && assetIds.length === 0) || sending || contextCompacting) return;
     if (!status?.enabled) {
       setStreamError(
         status?.reason === "missing_api_key"
@@ -2065,7 +2128,16 @@ export const AgentChatPanel = forwardRef<
       }
     } catch (err) {
       if (ac.signal.aborted) return;
-      setStreamError(err instanceof Error ? err.message : String(err));
+      setContextCompacting(false);
+      const code =
+        err instanceof Error ? (err as Error & { code?: string }).code : undefined;
+      setStreamError(
+        code === "SESSION_COMPACTING"
+          ? "正在压缩上下文，请稍后再试"
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      );
     } finally {
       setMessages((prev) =>
         prev.map((m) =>
@@ -2548,6 +2620,11 @@ export const AgentChatPanel = forwardRef<
           onDrop={onComposerDrop}
         >
           <div className="mdocs-agent-panel-scroll-wrap">
+            {contextCompacting ? (
+              <div className="mdocs-agent-panel-compacting" role="status" aria-live="polite">
+                正在压缩上下文…
+              </div>
+            ) : null}
             <div
               className="mdocs-agent-panel-welcome"
               ref={listRef}
@@ -2886,6 +2963,13 @@ export const AgentChatPanel = forwardRef<
                             <span />
                           </span>
                         ) : null
+                      ) : isContextCompactSummary(m.content) ? (
+                        <details className="mdocs-agent-panel-compact-summary">
+                          <summary>上下文已压缩</summary>
+                          <pre className="mdocs-agent-panel-compact-summary-body">
+                            {m.content.slice(CONTEXT_COMPACT_PREFIX.length).trim()}
+                          </pre>
+                        </details>
                       ) : (
                         m.content
                       )}
@@ -2949,11 +3033,22 @@ export const AgentChatPanel = forwardRef<
           {needsApiKey && messages.length > 0 ? (
             <AgentApiKeyInlineSetup onConfigured={refreshAgentStatus} />
           ) : null}
-          <AgentSkillRefPicker
-            selectedNames={selectedSkillNames}
-            onChange={setSelectedSkillNames}
-            disabled={sending || !status?.enabled}
-          />
+          <div className="mdocs-agent-composer-tools">
+            <AgentSkillRefPicker
+              selectedNames={selectedSkillNames}
+              onChange={setSelectedSkillNames}
+              disabled={sending || contextCompacting || !status?.enabled}
+            />
+            <button
+              type="button"
+              className="mdocs-agent-skill-ref-toggle"
+              disabled={sending || contextCompacting || !status?.enabled}
+              title="把更早的对话压成摘要，腾出上下文空间"
+              onClick={() => void onCompactContext()}
+            >
+              {contextCompacting ? "压缩中…" : "压缩上下文"}
+            </button>
+          </div>
           <div
             className={
               "mdocs-agent-panel-input-wrap" + (composerDragOver ? " is-dragover" : "")
@@ -3021,7 +3116,7 @@ export const AgentChatPanel = forwardRef<
               <button
                 type="button"
                 className="mdocs-agent-panel-attach"
-                disabled={sending || uploadingAttachment || !status?.enabled}
+                disabled={sending || contextCompacting || uploadingAttachment || !status?.enabled}
                 title="上传附件，也可粘贴或拖入"
                 aria-label="上传附件"
                 onClick={() => fileInputRef.current?.click()}
@@ -3040,7 +3135,7 @@ export const AgentChatPanel = forwardRef<
                     : "请先配置 API Key"
                 }
                 value={input}
-                disabled={sending || !status?.enabled}
+                disabled={sending || contextCompacting || !status?.enabled}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -3067,7 +3162,9 @@ export const AgentChatPanel = forwardRef<
                   disabled={
                     sending
                       ? false
-                      : !status?.enabled || (!input.trim() && pendingAttachments.length === 0)
+                      : contextCompacting ||
+                        !status?.enabled ||
+                        (!input.trim() && pendingAttachments.length === 0)
                   }
                   onClick={() => {
                     if (sending) {

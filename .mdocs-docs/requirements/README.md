@@ -18,7 +18,11 @@
 | [agent-sheet-overwrite](./agent-sheet-overwrite/设计契约.md) | **已同意**：Agent `sheet_overwrite` 整表替换工作表 |
 | [agent-sheet-get-styles](./agent-sheet-get-styles/设计契约.md) | **已同意**：`sheet_get_styles` 只读返回格/行/列/整表样式 |
 | [document-delete-recovery](./document-delete-recovery/设计契约.md) | **已同意**：删文审计 `recovery` + restore + deleted 列表 |
+| [document-trash-ui](./document-trash-ui/设计契约.md) | **已同意**：设置页回收站（接 deleted/restore） |
+| [document-version-restore](./document-version-restore/设计契约.md) | **已同意**：文章选历史版恢复（旧内容新 commit） |
+| [cli-multi-token](./cli-multi-token/设计契约.md) | **已同意**：多 CLI Token + 启停 + 硬删 |
 | [agent-md-append-replace](./agent-md-append-replace/设计契约.md) | **已同意**：md append/replace + 写后短提示重读 |
+| [agent-context-compact](./agent-context-compact/设计契约.md) | **已同意**：≥85% 自动 + 主动 LLM 压缩；UI + session 锁 |
 | [sheet-merge-style](./sheet-merge-style/设计契约.md) | **已实现**：`.sheet` 合并单元格 + cell/font 样式 — [代码索引](./sheet-merge-style/代码索引.md) |
 | [conflict-force-overwrite](./conflict-force-overwrite/需求分析.md) | **已同意**：冲突时 owner 强制覆盖（假 merge，正文=本地） |
 | [android-webview-shell](./android-webview-shell/设计契约.md) | **已同意**：Android 侧载 APK，用户自填 mdocs 地址 |

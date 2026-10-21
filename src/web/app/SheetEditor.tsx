@@ -14,6 +14,7 @@ import {
 import {
   Bold,
   Columns3,
+  History,
   Italic,
   Merge,
   Plus,
@@ -25,7 +26,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { ActiveDocumentMeta } from "../../shared/types/document";
+import type { ActiveDocumentMeta, DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
 import {
   DocumentPermission,
@@ -81,6 +82,7 @@ import {
 } from "../services/endpoints";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { VisitorPickerModal } from "./VisitorPickerModal";
+import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useDocScrollCache } from "./hooks/useDocScrollCache";
 import "./SheetEditor.css";
@@ -112,6 +114,7 @@ interface SheetEditorProps {
   commentPanelOpen?: boolean;
   commentCount?: number;
   onShowToast?: (message: string) => void;
+  onVersionRestored?: (doc: DocumentDetail) => void;
   readerChrome?: boolean;
   onOpenMobileNav?: () => void;
 }
@@ -258,6 +261,7 @@ export function SheetEditor(props: SheetEditorProps) {
   const [permissionBusy, setPermissionBusy] = useState(false);
   const [showInvitePicker, setShowInvitePicker] = useState(false);
   const [existingInvites, setExistingInvites] = useState<Map<string, string>>(new Map());
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [deleteTabTarget, setDeleteTabTarget] = useState<{ id: string; name: string } | null>(null);
   const [renamingColId, setRenamingColId] = useState<string | null>(null);
@@ -746,6 +750,17 @@ export function SheetEditor(props: SheetEditorProps) {
         >
           <ShieldUser size={14} />
           <span>{t("docInfoChangePermission")}</span>
+        </button>
+        <button
+          type="button"
+          style={menuItemStyle}
+          onClick={() => {
+            onClose();
+            setShowVersionHistory(true);
+          }}
+        >
+          <History size={14} />
+          <span>{t("versionHistoryTitle")}</span>
         </button>
       </>
     );
@@ -1336,6 +1351,19 @@ export function SheetEditor(props: SheetEditorProps) {
           onClose={() => setShowInvitePicker(false)}
           onConfirm={(result) => {
             void saveInvite(result as Array<{ visitorId: string; permission: string }>);
+          }}
+        />
+      ) : null}
+      {showVersionHistory ? (
+        <VersionHistoryPanel
+          documentId={documentId}
+          fileType="sheet"
+          canRestore={props.canEdit}
+          onClose={() => setShowVersionHistory(false)}
+          onRestored={(doc) => {
+            setShowVersionHistory(false);
+            props.onVersionRestored?.(doc);
+            props.onShowToast?.(t("versionHistoryRestored"));
           }}
         />
       ) : null}

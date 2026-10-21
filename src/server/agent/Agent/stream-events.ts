@@ -52,6 +52,10 @@ export type AgentStreamEvent =
       displayName: string;
     }
   | { type: "context_usage"; percent: number; used: number; limit: number }
+  /** 正在 LLM 压缩 session 历史 */
+  | { type: "context_compacting" }
+  /** 压缩完成（或跳过失败后用量不变时不发）；用于更新用量环 */
+  | { type: "context_compacted"; percent: number; used: number; limit: number }
   /** 账号工具改了文档树结构，前端应 re-fetch tree */
   | { type: "tree_changed"; reason: string }
   /** AI 覆写文档成功，前端若打开该文档应拉取最新内容 */

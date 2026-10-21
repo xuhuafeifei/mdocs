@@ -23,6 +23,9 @@ vi.mock("./session-manager.js", () => ({
     async loadLastOpenedMessages() {
       return { sessionId: "sess-fixed", messages: [] };
     }
+    isCompacting() {
+      return false;
+    }
   },
 }));
 

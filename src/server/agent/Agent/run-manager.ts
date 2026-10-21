@@ -9,6 +9,7 @@ import { cancelVisitorChoices } from "./choice-pending.js";
 import { cancelVisitorSkillForms } from "./skill-form-pending.js";
 import { runOnboardingChat } from "./run.js";
 import { AgentSessionManager } from "./session-manager.js";
+import { SessionCompactingError } from "./context-compact-lock.js";
 import type { AgentStreamEvent } from "./stream-events.js";
 import type { AgentMode, AgentUiReferences } from "./system-prompt.js";
 import {
@@ -210,6 +211,13 @@ export async function startAgentRun(params: {
     mode,
     documentId: params.documentId,
   });
+
+  const sessionMgr = new AgentSessionManager(params.visitorId, {
+    kind: mode === "coding" ? "coding" : "normal",
+  });
+  if (sessionMgr.isCompacting?.(sessionId)) {
+    throw new SessionCompactingError(sessionId);
+  }
 
   const existing = getActiveRunForSession(params.visitorId, sessionId);
   if (existing) throw new AgentRunActiveError(existing);

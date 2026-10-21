@@ -2,7 +2,11 @@ import { getVisitorAgentConfig, DEFAULT_AGENT_CONTEXT_WINDOW } from "../Config/c
 import { getSkillLoader } from "../Skill/skill-loader.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { createToolsForMode } from "./tools-registry.js";
-import { AgentSessionManager } from "./session-manager.js";
+import {
+  AgentSessionManager,
+  type AgentSessionMessage,
+  type AgentSessionKind,
+} from "./session-manager.js";
 
 export type AgentContextUsage = {
   percent: number;
@@ -58,17 +62,7 @@ function resolveContextLimit(visitorId: string): number {
   return getVisitorAgentConfig(visitorId)?.contextWindow ?? DEFAULT_AGENT_CONTEXT_WINDOW;
 }
 
-/**
- * 估算当前 lastOpened session 将占用的 context（system + tools + messages）。
- * limit 来自访客 AI 配置的 contextWindow。
- */
-export async function getAgentContextUsageForApi(
-  visitorId: string,
-): Promise<AgentContextUsage> {
-  const limit = resolveContextLimit(visitorId);
-  const systemTokens = estimateTokens(buildSystemPrompt());
-  const toolTokens = estimateToolsTokens(visitorId);
-  const { messages } = await new AgentSessionManager(visitorId).loadLastOpenedMessages();
+export function estimateMessageListTokens(messages: AgentSessionMessage[]): number {
   let messageTokens = 0;
   for (const m of messages) {
     if (m.role === "tool") {
@@ -79,9 +73,35 @@ export async function getAgentContextUsageForApi(
     }
     messageTokens += estimateTokens(m.content);
   }
+  return messageTokens;
+}
+
+export function estimateUsageForMessages(
+  visitorId: string,
+  messages: AgentSessionMessage[],
+): AgentContextUsage {
+  const limit = resolveContextLimit(visitorId);
+  const systemTokens = estimateTokens(buildSystemPrompt());
+  const toolTokens = estimateToolsTokens(visitorId);
+  const messageTokens = estimateMessageListTokens(messages);
   const used = Math.min(limit, systemTokens + toolTokens + messageTokens);
   const percent = limit <= 0 ? 0 : Math.min(100, Math.round((used / limit) * 100));
   return { percent, used, limit };
+}
+
+/**
+ * 估算当前 lastOpened session 将占用的 context（system + tools + messages）。
+ * limit 来自访客 AI 配置的 contextWindow。
+ */
+export async function getAgentContextUsageForApi(
+  visitorId: string,
+  opts?: { kind?: AgentSessionKind; documentId?: string | null },
+): Promise<AgentContextUsage> {
+  const kind = opts?.kind ?? "normal";
+  const { messages } = await new AgentSessionManager(visitorId, {
+    kind,
+  }).loadLastOpenedMessages(kind === "coding" ? opts?.documentId : undefined);
+  return estimateUsageForMessages(visitorId, messages);
 }
 
 /** 合并估算与本轮 provider usage.input（取较大者，避免低估） */

@@ -4,6 +4,11 @@ import { randomUUID } from "node:crypto";
 import { DEFAULT_DOMAIN_ID } from "../../../shared/domainUi.js";
 import { getConfig } from "../../config/index.js";
 import { atomicWriteJson, withSessionMetaLock } from "./session-meta-lock.js";
+import {
+  acquireCompactLock,
+  assertNotCompacting,
+  isSessionCompacting,
+} from "./context-compact-lock.js";
 
 export type AgentSessionRole = "user" | "assistant" | "tool";
 
@@ -819,6 +824,99 @@ export class AgentSessionManager {
     this.cachedSessionId = sessionId;
   }
 
+  jsonlFilePath(sessionId: string): string {
+    return this.jsonlPath(sessionId);
+  }
+
+  isCompacting(sessionId: string): boolean {
+    return isSessionCompacting(this.jsonlPath(sessionId));
+  }
+
+  async acquireSessionCompactLock(sessionId: string): Promise<() => Promise<void>> {
+    if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
+    return acquireCompactLock(this.jsonlPath(sessionId), sessionId);
+  }
+
+  async loadMessages(sessionId: string): Promise<AgentSessionMessage[]> {
+    if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
+    return this.loadTranscript(sessionId);
+  }
+
+  /**
+   * 整文件替换 jsonl（压缩写回）。先备份再原子 rename。
+   * markSummary：首条 user 若带压缩前缀则写 kind=context_compact_summary
+   */
+  async replaceTranscript(
+    sessionId: string,
+    messages: AgentSessionMessage[],
+    opts?: { markSummary?: boolean },
+  ): Promise<void> {
+    if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
+    const jsonl = this.jsonlPath(sessionId);
+    await this.runSerialized(async () => {
+      // 压缩流程应已持有 compact lock
+      if (!isSessionCompacting(jsonl)) {
+        throw new Error("compact_lock_required");
+      }
+      const lines: string[] = [];
+      for (let i = 0; i < messages.length; i++) {
+        const m = messages[i]!;
+        if (m.role === "tool") {
+          const row: Record<string, unknown> = {
+            role: "tool",
+            toolCallId: m.toolCallId,
+            toolName: m.toolName,
+            arguments: m.arguments,
+            resultText: m.resultText,
+            ts: nowIso(),
+          };
+          if (m.isError) row.isError = true;
+          lines.push(JSON.stringify(row));
+          continue;
+        }
+        const row: Record<string, unknown> = {
+          role: m.role,
+          content: m.content,
+          ts: nowIso(),
+        };
+        if (m.role === "user" && m.skillNames?.length) row.skillNames = m.skillNames;
+        if (m.role === "user" && m.assets?.length) row.assets = m.assets;
+        if (
+          opts?.markSummary &&
+          i === 0 &&
+          m.role === "user" &&
+          m.content.startsWith("【系统·上下文压缩】")
+        ) {
+          row.kind = "context_compact_summary";
+        }
+        lines.push(JSON.stringify(row));
+      }
+      const body = lines.length ? `${lines.join("\n")}\n` : "";
+      const bak = `${jsonl}.bak-compact-${Date.now()}`;
+      try {
+        if (fs.existsSync(jsonl)) {
+          await fs.promises.rename(jsonl, bak);
+          // 只留最近 2 个 bak
+          const dir = path.dirname(jsonl);
+          const base = path.basename(jsonl);
+          const baks = (await fs.promises.readdir(dir))
+            .filter((n) => n.startsWith(`${base}.bak-compact-`))
+            .sort();
+          while (baks.length > 2) {
+            const old = baks.shift();
+            if (old) await fs.promises.unlink(path.join(dir, old)).catch(() => undefined);
+          }
+        }
+      } catch {
+        /* 无原文件亦可 */
+      }
+      const tmp = `${jsonl}.tmp.${process.pid}.${randomUUID()}`;
+      await fs.promises.writeFile(tmp, body, "utf8");
+      await fs.promises.rename(tmp, jsonl);
+      await this.touchLastOpenedUnlocked(sessionId);
+    });
+  }
+
   /** jsonl append + touch meta 同一 Manager 队列任务。 */
   async appendUser(
     sessionId: string,
@@ -827,6 +925,7 @@ export class AgentSessionManager {
     assets?: AgentSessionAssetRef[],
   ): Promise<void> {
     if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
+    assertNotCompacting(this.jsonlPath(sessionId), sessionId);
     const names = Array.isArray(skillNames)
       ? skillNames
           .filter((n) => typeof n === "string" && n.trim())
@@ -862,6 +961,7 @@ export class AgentSessionManager {
 
   async appendAssistant(sessionId: string, content: string): Promise<void> {
     if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
+    assertNotCompacting(this.jsonlPath(sessionId), sessionId);
     await this.runSerialized(async () => {
       await fs.promises.appendFile(
         this.jsonlPath(sessionId),
@@ -887,6 +987,7 @@ export class AgentSessionManager {
     },
   ): Promise<void> {
     if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
+    assertNotCompacting(this.jsonlPath(sessionId), sessionId);
     const toolCallId = String(exchange.toolCallId ?? "").trim();
     const toolName = String(exchange.toolName ?? "").trim();
     if (!toolCallId || !toolName) return;

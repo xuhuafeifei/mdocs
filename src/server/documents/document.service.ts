@@ -17,14 +17,19 @@ import {
   updateDocumentLocation,
   type DocumentRow,
 } from "../db/repositories/document.repo.js";
-import { insertCommit, insertCommitParent } from "../db/repositories/commit.repo.js";
+import {
+  insertCommit,
+  insertCommitParent,
+  findCommitById,
+  listCommitsByDocument as listCommitRowsByDocument,
+} from "../db/repositories/commit.repo.js";
 import {
   assertCommitBelongsToDocument,
   assertMergeFork,
   findMergeBaseCommitId,
   isAncestorOf,
 } from "./commit-graph.js";
-import { findCommitById } from "../db/repositories/commit.repo.js";
+import { findVisitorById } from "../db/repositories/visitor.repo.js";
 import {
   findDomainById,
   isDomainMember,
@@ -51,6 +56,7 @@ import {
   readCommitBlob,
   readDocument,
   renameDocumentFile,
+  renameDocumentFileIfPresent,
   sha256,
   writeCommitBlob,
   writeDocument,
@@ -71,7 +77,7 @@ import type {
 import { getConfig } from "../config/index.js";
 import { markdownToLexicalJson } from "./markdown-to-lexical.js";
 import { extractPlainTextFromLexical } from "./lexical-text.js";
-import { FILE_TYPE } from "../../shared/file-types.js";
+import { FILE_TYPE, isGraphFileType } from "../../shared/file-types.js";
 import { isFolderDescPath } from "../../shared/folderDesc.js";
 import { getPolicy } from "../../shared/file-type-policy.js";
 import {
@@ -904,6 +910,187 @@ export function restoreDocumentFromAudit(params: {
 }
 
 // ============================================================
+//  版本历史 / 选版恢复（旧内容新 commit）
+// ============================================================
+
+export type DocumentCommitSummary = {
+  commitId: string;
+  createdAt: string;
+  authorVisitorId: string;
+  authorVisitorName: string | null;
+  contentHash: string;
+  isHead: boolean;
+};
+
+export type DocumentCommitDetail = DocumentCommitSummary & {
+  content: string;
+};
+
+export function listDocumentCommits(documentId: string): DocumentCommitSummary[] {
+  const db = getDb();
+  const row = findDocumentById(db, documentId);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+  const head = row.head_commit_id;
+  const commits = listCommitRowsByDocument(db, documentId);
+  return commits.map((c) => {
+    const author = findVisitorById(db, c.author_visitor_id);
+    return {
+      commitId: c.commit_id,
+      createdAt: c.created_at,
+      authorVisitorId: c.author_visitor_id,
+      authorVisitorName: author?.visitor_name ?? null,
+      contentHash: c.content_hash,
+      isHead: head != null && c.commit_id === head,
+    };
+  });
+}
+
+export function getDocumentCommit(
+  documentId: string,
+  commitId: string,
+): DocumentCommitDetail {
+  const db = getDb();
+  const row = findDocumentById(db, documentId);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+  const commit = findCommitById(db, commitId);
+  if (!commit || commit.document_id !== documentId) {
+    throw new DocumentError("COMMIT_NOT_FOUND", "版本不存在", 404);
+  }
+  let content: string;
+  try {
+    content = readCommitBlob(commit.blob_ref);
+  } catch {
+    throw new DocumentError("BLOB_MISSING", "该版本正文不可读", 409);
+  }
+  const author = findVisitorById(db, commit.author_visitor_id);
+  return {
+    commitId: commit.commit_id,
+    createdAt: commit.created_at,
+    authorVisitorId: commit.author_visitor_id,
+    authorVisitorName: author?.visitor_name ?? null,
+    contentHash: commit.content_hash,
+    isHead: row.head_commit_id != null && commit.commit_id === row.head_commit_id,
+    content,
+  };
+}
+
+/**
+ * 将选中历史版正文作为新 commit 发布（parent = 当前 head）。
+ * 若目标已是 head 且工作区 hash 一致 → 不插新节点，直接返回当前详情。
+ */
+export function restoreDocumentVersion(params: {
+  actorVisitorId: string;
+  documentId: string;
+  commitId: string;
+}): DocumentDetail {
+  const db = getDb();
+  const row = findDocumentById(db, params.documentId);
+  if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+
+  const domain = findDomainById(db, row.domain_id);
+  const domainPermission = domain?.permission ?? "public";
+  const isMember = !!(
+    domain && isDomainMember(db, domain.domain_id, params.actorVisitorId)
+  );
+  const domainInfo: DomainAccessInfo = {
+    domainPermission,
+    isDomainMember: isMember,
+  };
+  if (!canEditDocument(row, params.actorVisitorId, domainInfo)) {
+    throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
+  }
+
+  const source = findCommitById(db, params.commitId);
+  if (!source || source.document_id !== params.documentId) {
+    throw new DocumentError("COMMIT_NOT_FOUND", "版本不存在", 404);
+  }
+
+  let content: string;
+  try {
+    content = readCommitBlob(source.blob_ref);
+  } catch {
+    throw new DocumentError("BLOB_MISSING", "该版本正文不可读", 409);
+  }
+
+  if (
+    row.head_commit_id === source.commit_id &&
+    row.content_hash === source.content_hash
+  ) {
+    return getDocument(params.documentId, params.actorVisitorId);
+  }
+
+  const now = new Date().toISOString();
+  const write = writeDocument(row.domain_id, row.relative_path, content);
+  const newCommitId = randomUUID();
+  const blob = writeCommitBlob(write.contentHash, content);
+  const previousHead = row.head_commit_id;
+
+  const tx = db.transaction(() => {
+    updateDocumentContent(db, {
+      documentId: row.document_id,
+      displayName: row.display_name,
+      contentHash: write.contentHash,
+      updatedBy: params.actorVisitorId,
+      updatedAt: now,
+    });
+    insertCommit(db, {
+      commitId: newCommitId,
+      documentId: row.document_id,
+      contentHash: write.contentHash,
+      blobRef: blob.blobRef,
+      authorVisitorId: params.actorVisitorId,
+      createdAt: now,
+    });
+    if (previousHead) {
+      insertCommitParent(db, {
+        childCommitId: newCommitId,
+        parentCommitId: previousHead,
+      });
+    }
+    updateDocumentHeadCommit(db, {
+      documentId: row.document_id,
+      headCommitId: newCommitId,
+      updatedBy: params.actorVisitorId,
+      updatedAt: now,
+    });
+    insertAuditLog(db, {
+      actorVisitorId: params.actorVisitorId,
+      action: "document.restore_version",
+      targetType: "document",
+      targetId: row.document_id,
+      metadata: {
+        fromCommitId: source.commit_id,
+        newCommitId,
+        previousHeadCommitId: previousHead,
+      },
+      createdAt: now,
+    });
+  });
+  tx();
+
+  scheduleFtsIfNeeded(row.file_type, row.document_id);
+  scheduleGraphIfExtractable(row.file_type, () =>
+    onArticlePublished({
+      domainId: row.domain_id,
+      documentId: row.document_id,
+      parentId: row.parent_id,
+    }),
+  );
+
+  const invitedEdit = resolveInvitedEditFlag(db, row, params.actorVisitorId);
+  return buildDocumentDetail(row, {
+    displayName: row.display_name,
+    content,
+    contentHash: write.contentHash,
+    updatedBy: params.actorVisitorId,
+    updatedAt: now,
+    permission: row.permission,
+    headCommitId: newCommitId,
+    invitedEdit,
+  });
+}
+
+// ============================================================
 //  移动文档（同域；改 parent_id + relative_path + 磁盘）
 // ============================================================
 
@@ -923,6 +1110,11 @@ export function moveDocument(params: {
   if (row.owner_visitor_id !== params.actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可移动此文件", 403);
   }
+
+  if (row.file_type === FILE_TYPE.FOLDER) {
+    return moveFolder(params);
+  }
+
   if (!getPolicy(row.file_type as any).movable) {
     throw new DocumentError("INVALID_TYPE", "该类型文件不支持移动", 400);
   }
@@ -1024,6 +1216,209 @@ export function moveDocument(params: {
   );
 
   return getDocument(params.documentId, params.actorVisitorId);
+}
+
+/**
+ * 移动目录：子孙 relative_path 一并改写；图谱隐藏文件不搬家，直接删。
+ */
+function moveFolder(params: {
+  actorVisitorId: string;
+  documentId: string;
+  parentId: string | null;
+}): DocumentDetail {
+  const db = getDb();
+  const folder = findDocumentById(db, params.documentId);
+  if (!folder || folder.file_type !== FILE_TYPE.FOLDER) {
+    throw new DocumentError("DOC_NOT_FOUND", "目录不存在", 404);
+  }
+  if (folder.owner_visitor_id !== params.actorVisitorId) {
+    throw new DocumentError("FORBIDDEN", "仅创建者可移动此目录", 403);
+  }
+
+  const currentParent = folder.parent_id ?? null;
+  const targetParent = params.parentId;
+  if (currentParent === targetParent) {
+    return getDocument(params.documentId, params.actorVisitorId);
+  }
+
+  if (targetParent === folder.document_id) {
+    throw new DocumentError("INVALID_PARENT", "不能将目录移动到自身下", 400);
+  }
+
+  let newParentId: string | null;
+  let newFolderPath: string;
+  const baseName = basenameRelativePath(folder.relative_path);
+
+  if (targetParent == null) {
+    newParentId = null;
+    newFolderPath = baseName;
+  } else {
+    const parentDoc = findDocumentById(db, targetParent);
+    if (!parentDoc || parentDoc.file_type !== "dir") {
+      throw new DocumentError(
+        "INVALID_PARENT",
+        "无效的父节点或父节点不是文件夹",
+        400,
+      );
+    }
+    if (parentDoc.domain_id !== folder.domain_id) {
+      throw new DocumentError("CROSS_DOMAIN", "不能跨工作空间移动目录", 400);
+    }
+    if (
+      parentDoc.relative_path === folder.relative_path ||
+      parentDoc.relative_path.startsWith(`${folder.relative_path}/`)
+    ) {
+      throw new DocumentError("INVALID_PARENT", "不能将目录移动到其子孙下", 400);
+    }
+    newParentId = targetParent;
+    const parentPath = parentDoc.relative_path.endsWith("/")
+      ? parentDoc.relative_path.slice(0, -1)
+      : parentDoc.relative_path;
+    newFolderPath = `${parentPath}/${baseName}`;
+  }
+
+  const oldFolderPath = folder.relative_path;
+  const oldPrefix = `${oldFolderPath}/`;
+  const descendants = listDocumentsByPathPrefix(db, folder.domain_id, oldPrefix);
+  const subtree = [folder, ...descendants];
+
+  const notOwned = subtree.filter((d) => d.owner_visitor_id !== params.actorVisitorId);
+  if (notOwned.length > 0) {
+    throw new DocumentError(
+      "FORBIDDEN",
+      `目录下有 ${notOwned.length} 篇文档不属于你，无法移动`,
+      403,
+    );
+  }
+
+  const graphDocs = descendants.filter((d) => isGraphFileType(d.file_type));
+  const movingDocs = subtree.filter((d) => !isGraphFileType(d.file_type));
+
+  type MovePlan = { row: DocumentRow; newPath: string; newParentId: string | null };
+  const plans: MovePlan[] = movingDocs.map((doc) => {
+    if (doc.document_id === folder.document_id) {
+      return { row: doc, newPath: newFolderPath, newParentId };
+    }
+    const suffix = doc.relative_path.slice(oldPrefix.length);
+    return {
+      row: doc,
+      newPath: `${newFolderPath}/${suffix}`,
+      newParentId: doc.parent_id,
+    };
+  });
+
+  const movingIds = new Set(plans.map((p) => p.row.document_id));
+  for (const plan of plans) {
+    const existing = findDocumentByPath(db, folder.domain_id, plan.newPath);
+    if (existing && !movingIds.has(existing.document_id)) {
+      throw new DocumentError("DOC_EXISTS", "目标位置已存在同名文档", 409);
+    }
+  }
+
+  const now = new Date().toISOString();
+  const diskOps = plans
+    .filter((p) => p.row.relative_path !== p.newPath)
+    .sort((a, b) => b.row.relative_path.length - a.row.relative_path.length);
+
+  const doneDisk: Array<{ from: string; to: string }> = [];
+  try {
+    for (const plan of diskOps) {
+      renameDocumentFileIfPresent(folder.domain_id, plan.row.relative_path, plan.newPath);
+      doneDisk.push({ from: plan.row.relative_path, to: plan.newPath });
+    }
+  } catch (err) {
+    for (const op of [...doneDisk].reverse()) {
+      try {
+        renameDocumentFileIfPresent(folder.domain_id, op.to, op.from);
+      } catch {
+        /* 回滚尽力 */
+      }
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new DocumentError("STORAGE_ERROR", msg, 500);
+  }
+
+  try {
+    const tx = db.transaction(() => {
+      for (const g of graphDocs) {
+        deleteDocument(db, g.document_id);
+        insertAuditLog(db, {
+          actorVisitorId: params.actorVisitorId,
+          action: "document.delete",
+          targetType: "document",
+          targetId: g.document_id,
+          metadata: {
+            relativePath: g.relative_path,
+            viaFolderMove: true,
+            reason: "graph-hidden-on-folder-move",
+          },
+          createdAt: now,
+        });
+      }
+      for (const plan of plans) {
+        updateDocumentLocation(db, {
+          documentId: plan.row.document_id,
+          parentId: plan.newParentId,
+          relativePath: plan.newPath,
+          updatedBy: params.actorVisitorId,
+          updatedAt: now,
+        });
+      }
+      insertAuditLog(db, {
+        actorVisitorId: params.actorVisitorId,
+        action: "folder.move",
+        targetType: "folder",
+        targetId: folder.document_id,
+        metadata: {
+          fromRelativePath: oldFolderPath,
+          toRelativePath: newFolderPath,
+          parentId: newParentId,
+          movedCount: plans.length,
+          deletedGraphCount: graphDocs.length,
+        },
+        createdAt: now,
+      });
+    });
+    tx();
+  } catch (err) {
+    for (const op of [...doneDisk].reverse()) {
+      try {
+        renameDocumentFileIfPresent(folder.domain_id, op.to, op.from);
+      } catch {
+        /* 回滚尽力 */
+      }
+    }
+    throw err;
+  }
+
+  for (const g of graphDocs) {
+    try {
+      deleteDocumentFile(folder.domain_id, g.relative_path);
+    } catch {
+      /* 盘上可能已不存在 */
+    }
+    removeIndex(g.document_id);
+  }
+
+  for (const plan of plans) {
+    scheduleFtsIfNeeded(plan.row.file_type, plan.row.document_id);
+    scheduleGraphIfExtractable(plan.row.file_type, () =>
+      onArticleMoved({
+        domainId: folder.domain_id,
+        documentId: plan.row.document_id,
+        oldParentId: plan.row.parent_id,
+        newParentId: plan.newParentId,
+      }),
+    );
+  }
+
+  const updated = findDocumentById(db, params.documentId)!;
+  return {
+    ...rowToSummary(updated),
+    content: "",
+    contentHash: updated.content_hash ?? "",
+    permission: updated.permission,
+  };
 }
 
 // ============================================================

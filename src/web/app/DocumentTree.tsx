@@ -538,10 +538,14 @@ function FolderRow(props: {
     Boolean(props.folder.descDocumentId) && props.folder.descDocumentId === props.activeDocumentId;
   const isGraphFocus = props.folder.documentId === props.graphFocusAnchorId;
   const isSelectTarget = props.selectedParentPath === props.folder.path;
+  const canDrag = Boolean(props.onMoveDocument);
+  const dragging = props.draggingId === props.folder.documentId;
   const dropActive =
     props.dropHighlight?.kind === "folder" && props.dropHighlight.id === props.folder.documentId;
+  const [suppressClick, setSuppressClick] = useState(false);
 
   function activateFolder(): void {
+    if (suppressClick) return;
     props.onOpenFolder(props.folder.path, props.folder.descDocumentId);
   }
 
@@ -552,11 +556,13 @@ function FolderRow(props: {
           "mdocs-tree-row mdocs-tree-folder mdocs-tree-folder-row" +
           (isActive ? " active" : isSelectTarget ? " mdocs-tree-select-target" : "") +
           (isGraphFocus ? " mdocs-tree-row--graph-focus" : "") +
+          (dragging ? " mdocs-tree-dragging" : "") +
           (dropActive ? " mdocs-tree-drop-target" : "")
         }
         data-tree-id={props.folder.documentId}
         tabIndex={-1}
-        style={props.indent}
+        style={{ ...props.indent, cursor: canDrag ? "grab" : undefined }}
+        draggable={canDrag}
         onClick={activateFolder}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -568,8 +574,21 @@ function FolderRow(props: {
             parentPath: props.folder.path,
           });
         }}
+        onDragStart={(e) => {
+          if (!props.onMoveDocument) return;
+          setSuppressClick(true);
+          props.beginDragSession(props.folder.documentId);
+          e.dataTransfer.setData(DND_MIME, props.folder.documentId);
+          e.dataTransfer.setData("text/plain", DND_TEXT_PREFIX + props.folder.documentId);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onDragEnd={() => {
+          props.endDragSession();
+          queueMicrotask(() => setSuppressClick(false));
+        }}
         onDragEnter={(e) => {
           if (!isOurDocDrag(props.onMoveDocument)) return;
+          if (dragSessionDocumentId === props.folder.documentId) return;
           e.preventDefault();
           e.stopPropagation();
           props.setDropHighlight({ kind: "folder", id: props.folder.documentId });
@@ -577,6 +596,7 @@ function FolderRow(props: {
         }}
         onDragOver={(e) => {
           if (!isOurDocDrag(props.onMoveDocument)) return;
+          if (dragSessionDocumentId === props.folder.documentId) return;
           e.preventDefault();
           e.stopPropagation();
           e.dataTransfer.dropEffect = "move";
@@ -589,7 +609,8 @@ function FolderRow(props: {
           const documentId = readDraggedDocumentId(e.dataTransfer);
           const folderId = props.folder.documentId;
           props.endDragSession();
-          if (documentId) void props.onMoveDocument(documentId, folderId);
+          if (!documentId || documentId === folderId) return;
+          void props.onMoveDocument(documentId, folderId);
         }}
       >
         <span
