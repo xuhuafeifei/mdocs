@@ -136,6 +136,28 @@ describe("append_document / replace_document_markdown", () => {
     expect(md).not.toContain("**world**");
   });
 
+  it("replace refuses emptying a non-empty document", async () => {
+    const body =
+      "一段足够长的正文用来触发破坏性替换保护，后面再跟一些句子保证超过八十个字符。\n\n结尾段。\n";
+    const created = createDocument({
+      actorVisitorId: OWNER,
+      fileName: "wipe.md",
+      content: body,
+      domainId: "public-domain",
+      permission: Permission.PUBLIC_WRITE,
+      contentFormat: "markdown",
+    });
+    const deps = { visitorId: OWNER, onEvent: () => {} };
+    await expect(
+      runTool(replaceDocumentMarkdownTool(deps), {
+        documentId: created.documentId,
+        find: body.trim(),
+        replace: "",
+        message: "误清空",
+      }),
+    ).rejects.toThrow(/REPLACE_EMPTY_RESULT|REPLACE_TOO_DESTRUCTIVE/);
+  });
+
   it("replace fails when ambiguous without occurrence", async () => {
     const created = createDocument({
       actorVisitorId: OWNER,

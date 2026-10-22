@@ -2773,18 +2773,21 @@ export function App() {
 
       {!isDemoMode() && (
         <>
-          <AgentFab
-            open={agentPanelOpen}
-            onToggle={() => {
-              if (agentPanelOpen) {
-                agentPanelRef.current?.requestClose();
-              } else {
-                setAgentPanelOpen(true);
-              }
-            }}
-            position={agentFabPos}
-            onPositionChange={setAgentFabPos}
-          />
+          {/* 贴左时左侧已是助手面板，不再叠浮动球 */}
+          {!agentDockLayout ? (
+            <AgentFab
+              open={agentPanelOpen}
+              onToggle={() => {
+                if (agentPanelOpen) {
+                  agentPanelRef.current?.requestClose();
+                } else {
+                  setAgentPanelOpen(true);
+                }
+              }}
+              position={agentFabPos}
+              onPositionChange={setAgentFabPos}
+            />
+          ) : null}
           {agentPanelOpen && !agentDockLayout ? (
             <Suspense fallback={null}>
               <AgentChatPanel

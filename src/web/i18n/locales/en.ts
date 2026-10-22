@@ -391,7 +391,7 @@ export const en: Record<TranslationKey, string> = {
   versionHistorySheetHint: "Sheet preview shows a summary only; restore to view full content in the editor.",
   versionHistoryHideAuto: "Hide auto-publishes",
   publishMessageTitle: "Publish message",
-  publishMessageHint: "Optional note for this publish (like a git commit message). Leave blank to publish anyway.",
+  publishMessageHint: "Optional note for this publish (like a git commit). Enter publishes; Shift+Enter for a new line.",
   publishMessageLabel: "Message",
   publishMessagePlaceholder: "e.g. Clarify API section, fix typos…",
   publishMessageSuggestAi: "Suggest with AI",

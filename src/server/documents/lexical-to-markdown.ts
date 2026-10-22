@@ -191,13 +191,15 @@ function serializeBlock(node: LexNode, depth: number, listIndent = 0): string {
     }
     case "quote":
     case "blockquote": {
-      const inner = asNodes(node.children)
-        .map((c) => serializeBlock(c, depth + 1))
-        .filter(Boolean)
-        .join("\n\n");
+      const kids = asNodes(node.children);
+      // 空引用（无子节点 / 仅空段落）必须仍输出 `>`，否则 replace 往返会把「空白引用行」吃掉
+      if (kids.length === 0) return ">";
+      const parts = kids.map((c) => serializeBlock(c, depth + 1));
+      if (parts.every((p) => p.length === 0)) return ">";
+      const inner = parts.join("\n\n");
       return inner
         .split("\n")
-        .map((line) => `> ${line}`)
+        .map((line) => (line.length > 0 ? `> ${line}` : ">"))
         .join("\n");
     }
     case "list":

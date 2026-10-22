@@ -90,15 +90,47 @@ function formatUploadError(err: unknown): string {
   return msg || "上传失败";
 }
 
+/** Lexical quote 无子节点时编辑器/导出易丢块；补空 paragraph。 */
+function ensureQuoteHasParagraph(node: Record<string, unknown>): void {
+  if (node.type === "quote" || node.type === "blockquote") {
+    const kids = node.children;
+    if (!Array.isArray(kids) || kids.length === 0) {
+      node.children = [
+        {
+          type: "paragraph",
+          children: [],
+          direction: "ltr",
+          format: "",
+          indent: 0,
+          version: 1,
+          textFormat: 0,
+          textStyle: "",
+        },
+      ];
+    }
+  }
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) {
+      if (child && typeof child === "object") {
+        ensureQuoteHasParagraph(child as Record<string, unknown>);
+      }
+    }
+  }
+}
+
 function ensureNonEmptyEditorContent(content: string, contentType: "json" | "markdown"): string {
   if (!content) {
     return contentType === "json" ? EMPTY_PARAGRAPH_LEXICAL : content;
   }
   if (contentType !== "json") return content;
   try {
-    const parsed = JSON.parse(content) as { root?: { children?: unknown[] } };
+    const parsed = JSON.parse(content) as { root?: Record<string, unknown> & { children?: unknown[] } };
     if (parsed?.root && Array.isArray(parsed.root.children) && parsed.root.children.length === 0) {
       return EMPTY_PARAGRAPH_LEXICAL;
+    }
+    if (parsed?.root) {
+      ensureQuoteHasParagraph(parsed.root);
+      return JSON.stringify(parsed);
     }
   } catch {
     /* 非 JSON，原样交给编辑器 */
@@ -353,6 +385,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
     isDirty: _isDirty,
     draftExists,
     markDraftSaved,
+    beginExternalReload,
+    endExternalReload,
   } = useAutoSave({
     editor,
     documentId: props.meta.documentId,
@@ -377,12 +411,14 @@ export function DocumentEditor(props: DocumentEditorProps) {
   /** 仅在文档切换或 App 显式 bump contentRevision（pull / 冲突恢复等）时重载正文；勿依赖 editorSafeContent，避免发布后无意义 setDocument 带动视口跳动 */
   useEffect(() => {
     if (!editor) return;
+    beginExternalReload();
     try {
       editor.setDocument(contentType, editorSafeContent);
     } catch {
       /* 编辑器暂不可写 */
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally omit editorSafeContent
+    endExternalReload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally omit editorSafeContent; begin/end 随 revision 同步
   }, [editor, props.meta.documentId, props.contentRevision, contentType]);
 
   /**

@@ -32,6 +32,11 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
 
   if (!props.open) return null;
 
+  function confirmPublish(): void {
+    if (suggestBusy) return;
+    props.onConfirm(message.trim());
+  }
+
   async function handleSuggest(): Promise<void> {
     setSuggestBusy(true);
     setError(null);
@@ -73,6 +78,12 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
             maxLength={PUBLISH_MESSAGE_MAX_LENGTH}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              if (e.shiftKey) return; // Shift+Enter 换行
+              e.preventDefault();
+              confirmPublish();
+            }}
             placeholder={t("publishMessagePlaceholder")}
             autoFocus
           />
@@ -99,7 +110,7 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
             type="button"
             className="primary"
             disabled={suggestBusy}
-            onClick={() => props.onConfirm(message.trim())}
+            onClick={() => confirmPublish()}
           >
             {t("publish")}
           </button>

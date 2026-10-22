@@ -252,6 +252,23 @@ export function replaceDocumentMarkdownTool({ visitorId }: ToolDeps): AgentTool 
           }
         }
         const nextMarkdown = replaceNth(markdown, find, replace, occurrence);
+        // 防误伤：把大段正文换成空/极短内容（常见于 find 过大或 replace 漏传）
+        const before = markdown.trim();
+        const after = nextMarkdown.trim();
+        if (before.length > 0 && after.length === 0) {
+          throw new Error(
+            "REPLACE_EMPTY_RESULT: 替换后正文为空；若确要清空请用 overwrite_document",
+          );
+        }
+        if (
+          before.length >= 80 &&
+          after.length < Math.floor(before.length * 0.15) &&
+          replace.length < find.length
+        ) {
+          throw new Error(
+            `REPLACE_TOO_DESTRUCTIVE: 原文 ${before.length} 字，替换后仅 ${after.length} 字；请缩小 find 或检查 replace`,
+          );
+        }
         const updated = updateDocument({
           actorVisitorId: visitorId,
           documentId,

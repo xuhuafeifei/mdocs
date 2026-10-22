@@ -341,8 +341,12 @@ function convert(
         child.value as string,
       );
 
-    case "blockquote":
-      return quoteNode(children ? convertBlockChildren(children) : []);
+    case "blockquote": {
+      // remark 对单独一行 `>` 会给出 children:[]；Lexical Quote 无子节点时常被编辑器丢掉。
+      // 补一个空 paragraph，保证空引用在 MD↔Lexical 往返后仍在。
+      const kids = children ? convertBlockChildren(children) : [];
+      return quoteNode(kids.length > 0 ? kids : [paragraphNode([])]);
+    }
 
     case "list": {
       const ordered = (child.ordered as boolean) ?? false;

@@ -88,6 +88,11 @@ export function useAutoSave({
    */
   const lastContentRef = useRef("");
 
+  /**
+   * 外部灌入正文（助手 replace/overwrite 后 pull）期间抑制 dirty/保存。
+   * 到期前 updateListener 只跟随基线，不写 IndexedDB。
+   */
+  const suppressAutosaveUntilRef = useRef(0);
   // ---- dirty 标记的 ref 版本 ----
   // 用于事件处理器中读取最新值（避免闭包捕获旧值）
   const dirtyRef = useRef(false);
@@ -110,6 +115,10 @@ export function useAutoSave({
   const performSave = useCallback(async () => {
     // 编辑器尚未初始化，无法保存
     if (!editor) return;
+    if (Date.now() < suppressAutosaveUntilRef.current) {
+      console.log("[useAutoSave] performSave blocked: external reload suppress");
+      return;
+    }
     // 基线还没初始化（非空 markdown 字符串不会为 falsy），兜底跳过，防止挂载时误写草稿
     if (!lastContentRef.current) {
       console.log("[useAutoSave] performSave blocked: lastContentRef is empty");
@@ -118,6 +127,17 @@ export function useAutoSave({
     // 将编辑器当前内容序列化为 Lexical JSON 字符串
     const jsonContent = safeGetJsonString(editor);
     if (jsonContent == null) return;
+    // 空 root / 仅空段落：绝不写成草稿，避免助手 pull 中间态把正文「毛都没了」
+    try {
+      const parsed = JSON.parse(jsonContent) as { root?: { children?: unknown[] } };
+      const kids = parsed?.root?.children;
+      if (!Array.isArray(kids) || kids.length === 0) {
+        console.log("[useAutoSave] performSave blocked: empty root children");
+        return;
+      }
+    } catch {
+      /* 非 JSON 则按原逻辑写入 */
+    }
     console.log("[useAutoSave] performSave saving draft, documentId:", documentIdRef.current, "content preview:", jsonContent.slice(0, 80));
     await getDocumentTaskQueue(documentIdRef.current).execute(() =>
       upsertContentDraft({
@@ -216,6 +236,13 @@ export function useAutoSave({
         if (nextMd === null) return;
         // 仅在文档文本实际变化时才标记 dirty。忽略选区/光标移动，以及 Lexical 内部状态抖动（node key 重新生成等）
         if (nextMd === lastContentRef.current) return;
+
+        // 助手/pull 灌入期间：只跟随基线，不标 dirty、不写草稿
+        if (Date.now() < suppressAutosaveUntilRef.current) {
+          lastContentRef.current = nextMd;
+          return;
+        }
+
         console.log("[useAutoSave] updateListener dirty, documentId:", documentId, "oldLen:", lastContentRef.current.length, "newLen:", nextMd.length);
         // 更新对比基线为最新内容
         lastContentRef.current = nextMd;
@@ -375,6 +402,50 @@ export function useAutoSave({
     }
   }
 
+  /**
+   * App/助手灌入远端正文（setDocument）前后调用：取消待保存并重设基线，
+   * 避免 setDocument 过程中的空/中间态被当成用户编辑写进 IndexedDB。
+   */
+  function beginExternalReload(): void {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsDirty(false);
+    dirtyRef.current = false;
+    draftCurrentRef.current = true;
+    // 覆盖 setDocument + 若干帧更新监听的窗口
+    suppressAutosaveUntilRef.current = Date.now() + 2000;
+  }
+
+  function endExternalReload(): void {
+    if (!editor) {
+      lastContentRef.current = "";
+      suppressAutosaveUntilRef.current = 0;
+      return;
+    }
+    // setDocument 后两帧再采基线，等 Lexical 落稳
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const md = safeGetMarkdown(editor);
+        if (md !== null) lastContentRef.current = md;
+        setIsDirty(false);
+        dirtyRef.current = false;
+        draftCurrentRef.current = true;
+        suppressAutosaveUntilRef.current = Date.now() + 300;
+      });
+    });
+  }
+
   // 返回外部需要的状态和方法
-  return { isDirty, draftExists, lastSavedAt, clearDraft, loadDraftContent, markDraftSaved };
+  return {
+    isDirty,
+    draftExists,
+    lastSavedAt,
+    clearDraft,
+    loadDraftContent,
+    markDraftSaved,
+    beginExternalReload,
+    endExternalReload,
+  };
 }

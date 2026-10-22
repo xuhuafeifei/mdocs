@@ -387,7 +387,7 @@ export const zh: Record<TranslationKey, string> = {
   versionHistorySheetHint: "表格版本预览仅显示工作表摘要；恢复后在编辑器中查看完整内容。",
   versionHistoryHideAuto: "隐藏自动发布",
   publishMessageTitle: "发布说明",
-  publishMessageHint: "可选填写本次改动说明（类似 git commit）。不填也可直接发布。",
+  publishMessageHint: "可选填写本次改动说明（类似 git commit）。回车发布，Shift+回车换行。",
   publishMessageLabel: "说明",
   publishMessagePlaceholder: "例如：补充接口说明、修正错别字…",
   publishMessageSuggestAi: "AI 生成",

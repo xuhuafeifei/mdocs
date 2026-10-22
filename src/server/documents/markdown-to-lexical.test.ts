@@ -137,6 +137,17 @@ describe("markdownToLexicalJson", () => {
     expect(q.children[0]!.children[0]!.text).toBe("quote line");
   });
 
+  it("单独一行 > ：quote 至少含一个空 paragraph（避免 Lexical 丢块）", () => {
+    const { root } = parseSerializedLexical("before\n\n>\n\nafter");
+    const q = root.children.find((c) => (c as { type: string }).type === "quote") as {
+      type: string;
+      children: { type: string; children: unknown[] }[];
+    };
+    expect(q).toBeTruthy();
+    expect(q.children.length).toBeGreaterThanOrEqual(1);
+    expect(q.children[0]!.type).toBe("paragraph");
+  });
+
   it("无序列表：bullet list + listitem + paragraph", () => {
     const { root } = parseSerializedLexical("- one\n- two");
     const list = root.children[0] as {
