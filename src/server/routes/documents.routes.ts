@@ -21,6 +21,8 @@ import {
   restoreDocumentVersion,
   updateDocument,
 } from "../documents/document.service.js";
+import { suggestCommitMessage } from "../documents/suggest-commit-message.js";
+import { isPublishSource } from "../../shared/publish-meta.js";
 import { findDomainByName } from "../db/repositories/domain.repo.js";
 import { getDb } from "../db/connection.js";
 import { searchDocuments, tokenizeQuery } from "../search/search.service.js";
@@ -436,6 +438,8 @@ export function buildDocumentsRouter(): Router {
    * - permission?: number   可选，新权限档位
    * - contentFormat?: 'markdown' | 'lexical'
    * - version?: { localBaseCommitId?, merge?: { remoteCommitId, localSnapshotContent?, forceLocal? } }
+   * - message?: string
+   * - source?: 'auto' | 'manual' | 'agent' | 'cli'
    */
   router.put("/:documentId", requireDocumentAccess("edit"), (req: Request, res: Response) => {
     // 中间件只校验了文档访问权，编辑操作仍需确认已登录（ req.visitor 存在）
@@ -449,10 +453,22 @@ export function buildDocumentsRouter(): Router {
       permission?: unknown;
       contentFormat?: unknown;
       version?: unknown;
+      message?: unknown;
+      source?: unknown;
     };
     // 更新时 content 是必填项（即使是空字符串也要显式传）
     if (typeof body.content !== "string") {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "content is required" } });
+      return;
+    }
+    if (body.source !== undefined && body.source !== null && !isPublishSource(body.source)) {
+      res.status(400).json({
+        error: { code: "BAD_REQUEST", message: "source must be auto|manual|agent|cli" },
+      });
+      return;
+    }
+    if (body.message !== undefined && body.message !== null && typeof body.message !== "string") {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "message must be a string" } });
       return;
     }
     const documentId = req.params.documentId!;
@@ -466,6 +482,8 @@ export function buildDocumentsRouter(): Router {
         permission: typeof body.permission === "number" ? body.permission : undefined,
         contentFormat: body.contentFormat === 'markdown' ? 'markdown' : undefined,
         version,
+        message: typeof body.message === "string" ? body.message : undefined,
+        source: isPublishSource(body.source) ? body.source : undefined,
       });
       // merge 发布仅返回成功状态：前端需随后 GET 文档详情，避免混合写接口职责。
       if (version?.merge) {
@@ -477,6 +495,37 @@ export function buildDocumentsRouter(): Router {
       respondError(res, err, "documents-route.update");
     }
   });
+
+  /**
+   * POST /:documentId/suggest-commit-message
+   * 根据当前待发正文相对最近一次非 auto 发布的 diff，用默认模型生成短 message。
+   */
+  router.post(
+    "/:documentId/suggest-commit-message",
+    requireDocumentAccess("edit"),
+    async (req: Request, res: Response) => {
+      if (!req.visitor) {
+        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+        return;
+      }
+      const body = (req.body ?? {}) as { content?: unknown; contentFormat?: unknown };
+      if (typeof body.content !== "string") {
+        res.status(400).json({ error: { code: "BAD_REQUEST", message: "content is required" } });
+        return;
+      }
+      try {
+        const data = await suggestCommitMessage({
+          actorVisitorId: req.visitor.visitor_id,
+          documentId: req.params.documentId!,
+          content: body.content,
+          contentFormat: body.contentFormat === "markdown" ? "markdown" : "lexical",
+        });
+        res.json({ data });
+      } catch (err) {
+        respondError(res, err, "documents-route.suggest-commit-message");
+      }
+    },
+  );
 
   /**
    * DELETE /:documentId

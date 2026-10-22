@@ -5633,6 +5633,53 @@ strong.label {
   max-width: 52em;
 }
 
+.mdocs-version-history-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.mdocs-version-history-item-message {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--mdocs-text, #333);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.mdocs-publish-message-dialog {
+  width: min(440px, 94vw);
+}
+
+.mdocs-publish-message-input {
+  width: 100%;
+  margin-top: 6px;
+  resize: vertical;
+  min-height: 72px;
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--mdocs-border, #ddd);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.mdocs-publish-message-actions {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.mdocs-publish-message-actions-spacer {
+  flex: 1 1 auto;
+  min-width: 8px;
+}
+
 .mdocs-version-history-body {
   display: flex;
   flex: 1 1 auto;
@@ -5644,8 +5691,8 @@ strong.label {
   list-style: none;
   margin: 0;
   padding: 8px 0;
-  width: 240px;
-  flex: 0 0 240px;
+  width: 280px;
+  flex: 0 0 280px;
   overflow-y: auto;
   border-right: 1px solid var(--mdocs-border, #eee);
   background: #fafafa;

@@ -70,6 +70,7 @@ import { useIsNarrowViewport } from "./hooks/useIsNarrowViewport";
 import { useEdgeSwipeOpen } from "./hooks/useEdgeSwipeOpen";
 import { ConflictModal } from "./ConflictModal";
 import { CommentsPanel } from "./CommentsPanel";
+import { PublishMessageDialog } from "./PublishMessageDialog";
 import {
   getDraft,
   saveDraft as saveDraftRecord,
@@ -444,9 +445,29 @@ export function App() {
   const saveBeforeNavRef = useRef<(() => Promise<void>) | undefined>(undefined);
   const exportMarkdownRef = useRef<(() => string) | undefined>(undefined);
 
+  // ---- 手动发布说明弹框（Promise 桥）----
+  const [publishMsgPrompt, setPublishMsgPrompt] = useState<{
+    content: string;
+    documentId: string;
+    contentFormat?: "markdown" | "lexical";
+    resolve: (message: string | null) => void;
+  } | null>(null);
+
+  function requestPublishMessage(
+    content: string,
+    documentId: string,
+    contentFormat?: "markdown" | "lexical",
+  ): Promise<string | null> {
+    return new Promise((resolve) => {
+      setPublishMsgPrompt({ content, documentId, contentFormat, resolve });
+    });
+  }
+
   // ---- 自动发布：每 10 秒扫描一次本地草稿，闲置超过 30 秒的自动推送到服务器 ----
   // 仅在用户开启「自动同步至云端」时启用
-  useAutoPublish(localStorage.getItem("mdocs.autoPublish") === "true", publishDraftFromList);
+  useAutoPublish(localStorage.getItem("mdocs.autoPublish") === "true", (docId) =>
+    publishDraftFromList(docId, { source: "auto" }),
+  );
 
   /**
    * 导航守卫：在切换路由前先触发保存草稿，确保内容不丢失。
@@ -550,12 +571,46 @@ export function App() {
   }
 
   /** AI 覆写文档成功：直接触发拉取更新逻辑 */
+  /**
+   * 助手已在服务端发布成功：若当前正打开该文，清本地草稿并拉远端（等同「拉取更新」且不被草稿挡住）。
+   */
   async function handleDocumentOverwritten(payload: {
     documentId: string;
     headCommitId: string;
   }): Promise<void> {
-    if (activeDocMeta?.documentId !== payload.documentId) return;
-    await handleSyncClick();
+    const docId = payload.documentId;
+    const hitPrimary = activeDocMeta?.documentId === docId;
+    const hitSecondary = secondaryMeta?.documentId === docId;
+    if (!hitPrimary && !hitSecondary) return;
+
+    await deleteDraft(docId);
+    await clearDraftConflict(docId);
+    await clearDraftPublishError(docId);
+
+    try {
+      const doc = await getDocumentApi(docId);
+      if (hitPrimary) {
+        expectedDocIdRef.current = docId;
+        setActiveDocMeta(documentDetailToMeta(doc));
+        loadEditorFromServer(doc);
+        setEditorDraftExists(false);
+        setEditBaseCommitId(doc.headCommitId ?? null);
+      }
+      if (hitSecondary) {
+        setSecondaryMeta(documentDetailToMeta(doc));
+        setSecondaryContent({
+          documentId: doc.documentId,
+          content: doc.content,
+          displayName: doc.displayName,
+        });
+        setSecondaryDraftExists(false);
+        setSecondaryRevision((r) => r + 1);
+      }
+      setMessage(t("syncPullDone"));
+      window.setTimeout(() => setMessage(null), 1200);
+    } catch (err) {
+      setAlertMessage(translateError(t, err));
+    }
   }
 
   async function completeAiWrite(result: {
@@ -1277,6 +1332,12 @@ export function App() {
           throw new Error("missing force overwrite payload");
         }
 
+        const message = await requestPublishMessage(localContent, documentId);
+        if (message === null) {
+          setMessage(t("publishMessageCancelled"));
+          window.setTimeout(() => setMessage(null), 1200);
+          return;
+        }
         await updateDocumentApi(documentId, {
           content: localContent,
           displayName,
@@ -1288,6 +1349,8 @@ export function App() {
               forceLocal: true,
             },
           },
+          message,
+          source: "manual",
         });
         const updated = await getDocumentApi(documentId);
         await handleMergeSuccess(updated);
@@ -1302,9 +1365,15 @@ export function App() {
   }
 
   /**
-   * 发布文档：带 version.localBaseCommitId 乐观锁。
+   * 发布文档：带 version.localBaseCommitId 乐观锁；手动入口先弹发布说明。
    */
   async function publishDocument(content: string, displayName: string, documentId: string, permission?: number): Promise<void> {
+    const message = await requestPublishMessage(content, documentId);
+    if (message === null) {
+      setMessage(t("publishMessageCancelled"));
+      window.setTimeout(() => setMessage(null), 1200);
+      return;
+    }
     return getDocumentTaskQueue(documentId).execute(async () => {
       const draftForPublish = await getDraft(documentId);
       const localBaseCommitId =
@@ -1321,6 +1390,8 @@ export function App() {
           displayName,
           permission,
           version: { localBaseCommitId },
+          message,
+          source: "manual",
         });
         await clearDraftConflict(documentId);
         await finalizeAfterPublish(documentId, content);
@@ -1441,15 +1512,33 @@ export function App() {
       window.setTimeout(() => setMessage(null), 4000);
       throw aborted;
     }
+    throw err instanceof Error ? err : new Error(String(err));
   }
 
   /**
-   * 从草稿列表发布单篇草稿（供自动发布或批量发布调用）。
+   * 从草稿列表发布单篇草稿（供自动发布或批量/手动发布调用）。
    * 使用乐观锁：仅当草稿在 API 调用期间未被修改时才删除本地草稿。
+   * `source: 'auto'` 跳过说明弹框并写入自动发布标记。
    */
-  async function publishDraftFromList(docId: string): Promise<void> {
+  async function publishDraftFromList(
+    docId: string,
+    opts?: { source?: "auto" | "manual" },
+  ): Promise<void> {
+    const source = opts?.source ?? "manual";
     let draft: DraftRecord | undefined;
     try {
+      const currentPeek = await getDraft(docId);
+      if (!currentPeek) return;
+      let publishMessage = "";
+      if (source === "manual") {
+        const picked = await requestPublishMessage(currentPeek.content, docId);
+        if (picked === null) {
+          setMessage(t("publishMessageCancelled"));
+          window.setTimeout(() => setMessage(null), 1200);
+          return;
+        }
+        publishMessage = picked;
+      }
       await getDocumentTaskQueue(docId).execute(async () => {
         const current = await getDraft(docId);
         if (!current) return;
@@ -1474,6 +1563,9 @@ export function App() {
           content: latest.content,
           displayName: latest.displayName,
           version: { localBaseCommitId },
+          ...(source === "auto"
+            ? { source: "auto" as const }
+            : { source: "manual" as const, message: publishMessage }),
         });
         await clearDraftConflict(docId);
         await clearDraftPublishError(docId);
@@ -1489,6 +1581,22 @@ export function App() {
     } catch (err) {
       await reportDraftPublishFailure(docId, err, draft);
     }
+  }
+
+  /** 合并/强制覆盖路径：先弹说明再 PUT。 */
+  async function updateDocumentWithPublishMessage(
+    documentId: string,
+    input: Parameters<typeof updateDocumentApi>[1],
+  ): Promise<DocumentDetail | void> {
+    const message = await requestPublishMessage(input.content, documentId, input.contentFormat);
+    if (message === null) {
+      throw new Error(t("publishMessageCancelled"));
+    }
+    return updateDocumentApi(documentId, {
+      ...input,
+      message,
+      source: "manual",
+    });
   }
 
   /**
@@ -2230,6 +2338,7 @@ export function App() {
                   onClose={() => setMergeViewOpen(false)}
                   onSuccess={handleMergeSuccess}
                   onError={(msg) => setAlertMessage(msg)}
+                  updateDocument={updateDocumentWithPublishMessage}
                   onForceOverwrite={
                     visitor && activeDocMeta && visitor.visitorId === activeDocMeta.ownerVisitorId
                       ? () => void handleForceOverwrite()
@@ -2239,6 +2348,25 @@ export function App() {
                 />
               </Suspense>
             )}
+
+            {publishMsgPrompt ? (
+              <PublishMessageDialog
+                open
+                documentId={publishMsgPrompt.documentId}
+                content={publishMsgPrompt.content}
+                contentFormat={publishMsgPrompt.contentFormat}
+                onCancel={() => {
+                  const resolve = publishMsgPrompt.resolve;
+                  setPublishMsgPrompt(null);
+                  resolve(null);
+                }}
+                onConfirm={(msg) => {
+                  const resolve = publishMsgPrompt.resolve;
+                  setPublishMsgPrompt(null);
+                  resolve(msg);
+                }}
+              />
+            ) : null}
 
             {/* 全局 Toast 消息 */}
             {message && (

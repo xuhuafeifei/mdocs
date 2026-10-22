@@ -109,11 +109,14 @@ export function appendDocumentTool({ visitorId }: ToolDeps): AgentTool {
     label: "追加文档正文",
     description:
       "在 .md 文末追加 Markdown（推荐：日记续写、文末加节；不覆写已有内容，无选择卡）。" +
-      "写后直接发布。写成功后请重新 get_document。" +
+      "写后直接发布。必须传 message（简短发布说明，类似 git commit）。写成功后请重新 get_document。" +
       "改已有片段用 replace_document_markdown；仅整篇重写才用 overwrite_document。仅 fileType=md。",
     parameters: Type.Object({
       documentId: Type.String({ description: "目标文档 documentId" }),
       content: Type.String({ description: "追加的 Markdown" }),
+      message: Type.String({
+        description: "本次发布说明（必填，简短中文，说明追加了什么）",
+      }),
       separator: Type.Optional(
         Type.String({
           description: '已有正文非空时先拼此分隔符再追加；默认 "\\n\\n"',
@@ -125,12 +128,15 @@ export function appendDocumentTool({ visitorId }: ToolDeps): AgentTool {
         documentId?: string;
         content?: string;
         separator?: string;
+        message?: string;
       };
       const documentId = String(p.documentId ?? "").trim();
       const content = String(p.content ?? "");
+      const message = String(p.message ?? "").trim();
       const separator =
         p.separator === undefined ? "\n\n" : String(p.separator);
       if (!documentId) throw new Error("documentId is required");
+      if (!message) throw new Error("message is required");
       if (content.length > APPEND_CONTENT_MAX) {
         throw new Error(`content exceeds max ${APPEND_CONTENT_MAX}`);
       }
@@ -149,6 +155,8 @@ export function appendDocumentTool({ visitorId }: ToolDeps): AgentTool {
           documentId,
           content: nextLexical,
           version: { localBaseCommitId: headCommitId },
+          message,
+          source: "agent",
         });
         const payload = {
           status: "appended",
@@ -183,11 +191,14 @@ export function replaceDocumentMarkdownTool({ visitorId }: ToolDeps): AgentTool 
       "在 Markdown 源码层精确查找并替换（与 get_document 默认 format=md 同一层）；" +
       "find 须为该 MD 中的精确子串，默认恰好出现 1 次，多次时传 occurrence（1-based）。" +
       "一次改多处：多次调用，每次成功后重新 get_document 再取下一段 find。" +
-      "无选择卡，写后直接发布。仅 fileType=md。",
+      "无选择卡，写后直接发布。必须传 message（简短发布说明）。仅 fileType=md。",
     parameters: Type.Object({
       documentId: Type.String({ description: "目标文档 documentId" }),
       find: Type.String({ description: "要查找的原文片段（非空）" }),
       replace: Type.String({ description: "替换为；空字符串表示删除该片段" }),
+      message: Type.String({
+        description: "本次发布说明（必填，简短中文，说明改了什么）",
+      }),
       occurrence: Type.Optional(
         Type.Number({
           description: "替换第几次出现（1-based）；省略则要求恰好 1 次",
@@ -200,11 +211,14 @@ export function replaceDocumentMarkdownTool({ visitorId }: ToolDeps): AgentTool 
         find?: string;
         replace?: string;
         occurrence?: number;
+        message?: string;
       };
       const documentId = String(p.documentId ?? "").trim();
       const find = String(p.find ?? "");
       const replace = String(p.replace ?? "");
+      const message = String(p.message ?? "").trim();
       if (!documentId) throw new Error("documentId is required");
+      if (!message) throw new Error("message is required");
       if (!find) throw new Error("find is required");
       if (find.length > FIND_MAX) {
         throw new Error(`find exceeds max ${FIND_MAX}`);
@@ -244,6 +258,8 @@ export function replaceDocumentMarkdownTool({ visitorId }: ToolDeps): AgentTool 
           content: nextMarkdown,
           contentFormat: "markdown",
           version: { localBaseCommitId: headCommitId },
+          message,
+          source: "agent",
         });
         return asToolResult({
           status: "replaced",

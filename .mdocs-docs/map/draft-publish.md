@@ -43,3 +43,16 @@
   | 路径 | 符号 |
   |------|------|
   | `src/server/documents/commit-graph.ts` | commit 图 / 命名 |
+
+### 发布说明 message / source
+
+- **关键词**：`publish message` `source=auto` `suggest-commit-message` `VersionHistoryHideAuto`
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/shared/publish-meta.ts` | `PublishSource` `AUTO_PUBLISH_MESSAGE` |
+  | `src/server/documents/document.service.ts` | `normalizePublishMeta` |
+  | `src/server/documents/suggest-commit-message.ts` | `suggestCommitMessage` |
+  | `src/web/app/PublishMessageDialog.tsx` | 手动发布弹框 |
+  | `src/web/app/VersionHistoryPanel.tsx` | 隐藏自动发布 |
+- **需求**：[`../requirements/publish-commit-message/`](../requirements/publish-commit-message/)

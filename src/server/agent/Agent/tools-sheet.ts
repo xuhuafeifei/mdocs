@@ -125,12 +125,17 @@ function saveWorkbook(params: {
   documentId: string;
   workbook: SheetDocument;
   headCommitId: string;
+  /** 发布说明；缺省「更新表格」 */
+  message?: string;
 }) {
+  const message = String(params.message ?? "").trim() || "更新表格";
   return updateDocument({
     actorVisitorId: params.visitorId,
     documentId: params.documentId,
     content: serializeSheetDocument(params.workbook),
     version: { localBaseCommitId: params.headCommitId },
+    message,
+    source: "agent",
   });
 }
 

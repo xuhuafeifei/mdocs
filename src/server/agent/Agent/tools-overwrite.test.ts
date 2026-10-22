@@ -79,6 +79,7 @@ describe("overwrite_document tool", () => {
     const result = await runOverwrite({
       documentId: created.documentId,
       content: html,
+      message: "写入示例 HTML",
     });
     const details = result.details as {
       status: string;

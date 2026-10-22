@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import type { PublishSource } from "../../../shared/publish-meta.js";
 
 /** document_commits 表行结构：一次发布的不可变快照节点。 */
 export interface CommitRow {
@@ -8,7 +9,13 @@ export interface CommitRow {
   blob_ref: string;
   author_visitor_id: string;
   created_at: string;
+  message: string;
+  source: PublishSource;
 }
+
+const COMMIT_SELECT =
+  `commit_id, document_id, content_hash, blob_ref, author_visitor_id, created_at,
+   COALESCE(message, '') AS message, COALESCE(source, 'manual') AS source`;
 
 /** 插入一条提交节点（不含 parent 边，边由 insertCommitParent 单独写入）。 */
 export function insertCommit(
@@ -20,12 +27,14 @@ export function insertCommit(
     blobRef: string;
     authorVisitorId: string;
     createdAt: string;
+    message?: string;
+    source?: PublishSource;
   },
 ): void {
   db.prepare(
     `INSERT INTO document_commits
-     (commit_id, document_id, content_hash, blob_ref, author_visitor_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+     (commit_id, document_id, content_hash, blob_ref, author_visitor_id, created_at, message, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     input.commitId,
     input.documentId,
@@ -33,6 +42,8 @@ export function insertCommit(
     input.blobRef,
     input.authorVisitorId,
     input.createdAt,
+    input.message ?? "",
+    input.source ?? "manual",
   );
 }
 
@@ -50,7 +61,7 @@ export function insertCommitParent(
 export function findCommitById(db: Database.Database, commitId: string): CommitRow | undefined {
   return db
     .prepare<string, CommitRow>(
-      `SELECT commit_id, document_id, content_hash, blob_ref, author_visitor_id, created_at
+      `SELECT ${COMMIT_SELECT}
        FROM document_commits WHERE commit_id = ?`,
     )
     .get(commitId);
@@ -63,12 +74,32 @@ export function listCommitsByDocument(
 ): CommitRow[] {
   return db
     .prepare<string, CommitRow>(
-      `SELECT commit_id, document_id, content_hash, blob_ref, author_visitor_id, created_at
+      `SELECT ${COMMIT_SELECT}
        FROM document_commits
        WHERE document_id = ?
        ORDER BY created_at DESC`,
     )
     .all(documentId);
+}
+
+/**
+ * 最近一条非自动发布（source != 'auto'）的 commit，按 created_at 倒序。
+ * 旧数据 source 默认 manual，会命中。
+ */
+export function findLatestNonAutoCommit(
+  db: Database.Database,
+  documentId: string,
+): CommitRow | undefined {
+  return db
+    .prepare<string, CommitRow>(
+      `SELECT ${COMMIT_SELECT}
+       FROM document_commits
+       WHERE document_id = ?
+         AND COALESCE(source, 'manual') != 'auto'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+    )
+    .get(documentId);
 }
 
 /** 列出某提交节点的全部直接父节点 id。 */

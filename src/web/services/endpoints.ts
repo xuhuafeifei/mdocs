@@ -261,10 +261,23 @@ export function updateDocumentApi(
     permission?: number;
     contentFormat?: "markdown" | "lexical";
     version?: PublishVersionContext;
+    message?: string;
+    source?: "auto" | "manual" | "agent" | "cli";
   },
 ): Promise<DocumentDetail> {
   return api<DocumentDetail>(`/api/documents/${encodeURIComponent(documentId)}`, {
     method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+/** AI 根据相对最近非 auto 发布的 diff 建议 commit message。 */
+export function suggestCommitMessageApi(
+  documentId: string,
+  input: { content: string; contentFormat?: "markdown" | "lexical" },
+): Promise<{ message: string; baseCommitId: string | null }> {
+  return api(`/api/documents/${encodeURIComponent(documentId)}/suggest-commit-message`, {
+    method: "POST",
     body: JSON.stringify(input),
   });
 }
@@ -331,6 +344,8 @@ export type DocumentCommitSummary = {
   authorVisitorName: string | null;
   contentHash: string;
   isHead: boolean;
+  message: string;
+  source: "auto" | "manual" | "agent" | "cli";
 };
 
 export type DocumentCommitDetail = DocumentCommitSummary & {

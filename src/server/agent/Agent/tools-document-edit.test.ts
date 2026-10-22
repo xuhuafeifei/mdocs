@@ -96,6 +96,7 @@ describe("append_document / replace_document_markdown", () => {
     const result = (await runTool(appendDocumentTool(deps), {
       documentId: created.documentId,
       content: "day2",
+      message: "追加 day2",
     })).details as {
       status: string;
       notice: string;
@@ -125,6 +126,7 @@ describe("append_document / replace_document_markdown", () => {
       documentId: created.documentId,
       find: "**world**",
       replace: "**mdocs**",
+      message: "world→mdocs",
     })).details as { status: string; notice: string };
     expect(result.status).toBe("replaced");
     expect(result.notice).toContain("DOCUMENT_CHANGED");
@@ -149,6 +151,7 @@ describe("append_document / replace_document_markdown", () => {
         documentId: created.documentId,
         find: "aa",
         replace: "b",
+        message: "noop",
       }),
     ).rejects.toThrow(/FIND_AMBIGUOUS/);
   });
@@ -167,6 +170,7 @@ describe("append_document / replace_document_markdown", () => {
       runTool(appendDocumentTool(deps), {
         documentId: created.documentId,
         content: "y",
+        message: "x",
       }),
     ).rejects.toThrow(/NOT_MARKDOWN/);
   });

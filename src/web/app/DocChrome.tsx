@@ -92,13 +92,16 @@ export function DocChrome(props: DocChromeProps) {
 
   useEffect(() => {
     if (!canPublishHotkey) return;
+    // capture：先于 Lexical/contenteditable，避免 ⌘/Alt+Enter 被当成软换行
     const onKeyDown = (e: KeyboardEvent) => {
       if (!isPublishHotkey(e)) return;
       e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
       props.onPublish?.();
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [canPublishHotkey, props.onPublish]);
 
   const publishTooltip = !props.readerChrome

@@ -261,6 +261,26 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
       return;
     }
 
+    if (
+      event.toolName === "append_document" ||
+      event.toolName === "replace_document_markdown"
+    ) {
+      const status = String(details?.status ?? "");
+      const ok =
+        status === "appended" ||
+        status === "replaced" ||
+        details?.replaced === true;
+      if (ok) {
+        const documentId = String(details?.documentId ?? "").trim();
+        const headCommitId = String(details?.headCommitId ?? "");
+        if (documentId && headCommitId) {
+          onEvent({ type: "document_overwritten", documentId, headCommitId });
+        }
+        onEvent({ type: "tree_changed", reason: event.toolName });
+      }
+      return;
+    }
+
     if (event.toolName === "get_working_document") {
       // tool_call 卡片已覆盖
       return;

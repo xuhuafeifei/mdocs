@@ -37,6 +37,7 @@ function doOverwrite(params: {
   content: string;
   localBaseCommitId: string;
   fileType: string;
+  message: string;
 }) {
   const policy = getPolicy(params.fileType as any);
   const isRaw = policy.writeNormalize === "raw";
@@ -47,6 +48,8 @@ function doOverwrite(params: {
     // html：原样 raw，勿传 contentFormat=markdown
     ...(isRaw ? {} : { contentFormat: "markdown" as const }),
     version: { localBaseCommitId: params.localBaseCommitId },
+    message: params.message,
+    source: "agent",
   });
   return asToolResult({
     status: "overwritten",
@@ -81,19 +84,29 @@ export function overwriteDocumentTool({
       "适用：文档几乎为空、用户明确要求整篇重写、或目标是 html。" +
       "必须先确认 fileType：md → 完整 Markdown；html → 完整 HTML（禁止传 Markdown，不做 MD↔HTML 转换）。" +
       "几乎空则直接写入；已有实质正文时弹出选择卡：「直接覆写」「打开帮写审阅」「取消」。" +
-      "有正文不是无法覆写，只是要用户点选。",
+      "有正文不是无法覆写，只是要用户点选。必须传 message（简短发布说明）。",
     parameters: Type.Object({
       documentId: Type.String({ description: "目标文档 documentId" }),
       content: Type.String({
         description:
           "完整正文，格式必须与文档类型一致：md→Markdown；html→HTML。禁止错格式，系统不会自动转换",
       }),
+      message: Type.String({
+        description: "本次发布说明（必填，简短中文，说明整篇改了什么）",
+      }),
     }),
     execute: async (_id, params) => {
-      const raw = params as { documentId?: string; content?: string; markdown?: string };
+      const raw = params as {
+        documentId?: string;
+        content?: string;
+        markdown?: string;
+        message?: string;
+      };
       const documentId = String(raw.documentId ?? "").trim();
       const content = String(raw.content ?? raw.markdown ?? "");
+      const message = String(raw.message ?? "").trim();
       if (!documentId) throw new Error("documentId is required");
+      if (!message) throw new Error("message is required");
 
       try {
         assertDocumentAccess(documentId, visitorId, "edit");
@@ -125,6 +138,7 @@ export function overwriteDocumentTool({
             content,
             localBaseCommitId: headCommitId,
             fileType,
+            message,
           });
         }
 
@@ -179,6 +193,7 @@ export function overwriteDocumentTool({
             content,
             localBaseCommitId: base,
             fileType: fresh.fileType || fileType,
+            message,
           });
         }
         if (action === "coding") {

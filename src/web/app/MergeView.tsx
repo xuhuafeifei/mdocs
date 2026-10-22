@@ -44,6 +44,11 @@ export interface MergeViewProps {
   onClose: () => void;
   onSuccess: (doc: DocumentDetail) => void | Promise<void>;
   onError: (message: string) => void;
+  /** 发布 PUT（可先弹 message）；缺省直调 updateDocumentApi；merge 可能 204 → void */
+  updateDocument?: (
+    documentId: string,
+    input: Parameters<typeof updateDocumentApi>[1],
+  ) => Promise<DocumentDetail | void>;
   /** 仅文档所有者：整表 merge 页也可强制覆盖 */
   onForceOverwrite?: () => void;
   forceBusy?: boolean;
@@ -111,7 +116,7 @@ function SheetWholeDocumentMerge(props: MergeViewProps) {
         localContent: props.conflict.localSnapshotContent || localContent,
         localBaseCommitId: props.conflict.localBaseCommitId,
         getDocument: getDocumentApi,
-        updateDocument: updateDocumentApi,
+        updateDocument: props.updateDocument ?? updateDocumentApi,
       });
       await props.onSuccess(updated);
     } catch (err) {
@@ -338,7 +343,7 @@ function LineBasedMergeView(
         localBaseCommitId: props.conflict.localBaseCommitId,
         localSnapshotContent: props.conflict.localSnapshotContent,
         getDocument: getDocumentApi,
-        updateDocument: updateDocumentApi,
+        updateDocument: props.updateDocument ?? updateDocumentApi,
       });
       await props.onSuccess(updated);
     } catch (err) {

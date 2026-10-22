@@ -132,6 +132,18 @@ export function VersionHistoryPanel(props: {
   const [previewBusy, setPreviewBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState(false);
+  const [hideAuto, setHideAuto] = useState(() => {
+    try {
+      return sessionStorage.getItem("mdocs.versionHistory.hideAuto") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const visibleItems = useMemo(
+    () => (hideAuto ? items.filter((c) => c.source !== "auto") : items),
+    [items, hideAuto],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,18 +151,35 @@ export function VersionHistoryPanel(props: {
     try {
       const data = await listDocumentCommitsApi(props.documentId);
       setItems(data);
-      const head = data.find((c) => c.isHead) ?? data[0];
+      const visible = hideAuto ? data.filter((c) => c.source !== "auto") : data;
+      const head = visible.find((c) => c.isHead) ?? visible[0] ?? data[0];
       if (head) setSelectedId(head.commitId);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  }, [props.documentId]);
+  }, [props.documentId, hideAuto]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("mdocs.versionHistory.hideAuto", hideAuto ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+    if (hideAuto && selectedId) {
+      const still = items.some((c) => c.commitId === selectedId && c.source !== "auto");
+      if (!still) {
+        const next = items.find((c) => c.source !== "auto");
+        setSelectedId(next?.commitId ?? null);
+        setConfirmRestore(false);
+      }
+    }
+  }, [hideAuto, items, selectedId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -213,6 +242,14 @@ export function VersionHistoryPanel(props: {
           <div>
             <h1 id="mdocs-version-history-title">{t("versionHistoryTitle")}</h1>
             <p className="mdocs-version-history-desc">{t("versionHistoryDesc")}</p>
+            <label className="mdocs-version-history-filter muted">
+              <input
+                type="checkbox"
+                checked={hideAuto}
+                onChange={(e) => setHideAuto(e.target.checked)}
+              />
+              {t("versionHistoryHideAuto")}
+            </label>
           </div>
           <button type="button" className="secondary" onClick={props.onClose}>
             {t("close")}
@@ -229,10 +266,12 @@ export function VersionHistoryPanel(props: {
           <p className="muted">{t("loading")}</p>
         ) : items.length === 0 ? (
           <p className="muted">{t("versionHistoryEmpty")}</p>
+        ) : visibleItems.length === 0 ? (
+          <p className="muted">{t("versionHistoryEmpty")}</p>
         ) : (
           <div className="mdocs-version-history-body">
             <ul className="mdocs-version-history-list">
-              {items.map((c) => (
+              {visibleItems.map((c) => (
                 <li key={c.commitId}>
                   <button
                     type="button"
@@ -248,8 +287,12 @@ export function VersionHistoryPanel(props: {
                     <span className="mdocs-version-history-item-time">
                       {new Date(c.createdAt).toLocaleString()}
                     </span>
+                    {c.message ? (
+                      <span className="mdocs-version-history-item-message">{c.message}</span>
+                    ) : null}
                     <span className="mdocs-version-history-item-meta muted">
                       {c.authorVisitorName || c.authorVisitorId.slice(0, 8)}
+                      {c.source === "auto" ? " · auto" : ""}
                       {c.isHead ? ` · ${t("versionHistoryCurrent")}` : ""}
                     </span>
                   </button>

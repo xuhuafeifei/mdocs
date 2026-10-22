@@ -18,6 +18,8 @@ export type LineMergePublishDeps = {
     input: {
       content: string;
       displayName?: string;
+      message?: string;
+      source?: "auto" | "manual" | "agent" | "cli";
       version?: {
         localBaseCommitId?: string;
         merge?: {

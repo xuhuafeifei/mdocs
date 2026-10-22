@@ -60,6 +60,8 @@ const SCHEMA_STATEMENTS: string[] = [
     blob_ref TEXT NOT NULL,
     author_visitor_id TEXT NOT NULL,
     created_at TEXT NOT NULL,
+    message TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'manual',
     FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE CASCADE
   )`,
   `CREATE INDEX IF NOT EXISTS idx_document_commits_document ON document_commits (document_id, created_at DESC)`,
@@ -252,6 +254,7 @@ export function applySchema(db: Database.Database): void {
     migrateDocumentsDirty(db);
     migrateDocumentsHeadCommit(db);
     migrateDocumentsTitleFts(db);
+    migrateDocumentCommitsMessage(db);
     backfillFolderDescHeadCommits(db);
     migrateVisitorsRecoveryCode(db);
     migrateVisitorsPasswordHash(db);
@@ -423,6 +426,19 @@ function migrateDocumentsHeadCommit(db: Database.Database): void {
   const names = documentColumnNames(db);
   if (names.has("head_commit_id")) return;
   db.exec(`ALTER TABLE documents ADD COLUMN head_commit_id TEXT`);
+}
+
+/** 为 document_commits 添加 message / source（发布说明与来源）。旧行默认 manual + 空 message。 */
+function migrateDocumentCommitsMessage(db: Database.Database): void {
+  const rows = db.prepare(`PRAGMA table_info(document_commits)`).all() as { name: string }[];
+  if (rows.length === 0) return;
+  const names = new Set(rows.map((r) => r.name));
+  if (!names.has("message")) {
+    db.exec(`ALTER TABLE document_commits ADD COLUMN message TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!names.has("source")) {
+    db.exec(`ALTER TABLE document_commits ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'`);
+  }
 }
 
 function documentColumnNames(db: Database.Database): Set<string> {

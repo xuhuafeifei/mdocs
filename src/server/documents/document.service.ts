@@ -24,6 +24,12 @@ import {
   listCommitsByDocument as listCommitRowsByDocument,
 } from "../db/repositories/commit.repo.js";
 import {
+  AUTO_PUBLISH_MESSAGE,
+  isPublishSource,
+  PUBLISH_MESSAGE_MAX_LENGTH,
+  type PublishSource,
+} from "../../shared/publish-meta.js";
+import {
   assertCommitBelongsToDocument,
   assertMergeFork,
   findMergeBaseCommitId,
@@ -450,6 +456,26 @@ export function getDocument(
 //  更新文档
 // ============================================================
 
+/** 规范化发布 message / source；auto 强制文案。 */
+export function normalizePublishMeta(input?: {
+  message?: string;
+  source?: string;
+}): { message: string; source: PublishSource } {
+  const source: PublishSource = isPublishSource(input?.source) ? input!.source! : "manual";
+  if (source === "auto") {
+    return { message: AUTO_PUBLISH_MESSAGE, source };
+  }
+  const message = typeof input?.message === "string" ? input.message : "";
+  if (message.length > PUBLISH_MESSAGE_MAX_LENGTH) {
+    throw new DocumentError(
+      "BAD_REQUEST",
+      `message 最长 ${PUBLISH_MESSAGE_MAX_LENGTH} 字符`,
+      400,
+    );
+  }
+  return { message, source };
+}
+
 export function updateDocument(params: {
   actorVisitorId: string;
   documentId: string;
@@ -460,6 +486,10 @@ export function updateDocument(params: {
   contentFormat?: "markdown" | "lexical";
   /** 发布版本信息：乐观锁与 merge 发布 */
   version?: PublishVersionContext;
+  /** 发布说明（类似 git commit message） */
+  message?: string;
+  /** 发布来源 */
+  source?: PublishSource | string;
 }): DocumentDetail {
   const db = getDb();
   const row = findDocumentById(db, params.documentId);
@@ -508,6 +538,10 @@ export function updateDocument(params: {
   const version = params.version;
   const localBaseCommitId = version?.localBaseCommitId;
   const mergeCtx = version?.merge;
+  const publishMeta = normalizePublishMeta({
+    message: params.message,
+    source: params.source,
+  });
 
   // 冲突解决后的合并发布：插 r_local + 双父 merge 节点
   if (mergeCtx) {
@@ -539,6 +573,8 @@ export function updateDocument(params: {
       remoteCommitId: mergeCtx.remoteCommitId,
       localSnapshotContent,
       now,
+      message: publishMeta.message,
+      source: publishMeta.source,
     });
   }
 
@@ -565,6 +601,8 @@ export function updateDocument(params: {
       blobRef: blob.blobRef,
       authorVisitorId: params.actorVisitorId,
       createdAt: now,
+      message: publishMeta.message,
+      source: publishMeta.source,
     });
     // 有上一版 head 时挂一条父边（fast-forward）
     if (row.head_commit_id) {
@@ -925,11 +963,17 @@ export type DocumentCommitSummary = {
   authorVisitorName: string | null;
   contentHash: string;
   isHead: boolean;
+  message: string;
+  source: PublishSource;
 };
 
 export type DocumentCommitDetail = DocumentCommitSummary & {
   content: string;
 };
+
+function commitSourceOf(c: { source?: string | null }): PublishSource {
+  return isPublishSource(c.source) ? c.source : "manual";
+}
 
 export function listDocumentCommits(documentId: string): DocumentCommitSummary[] {
   const db = getDb();
@@ -946,6 +990,8 @@ export function listDocumentCommits(documentId: string): DocumentCommitSummary[]
       authorVisitorName: author?.visitor_name ?? null,
       contentHash: c.content_hash,
       isHead: head != null && c.commit_id === head,
+      message: c.message ?? "",
+      source: commitSourceOf(c),
     };
   });
 }
@@ -975,6 +1021,8 @@ export function getDocumentCommit(
     authorVisitorName: author?.visitor_name ?? null,
     contentHash: commit.content_hash,
     isHead: row.head_commit_id != null && commit.commit_id === row.head_commit_id,
+    message: commit.message ?? "",
+    source: commitSourceOf(commit),
     content,
   };
 }
@@ -1045,6 +1093,8 @@ export function restoreDocumentVersion(params: {
       blobRef: blob.blobRef,
       authorVisitorId: params.actorVisitorId,
       createdAt: now,
+      message: "",
+      source: "manual",
     });
     if (previousHead) {
       insertCommitParent(db, {
@@ -1775,8 +1825,10 @@ function publishMergeDocument(params: {
   /** 已按 contentFormat 转换后的本地快照；未传则用 content */
   localSnapshotContent?: string;
   now: string;
+  message: string;
+  source: PublishSource;
 }): DocumentDetail {
-  const { row, actorVisitorId, content, displayName, now } = params;
+  const { row, actorVisitorId, content, displayName, now, message, source } = params;
   const db = getDb();
 
   // 如果row.head_commit_id为空大概率是因为旧客户文章没有commit_id, 不能走conflict merge逻辑
@@ -1826,6 +1878,8 @@ function publishMergeDocument(params: {
       blobRef: localWrite.blobRef,
       authorVisitorId: actorVisitorId,
       createdAt: now,
+      message,
+      source,
     });
     insertCommitParent(db, {
       childCommitId: localCommitId,
@@ -1848,6 +1902,8 @@ function publishMergeDocument(params: {
       blobRef: mergeBlob.blobRef,
       authorVisitorId: actorVisitorId,
       createdAt: now,
+      message,
+      source,
     });
     // merge node 拥有两个 parent, r_local 和 远端head
     // 这里存储的是远端head
