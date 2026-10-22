@@ -4655,24 +4655,26 @@ button.small {
   overflow: hidden;
 }
 
-/* === Context menu === */
+/* === Context menu（portal 到 body，避开 sidebar overflow） === */
 .mdocs-context-menu {
   position: fixed;
   min-width: 200px;
+  max-width: min(320px, calc(100vw - 16px));
   padding: 4px;
-  z-index: 50;
+  z-index: 12000;
   display: flex;
   flex-direction: column;
 }
 
-.mdocs-context-label {
-  padding: 6px 10px 2px;
-  font-size: 11px;
-  color: var(--mdocs-text-secondary, #6b7280);
-  user-select: none;
+.mdocs-context-submenu-anchor {
+  position: relative;
 }
 
 .mdocs-context-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
   text-align: left;
   border: none;
   background: transparent;
@@ -4680,9 +4682,26 @@ button.small {
   border-radius: 6px;
   font-size: 13px;
   color: var(--mdocs-text);
+  cursor: pointer;
 }
 
-.mdocs-context-item:hover {
+.mdocs-context-item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mdocs-context-item-chevron {
+  flex: 0 0 auto;
+  color: var(--mdocs-text-secondary, #6b7280);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.mdocs-context-item:hover,
+.mdocs-context-submenu-anchor:hover > .mdocs-context-item {
   background: var(--mdocs-bg);
 }
 
@@ -4692,6 +4711,31 @@ button.small {
 
 .mdocs-context-item.danger:hover {
   background: var(--mdocs-error-soft);
+}
+
+.mdocs-context-submenu {
+  position: absolute;
+  top: 0;
+  min-width: 140px;
+  padding: 4px;
+  z-index: 12001;
+  display: flex;
+  flex-direction: column;
+}
+
+.mdocs-context-submenu.is-right {
+  left: calc(100% - 2px);
+  right: auto;
+}
+
+.mdocs-context-submenu.is-left {
+  right: calc(100% - 2px);
+  left: auto;
+}
+
+.mdocs-context-submenu.is-align-bottom {
+  top: auto;
+  bottom: 0;
 }
 
 .mdocs-context-divider {

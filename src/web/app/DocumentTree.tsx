@@ -606,8 +606,8 @@ function FolderRow(props: {
           if (dragSessionDocumentId === props.folder.documentId) return;
           e.preventDefault();
           e.stopPropagation();
+          // 只高亮投放目标，不自动展开（避免拖进收起的目录时突然撑开整树）
           props.setDropHighlight({ kind: "folder", id: props.folder.documentId });
-          setUserOpen(true);
         }}
         onDragOver={(e) => {
           if (!isOurDocDrag(props.onMoveDocument)) return;

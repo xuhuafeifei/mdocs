@@ -67,7 +67,7 @@ import { localizeDomainName } from "./utils";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
-import { countDocumentPlainChars } from "./docPlainCharCount";
+import { computeDocumentStats, type DocTextStats } from "./docPlainCharCount";
 
 function safeLexicalJsonString(editor: IEditor): string | null {
   try {
@@ -231,8 +231,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const [existingInvites, setExistingInvites] = useState<Map<string, string>>(new Map());
   const [inviteBusy, setInviteBusy] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
-  /** 文档信息「字符数」；null = 计算中 */
-  const [plainCharCount, setPlainCharCount] = useState<number | null>(null);
+  /** 文档信息统计（阅读时间 / 行 / 词 / 字符）；null = 计算中 */
+  const [docTextStats, setDocTextStats] = useState<DocTextStats | null>(null);
   const plainCharGenRef = useRef(0);
 
   // ---- 点击菜单外部自动关闭 ----
@@ -314,11 +314,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
   // 正文撑开后再恢复滚动；进程内 LRU，重启即丢
   useDocScrollCache(props.meta.documentId, scrollHostRef, Boolean(editor));
 
-  // ---- 打开文档信息时异步统计纯文字符数（忽略 md 语法）----
+  // ---- 打开文档信息时异步统计（阅读时间 / 行 / 词 / 字符，对齐 Typora）----
   useEffect(() => {
     if (!showDocInfoMenu && !showReaderMoreMenu) return;
     const gen = ++plainCharGenRef.current;
-    setPlainCharCount(null);
+    setDocTextStats(null);
     const run = () => {
       if (gen !== plainCharGenRef.current) return;
       try {
@@ -331,10 +331,12 @@ export function DocumentEditor(props: DocumentEditorProps) {
             /* 降级 initialContent */
           }
         }
-        const n = countDocumentPlainChars("md", sample);
-        if (gen === plainCharGenRef.current) setPlainCharCount(n);
+        const stats = computeDocumentStats("md", sample);
+        if (gen === plainCharGenRef.current) setDocTextStats(stats);
       } catch {
-        if (gen === plainCharGenRef.current) setPlainCharCount(0);
+        if (gen === plainCharGenRef.current) {
+          setDocTextStats({ chars: 0, words: 0, lines: 0, readingMinutes: 0 });
+        }
       }
     };
     const w = window as Window & {
@@ -988,7 +990,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
     return (
       <>
-        <div style={{ padding: "4px 16px", fontSize: "13px" }}>
+        <div style={{ padding: "4px 16px", fontSize: "13px" }} aria-live="polite">
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
             <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCreator")}</span>
             <span>{getVisitorName(props.meta.ownerVisitorId)}</span>
@@ -1002,12 +1004,41 @@ export function DocumentEditor(props: DocumentEditorProps) {
             <span>{formatFileSize(new Blob([props.initialContent]).size)}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCharCount")}</span>
-            <span>{plainCharCount === null ? "…" : plainCharCount.toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoUpdatedAt")}</span>
             <span>{new Date(props.meta.updatedAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
+          </div>
+          <div style={{ height: "1px", background: "var(--mdocs-border, #e5e5e5)", margin: "8px 0" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoStatReading")}</span>
+            <span>
+              {docTextStats === null
+                ? "…"
+                : t("docInfoStatReadingValue", { n: String(docTextStats.readingMinutes) })}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoStatLines")}</span>
+            <span>
+              {docTextStats === null
+                ? "…"
+                : docTextStats.lines.toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoStatWords")}</span>
+            <span>
+              {docTextStats === null
+                ? "…"
+                : docTextStats.words.toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoStatChars")}</span>
+            <span>
+              {docTextStats === null
+                ? "…"
+                : docTextStats.chars.toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}
+            </span>
           </div>
         </div>
         <div style={{ height: "1px", background: "var(--mdocs-border, #e5e5e5)", margin: "8px 0" }} />

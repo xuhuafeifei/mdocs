@@ -35,7 +35,7 @@ import {
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
-import { countDocumentPlainChars } from "./docPlainCharCount";
+import { computeDocumentStats, type DocTextStats } from "./docPlainCharCount";
 import "./HtmlEditor.css";
 
 interface HtmlEditorProps {
@@ -94,7 +94,7 @@ export function HtmlEditor(props: HtmlEditorProps) {
   const [showInvitePicker, setShowInvitePicker] = useState(false);
   const [existingInvites, setExistingInvites] = useState<Map<string, string>>(new Map());
   const [showVersionHistory, setShowVersionHistory] = useState(false);
-  const [plainCharCount, setPlainCharCount] = useState<number | null>(null);
+  const [docTextStats, setDocTextStats] = useState<DocTextStats | null>(null);
   const plainCharGenRef = useRef(0);
 
   const docInfoMenuRef = useRef<HTMLDivElement>(null);
@@ -188,14 +188,16 @@ export function HtmlEditor(props: HtmlEditorProps) {
   useEffect(() => {
     if (!showDocInfoMenu && !showReaderMoreMenu) return;
     const gen = ++plainCharGenRef.current;
-    setPlainCharCount(null);
+    setDocTextStats(null);
     const run = () => {
       if (gen !== plainCharGenRef.current) return;
       try {
-        const n = countDocumentPlainChars("html", contentRef.current || "");
-        if (gen === plainCharGenRef.current) setPlainCharCount(n);
+        const stats = computeDocumentStats("html", contentRef.current || "");
+        if (gen === plainCharGenRef.current) setDocTextStats(stats);
       } catch {
-        if (gen === plainCharGenRef.current) setPlainCharCount(0);
+        if (gen === plainCharGenRef.current) {
+          setDocTextStats({ chars: 0, words: 0, lines: 0, readingMinutes: 0 });
+        }
       }
     };
     const w = window as Window & {
@@ -371,7 +373,7 @@ export function HtmlEditor(props: HtmlEditorProps) {
     };
     return (
       <>
-        <div style={{ padding: "4px 16px", fontSize: "13px" }}>
+        <div style={{ padding: "4px 16px", fontSize: "13px" }} aria-live="polite">
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
             <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCreator")}</span>
             <span>{getVisitorName(props.meta.ownerVisitorId)}</span>
@@ -385,12 +387,41 @@ export function HtmlEditor(props: HtmlEditorProps) {
             <span>{formatFileSize(new Blob([content]).size)}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoCharCount")}</span>
-            <span>{plainCharCount === null ? "…" : plainCharCount.toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoUpdatedAt")}</span>
             <span>{new Date(props.meta.updatedAt).toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}</span>
+          </div>
+          <div style={{ height: "1px", background: "var(--mdocs-border, #e5e5e5)", margin: "8px 0" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoStatReading")}</span>
+            <span>
+              {docTextStats === null
+                ? "…"
+                : t("docInfoStatReadingValue", { n: String(docTextStats.readingMinutes) })}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoStatLines")}</span>
+            <span>
+              {docTextStats === null
+                ? "…"
+                : docTextStats.lines.toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoStatWords")}</span>
+            <span>
+              {docTextStats === null
+                ? "…"
+                : docTextStats.words.toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "var(--mdocs-text-muted, #888)" }}>{t("docInfoStatChars")}</span>
+            <span>
+              {docTextStats === null
+                ? "…"
+                : docTextStats.chars.toLocaleString(lang === "zh" ? "zh-CN" : "en-US")}
+            </span>
           </div>
         </div>
         <div style={{ height: "1px", background: "var(--mdocs-border, #e5e5e5)", margin: "8px 0" }} />
