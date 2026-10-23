@@ -403,6 +403,13 @@ export const zh: Record<TranslationKey, string> = {
   editorSplitClose: "关闭下栏",
   editorSplitResize: "拖动调整上下分屏比例",
   editorSplitSameDoc: "同一文档不能上下双开",
+  recentTabsLabel: "最近打开",
+  recentTabsClose: "从列表移除",
+  recentTabsPin: "钉住标签栏",
+  recentTabsUnpin: "取消钉住（吸附收起）",
+  recentTabsLobeShow: "显示格式工具栏",
+  recentTabsLobeHide: "隐藏格式工具栏",
+  scrollToTop: "回到顶端",
   // Document info menu
   docInfo: "文档信息",
   docInfoCreator: "创建者",

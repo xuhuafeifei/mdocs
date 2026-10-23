@@ -408,6 +408,13 @@ export const en: Record<TranslationKey, string> = {
   editorSplitClose: "Close lower pane",
   editorSplitResize: "Drag to resize split",
   editorSplitSameDoc: "Cannot open the same document in both panes",
+  recentTabsLabel: "Recently opened",
+  recentTabsClose: "Remove from list",
+  recentTabsPin: "Pin tab bar",
+  recentTabsUnpin: "Unpin (collapse to hotzone)",
+  recentTabsLobeShow: "Show formatting toolbar",
+  recentTabsLobeHide: "Hide formatting toolbar",
+  scrollToTop: "Back to top",
   // Document info menu
   docInfo: "Document info",
   docInfoCreator: "Creator",

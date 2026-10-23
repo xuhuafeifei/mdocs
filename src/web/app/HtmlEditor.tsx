@@ -16,6 +16,7 @@ import {
 import { useI18n } from "../i18n";
 import { localizeDomainName } from "./utils";
 import { DocChrome } from "./DocChrome";
+import { RecentDocTabs, type RecentDocTabsProps } from "./RecentDocTabs";
 import { getDocumentTaskQueue } from "./documentTaskQueue";
 import {
   draftPresenceGeneration,
@@ -70,6 +71,7 @@ interface HtmlEditorProps {
   onVersionRestored?: (doc: DocumentDetail) => void;
   readerChrome?: boolean;
   onOpenMobileNav?: () => void;
+  recentTabsProps?: RecentDocTabsProps | null;
 }
 
 export function HtmlEditor(props: HtmlEditorProps) {
@@ -616,6 +618,8 @@ export function HtmlEditor(props: HtmlEditorProps) {
           }
         />
 
+      <div className="mdocs-editor-body-host">
+        {props.recentTabsProps ? <RecentDocTabs {...props.recentTabsProps} /> : null}
         <div className="mdocs-html-editor-body">
           {!previewMode && props.canEdit ? (
             <textarea
@@ -638,6 +642,7 @@ export function HtmlEditor(props: HtmlEditorProps) {
             />
           </div>
         </div>
+      </div>
 
       {showPermissionDialog && (
         <div

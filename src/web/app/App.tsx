@@ -8,7 +8,7 @@
  * 5. 新建文档/文件夹的模态框管理
  * 6. 全局消息提示与冲突处理
  */
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, PanelRightClose, Search, Star, Table } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
@@ -95,6 +95,23 @@ import { aiWriteResultToHtml, htmlToAiWriteSeed } from "./ai-write/htmlAiWrite";
 import { installAssetLinkDownloads } from "./assetLinkDownload";
 import { FILE_TYPE } from "../../shared/file-types";
 import { EditorPaneHost } from "./EditorPaneHost";
+import type { RecentDocTabsProps } from "./RecentDocTabs";
+import {
+  clearSecondaryRecentDocTabs,
+  loadRecentDocTabsByPane,
+  promoteSecondaryTabsToPrimary,
+  removeRecentDocTab,
+  touchRecentDocTab,
+  type RecentDocTab,
+  type RecentDocTabsByPane,
+  type RecentTabsPane,
+} from "../storage/recentDocTabs";
+import {
+  loadLobeToolbarVisible,
+  loadTabsPinned,
+  saveLobeToolbarVisible,
+  saveTabsPinned,
+} from "../storage/editorWorkbenchPrefs";
 import {
   loadEditorSplitOpen,
   loadEditorSplitRatio,
@@ -276,6 +293,13 @@ export function App() {
   } | null>(null);
   const editorContentRef = useRef(editorContent);
   editorContentRef.current = editorContent;
+
+  /** PC「最近打开」标签：上下栏分列（窄屏不渲染） */
+  const [recentTabsByPane, setRecentTabsByPane] = useState<RecentDocTabsByPane>(() =>
+    loadRecentDocTabsByPane(),
+  );
+  const [tabsPinned, setTabsPinned] = useState(() => loadTabsPinned());
+  const [lobeToolbarVisible, setLobeToolbarVisible] = useState(() => loadLobeToolbarVisible());
 
   /** PC 中间上下分屏（下栏） */
   const [splitOpen, setSplitOpen] = useState(false);
@@ -1107,6 +1131,21 @@ export function App() {
       setFocusedPane("secondary");
       setFocus({ kind: "document", documentId: docId });
       setView("docs");
+      setRecentTabsByPane(
+        touchRecentDocTab("secondary", {
+          documentId: doc.documentId,
+          displayName:
+            (draft && !draft.published && draft.displayName) ||
+            doc.displayName ||
+            doc.relativePath ||
+            "",
+          domainId: doc.domainId,
+          fileType:
+            doc.fileType === FILE_TYPE.HTML || doc.fileType === FILE_TYPE.SHEET
+              ? doc.fileType
+              : FILE_TYPE.DOCUMENT,
+        }),
+      );
       // URL 仍指向上栏文档，避免 /doc/:id effect 把下栏文加载进 primary
     } catch (err) {
       setAlertMessage(translateError(t, err));
@@ -1177,6 +1216,22 @@ export function App() {
       setActiveDocMeta(documentDetailToMeta(doc));
       if (expectedDocIdRef.current !== docId) return;
 
+      setRecentTabsByPane(
+        touchRecentDocTab("primary", {
+          documentId: doc.documentId,
+          displayName:
+            (draft && !draft.published && draft.displayName) ||
+            doc.displayName ||
+            doc.relativePath ||
+            "",
+          domainId: doc.domainId,
+          fileType:
+            doc.fileType === FILE_TYPE.HTML || doc.fileType === FILE_TYPE.SHEET
+              ? doc.fileType
+              : FILE_TYPE.DOCUMENT,
+        }),
+      );
+
       if (draft && !draft.published) {
         loadEditorFromDraft(docId, draft);
       } else {
@@ -1187,6 +1242,90 @@ export function App() {
       setAlertMessage(translateError(t, err));
     }
   }
+
+  function handleRecentTabSelect(pane: RecentTabsPane, tab: RecentDocTab): void {
+    if (pane === "secondary") {
+      void openDocumentBelow(tab.documentId);
+      return;
+    }
+    void guardNavigate(() => navigate(`/doc/${tab.documentId}`));
+  }
+
+  function handleRecentTabClose(pane: RecentTabsPane, documentId: string): void {
+    const next = removeRecentDocTab(pane, documentId);
+    setRecentTabsByPane(next);
+
+    if (pane === "secondary") {
+      if (next.secondary.length === 0) {
+        closeSecondaryPane();
+        return;
+      }
+      if (secondaryMeta?.documentId === documentId) {
+        void loadDocIntoSecondary(next.secondary[0]!.documentId);
+      }
+      return;
+    }
+
+    if (activeDocMeta?.documentId !== documentId) return;
+    if (next.primary.length > 0) {
+      void guardNavigate(() => navigate(`/doc/${next.primary[0]!.documentId}`));
+      return;
+    }
+    // 上栏标签清空：若有下栏则升格
+    if (splitOpen && secondaryMeta) {
+      const secId = secondaryMeta.documentId;
+      setRecentTabsByPane(promoteSecondaryTabsToPrimary());
+      clearEditorSplit();
+      void guardNavigate(() => navigate(`/doc/${secId}`));
+      return;
+    }
+    void guardNavigate(() => {
+      expectedDocIdRef.current = null;
+      setFocus(null);
+      setActiveDocMeta(null);
+      setEditorContent(null);
+      setEditBaseCommitId(null);
+      clearEditorSplit();
+      navigate("/");
+    });
+  }
+
+  function handleTabsPinnedChange(pinned: boolean): void {
+    saveTabsPinned(pinned);
+    setTabsPinned(pinned);
+  }
+
+  function handleLobeToolbarVisibleChange(visible: boolean): void {
+    saveLobeToolbarVisible(visible);
+    setLobeToolbarVisible(visible);
+  }
+
+  function buildRecentTabsProps(pane: RecentTabsPane): RecentDocTabsProps | null {
+    if (isNarrow) return null;
+    const tabs = recentTabsByPane[pane];
+    if (tabs.length === 0) return null;
+    const activeId =
+      pane === "primary"
+        ? (activeDocMeta?.documentId ?? null)
+        : (secondaryMeta?.documentId ?? null);
+    const fileType = pane === "primary" ? activeDocMeta?.fileType : secondaryMeta?.fileType;
+    const isMdPane = fileType !== FILE_TYPE.HTML && fileType !== FILE_TYPE.SHEET;
+    return {
+      tabs,
+      activeDocumentId: activeId,
+      pinned: tabsPinned,
+      onPinnedChange: handleTabsPinnedChange,
+      onSelect: (tab) => handleRecentTabSelect(pane, tab),
+      onClose: (id) => handleRecentTabClose(pane, id),
+      ...(isMdPane
+        ? {
+            lobeToolbarVisible,
+            onLobeToolbarVisibleChange: handleLobeToolbarVisibleChange,
+          }
+        : {}),
+    };
+  }
+
 
   /**
    * URL 中的 documentId 变化或应用就绪后，自动打开对应文档。
@@ -2254,6 +2393,7 @@ export function App() {
                       setFocusedPane("primary");
                       if (activeDocMeta) setFocus({ kind: "document", documentId: activeDocMeta.documentId });
                     }}
+                    recentTabsProps={buildRecentTabsProps("primary")}
                   />
                   {commentPanelOpen && focusedPane === "primary" ? (
                     <CommentsPanel
@@ -2362,13 +2502,17 @@ export function App() {
                           setFocusedPane("secondary");
                           setFocus({ kind: "document", documentId: secondaryMeta.documentId });
                         }}
+                        recentTabsProps={buildRecentTabsProps("secondary")}
                         splitChrome={
                           <button
                             type="button"
                             className="mdocs-editor-split-close-line mdocs-tooltip"
                             aria-label={t("editorSplitClose")}
                             data-tooltip={t("editorSplitClose")}
-                            onClick={closeSecondaryPane}
+                            onClick={() => {
+                              setRecentTabsByPane(clearSecondaryRecentDocTabs());
+                              closeSecondaryPane();
+                            }}
                           />
                         }
                       />

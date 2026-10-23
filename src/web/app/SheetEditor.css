@@ -326,6 +326,15 @@
   }
 }
 
+/* 滚动区 + 回顶按钮宿主 */
+.mdocs-sheet-scroll-host {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* 数据网格滚动容器 */
 .mdocs-sheet-scroll {
   flex: 1;

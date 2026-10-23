@@ -7,6 +7,7 @@ import type { DomainSummary } from "../../shared/types/domain";
 import type { ActiveDocumentMeta, DocumentDetail } from "../../shared/types/document";
 import { isFolderDescPath } from "../../shared/folderDesc";
 import { isPublicWritePermission } from "../../shared/permissions.js";
+import type { RecentDocTabsProps } from "./RecentDocTabs";
 
 const DocumentEditor = lazy(() =>
   import("./DocumentEditor").then((m) => ({ default: m.DocumentEditor })),
@@ -61,6 +62,8 @@ export function EditorPaneHost(props: {
   onOpenMobileNav?: () => void;
   onFocusPane?: () => void;
   splitChrome?: ReactNode;
+  /** 最近打开标签：插入各编辑器 DocChrome 下方（md 在 OutlineProvider 内渲染以接大纲） */
+  recentTabsProps?: RecentDocTabsProps | null;
   className?: string;
 }) {
   const { meta, editorContent } = props;
@@ -107,6 +110,7 @@ export function EditorPaneHost(props: {
         onVersionRestored={props.onVersionRestored}
         readerChrome={props.readerChrome}
         onOpenMobileNav={props.onOpenMobileNav}
+        recentTabsProps={props.recentTabsProps}
       />
     ) : meta.fileType === "html" ? (
       <HtmlEditor
@@ -136,6 +140,7 @@ export function EditorPaneHost(props: {
         onVersionRestored={props.onVersionRestored}
         readerChrome={props.readerChrome}
         onOpenMobileNav={props.onOpenMobileNav}
+        recentTabsProps={props.recentTabsProps}
       />
     ) : (
       <DocumentEditor
@@ -176,6 +181,7 @@ export function EditorPaneHost(props: {
         onAiWrite={props.onAiWrite}
         readerChrome={props.readerChrome}
         onOpenMobileNav={props.onOpenMobileNav}
+        recentTabsProps={props.recentTabsProps}
       />
     );
 

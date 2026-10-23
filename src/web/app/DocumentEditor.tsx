@@ -56,9 +56,15 @@ import {
   type DocumentPermissionValue,
 } from "../../shared/permissions.js";
 import { useI18n } from "../i18n";
+import { RecentDocTabs, type RecentDocTabsProps } from "./RecentDocTabs";
+import {
+  loadOutlineVisible,
+  saveOutlineVisible,
+} from "../storage/editorWorkbenchPrefs";
 import { openFileSelector } from "./actions";
 import Toolbar from "./Toolbar";
 import { DocChrome } from "./DocChrome";
+import { ScrollToTopButton } from "./ScrollToTopButton";
 import { uploadAssetApi, checkBookmarkApi, addBookmarkApi, removeBookmarkApi, fetchVisitorsDirectoryApi, addDocumentInviteApi, getDocumentInvitesApi, removeDocumentInviteApi } from "../services/endpoints";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { useDocScrollCache } from "./hooks/useDocScrollCache";
@@ -211,6 +217,23 @@ interface DocumentEditorProps {
   readerChrome?: boolean;
   /** 打开左侧目录抽屉 */
   onOpenMobileNav?: () => void;
+  /** 最近打开标签：须在 OutlineProvider 内渲染以接大纲开关 */
+  recentTabsProps?: RecentDocTabsProps | null;
+}
+
+/** 标签栏 + 大纲开关（必须在 OutlineProvider 内） */
+function DocumentRecentDocTabs(props: RecentDocTabsProps) {
+  const { visible, toggle } = useOutlineVisibility();
+  return (
+    <RecentDocTabs
+      {...props}
+      outlineVisible={visible}
+      onOutlineToggle={() => {
+        saveOutlineVisible(!visible);
+        toggle();
+      }}
+    />
+  );
 }
 
 export function DocumentEditor(props: DocumentEditorProps) {
@@ -1204,6 +1227,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           </>
         }
       />
+      <div className="mdocs-editor-body-host">
       {showPermissionDialog && (
         <div
           className="mdocs-dialog-backdrop"
@@ -1270,7 +1294,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
           }}
         />
       ) : null}
-      <OutlineProvider defaultVisible={false}>
+      <OutlineProvider defaultVisible={loadOutlineVisible()}>
+        {props.recentTabsProps ? <DocumentRecentDocTabs {...props.recentTabsProps} /> : null}
         <Block flex={1} style={{ minHeight: 0 }}>
           <div
             style={{
@@ -1280,14 +1305,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
               minHeight: 0,
             }}
           >
-            {/* 编辑模式下显示顶部固定工具栏；窄屏阅读壳隐藏，避免灰条占位 */}
-            {editing && editor && !readerChrome ? (
-              <Toolbar
-                editor={editor}
-                outlineCollapseTitle={t("outlineHide")}
-                outlineExpandTitle={t("outlineShow")}
-                outlineToggle
-              />
+            {/* Lobe 格式栏：默认关，由标签栏扳手开关；大纲改走标签栏 */}
+            {editing && editor && !readerChrome && props.recentTabsProps?.lobeToolbarVisible ? (
+              <Toolbar editor={editor} />
             ) : null}
             <div className="mdocs-editor-content-area" style={{ flex: 1, display: "flex", minHeight: 0 }}>
               <Block
@@ -1313,6 +1333,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     />
                   ) : null}
                 </div>
+                <ScrollToTopButton scrollRef={scrollHostRef} />
                 {/* 大纲侧边栏：与 Editor 共享同一卡片，滚动时保持固定 */}
                 {editor && <OutlineSideRail editor={editor} />}
               </Block>
@@ -1320,6 +1341,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
         </div>
       </Block>
       </OutlineProvider>
+      </div>
     </div>
   );
 }

@@ -33,6 +33,8 @@ import {
   allowedPermissionsForDomain,
   type DocumentPermissionValue,
 } from "../../shared/permissions.js";
+import { ScrollToTopButton } from "./ScrollToTopButton";
+import { RecentDocTabs, type RecentDocTabsProps } from "./RecentDocTabs";
 import {
   addSheetColumn,
   addSheetRow,
@@ -117,6 +119,7 @@ interface SheetEditorProps {
   onVersionRestored?: (doc: DocumentDetail) => void;
   readerChrome?: boolean;
   onOpenMobileNav?: () => void;
+  recentTabsProps?: RecentDocTabsProps | null;
 }
 
 type CellRef = { rowId: string; colId: string };
@@ -857,6 +860,8 @@ export function SheetEditor(props: SheetEditorProps) {
         }
       />
 
+      <div className="mdocs-editor-body-host">
+      {props.recentTabsProps ? <RecentDocTabs {...props.recentTabsProps} /> : null}
       <div className="mdocs-sheet-toolbar">
         <div className="mdocs-sheet-toolbar-left">
           <button
@@ -1012,6 +1017,7 @@ export function SheetEditor(props: SheetEditorProps) {
         </div>
       </div>
 
+      <div className="mdocs-sheet-scroll-host">
       <div className="mdocs-sheet-scroll" ref={scrollHostRef}>
         <table className="mdocs-sheet-table">
           <thead>
@@ -1178,6 +1184,8 @@ export function SheetEditor(props: SheetEditorProps) {
           </tbody>
         </table>
       </div>
+      <ScrollToTopButton scrollRef={scrollHostRef} />
+      </div>
 
       <footer className="mdocs-sheet-footer">
         <div className="mdocs-sheet-tabs" role="tablist">
@@ -1267,6 +1275,7 @@ export function SheetEditor(props: SheetEditorProps) {
           <span>共 {workbook.sheets.length} 个工作表</span>
         </div>
       </footer>
+      </div>
 
       {deleteTabTarget ? (
         <ConfirmDialog

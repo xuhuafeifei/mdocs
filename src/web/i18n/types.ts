@@ -399,6 +399,13 @@ export type TranslationKey =
   | "editorSplitClose"
   | "editorSplitResize"
   | "editorSplitSameDoc"
+  | "recentTabsLabel"
+  | "recentTabsClose"
+  | "recentTabsPin"
+  | "recentTabsUnpin"
+  | "recentTabsLobeShow"
+  | "recentTabsLobeHide"
+  | "scrollToTop"
   // Document info menu
   | "docInfo"
   | "docInfoCreator"

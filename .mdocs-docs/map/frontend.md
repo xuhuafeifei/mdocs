@@ -9,6 +9,13 @@
 - **定位**：`EditorPaneHost.tsx` · `editorSplitStorage.ts` · `App.tsx`（`openDocumentBelow`）
 - **需求**：[`../requirements/editor-vertical-split/`](../requirements/editor-vertical-split/)
 
+### 最近打开标签 / 回顶
+
+- **关键词**：`recent tabs` `最近打开` `scroll to top` `回顶` `pin`
+- **结论**：仅 PC；发布栏下方；钉住常驻 / 未钉吸附悬停展开；右侧大纲·Lobe·钉子；Lobe 默认关。上下分屏各一份标签。窄屏无。回顶 `scrollTop > 240`。
+- **定位**：`RecentDocTabs.tsx` · `recentDocTabs.ts` · `editorWorkbenchPrefs.ts` · `ScrollToTopButton.tsx` · `App.tsx`
+- **需求**：[`../requirements/recent-doc-tabs/`](../requirements/recent-doc-tabs/)
+
 ### App shell / 路由
 
 - **关键词**：`App` `DocumentTree` `开始写作` `工作空间` `react-router` `mdocs-shell` `mdocs-sidebar-list` `DocSearchOverlay` `⌘K`
