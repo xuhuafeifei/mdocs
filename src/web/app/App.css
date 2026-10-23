@@ -5523,7 +5523,8 @@ strong.label {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  z-index: 300;
+  /* 须高于 .mdocs-merge-overlay(1500)，否则 merge 内点发布会卡在「发布中」等看不见的说明弹窗 */
+  z-index: 2500;
   animation: backdrop-in 0.2s ease;
 }
 

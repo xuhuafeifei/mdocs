@@ -36,7 +36,9 @@
 
 | 需求夹 | 说明 |
 |--------|------|
-| `publish-commit-message` | **已同意 / 已实现**：发布 commit message + source；手动弹框 / AI 建议；版本历史可隐藏自动发布 — [需求分析](./requirements/publish-commit-message/需求分析.md) · [设计契约](./requirements/publish-commit-message/设计契约.md) · [代码索引](./requirements/publish-commit-message/代码索引.md) |
+| `publish-commit-message` | **已同意 / 已实现**（含 **merge-message 增量已同意 2026-10-23**：合并说明弹窗 + `suggest-merge-message`）— [需求分析](./requirements/publish-commit-message/需求分析.md) · [设计契约](./requirements/publish-commit-message/设计契约.md) · [代码索引](./requirements/publish-commit-message/代码索引.md) |
+| `ai-merge` | **已同意（2026-10-23）**：行级冲突 AI 选票（标记全文 → resolution）；与 merge-message 分接口 — [需求分析](./requirements/ai-merge/需求分析.md) · [设计契约](./requirements/ai-merge/设计契约.md) · [代码索引](./requirements/ai-merge/代码索引.md) |
+| `agent-get-editor-draft` | **已同意 / 已实现（2026-10-23）**：按需 `get_editor_draft`（SSE+requestId 静默取本地 MD/HTML）；不提供 CLI ai-merge — [需求分析](./requirements/agent-get-editor-draft/需求分析.md) · [设计契约](./requirements/agent-get-editor-draft/设计契约.md) · [代码索引](./requirements/agent-get-editor-draft/代码索引.md) |
 | `search-query-modes` | **已实现**：搜索模式入参（关键词/语义/默认、限域）+ 我的文章表格接真实查询 + 语义索引 Agent 工具（查询/构建/状态）；可读即可索引 — [需求分析](./requirements/search-query-modes/需求分析.md) · [设计契约](./requirements/search-query-modes/设计契约.md) · [代码索引](./requirements/search-query-modes/代码索引.md) |
 | `search-title-index` | **已实现**：标题独立索引 + 两路召回合并；侧栏/⌘K 浮层 — [需求分析](./requirements/search-title-index/需求分析.md) · [设计契约](./requirements/search-title-index/设计契约.md) |
 | `search-embedding` | **已实现**：本地 nomic 语义索引 + 与文章检索同构构建；异步下 GGUF；失败不挡 FTS — [需求分析](./requirements/search-embedding/需求分析.md) · [设计契约](./requirements/search-embedding/设计契约.md) · [代码索引](./requirements/search-embedding/代码索引.md) |

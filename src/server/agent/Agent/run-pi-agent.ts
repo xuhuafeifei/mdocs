@@ -18,6 +18,7 @@ import {
   writeToolBodyText,
 } from "./tool-call-ui.js";
 import { cancelVisitorChoices } from "./choice-pending.js";
+import { cancelVisitorEditorDrafts } from "./editor-draft-wait.js";
 import { cancelVisitorSkillForms } from "./skill-form-pending.js";
 import {
   extractToolResultText,
@@ -115,6 +116,7 @@ export async function runPiAgent(params: RunPiAgentParams): Promise<PiRunTrack> 
 
   const onAbort = () => {
     cancelVisitorChoices(visitorId);
+    cancelVisitorEditorDrafts(visitorId);
     cancelVisitorSkillForms(visitorId);
     agent.abort();
   };
@@ -141,6 +143,7 @@ export async function runPiAgent(params: RunPiAgentParams): Promise<PiRunTrack> 
   } finally {
     signal?.removeEventListener("abort", onAbort);
     cancelVisitorChoices(visitorId);
+    cancelVisitorEditorDrafts(visitorId);
     cancelVisitorSkillForms(visitorId);
     unsub();
   }

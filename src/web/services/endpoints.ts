@@ -282,6 +282,34 @@ export function suggestCommitMessageApi(
   });
 }
 
+/** AI 行级 merge：git 冲突 Markdown → 定稿 Markdown。 */
+export function suggestMergeResolutionsApi(
+  documentId: string,
+  input: { conflictMarkdown: string },
+): Promise<{ mergedMarkdown: string }> {
+  return api(`/api/documents/${encodeURIComponent(documentId)}/suggest-merge-resolutions`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** 合并发布说明：local / remote / merged → message。 */
+export function suggestMergeMessageApi(
+  documentId: string,
+  input: {
+    localContent: string;
+    remoteContent: string;
+    mergedContent: string;
+    baseContent?: string;
+    contentFormat?: "markdown" | "lexical" | "plain";
+  },
+): Promise<{ message: string }> {
+  return api(`/api/documents/${encodeURIComponent(documentId)}/suggest-merge-message`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function getDocumentSyncStatusApi(
   documentId: string,
   localBaseCommitId?: string,
@@ -935,6 +963,12 @@ export type AgentStreamEvent =
     }
   | { type: "choice_expired"; requestId: string }
   | {
+      type: "editor_draft_request";
+      requestId: string;
+      documentId: string;
+      expiresAt: string;
+    }
+  | {
       type: "skill_form_card";
       requestId: string;
       mode: "create" | "update";
@@ -1164,6 +1198,27 @@ export function submitAgentChoiceApi(
   return api("/api/agent/choice", {
     method: "POST",
     body: JSON.stringify({ requestId, choice }),
+  });
+}
+
+/** 前端静默回传 get_editor_draft（自动执行，无确认卡） */
+export function submitAgentEditorDraftApi(
+  body:
+    | {
+        requestId: string;
+        status: "ok";
+        documentId: string;
+        content: string;
+        contentFormat: "markdown" | "html" | "plain";
+        source: "editor" | "indexeddb";
+        localBaseCommitId?: string | null;
+        displayName?: string;
+      }
+    | { requestId: string; status: "unavailable"; reason: string },
+): Promise<{ status: string }> {
+  return api("/api/agent/editor-draft", {
+    method: "POST",
+    body: JSON.stringify(body),
   });
 }
 

@@ -26,6 +26,8 @@ export type ToolDeps = {
   coding?: CodingDocContext;
   /** 有值时注册 web_search / web_fetch */
   deepseekWeb?: DeepSeekWebCreds;
+  /** 当前 UI 打开的文档（get_editor_draft 缺省 documentId） */
+  uiDocumentId?: string | null;
 };
 
 export function asToolResult(payload: unknown) {

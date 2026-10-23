@@ -4,7 +4,7 @@
  * - html：原文直通 merge-plan → updateDocument
  * - sheet：整表二选一（用我的 / 用别人的），不做 JSON 行级 merge
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import { LexicalMarkdownBridge } from "./LexicalMarkdownBridge";
 import { MergeInlinePane } from "./merge/MergeInlinePane";
@@ -22,18 +22,20 @@ import {
   convertContentApi,
   getDocumentApi,
   getDocumentMergeContextApi,
+  suggestMergeResolutionsApi,
   updateDocumentApi,
 } from "../services/endpoints";
 import { ApiRequestError } from "../services/api-request-error";
 import type { DraftConflictRecord } from "../storage/drafts";
 import type { DocumentDetail } from "../../shared/types/document";
-import { getPolicy } from "../../shared/file-type-policy";
+import { canAiMerge, getPolicy } from "../../shared/file-type-policy";
 import type { FileType } from "../../shared/file-types";
 import { publishSheetWholeChoice } from "./merge/sheet-whole-publish";
 import {
   isSameMarkdownBody,
   publishLineMergeDocument,
 } from "./merge/line-merge-publish";
+import { serializeMergeMarkedText } from "./merge/merge-marked-text";
 
 export interface MergeViewProps {
   documentId: string;
@@ -49,6 +51,16 @@ export interface MergeViewProps {
     documentId: string,
     input: Parameters<typeof updateDocumentApi>[1],
   ) => Promise<DocumentDetail | void>;
+  /** 行级 merge 收尾：合并说明弹窗（替代普通发布说明） */
+  requestMergePublishMessage?: (opts: {
+    documentId: string;
+    content: string;
+    contentFormat?: "markdown" | "lexical" | "plain";
+    localContent: string;
+    remoteContent: string;
+    mergedContent: string;
+    baseContent?: string;
+  }) => Promise<string | null>;
   /** 仅文档所有者：整表 merge 页也可强制覆盖 */
   onForceOverwrite?: () => void;
   forceBusy?: boolean;
@@ -76,6 +88,10 @@ function SheetWholeDocumentMerge(props: MergeViewProps) {
   const [loadingRemote, setLoadingRemote] = useState(true);
   const [busy, setBusy] = useState(false);
   const localContent = props.conflict.localSnapshotContent;
+  const onErrorRef = useRef(props.onError);
+  onErrorRef.current = props.onError;
+  const tRef = useRef(t);
+  tRef.current = t;
 
   useEffect(() => {
     let cancelled = false;
@@ -87,7 +103,7 @@ function SheetWholeDocumentMerge(props: MergeViewProps) {
         if (cancelled) return;
         setRemoteContent(doc.content);
       } catch {
-        if (!cancelled) props.onError(t("mergeLoadRemoteFailed"));
+        if (!cancelled) onErrorRef.current(tRef.current("mergeLoadRemoteFailed"));
       } finally {
         if (!cancelled) setLoadingRemote(false);
       }
@@ -95,7 +111,8 @@ function SheetWholeDocumentMerge(props: MergeViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [props.documentId, props.onError, t]);
+    // 勿依赖 onError/t：App 弹「发布说明」会重渲染出新函数，否则会重拉 tip 并打回冲突未决议态
+  }, [props.documentId]);
 
   async function publishSide(side: "local" | "remote"): Promise<void> {
     if (side === "local" && !localContent.trim()) {
@@ -183,7 +200,15 @@ function LineBasedMergeView(
   const [segments, setSegments] = useState<MergeSegment[] | null>(null);
   const [editedMd, setEditedMd] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [aiMergeBusy, setAiMergeBusy] = useState(false);
   const [loadingRemote, setLoadingRemote] = useState(true);
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  const onErrorRef = useRef(props.onError);
+  onErrorRef.current = props.onError;
+  const tRef = useRef(t);
+  tRef.current = t;
+  const showAiMerge = canAiMerge((props.fileType ?? "md") as FileType);
 
   useEffect(() => {
     let cancelled = false;
@@ -203,14 +228,15 @@ function LineBasedMergeView(
           setRemoteLexical(doc.content);
         }
       } catch {
-        if (!cancelled) props.onError(t("mergeLoadRemoteFailed"));
+        if (!cancelled) onErrorRef.current(tRef.current("mergeLoadRemoteFailed"));
         if (!cancelled) setLoadingRemote(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [props.documentId, props.onError, t, isRawText]);
+    // 勿依赖 onError/t：App 弹「发布说明」会重渲染出新函数，否则清空 segments 把已决议冲突打回未处理
+  }, [props.documentId, isRawText]);
 
   useEffect(() => {
     let cancelled = false;
@@ -280,6 +306,8 @@ function LineBasedMergeView(
 
   useEffect(() => {
     if (!localMd || !remoteMd || loadingRemote || !baseReady) return;
+    // 发布说明弹窗期间 busy=true：勿重建 plan（也不要把 busy 放进 deps，否则取消发布 busy→false 会再打回未决议）
+    if (busyRef.current) return;
     setSegments(buildThreeWayMergePlan(localMd, baseMd, remoteMd));
     setEditedMd(null);
   }, [localMd, remoteMd, baseMd, baseReady, loadingRemote, props.conflict.remoteCommitId]);
@@ -313,6 +341,43 @@ function LineBasedMergeView(
     setEditedMd(null);
   }
 
+  async function runAiMerge(): Promise<void> {
+    if (!segments || aiMergeBusy || busy) return;
+    const { conflictMarkdown, unresolvedCount: pending } = serializeMergeMarkedText(segments);
+    if (pending === 0) {
+      props.onError(t("mergeAiMergeEmpty"));
+      return;
+    }
+    setAiMergeBusy(true);
+    try {
+      const { mergedMarkdown } = await suggestMergeResolutionsApi(props.documentId, {
+        conflictMarkdown,
+      });
+      // 全部标为已决议（manual），正文以 AI 定稿为准，进入可编辑态
+      setSegments((prev) => {
+        if (!prev) return prev;
+        let next = prev;
+        for (const seg of prev) {
+          if (seg.kind === "conflict" && seg.resolution === "unresolved") {
+            next = updateConflictResolution(next, seg.id, "manual", []);
+          }
+        }
+        return next;
+      });
+      setEditedMd(mergedMarkdown);
+    } catch (err) {
+      const msg =
+        err instanceof ApiRequestError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      props.onError(msg || t("mergeAiMergeFailed"));
+    } finally {
+      setAiMergeBusy(false);
+    }
+  }
+
   async function completeMerge(): Promise<void> {
     if (unresolvedCount > 0) {
       props.onError(t("mergeConflictsUnresolved", { count: String(unresolvedCount) }));
@@ -336,6 +401,28 @@ function LineBasedMergeView(
               })
             ).content;
 
+      let updateDocument = props.updateDocument ?? updateDocumentApi;
+      if (props.requestMergePublishMessage) {
+        const message = await props.requestMergePublishMessage({
+          documentId: props.documentId,
+          content,
+          contentFormat: isRawText ? "plain" : "markdown",
+          localContent: localMd,
+          remoteContent: remoteMd,
+          mergedContent: body,
+          baseContent: baseMd || undefined,
+        });
+        if (message === null) {
+          throw new Error(t("publishMessageCancelled"));
+        }
+        updateDocument = async (documentId, input) =>
+          updateDocumentApi(documentId, {
+            ...input,
+            message,
+            source: "manual",
+          });
+      }
+
       const updated = await publishLineMergeDocument({
         documentId: props.documentId,
         displayName: props.displayName,
@@ -343,7 +430,7 @@ function LineBasedMergeView(
         localBaseCommitId: props.conflict.localBaseCommitId,
         localSnapshotContent: props.conflict.localSnapshotContent,
         getDocument: getDocumentApi,
-        updateDocument: props.updateDocument ?? updateDocumentApi,
+        updateDocument,
       });
       await props.onSuccess(updated);
     } catch (err) {
@@ -403,13 +490,28 @@ function LineBasedMergeView(
           ) : null}
         </div>
         <div className="mdocs-merge-toolbar-actions">
-          <button type="button" className="secondary" disabled={busy} onClick={props.onClose}>
+          {showAiMerge ? (
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy || aiMergeBusy || !ready || unresolvedCount === 0}
+              onClick={() => void runAiMerge()}
+            >
+              {aiMergeBusy ? t("mergeAiMerging") : t("mergeAiMerge")}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy || aiMergeBusy}
+            onClick={props.onClose}
+          >
             {t("cancel")}
           </button>
           <button
             type="button"
             className="primary"
-            disabled={busy || !ready || unresolvedCount > 0}
+            disabled={busy || aiMergeBusy || !ready || unresolvedCount > 0}
             onClick={() => void completeMerge()}
           >
             {busy ? t("publishing") : t("mergeComplete")}

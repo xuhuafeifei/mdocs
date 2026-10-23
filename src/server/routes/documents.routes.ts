@@ -22,6 +22,9 @@ import {
   updateDocument,
 } from "../documents/document.service.js";
 import { suggestCommitMessage } from "../documents/suggest-commit-message.js";
+import { suggestDocumentMerge } from "../documents/ai-merge.service.js";
+import { suggestMergeMessage } from "../documents/suggest-merge-message.js";
+import { suggestMergeResolutions } from "../documents/suggest-merge-resolutions.js";
 import { isPublishSource } from "../../shared/publish-meta.js";
 import { findDomainByName } from "../db/repositories/domain.repo.js";
 import { getDb } from "../db/connection.js";
@@ -523,6 +526,147 @@ export function buildDocumentsRouter(): Router {
         res.json({ data });
       } catch (err) {
         respondError(res, err, "documents-route.suggest-commit-message");
+      }
+    },
+  );
+
+  /**
+   * POST /:documentId/suggest-document-merge
+   * CLI / Agent 入口：localContent + tip/base → AI 消冲突，返回定稿 Markdown + 各侧快照。
+   * （Web Merge 页仍用 suggest-merge-resolutions，直接吃已序列化的 conflictMarkdown。）
+   */
+  router.post(
+    "/:documentId/suggest-document-merge",
+    requireDocumentAccess("edit"),
+    async (req: Request, res: Response) => {
+      if (!req.visitor) {
+        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+        return;
+      }
+      const body = (req.body ?? {}) as {
+        localContent?: unknown;
+        localBaseCommitId?: unknown;
+        contentFormat?: unknown;
+      };
+      if (typeof body.localContent !== "string") {
+        res.status(400).json({
+          error: { code: "BAD_REQUEST", message: "localContent is required" },
+        });
+        return;
+      }
+      const contentFormat =
+        body.contentFormat === "markdown" ||
+        body.contentFormat === "plain" ||
+        body.contentFormat === "lexical"
+          ? body.contentFormat
+          : "markdown";
+      try {
+        const data = await suggestDocumentMerge({
+          actorVisitorId: req.visitor.visitor_id,
+          documentId: req.params.documentId!,
+          localContent: body.localContent,
+          localBaseCommitId:
+            typeof body.localBaseCommitId === "string" ? body.localBaseCommitId : undefined,
+          contentFormat,
+        });
+        res.json({ data });
+      } catch (err) {
+        respondError(res, err, "documents-route.suggest-document-merge");
+      }
+    },
+  );
+
+  /**
+   * POST /:documentId/suggest-merge-resolutions
+   * AI 行级 merge：完整 git 冲突 Markdown → 定稿 Markdown（无冲突标记）。
+   */
+  router.post(
+    "/:documentId/suggest-merge-resolutions",
+    requireDocumentAccess("edit"),
+    async (req: Request, res: Response) => {
+      if (!req.visitor) {
+        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+        return;
+      }
+      const body = (req.body ?? {}) as {
+        conflictMarkdown?: unknown;
+        /** @deprecated 旧字段，等同 conflictMarkdown */
+        markedText?: unknown;
+      };
+      const conflictMarkdown =
+        typeof body.conflictMarkdown === "string"
+          ? body.conflictMarkdown
+          : typeof body.markedText === "string"
+            ? body.markedText
+            : null;
+      if (conflictMarkdown == null) {
+        res.status(400).json({
+          error: { code: "BAD_REQUEST", message: "conflictMarkdown is required" },
+        });
+        return;
+      }
+      try {
+        const data = await suggestMergeResolutions({
+          actorVisitorId: req.visitor.visitor_id,
+          documentId: req.params.documentId!,
+          conflictMarkdown,
+        });
+        res.json({ data });
+      } catch (err) {
+        respondError(res, err, "documents-route.suggest-merge-resolutions");
+      }
+    },
+  );
+
+  /**
+   * POST /:documentId/suggest-merge-message
+   * 合并发布说明：local / remote / merged（可选 base）→ 短 message。
+   */
+  router.post(
+    "/:documentId/suggest-merge-message",
+    requireDocumentAccess("edit"),
+    async (req: Request, res: Response) => {
+      if (!req.visitor) {
+        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+        return;
+      }
+      const body = (req.body ?? {}) as {
+        localContent?: unknown;
+        remoteContent?: unknown;
+        mergedContent?: unknown;
+        baseContent?: unknown;
+        contentFormat?: unknown;
+      };
+      if (
+        typeof body.localContent !== "string" ||
+        typeof body.remoteContent !== "string" ||
+        typeof body.mergedContent !== "string"
+      ) {
+        res.status(400).json({
+          error: {
+            code: "BAD_REQUEST",
+            message: "localContent, remoteContent and mergedContent are required",
+          },
+        });
+        return;
+      }
+      const contentFormat =
+        body.contentFormat === "markdown" || body.contentFormat === "plain"
+          ? body.contentFormat
+          : "lexical";
+      try {
+        const data = await suggestMergeMessage({
+          actorVisitorId: req.visitor.visitor_id,
+          documentId: req.params.documentId!,
+          localContent: body.localContent,
+          remoteContent: body.remoteContent,
+          mergedContent: body.mergedContent,
+          baseContent: typeof body.baseContent === "string" ? body.baseContent : undefined,
+          contentFormat,
+        });
+        res.json({ data });
+      } catch (err) {
+        respondError(res, err, "documents-route.suggest-merge-message");
       }
     },
   );

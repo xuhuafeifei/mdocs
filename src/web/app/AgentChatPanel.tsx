@@ -45,6 +45,7 @@ import {
   streamAgentRunApi,
   cancelAgentRunApi,
   submitAgentChoiceApi,
+  submitAgentEditorDraftApi,
   expireAgentChoiceApi,
   cancelAgentChoiceApi,
   cancelAgentSkillFormApi,
@@ -1104,6 +1105,22 @@ export const AgentChatPanel = forwardRef<
       documentId: string;
       displayName: string;
     }) => void | Promise<void>;
+    /**
+     * get_editor_draft：收到 SSE 后静默取主栏草稿（MD/HTML），无确认卡。
+     * 未传则回传 unavailable。
+     */
+    onProvideEditorDraft?: (documentId: string) => Promise<
+      | {
+          status: "ok";
+          documentId: string;
+          content: string;
+          contentFormat: "markdown" | "html" | "plain";
+          source: "editor" | "indexeddb";
+          localBaseCommitId?: string | null;
+          displayName?: string;
+        }
+      | { status: "unavailable"; reason: string }
+    >;
     /** 嵌在帮写左栏或 PC 贴左列：去掉浮层定位 */
     embedded?: boolean;
     /** PC 贴左（embedded 于主壳左列）；与帮写 embedded 区分 */
@@ -1140,6 +1157,7 @@ export const AgentChatPanel = forwardRef<
     onTreeChanged,
     onDocumentOverwritten,
     onOpenCoding,
+    onProvideEditorDraft,
     embedded = false,
     docked = false,
     onToggleDock,
@@ -1152,6 +1170,8 @@ export const AgentChatPanel = forwardRef<
     onSendingChange,
     onSessionId,
   } = props;
+  const onProvideEditorDraftRef = useRef(onProvideEditorDraft);
+  onProvideEditorDraftRef.current = onProvideEditorDraft;
   const sessionMode = mode === "coding" ? "coding" : "normal";
   const coding = sessionMode === "coding";
   const showClose = !embedded || docked;
@@ -1858,6 +1878,50 @@ export const AgentChatPanel = forwardRef<
           };
         }),
       );
+    } else if (event.type === "editor_draft_request") {
+      // 静默：立刻取稿并 POST，无确认卡
+      void (async () => {
+        const provide = onProvideEditorDraftRef.current;
+        try {
+          if (!provide) {
+            await submitAgentEditorDraftApi({
+              requestId: event.requestId,
+              status: "unavailable",
+              reason: "no_provider",
+            });
+            return;
+          }
+          const snap = await provide(event.documentId);
+          if (snap.status === "unavailable") {
+            await submitAgentEditorDraftApi({
+              requestId: event.requestId,
+              status: "unavailable",
+              reason: snap.reason,
+            });
+            return;
+          }
+          await submitAgentEditorDraftApi({
+            requestId: event.requestId,
+            status: "ok",
+            documentId: snap.documentId,
+            content: snap.content,
+            contentFormat: snap.contentFormat,
+            source: snap.source,
+            localBaseCommitId: snap.localBaseCommitId,
+            displayName: snap.displayName,
+          });
+        } catch {
+          try {
+            await submitAgentEditorDraftApi({
+              requestId: event.requestId,
+              status: "unavailable",
+              reason: "provide_failed",
+            });
+          } catch {
+            /* 后端可能已超时 */
+          }
+        }
+      })();
     } else if (event.type === "skill_form_card") {
       setMessages((prev) =>
         prev.map((m) => {

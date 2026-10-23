@@ -75,6 +75,9 @@ describe("createToolsForMode", () => {
       "overwrite_document",
       "append_document",
       "replace_document_markdown",
+      "get_editor_draft",
+      "suggest_document_merge",
+      "suggest_document_merge_message",
       ...USER_SKILL_NAMES,
     ]);
   });
@@ -105,6 +108,9 @@ describe("createToolsForMode", () => {
       "overwrite_document",
       "append_document",
       "replace_document_markdown",
+      "get_editor_draft",
+      "suggest_document_merge",
+      "suggest_document_merge_message",
       ...USER_SKILL_NAMES,
     ]);
   });

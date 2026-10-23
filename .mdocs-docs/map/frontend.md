@@ -150,14 +150,16 @@
 
 ### 冲突 Merge（inline）
 
-- **关键词**：`MergeView` `MergeInlinePane` `接收` `拒绝` `全部用我的` `三路 diff`
+- **关键词**：`MergeView` `MergeInlinePane` `接收` `拒绝` `全部用我的` `三路 diff` `AI 合并` `合并说明`
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/web/app/MergeView.tsx` | `MergeView` |
+  | `src/web/app/MergeView.tsx` | `MergeView` `runAiMerge` |
   | `src/web/app/merge/MergeInlinePane.tsx` | `MergeInlinePane` |
   | `src/web/app/merge/merge-plan.ts` | `buildThreeWayMergePlan` |
-- **需求**：[`../requirements/merge-inline-ui/`](../requirements/merge-inline-ui/)
+  | `src/web/app/merge/merge-marked-text.ts` | `serializeMergeMarkedText` |
+  | `src/shared/file-type-policy.ts` | `canAiMerge` |
+- **需求**：[`../requirements/merge-inline-ui/`](../requirements/merge-inline-ui/) · [`../requirements/ai-merge/`](../requirements/ai-merge/) · merge-message 见 [`../requirements/publish-commit-message/`](../requirements/publish-commit-message/)
 
 ### UI 视觉体系（选中态 / 层级 / 控件声量）
 

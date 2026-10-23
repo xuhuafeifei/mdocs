@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { useLogger } from "../../logger/logger.js";
 import { getVisitorAgentConfig } from "../Config/config.js";
 import { cancelVisitorChoices } from "./choice-pending.js";
+import { cancelVisitorEditorDrafts } from "./editor-draft-wait.js";
 import { cancelVisitorSkillForms } from "./skill-form-pending.js";
 import { runOnboardingChat } from "./run.js";
 import { AgentSessionManager } from "./session-manager.js";
@@ -319,6 +320,7 @@ async function finishRun(
   if (!run || !isActiveStatus(run.meta.status)) return;
   updateStatus(run, status, reason);
   cancelVisitorChoices(run.meta.visitorId);
+  cancelVisitorEditorDrafts(run.meta.visitorId);
   cancelVisitorSkillForms(run.meta.visitorId);
   if (!run.ac.signal.aborted) {
     run.ac.abort();

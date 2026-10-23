@@ -449,17 +449,51 @@ export function App() {
   const [publishMsgPrompt, setPublishMsgPrompt] = useState<{
     content: string;
     documentId: string;
-    contentFormat?: "markdown" | "lexical";
+    contentFormat?: "markdown" | "lexical" | "plain";
+    mode?: "publish" | "merge";
+    mergeSuggest?: {
+      localContent: string;
+      remoteContent: string;
+      mergedContent: string;
+      baseContent?: string;
+    };
     resolve: (message: string | null) => void;
   } | null>(null);
 
   function requestPublishMessage(
     content: string,
     documentId: string,
-    contentFormat?: "markdown" | "lexical",
+    contentFormat?: "markdown" | "lexical" | "plain",
   ): Promise<string | null> {
     return new Promise((resolve) => {
-      setPublishMsgPrompt({ content, documentId, contentFormat, resolve });
+      setPublishMsgPrompt({ content, documentId, contentFormat, mode: "publish", resolve });
+    });
+  }
+
+  /** 冲突合并收尾：合并说明弹窗（AI 走 suggest-merge-message）。 */
+  function requestMergePublishMessage(opts: {
+    documentId: string;
+    content: string;
+    contentFormat?: "markdown" | "lexical" | "plain";
+    localContent: string;
+    remoteContent: string;
+    mergedContent: string;
+    baseContent?: string;
+  }): Promise<string | null> {
+    return new Promise((resolve) => {
+      setPublishMsgPrompt({
+        mode: "merge",
+        documentId: opts.documentId,
+        content: opts.content,
+        contentFormat: opts.contentFormat,
+        mergeSuggest: {
+          localContent: opts.localContent,
+          remoteContent: opts.remoteContent,
+          mergedContent: opts.mergedContent,
+          baseContent: opts.baseContent,
+        },
+        resolve,
+      });
     });
   }
 
@@ -483,6 +517,99 @@ export function App() {
     const raw = title.trim() || "untitled";
     const safe = raw.replace(/[\\/:*?"<>|]/g, "-").slice(0, 80);
     return safe.endsWith(".md") ? safe : `${safe}.md`;
+  }
+
+  /** Agent get_editor_draft：静默取主栏当前稿（MD/HTML，非 Lexical） */
+  async function provideEditorDraft(documentId: string): Promise<
+    | {
+        status: "ok";
+        documentId: string;
+        content: string;
+        contentFormat: "markdown" | "html" | "plain";
+        source: "editor" | "indexeddb";
+        localBaseCommitId?: string | null;
+        displayName?: string;
+      }
+    | { status: "unavailable"; reason: string }
+  > {
+    if (!activeDocMeta || activeDocMeta.documentId !== documentId) {
+      return { status: "unavailable", reason: "not_active_document" };
+    }
+    if (activeDocMeta.fileType === FILE_TYPE.SHEET) {
+      return { status: "unavailable", reason: "sheet_not_supported" };
+    }
+    const isHtml = activeDocMeta.fileType === FILE_TYPE.HTML;
+
+    if (editorContent && editorContent.documentId === documentId) {
+      if (isHtml) {
+        return {
+          status: "ok",
+          documentId,
+          content: editorContent.content,
+          contentFormat: "html",
+          source: "editor",
+          localBaseCommitId: editBaseCommitId,
+          displayName: editorContent.displayName,
+        };
+      }
+      let markdown = exportMarkdownRef.current?.() ?? "";
+      if (!markdown.trim()) {
+        try {
+          const converted = await convertContentApi({
+            content: editorContent.content,
+            from: "lexical",
+            to: "markdown",
+          });
+          markdown = converted.content;
+        } catch {
+          return { status: "unavailable", reason: "convert_failed" };
+        }
+      }
+      return {
+        status: "ok",
+        documentId,
+        content: markdown,
+        contentFormat: "markdown",
+        source: "editor",
+        localBaseCommitId: editBaseCommitId,
+        displayName: editorContent.displayName,
+      };
+    }
+
+    const draft = await getDraft(documentId);
+    if (!draft) return { status: "unavailable", reason: "no_draft" };
+    if (draft.contentKind === "sheet") {
+      return { status: "unavailable", reason: "sheet_not_supported" };
+    }
+    if (isHtml || draft.contentKind === "html") {
+      return {
+        status: "ok",
+        documentId,
+        content: draft.content,
+        contentFormat: "html",
+        source: "indexeddb",
+        localBaseCommitId: draft.localBaseCommitId ?? editBaseCommitId,
+        displayName: draft.displayName,
+      };
+    }
+    try {
+      const converted = await convertContentApi({
+        content: draft.content,
+        from: "lexical",
+        to: "markdown",
+      });
+      return {
+        status: "ok",
+        documentId,
+        content: converted.content,
+        contentFormat: "markdown",
+        source: "indexeddb",
+        localBaseCommitId: draft.localBaseCommitId ?? editBaseCommitId,
+        displayName: draft.displayName,
+      };
+    } catch {
+      return { status: "unavailable", reason: "convert_failed" };
+    }
   }
 
   async function openAiWriteForCurrentDoc(): Promise<void> {
@@ -1938,6 +2065,7 @@ export function App() {
                   onOpenCoding={
                     isNarrow ? undefined : (payload) => void openAiWriteForDocument(payload)
                   }
+                  onProvideEditorDraft={provideEditorDraft}
                 />
               </Suspense>
             ) : (
@@ -2339,6 +2467,7 @@ export function App() {
                   onSuccess={handleMergeSuccess}
                   onError={(msg) => setAlertMessage(msg)}
                   updateDocument={updateDocumentWithPublishMessage}
+                  requestMergePublishMessage={requestMergePublishMessage}
                   onForceOverwrite={
                     visitor && activeDocMeta && visitor.visitorId === activeDocMeta.ownerVisitorId
                       ? () => void handleForceOverwrite()
@@ -2352,9 +2481,11 @@ export function App() {
             {publishMsgPrompt ? (
               <PublishMessageDialog
                 open
+                mode={publishMsgPrompt.mode ?? "publish"}
                 documentId={publishMsgPrompt.documentId}
                 content={publishMsgPrompt.content}
                 contentFormat={publishMsgPrompt.contentFormat}
+                mergeSuggest={publishMsgPrompt.mergeSuggest}
                 onCancel={() => {
                   const resolve = publishMsgPrompt.resolve;
                   setPublishMsgPrompt(null);
@@ -2834,6 +2965,7 @@ export function App() {
                 onOpenCoding={
                   isNarrow ? undefined : (payload) => void openAiWriteForDocument(payload)
                 }
+                onProvideEditorDraft={provideEditorDraft}
               />
             </Suspense>
           ) : null}

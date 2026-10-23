@@ -1,24 +1,34 @@
 /**
- * 手动发布前的说明弹框：可选填写 message，可 AI 根据 diff 生成。
+ * 手动发布 / 合并发布前的说明弹框：可选填写 message，可 AI 生成。
+ * mode=publish → suggest-commit-message；mode=merge → suggest-merge-message。
  */
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n";
 import { ApiRequestError } from "../services/client";
-import { suggestCommitMessageApi } from "../services/endpoints";
+import { suggestCommitMessageApi, suggestMergeMessageApi } from "../services/endpoints";
 import { PUBLISH_MESSAGE_MAX_LENGTH } from "../../shared/publish-meta";
 
 export type PublishMessageDialogProps = {
   open: boolean;
   documentId: string;
-  /** 待发正文（供 AI suggest） */
+  /** 待发正文（普通发布 AI suggest；merge 模式下作 merged 侧） */
   content: string;
-  contentFormat?: "markdown" | "lexical";
+  contentFormat?: "markdown" | "lexical" | "plain";
+  mode?: "publish" | "merge";
+  /** merge 模式 AI 入参 */
+  mergeSuggest?: {
+    localContent: string;
+    remoteContent: string;
+    mergedContent: string;
+    baseContent?: string;
+  };
   onConfirm: (message: string) => void;
   onCancel: () => void;
 };
 
 export function PublishMessageDialog(props: PublishMessageDialogProps) {
   const { t } = useI18n();
+  const mode = props.mode ?? "publish";
   const [message, setMessage] = useState("");
   const [suggestBusy, setSuggestBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +38,7 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
     setMessage("");
     setError(null);
     setSuggestBusy(false);
-  }, [props.open, props.documentId]);
+  }, [props.open, props.documentId, mode]);
 
   if (!props.open) return null;
 
@@ -41,11 +51,27 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
     setSuggestBusy(true);
     setError(null);
     try {
-      const data = await suggestCommitMessageApi(props.documentId, {
-        content: props.content,
-        contentFormat: props.contentFormat ?? "lexical",
-      });
-      setMessage(data.message.slice(0, PUBLISH_MESSAGE_MAX_LENGTH));
+      if (mode === "merge") {
+        const ms = props.mergeSuggest;
+        if (!ms) {
+          setError("missing merge suggest payload");
+          return;
+        }
+        const data = await suggestMergeMessageApi(props.documentId, {
+          localContent: ms.localContent,
+          remoteContent: ms.remoteContent,
+          mergedContent: ms.mergedContent,
+          baseContent: ms.baseContent,
+          contentFormat: props.contentFormat ?? "markdown",
+        });
+        setMessage(data.message.slice(0, PUBLISH_MESSAGE_MAX_LENGTH));
+      } else {
+        const data = await suggestCommitMessageApi(props.documentId, {
+          content: props.content,
+          contentFormat: props.contentFormat === "plain" ? "markdown" : props.contentFormat ?? "lexical",
+        });
+        setMessage(data.message.slice(0, PUBLISH_MESSAGE_MAX_LENGTH));
+      }
     } catch (err) {
       const msg =
         err instanceof ApiRequestError
@@ -59,6 +85,11 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
     }
   }
 
+  const title = mode === "merge" ? t("mergePublishMessageTitle") : t("publishMessageTitle");
+  const hint = mode === "merge" ? t("mergePublishMessageHint") : t("publishMessageHint");
+  const placeholder =
+    mode === "merge" ? t("mergePublishMessagePlaceholder") : t("publishMessagePlaceholder");
+
   return (
     <div className="mdocs-dialog-backdrop" role="presentation" onClick={props.onCancel}>
       <div
@@ -68,8 +99,8 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
         aria-labelledby="mdocs-publish-message-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <h1 id="mdocs-publish-message-title">{t("publishMessageTitle")}</h1>
-        <p className="muted mdocs-dialog-hint">{t("publishMessageHint")}</p>
+        <h1 id="mdocs-publish-message-title">{title}</h1>
+        <p className="muted mdocs-dialog-hint">{hint}</p>
         <label className="mdocs-dialog-label">
           <span className="muted">{t("publishMessageLabel")}</span>
           <textarea
@@ -80,11 +111,11 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => {
               if (e.key !== "Enter") return;
-              if (e.shiftKey) return; // Shift+Enter 换行
+              if (e.shiftKey) return;
               e.preventDefault();
               confirmPublish();
             }}
-            placeholder={t("publishMessagePlaceholder")}
+            placeholder={placeholder}
             autoFocus
           />
         </label>

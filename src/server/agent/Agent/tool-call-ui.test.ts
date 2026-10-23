@@ -15,6 +15,9 @@ describe("toolCallLabel", () => {
   it("maps known tools and falls back to raw name", () => {
     expect(toolCallLabel("set_markdown_document")).toBe("写入帮写正文");
     expect(toolCallLabel("overwrite_document")).toBe("覆写文档");
+    expect(toolCallLabel("get_editor_draft")).toBe("读取本地草稿");
+    expect(toolCallLabel("suggest_document_merge")).toBe("AI 合并文档冲突");
+    expect(toolCallLabel("suggest_document_merge_message")).toBe("生成合并说明");
     expect(toolCallLabel("unknown_tool_xyz")).toBe("unknown_tool_xyz");
   });
 });

@@ -109,6 +109,8 @@ export async function runOnboardingChat(params: {
     onEvent,
     signal,
     skills,
+    uiDocumentId:
+      mode === "normal" ? params.references?.documentId ?? null : null,
     ...(cfg.kind === "deepseek" && cfg.apiKey
       ? {
           deepseekWeb: {

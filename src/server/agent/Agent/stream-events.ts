@@ -34,6 +34,13 @@ export type AgentStreamEvent =
       expiresAt: string;
     }
   | { type: "choice_expired"; requestId: string }
+  /** 前端静默取本地草稿并 POST 回传（无用户确认卡） */
+  | {
+      type: "editor_draft_request";
+      requestId: string;
+      documentId: string;
+      expiresAt: string;
+    }
   | {
       type: "skill_form_card";
       requestId: string;

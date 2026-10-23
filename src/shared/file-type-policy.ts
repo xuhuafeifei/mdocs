@@ -194,6 +194,15 @@ export function canOverwrite(fileType: FileType): boolean {
   return POLICY_TABLE[fileType]?.writeNormalize !== 'none';
 }
 
+/**
+ * 是否支持行级 AI merge（冲突段投票）。
+ * sheet 整表二选一、不可 merge 的类型均为 false。
+ */
+export function canAiMerge(fileType: FileType | string): boolean {
+  const pipeline = POLICY_TABLE[fileType as FileType]?.mergePipeline;
+  return pipeline === 'lexical-md-bridge' || pipeline === 'raw-text';
+}
+
 /** 侧栏树是否可见（treeVisible） */
 export function isVisibleFileType(fileType: string): boolean {
   const policy = POLICY_TABLE[fileType as FileType];

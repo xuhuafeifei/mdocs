@@ -30,6 +30,7 @@ import {
 } from "../agent/attachments/index.js";
 import { agentAttachmentUpload } from "../agent/attachments/upload.js";
 import { resolveUserChoice, expireUserChoice, cancelUserChoice } from "../agent/Agent/choice-pending.js";
+import { resolveEditorDraft } from "../agent/Agent/editor-draft-wait.js";
 import {
   resolveSkillForm,
   expireSkillForm,
@@ -695,6 +696,92 @@ export function buildAgentRouter(): Router {
         return;
       }
       if (msg === "choice_empty") {
+        res.status(400).json({ error: { code: "BAD_REQUEST", message: msg } });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * 前端静默回传 get_editor_draft 结果（自动执行，无确认卡）。
+   */
+  router.post("/editor-draft", (req, res) => {
+    if (!req.visitor) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
+      return;
+    }
+    const requestId =
+      typeof req.body?.requestId === "string" ? req.body.requestId.trim() : "";
+    if (!requestId) {
+      res.status(400).json({ error: { code: "BAD_REQUEST", message: "requestId is required" } });
+      return;
+    }
+    const status = req.body?.status;
+    try {
+      if (status === "unavailable") {
+        const reason =
+          typeof req.body?.reason === "string" && req.body.reason.trim()
+            ? req.body.reason.trim()
+            : "unavailable";
+        const data = resolveEditorDraft(req.visitor.visitor_id, requestId, {
+          status: "unavailable",
+          reason,
+        });
+        res.json({ data });
+        return;
+      }
+      if (status !== "ok") {
+        res.status(400).json({
+          error: { code: "BAD_REQUEST", message: "status must be ok or unavailable" },
+        });
+        return;
+      }
+      const documentId =
+        typeof req.body?.documentId === "string" ? req.body.documentId.trim() : "";
+      const content = typeof req.body?.content === "string" ? req.body.content : null;
+      const contentFormat =
+        req.body?.contentFormat === "html" || req.body?.contentFormat === "plain"
+          ? req.body.contentFormat
+          : "markdown";
+      const source =
+        req.body?.source === "indexeddb" ? "indexeddb" : "editor";
+      if (!documentId || content == null) {
+        res.status(400).json({
+          error: {
+            code: "BAD_REQUEST",
+            message: "documentId and content are required when status=ok",
+          },
+        });
+        return;
+      }
+      const data = resolveEditorDraft(req.visitor.visitor_id, requestId, {
+        status: "ok",
+        documentId,
+        content,
+        contentFormat,
+        source,
+        localBaseCommitId:
+          typeof req.body?.localBaseCommitId === "string"
+            ? req.body.localBaseCommitId
+            : req.body?.localBaseCommitId === null
+              ? null
+              : undefined,
+        displayName:
+          typeof req.body?.displayName === "string" ? req.body.displayName : undefined,
+      });
+      res.json({ data });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "editor_draft_not_found") {
+        res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
+        return;
+      }
+      if (msg === "editor_draft_forbidden" || msg === "editor_draft_document_mismatch") {
+        res.status(403).json({ error: { code: "FORBIDDEN", message: msg } });
+        return;
+      }
+      if (msg === "editor_draft_empty") {
         res.status(400).json({ error: { code: "BAD_REQUEST", message: msg } });
         return;
       }

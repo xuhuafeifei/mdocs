@@ -68,6 +68,8 @@
   | `src/server/agent/Agent/tools-registry.ts` | `createToolsForMode(mode, deps)` |
   | `src/server/agent/Agent/tools-choice.ts` | `askUserChoiceTool` |
   | `src/server/agent/Agent/tools-overwrite.ts` | `overwriteDocumentTool` |
+  | `src/server/agent/Agent/tools-merge.ts` | `suggest_document_merge` / `suggest_document_merge_message` |
+  | `src/server/documents/ai-merge.service.ts` | `suggestDocumentMerge`（CLI/Agent 编排） |
   | `src/server/agent/Agent/almost-empty.ts` | `isAlmostEmptyDocumentText` |
   | `src/server/agent/Agent/choice-pending.ts` | `waitForUserChoice` `resolveUserChoice` |
   | `src/server/agent/Agent/tools-documents.ts` | `searchDocumentsTool` `getDocumentTool` 等单个 tool |
