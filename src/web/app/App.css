@@ -4785,11 +4785,12 @@ button.small {
 
 /*
  * 文章标签栏挂在 DocChrome（发布栏）下方的 .mdocs-editor-body-host 内。
- * 钉住：占流常驻；未钉：仅吸附条占位，悬停以覆盖方式展开（不挡发布栏）。
+ * 钉住：占流常驻；未钉：吸附热区悬停展开。
+ * 分屏 + 未钉：与顶栏联动（见下方 is-split :has 规则），不单独抢热区。
  */
 .mdocs-editor-body-host {
   --mdocs-recent-tabs-h: 34px;
-  --mdocs-recent-tabs-hotzone-h: 8px;
+  --mdocs-recent-tabs-hotzone-h: 4px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -4813,7 +4814,7 @@ button.small {
 
 .mdocs-recent-tabs.is-unpinned {
   position: relative;
-  height: var(--mdocs-recent-tabs-hotzone-h, 8px);
+  height: var(--mdocs-recent-tabs-hotzone-h, 4px);
 }
 
 .mdocs-recent-tabs-hotzone {
@@ -4821,11 +4822,12 @@ button.small {
   top: 0;
   left: 0;
   right: 0;
-  height: var(--mdocs-recent-tabs-hotzone-h, 8px);
+  height: var(--mdocs-recent-tabs-hotzone-h, 4px);
   z-index: 1;
   cursor: default;
   background: transparent;
-  border-bottom: 1px solid var(--mdocs-border, #e8e8e8);
+  border: none;
+  box-shadow: none;
 }
 
 .mdocs-recent-tabs.is-unpinned .mdocs-recent-tabs-bar {
@@ -4846,6 +4848,14 @@ button.small {
 .mdocs-recent-tabs.is-unpinned:focus-within .mdocs-recent-tabs-bar {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* 点击取消钉住后仍停在热区上：先强制收起，离开后再允许悬停展开 */
+.mdocs-recent-tabs.is-unpinned.is-hold-collapse .mdocs-recent-tabs-bar,
+.mdocs-recent-tabs.is-unpinned.is-hold-collapse:hover .mdocs-recent-tabs-bar,
+.mdocs-recent-tabs.is-unpinned.is-hold-collapse:focus-within .mdocs-recent-tabs-bar {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .mdocs-recent-tabs-bar {
@@ -5134,13 +5144,14 @@ button.small {
 
 /*
  * 分屏：文档顶栏在文档流里收起（始终在 Lobe 工具条之上）。
- * 仅顶缘热区（~10px）悬停才展开；移入整块正文不触发。
+ * 不占可视高度；用绝对定位热区悬停展开，避免留下细线/空隙。
  */
 .mdocs-editor-header-hotzone {
   display: none;
 }
 
 .mdocs-main-editor-stack.is-split .mdocs-editor-header-wrap {
+  position: relative;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -5148,15 +5159,36 @@ button.small {
 
 .mdocs-main-editor-stack.is-split .mdocs-editor-header-hotzone {
   display: block;
-  flex: 0 0 10px;
+  flex: 0 0 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
   cursor: default;
+}
+
+/* 可点热区盖住顶缘，但不挤占布局 */
+.mdocs-main-editor-stack.is-split .mdocs-editor-header-hotzone::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 10px;
+  z-index: 31;
 }
 
 .mdocs-main-editor-stack.is-split .mdocs-editor-toolbar {
   max-height: 0;
   padding-top: 0;
   padding-bottom: 0;
+  margin: 0;
+  border: none;
   border-bottom-width: 0;
+  box-shadow: none;
+  background: transparent;
   opacity: 0;
   overflow: hidden;
   pointer-events: none;
@@ -5164,7 +5196,9 @@ button.small {
     max-height 0.18s ease,
     padding 0.18s ease,
     opacity 0.15s ease,
-    border-bottom-width 0.15s ease;
+    border-bottom-width 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
 }
 
 /* 悬停热区或已展开的顶栏（含下拉 focus）时展开 */
@@ -5173,9 +5207,109 @@ button.small {
   max-height: 72px;
   padding: 12px 20px;
   border-bottom: 1px solid var(--mdocs-border);
+  box-shadow: none;
+  background: var(--mdocs-surface);
   opacity: 1;
   overflow: visible;
   pointer-events: auto;
+}
+
+.mdocs-main-editor-stack.is-split .mdocs-editor-header-wrap:hover .mdocs-editor-toolbar--float,
+.mdocs-main-editor-stack.is-split .mdocs-editor-toolbar--float:focus-within {
+  border-bottom: 1px solid color-mix(in srgb, var(--mdocs-border) 80%, transparent);
+  background: color-mix(in srgb, var(--mdocs-surface) 98%, transparent);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+/*
+ * 分屏 + 标签未钉：顶栏与标签联动（同一悬停单元）。
+ * 入口只走顶栏热区；展开后可移入标签而不把顶栏收掉。
+ */
+.mdocs-main-editor-stack.is-split
+  .mdocs-editor-pane:has(.mdocs-recent-tabs.is-unpinned)
+  .mdocs-recent-tabs.is-unpinned {
+  height: 0;
+}
+
+.mdocs-main-editor-stack.is-split
+  .mdocs-editor-pane:has(.mdocs-recent-tabs.is-unpinned)
+  .mdocs-recent-tabs-hotzone {
+  display: none;
+}
+
+.mdocs-main-editor-stack.is-split
+  .mdocs-editor-pane:has(.mdocs-recent-tabs.is-unpinned):is(
+    :has(.mdocs-editor-header-wrap:hover),
+    :has(.mdocs-recent-tabs.is-unpinned:hover),
+    :has(.mdocs-editor-toolbar:focus-within),
+    :has(.mdocs-recent-tabs.is-unpinned:focus-within)
+  ):not(:has(.mdocs-recent-tabs.is-hold-collapse))
+  .mdocs-recent-tabs.is-unpinned {
+  height: var(--mdocs-recent-tabs-h, 34px);
+}
+
+.mdocs-main-editor-stack.is-split
+  .mdocs-editor-pane:has(.mdocs-recent-tabs.is-unpinned):is(
+    :has(.mdocs-editor-header-wrap:hover),
+    :has(.mdocs-recent-tabs.is-unpinned:hover),
+    :has(.mdocs-editor-toolbar:focus-within),
+    :has(.mdocs-recent-tabs.is-unpinned:focus-within)
+  ):not(:has(.mdocs-recent-tabs.is-hold-collapse))
+  .mdocs-recent-tabs.is-unpinned
+  .mdocs-recent-tabs-bar {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 悬停在标签上时，顶栏也保持展开 */
+.mdocs-main-editor-stack.is-split
+  .mdocs-editor-pane:has(.mdocs-recent-tabs.is-unpinned):is(
+    :has(.mdocs-recent-tabs.is-unpinned:hover),
+    :has(.mdocs-recent-tabs.is-unpinned:focus-within)
+  ):not(:has(.mdocs-recent-tabs.is-hold-collapse))
+  .mdocs-editor-toolbar {
+  max-height: 72px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--mdocs-border);
+  box-shadow: none;
+  background: var(--mdocs-surface);
+  opacity: 1;
+  overflow: visible;
+  pointer-events: auto;
+}
+
+.mdocs-main-editor-stack.is-split
+  .mdocs-editor-pane:has(.mdocs-recent-tabs.is-unpinned):is(
+    :has(.mdocs-recent-tabs.is-unpinned:hover),
+    :has(.mdocs-recent-tabs.is-unpinned:focus-within)
+  ):not(:has(.mdocs-recent-tabs.is-hold-collapse))
+  .mdocs-editor-toolbar--float {
+  border-bottom: 1px solid color-mix(in srgb, var(--mdocs-border) 80%, transparent);
+  background: color-mix(in srgb, var(--mdocs-surface) 98%, transparent);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+/* 刚取消钉住：顶栏也不要因热区立刻弹开 */
+.mdocs-main-editor-stack.is-split
+  .mdocs-editor-pane:has(.mdocs-recent-tabs.is-hold-collapse)
+  .mdocs-editor-header-wrap:hover
+  .mdocs-editor-toolbar,
+.mdocs-main-editor-stack.is-split
+  .mdocs-editor-pane:has(.mdocs-recent-tabs.is-hold-collapse)
+  .mdocs-editor-toolbar:focus-within {
+  max-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
 }
 
 .mdocs-empty {

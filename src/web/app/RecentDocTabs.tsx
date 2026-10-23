@@ -3,6 +3,7 @@
  * 钉子开：常驻占流；关：吸附条，悬停以覆盖方式展开。
  * 大纲 / Lobe 仅 md 栏传入对应回调时显示。
  */
+import { useState, type MouseEvent } from "react";
 import { Code2, FileText, List, Pin, PinOff, Table, Type } from "lucide-react";
 import { useI18n } from "../i18n";
 import { FILE_TYPE } from "../../shared/file-types";
@@ -46,6 +47,8 @@ export function RecentDocTabs(props: RecentDocTabsProps) {
     lobeToolbarVisible,
     onLobeToolbarVisibleChange,
   } = props;
+  /** 刚取消钉住时鼠标仍在条上，压住 :hover 展开直到 mouseleave */
+  const [holdCollapse, setHoldCollapse] = useState(false);
 
   if (tabs.length === 0) return null;
 
@@ -55,10 +58,28 @@ export function RecentDocTabs(props: RecentDocTabsProps) {
   const lobeTip = lobeToolbarVisible ? t("recentTabsLobeHide") : t("recentTabsLobeShow");
   const pinTip = pinned ? t("recentTabsUnpin") : t("recentTabsPin");
 
+  function handlePinClick(e: MouseEvent<HTMLButtonElement>): void {
+    const next = !pinned;
+    if (!next) {
+      setHoldCollapse(true);
+      e.currentTarget.blur();
+    } else {
+      setHoldCollapse(false);
+    }
+    onPinnedChange(next);
+  }
+
   return (
     <div
-      className={"mdocs-recent-tabs" + (pinned ? " is-pinned" : " is-unpinned")}
+      className={
+        "mdocs-recent-tabs" +
+        (pinned ? " is-pinned" : " is-unpinned") +
+        (holdCollapse ? " is-hold-collapse" : "")
+      }
       data-testid="recent-doc-tabs"
+      onMouseLeave={() => {
+        if (holdCollapse) setHoldCollapse(false);
+      }}
     >
       {!pinned ? <div className="mdocs-recent-tabs-hotzone" aria-hidden /> : null}
       <div className="mdocs-recent-tabs-bar" role="tablist" aria-label={t("recentTabsLabel")}>
@@ -143,14 +164,14 @@ export function RecentDocTabs(props: RecentDocTabsProps) {
             aria-pressed={pinned}
             aria-label={pinTip}
             data-tooltip={pinTip}
-            onClick={() => onPinnedChange(!pinned)}
-          >
-            {pinned ? (
-              <Pin size={16} strokeWidth={2.25} aria-hidden />
-            ) : (
-              <PinOff size={16} strokeWidth={2.25} aria-hidden />
-            )}
-          </button>
+              onClick={handlePinClick}
+            >
+              {pinned ? (
+                <Pin size={16} strokeWidth={2.25} aria-hidden />
+              ) : (
+                <PinOff size={16} strokeWidth={2.25} aria-hidden />
+              )}
+            </button>
         </div>
       </div>
     </div>
