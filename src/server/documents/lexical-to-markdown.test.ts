@@ -65,6 +65,106 @@ describe("lexicalJsonToMarkdown", () => {
     expect(back2).toContain("师姐回头");
   });
 
+  it("listitem with bare text children (no paragraph) keeps content", () => {
+    // 复现 Part2：Lobe 存盘常见 listitem → text*，无 paragraph 包裹
+    const lex = JSON.stringify({
+      root: {
+        type: "root",
+        children: [
+          {
+            type: "heading",
+            tag: "h3",
+            children: [
+              { type: "text", text: "第十九幕", format: 1, mode: "normal", style: "", detail: 0, version: 1 },
+            ],
+            direction: "ltr",
+            format: "",
+            indent: 0,
+            version: 1,
+          },
+          {
+            type: "list",
+            listType: "bullet",
+            tag: "ul",
+            start: 1,
+            children: [
+              {
+                type: "listitem",
+                value: 1,
+                children: [
+                  { type: "text", text: "地点", format: 1, mode: "normal", style: "", detail: 0, version: 1 },
+                  { type: "text", text: "：客厅。", format: 0, mode: "normal", style: "", detail: 0, version: 1 },
+                ],
+                direction: "ltr",
+                format: "",
+                indent: 0,
+                version: 1,
+              },
+              {
+                type: "listitem",
+                value: 2,
+                children: [
+                  { type: "text", text: "事件", format: 1, mode: "normal", style: "", detail: 0, version: 1 },
+                  { type: "text", text: " ：", format: 0, mode: "normal", style: "", detail: 0, version: 1 },
+                  {
+                    type: "list",
+                    listType: "number",
+                    tag: "ol",
+                    start: 1,
+                    children: [
+                      {
+                        type: "listitem",
+                        value: 1,
+                        children: [
+                          { type: "text", text: "折返发现", format: 1, mode: "normal", style: "", detail: 0, version: 1 },
+                          {
+                            type: "text",
+                            text: "：北雁折返。",
+                            format: 0,
+                            mode: "normal",
+                            style: "",
+                            detail: 0,
+                            version: 1,
+                          },
+                        ],
+                        direction: "ltr",
+                        format: "",
+                        indent: 1,
+                        version: 1,
+                      },
+                    ],
+                    direction: "ltr",
+                    format: "",
+                    indent: 0,
+                    version: 1,
+                  },
+                ],
+                direction: "ltr",
+                format: "",
+                indent: 0,
+                version: 1,
+              },
+            ],
+            direction: "ltr",
+            format: "",
+            indent: 0,
+            version: 1,
+          },
+        ],
+        direction: "ltr",
+        format: "",
+        indent: 0,
+        version: 1,
+      },
+    });
+    const md = lexicalJsonToMarkdown(lex);
+    expect(md).toContain("地点");
+    expect(md).toContain("客厅");
+    expect(md).toContain("折返发现");
+    expect(md).toContain("北雁折返");
+    expect(md).not.toMatch(/^-\s*$/m);
+  });
+
   it("exports quote with empty children as >", () => {
     const lex = JSON.stringify({
       root: {

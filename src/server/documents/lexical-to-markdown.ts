@@ -92,6 +92,11 @@ function codeFenceContent(node: LexNode): { lang: string; body: string } {
   return { lang, body };
 }
 
+function isInlineLexNode(node: LexNode): boolean {
+  const type = String(node.type ?? "");
+  return type === "text" || type === "link" || type === "linebreak";
+}
+
 function serializeList(
   node: LexNode,
   depth: number,
@@ -114,16 +119,30 @@ function serializeList(
     const bullet = ordered ? `${idx}.` : "-";
     idx += 1;
     const parts: string[] = [];
+    // 编辑器常把 text 直接挂在 listitem 下（无 paragraph）；须当内联拼，不能走 serializeBlock（text→""）
+    let inlineBuf: LexNode[] = [];
+    const flushInline = () => {
+      if (inlineBuf.length === 0) return;
+      const inline = serializeInline(inlineBuf, depth + 1);
+      if (inline) parts.push(inline);
+      inlineBuf = [];
+    };
     for (const k of kids) {
       if (k.type === "list") {
+        flushInline();
         parts.push(serializeList(k, depth + 1, indent + 1));
       } else if (k.type === "paragraph") {
+        flushInline();
         parts.push(serializeInline(asNodes(k.children), depth + 1));
+      } else if (isInlineLexNode(k)) {
+        inlineBuf.push(k);
       } else {
+        flushInline();
         const b = serializeBlock(k, depth + 1, indent + 1).trimEnd();
         if (b) parts.push(b);
       }
     }
+    flushInline();
     const first = parts[0] ?? "";
     const rest = parts.slice(1).join("\n");
     lines.push(`${pad}${bullet} ${first}`.trimEnd());
