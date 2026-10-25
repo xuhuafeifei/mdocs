@@ -62,6 +62,8 @@ export function EditorPaneHost(props: {
   onOpenMobileNav?: () => void;
   onFocusPane?: () => void;
   splitChrome?: ReactNode;
+  /** 右侧抽屉（评论等）：渲染在编辑器同一行内，避免纵向堆叠到正文下方 */
+  aside?: ReactNode;
   /** 最近打开标签：插入各编辑器 DocChrome 下方（md 在 OutlineProvider 内渲染以接大纲） */
   recentTabsProps?: RecentDocTabsProps | null;
   className?: string;
@@ -195,6 +197,7 @@ export function EditorPaneHost(props: {
         <div className="mdocs-editor-container">
           <Suspense fallback={fallback}>{body}</Suspense>
         </div>
+        {props.aside}
       </div>
     </div>
   );

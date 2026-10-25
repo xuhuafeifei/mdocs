@@ -6,6 +6,7 @@
 
 | 夹 | 入口 |
 |----|------|
+| [version-history-compare](./version-history-compare/设计契约.md) | **已实现（2026-10-25）**：版本历史弹框全屏 + 并排对比（左历史/右 head，两栏只读 Lobe，按百分比联动滚动，无 diff 计算）— [代码索引](./version-history-compare/代码索引.md) |
 | [search-query-modes](./search-query-modes/设计契约.md) | **已实现**：搜索模式入参（关键词/语义/默认）+ 我的文章表格接查询 + 语义索引 Agent 工具（查询/构建/状态）；可读即可索引 — [代码索引](./search-query-modes/代码索引.md) |
 | [search-title-index](./search-title-index/设计契约.md) | **已实现**：标题独立 FTS + 先标题后正文合并；权限仍业务层；侧栏/⌘K 浮层 |
 | [search-embedding](./search-embedding/设计契约.md) | **已实现**：本地 nomic Embedding 语义召回；异步下 GGUF；失败不挡 FTS |

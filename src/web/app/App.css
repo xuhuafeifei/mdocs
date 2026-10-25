@@ -5330,6 +5330,7 @@ button.small {
 .mdocs-editor-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 12px 20px;
   border-bottom: 1px solid var(--mdocs-border);
@@ -6150,6 +6151,58 @@ strong.label {
   box-shadow: inset 3px 0 0 var(--mdocs-accent, #2f6fed);
 }
 
+/* 对比态：被选进左/右栏的版本 */
+.mdocs-version-history-item.is-picked {
+  background: #fff;
+  box-shadow: inset 3px 0 0 var(--mdocs-accent, #2f6fed);
+}
+
+.mdocs-version-pick-hint {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 14px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--mdocs-text-muted, #888);
+  background: #fafafa;
+  border-bottom: 1px dashed var(--mdocs-border, #eee);
+}
+
+.mdocs-version-pick-badges {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.mdocs-version-pick-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--mdocs-accent, #2f6fed);
+  background: rgba(47, 111, 237, 0.12);
+}
+
+.mdocs-version-pick-badge.is-right {
+  color: #1f7a4d;
+  background: rgba(31, 122, 77, 0.14);
+}
+
+.mdocs-version-compare-empty {
+  margin: 0;
+  padding: 24px 16px;
+  font-size: 13px;
+  text-align: center;
+}
+
 .mdocs-version-history-item-time {
   font-size: 13px;
   font-weight: 500;
@@ -6205,6 +6258,155 @@ strong.label {
   border-top: 1px solid var(--mdocs-border, #eee);
   flex: 0 0 auto;
   background: #fafafa;
+}
+
+.mdocs-version-history-foot-spacer {
+  flex: 1 1 auto;
+  min-width: 8px;
+}
+
+/* 版本历史：头部按钮组 / 全屏 / 并排对比（无 diff 计算，仅两栏 + 比例联动） */
+.mdocs-version-history-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+/* 头部图标按钮（全屏 / 对比 / 收起列表 / 关闭）：SVG + tooltip，不占文字宽度 */
+.mdocs-version-history-actions .mdocs-version-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 7px;
+  min-width: 0;
+  line-height: 1;
+}
+
+.mdocs-version-history-actions .mdocs-version-icon-btn[aria-pressed="true"] {
+  background: rgba(47, 111, 237, 0.1);
+  color: var(--mdocs-accent, #2f6fed);
+}
+
+.mdocs-version-history-actions .mdocs-version-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 对比态先声明：全屏规则在其后，两者叠加时全屏胜出 */
+.mdocs-version-history-dialog.is-compare {
+  width: min(1400px, 98vw);
+  height: min(86vh, 900px);
+}
+
+.mdocs-version-history-dialog.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+}
+
+.mdocs-version-history-list.is-narrow {
+  flex: 0 0 260px;
+  width: 260px;
+}
+
+.mdocs-version-history-list.is-collapsed {
+  display: none;
+}
+
+.mdocs-version-compare {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mdocs-version-compare-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  background: var(--mdocs-surface, #fff);
+}
+
+.mdocs-version-compare-pane + .mdocs-version-compare-pane {
+  border-left: 1px solid var(--mdocs-border, #eee);
+}
+
+.mdocs-version-compare-pane-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 12px;
+  background: #fafafa;
+  border-bottom: 1px solid var(--mdocs-border, #eee);
+}
+
+.mdocs-version-compare-badge {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mdocs-accent, #2f6fed);
+  background: rgba(47, 111, 237, 0.08);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.mdocs-version-compare-badge.is-current {
+  color: #1f7a4d;
+  background: rgba(31, 122, 77, 0.1);
+}
+
+.mdocs-version-compare-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.3;
+  padding: 2px 4px;
+  border: 1px solid var(--mdocs-border, #ddd);
+  border-radius: 4px;
+  background: #fff;
+  color: inherit;
+}
+
+.mdocs-version-compare-pane-body {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mdocs-version-compare-pane-body > .mdocs-version-preview-editor {
+  flex: 1 1 0;
+}
+
+.mdocs-version-compare-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 窄屏两栏不可读：隐藏并排对比入口，保留单栏预览与全屏 */
+@media (max-width: 768px) {
+  .mdocs-version-compare-toggle {
+    display: none;
+  }
+
+  .mdocs-version-history-actions {
+    gap: 6px;
+  }
 }
 
 /* === Message dialog (alert) === */

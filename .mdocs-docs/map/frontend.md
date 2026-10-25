@@ -31,6 +31,8 @@
   | `src/web/app/DocumentTree.tsx` | 文档树根节点 = `.mdocs-sidebar-list` |
   | `src/web/app/DocumentEditor.tsx` | 编辑器容器 |
   | `src/web/app/DocChrome.tsx` | 文档顶栏（桌面+reader）；`aiWrite`/`comments` |
+  | `src/web/app/EditorPaneHost.tsx` | 单栏宿主；`aside` = 右侧抽屉（评论）渲染进 `.mdocs-editor-with-comments` 行容器 |
+  | `src/web/app/CommentsPanel.tsx` | 评论抽屉；`comments.css` 窄屏改底部上滑（`100vw`） |
   | `src/web/app/HtmlEditor.tsx` | HTML 预览/编辑（sandbox iframe） |
   | `src/web/app/SheetEditor.tsx` | `.sheet` 工作簿 UI；窄屏 `readerHeaderDocked` 免盖工具栏 |
   | `src/shared/sheetDocument.ts` | workbook JSON（`sheets[]`）/ 行列与表标签 mutate |
@@ -38,12 +40,12 @@
 - **布局约定**：shell 只承载 layout；侧栏头尾 `flex: 0 0 auto`，仅 list `overflow-y: auto`（见 [`../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md`](../bug-fixes/sidebar-tree-scroll-header-footer-2026-09-10.md)）
 - **需求**：同域拖拽移动见 [`../requirements/document-move/`](../requirements/document-move/)（已同意，含目录子树）；HTML 文档见 [`../requirements/html-documents/`](../requirements/html-documents/)；文章搜索浮层见 [`../requirements/search-title-index/`](../requirements/search-title-index/)
 
-### 文章版本历史
+### 文章版本历史 / 并排对比
 
-- **关键词**：`version history` `restoreDocumentVersion` `commits` `版本历史`
-- **结论**：文档信息菜单打开面板；恢复 = 旧 blob 新 commit（parent=原 head）。
-- **定位**：`VersionHistoryPanel.tsx` · `restoreDocumentVersionApi`
-- **需求**：[`../requirements/document-version-restore/`](../requirements/document-version-restore/)
+- **关键词**：`version history` `restoreDocumentVersion` `commits` `版本历史` `并排对比` `compare` `联动滚动` `sync scroll` `fullscreen` `scrollRatio` `版本下拉` `pickSide` `左/右徽标`
+- **结论**：文档信息菜单打开面板；恢复 = 旧 blob 新 commit（parent=原 head）。面板可全屏；对比态在列表里**点名两版**（第 1 个进左、第 2 个进右，行上 `左`/`右` 徽标；再点取消；允许一侧为空），两栏下拉可改/清空，只读 Lobe，**无 diff 计算**，滚动按百分比联动（`scrollRatio` → `computeSyncedScrollTop`），两侧未选满时置灰；仅 `md`、版本数 ≥2、窄屏无入口。头部按钮为纯图标 + tooltip。
+- **定位**：`VersionHistoryPanel.tsx`（`mode`/`fullscreen`/`syncScroll`/`leftId`/`rightId`/`pickSide`/`assignVersion`）· `version-compare-scroll.ts` · `restoreDocumentVersionApi`
+- **需求**：[`../requirements/document-version-restore/`](../requirements/document-version-restore/) · [`../requirements/version-history-compare/`](../requirements/version-history-compare/)
 
 ### 设置 · 回收站 / 多 CLI Token
 
