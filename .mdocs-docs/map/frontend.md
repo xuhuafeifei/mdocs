@@ -30,7 +30,11 @@
   | `src/web/app/hooks/useEdgeSwipeOpen.ts` | 窄屏左缘右滑开侧栏 / 左滑关 |
   | `src/web/app/DocumentTree.tsx` | 文档树根节点 = `.mdocs-sidebar-list` |
   | `src/web/app/DocumentEditor.tsx` | 编辑器容器 |
-  | `src/web/app/DocChrome.tsx` | 文档顶栏（桌面+reader）；`aiWrite`/`comments` |
+  | `src/web/app/DocChrome.tsx` | 文档顶栏（桌面+reader）；`aiWrite`/`comments`；`ChromeTip` portal |
+  | `src/web/app/EditorPaneHost.tsx` | `commentsSlot` → `.mdocs-editor-with-comments` 内横排 |
+  | `src/web/app/CommentsPanel.tsx` | 评论侧栏；**勿**挂到 split-pane column 外 |
+- **布局约定（评论）**：`CommentsPanel` 必须是 `.mdocs-editor-with-comments` 的子节点（与 `.mdocs-editor-container` 横排）；挂在 `.mdocs-editor-split-pane`（column）下会错位。见 [`../bug-fixes/comments-slot-and-docchrome-tooltip-2026-10-27.md`](../bug-fixes/comments-slot-and-docchrome-tooltip-2026-10-27.md)
+- **布局约定（顶栏 tooltip）**：`.mdocs-editor-header-scroll` 有 `overflow-x: auto` 时，CSS `::before` tooltip 会被裁切 → 用 portal/`ChromeTip`
   | `src/web/app/HtmlEditor.tsx` | HTML 预览/编辑（sandbox iframe） |
   | `src/web/app/SheetEditor.tsx` | `.sheet` 工作簿 UI；窄屏 `readerHeaderDocked` 免盖工具栏 |
   | `src/shared/sheetDocument.ts` | workbook JSON（`sheets[]`）/ 行列与表标签 mutate |

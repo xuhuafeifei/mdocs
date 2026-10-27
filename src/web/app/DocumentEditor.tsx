@@ -258,22 +258,19 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const [docTextStats, setDocTextStats] = useState<DocTextStats | null>(null);
   const plainCharGenRef = useRef(0);
 
-  // ---- 点击菜单外部自动关闭 ----
+  // ---- 点击菜单外部自动关闭（文档信息由 DocChrome portal 自己关）----
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (docInfoMenuRef.current && !docInfoMenuRef.current.contains(event.target as Node)) {
-        setShowDocInfoMenu(false);
-      }
       if (readerMoreMenuRef.current && !readerMoreMenuRef.current.contains(event.target as Node)) {
         setShowReaderMoreMenu(false);
       }
     };
 
-    if (showDocInfoMenu || showReaderMoreMenu) {
+    if (showReaderMoreMenu) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showDocInfoMenu, showReaderMoreMenu]);
+  }, [showReaderMoreMenu]);
 
   // ---- 加载访客目录（用于显示创建者昵称）----
   useEffect(() => {

@@ -65,6 +65,8 @@ export function EditorPaneHost(props: {
   /** 最近打开标签：插入各编辑器 DocChrome 下方（md 在 OutlineProvider 内渲染以接大纲） */
   recentTabsProps?: RecentDocTabsProps | null;
   className?: string;
+  /** 评论侧栏：必须挂在 .mdocs-editor-with-comments 内才能横排贴右 */
+  commentsSlot?: ReactNode;
 }) {
   const { meta, editorContent } = props;
   const canEdit = Boolean(
@@ -195,6 +197,7 @@ export function EditorPaneHost(props: {
         <div className="mdocs-editor-container">
           <Suspense fallback={fallback}>{body}</Suspense>
         </div>
+        {props.commentsSlot}
       </div>
     </div>
   );

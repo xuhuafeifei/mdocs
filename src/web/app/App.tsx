@@ -2394,16 +2394,18 @@ export function App() {
                       if (activeDocMeta) setFocus({ kind: "document", documentId: activeDocMeta.documentId });
                     }}
                     recentTabsProps={buildRecentTabsProps("primary")}
+                    commentsSlot={
+                      commentPanelOpen && focusedPane === "primary" ? (
+                        <CommentsPanel
+                          documentId={activeDocMeta.documentId}
+                          visitorId={visitor?.visitorId}
+                          visitorName={visitor?.visitorName}
+                          documentOwnerId={activeDocMeta.ownerVisitorId}
+                          onClose={() => setCommentPanelOpen(false)}
+                        />
+                      ) : null
+                    }
                   />
-                  {commentPanelOpen && focusedPane === "primary" ? (
-                    <CommentsPanel
-                      documentId={activeDocMeta.documentId}
-                      visitorId={visitor?.visitorId}
-                      visitorName={visitor?.visitorName}
-                      documentOwnerId={activeDocMeta.ownerVisitorId}
-                      onClose={() => setCommentPanelOpen(false)}
-                    />
-                  ) : null}
                 </div>
                 {pcSplitActive && secondaryMeta && secondaryContent ? (
                   <>
@@ -2515,16 +2517,18 @@ export function App() {
                             }}
                           />
                         }
+                        commentsSlot={
+                          commentPanelOpen && focusedPane === "secondary" ? (
+                            <CommentsPanel
+                              documentId={secondaryMeta.documentId}
+                              visitorId={visitor?.visitorId}
+                              visitorName={visitor?.visitorName}
+                              documentOwnerId={secondaryMeta.ownerVisitorId}
+                              onClose={() => setCommentPanelOpen(false)}
+                            />
+                          ) : null
+                        }
                       />
-                      {commentPanelOpen && focusedPane === "secondary" ? (
-                        <CommentsPanel
-                          documentId={secondaryMeta.documentId}
-                          visitorId={visitor?.visitorId}
-                          visitorName={visitor?.visitorName}
-                          documentOwnerId={secondaryMeta.ownerVisitorId}
-                          onClose={() => setCommentPanelOpen(false)}
-                        />
-                      ) : null}
                     </div>
                   </>
                 ) : null}

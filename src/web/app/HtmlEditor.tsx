@@ -172,20 +172,18 @@ export function HtmlEditor(props: HtmlEditorProps) {
     setPermissionDraft(props.meta.permission as DocumentPermissionValue);
   }, [props.meta.permission, documentId]);
 
+  // 文档信息由 DocChrome portal 自己关
   useEffect(() => {
     const onDown = (event: MouseEvent) => {
-      if (docInfoMenuRef.current && !docInfoMenuRef.current.contains(event.target as Node)) {
-        setShowDocInfoMenu(false);
-      }
       if (readerMoreMenuRef.current && !readerMoreMenuRef.current.contains(event.target as Node)) {
         setShowReaderMoreMenu(false);
       }
     };
-    if (showDocInfoMenu || showReaderMoreMenu) {
+    if (showReaderMoreMenu) {
       document.addEventListener("mousedown", onDown);
     }
     return () => document.removeEventListener("mousedown", onDown);
-  }, [showDocInfoMenu, showReaderMoreMenu]);
+  }, [showReaderMoreMenu]);
 
   useEffect(() => {
     if (!showDocInfoMenu && !showReaderMoreMenu) return;

@@ -3,7 +3,17 @@
  *
  * 帮写 / 评论显隐读 file-type-policy（aiWrite / comments）。
  */
-import { useEffect, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { createPortal } from "react-dom";
 import { ChevronUp, EllipsisVertical, MessageSquare, PanelLeftOpen, RefreshCw, Star, TextAlignJustify } from "lucide-react";
 import { useI18n } from "../i18n";
 import { localizeDomainName } from "./utils";
@@ -14,6 +24,122 @@ import type { DomainSummary } from "../../shared/types/domain";
 import { getPolicy } from "../../shared/file-type-policy";
 import type { FileType } from "../../shared/file-types";
 import { isPublishHotkey, publishHotkeyLabel } from "./publishHotkey";
+
+/** 顶栏横向滚动会裁切 CSS ::before tooltip，改 portal 到 body */
+function ChromeTip(props: { text: string; children: ReactElement }) {
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  return (
+    <span
+      className="mdocs-chrome-tip-anchor"
+      onMouseEnter={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        setPos({ left: r.left + r.width / 2, top: r.bottom + 8 });
+      }}
+      onMouseLeave={() => setPos(null)}
+    >
+      {props.children}
+      {pos
+        ? createPortal(
+            <span
+              className="mdocs-chrome-tip"
+              style={{ left: pos.left, top: pos.top }}
+              role="tooltip"
+            >
+              {props.text}
+            </span>,
+            document.body,
+          )
+        : null}
+    </span>
+  );
+}
+
+/** 文档信息下拉：scrollport 会裁 absolute 菜单，portal + fixed */
+function ChromeDocInfoMenu(props: {
+  open: boolean;
+  onToggle: () => void;
+  menu: ReactNode;
+  menuRef?: RefObject<HTMLDivElement | null>;
+  tip: string;
+}) {
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!props.open) {
+      setPos(null);
+      return;
+    }
+    const update = () => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) });
+    };
+    update();
+    window.addEventListener("resize", update);
+    // 顶栏横向滚 / 页面滚都会挪按钮
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [props.open]);
+
+  useEffect(() => {
+    if (!props.open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (anchorRef.current?.contains(t) || dropdownRef.current?.contains(t)) return;
+      props.onToggle();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [props.open, props.onToggle]);
+
+  return (
+    <div ref={anchorRef} style={{ position: "relative" }}>
+      <ChromeTip text={props.tip}>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => props.onToggle()}
+          style={{
+            padding: "4px 8px",
+            minWidth: "auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <TextAlignJustify
+            size={18}
+            strokeWidth={1.5}
+            style={{ color: "var(--mdocs-text-secondary, #6b7280)" }}
+          />
+        </button>
+      </ChromeTip>
+      {props.open && pos
+        ? createPortal(
+            <div
+              ref={(node) => {
+                dropdownRef.current = node;
+                if (props.menuRef) {
+                  (props.menuRef as { current: HTMLDivElement | null }).current = node;
+                }
+              }}
+              className="mdocs-doc-info-dropdown mdocs-doc-info-dropdown--portal"
+              style={{ top: pos.top, right: pos.right }}
+            >
+              {props.menu}
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
 
 export interface DocChromeProps {
   fileType: string;
@@ -280,6 +406,7 @@ export function DocChrome(props: DocChromeProps) {
     <div className="mdocs-editor-header-wrap">
       {/* 分屏时 CSS 把它当成顶缘热区；非分屏 display:none */}
       <div className="mdocs-editor-header-hotzone" aria-hidden />
+      <div className="mdocs-editor-header-scroll">
       <div className={toolbarClass} style={toolbarStyle}>
         <div className="mdocs-editor-toolbar-leading">
           <input
@@ -320,63 +447,63 @@ export function DocChrome(props: DocChromeProps) {
         <span className="mdocs-editor-toolbar-spacer" aria-hidden />
         <div className="mdocs-editor-toolbar-trailing">
           {props.onToggleBookmark ? (
-            <button
-              type="button"
-              className="ghost mdocs-tooltip mdocs-tooltip-bottom"
-              onClick={() => props.onToggleBookmark?.()}
-              disabled={props.bookmarkBusy}
-              data-tooltip={props.isBookmarked ? "取消收藏" : "收藏"}
-              style={{
-                padding: "4px 8px",
-                minWidth: "auto",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                opacity: props.bookmarkBusy ? 0.5 : 1,
-              }}
-            >
-              <Star
-                size={18}
-                strokeWidth={1.5}
+            <ChromeTip text={props.isBookmarked ? "取消收藏" : "收藏"}>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => props.onToggleBookmark?.()}
+                disabled={props.bookmarkBusy}
                 style={{
-                  color: props.isBookmarked ? "#faad14" : "var(--mdocs-text-secondary, #6b7280)",
-                  fill: props.isBookmarked ? "#faad14" : "none",
+                  padding: "4px 8px",
+                  minWidth: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 4,
+                  opacity: props.bookmarkBusy ? 0.5 : 1,
                 }}
-              />
-              {props.isBookmarked ? <span>已收藏</span> : null}
-            </button>
+              >
+                <Star
+                  size={18}
+                  strokeWidth={1.5}
+                  style={{
+                    color: props.isBookmarked ? "#faad14" : "var(--mdocs-text-secondary, #6b7280)",
+                    fill: props.isBookmarked ? "#faad14" : "none",
+                  }}
+                />
+                {props.isBookmarked ? <span>已收藏</span> : null}
+              </button>
+            </ChromeTip>
           ) : null}
           <div className="mdocs-editor-toolbar-actions">
             {props.onSyncClick ? (
-              <button
-                type="button"
-                className={
-                  "mdocs-sync-btn mdocs-tooltip mdocs-tooltip-bottom" +
-                  (props.syncBehind ? " behind" : "")
-                }
-                data-tooltip={props.syncBehind ? t("syncBehindHint") : t("syncPull")}
-                onClick={() => void props.onSyncClick?.()}
-                style={{ display: "flex", alignItems: "center", gap: 4 }}
-              >
-                <RefreshCw size={16} strokeWidth={1.5} />
-                <span>{t("syncPull")}</span>
-              </button>
+              <ChromeTip text={props.syncBehind ? t("syncBehindHint") : t("syncPull")}>
+                <button
+                  type="button"
+                  className={"mdocs-sync-btn" + (props.syncBehind ? " behind" : "")}
+                  onClick={() => void props.onSyncClick?.()}
+                  style={{ display: "flex", alignItems: "center", gap: 4 }}
+                >
+                  <RefreshCw size={16} strokeWidth={1.5} />
+                  <span>{t("syncPull")}</span>
+                </button>
+              </ChromeTip>
             ) : null}
             {showDocActions ? (
               <>
                 {saveStatus}
                 {props.onPublish ? (
-                  <button
-                    type="button"
-                    className="primary mdocs-tooltip mdocs-tooltip-bottom"
-                    disabled={props.busy}
-                    data-tooltip={publishTooltip}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => props.onPublish?.()}
-                  >
-                    {props.busy ? t("publishing") : t("publish")}
-                  </button>
+                  <ChromeTip text={publishTooltip}>
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={props.busy}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => props.onPublish?.()}
+                    >
+                      {props.busy ? t("publishing") : t("publish")}
+                    </button>
+                  </ChromeTip>
                 ) : null}
                 {props.onDelete ? (
                   <button
@@ -397,65 +524,46 @@ export function DocChrome(props: DocChromeProps) {
             ) : null}
             {props.trailingExtra}
             {showComments ? (
-              <button
-                type="button"
-                className="ghost mdocs-tooltip mdocs-tooltip-bottom"
-                onClick={() => props.onToggleComments?.()}
-                data-tooltip="评论"
-                style={{
-                  padding: "4px 8px",
-                  minWidth: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 4,
-                  background: props.commentPanelOpen
-                    ? "var(--mdocs-hover-bg, #f0f0f0)"
-                    : undefined,
-                }}
-              >
-                <MessageSquare
-                  size={18}
-                  strokeWidth={1.5}
-                  style={{ color: "var(--mdocs-text-secondary, #6b7280)" }}
-                />
-                {props.commentCount && props.commentCount > 0 ? (
-                  <span style={{ fontSize: "0.85rem" }}>{props.commentCount}</span>
-                ) : null}
-              </button>
-            ) : null}
-            {props.onToggleDocInfo ? (
-              <div
-                ref={props.docInfoMenuRef}
-                className="mdocs-tooltip mdocs-tooltip-bottom"
-                data-tooltip={t("docInfo")}
-                style={{ position: "relative" }}
-              >
+              <ChromeTip text="评论">
                 <button
                   type="button"
-                  className="secondary"
-                  onClick={() => props.onToggleDocInfo?.()}
+                  className="ghost"
+                  onClick={() => props.onToggleComments?.()}
                   style={{
                     padding: "4px 8px",
                     minWidth: "auto",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    gap: 4,
+                    background: props.commentPanelOpen
+                      ? "var(--mdocs-hover-bg, #f0f0f0)"
+                      : undefined,
                   }}
                 >
-                  <TextAlignJustify
+                  <MessageSquare
                     size={18}
                     strokeWidth={1.5}
                     style={{ color: "var(--mdocs-text-secondary, #6b7280)" }}
                   />
+                  {props.commentCount && props.commentCount > 0 ? (
+                    <span style={{ fontSize: "0.85rem" }}>{props.commentCount}</span>
+                  ) : null}
                 </button>
-                {props.docInfoOpen ? (
-                  <div className="mdocs-doc-info-dropdown">{props.docInfoMenu}</div>
-                ) : null}
-              </div>
+              </ChromeTip>
+            ) : null}
+            {props.onToggleDocInfo ? (
+              <ChromeDocInfoMenu
+                open={Boolean(props.docInfoOpen)}
+                onToggle={() => props.onToggleDocInfo?.()}
+                menu={props.docInfoMenu}
+                menuRef={props.docInfoMenuRef}
+                tip={t("docInfo")}
+              />
             ) : null}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
