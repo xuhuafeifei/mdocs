@@ -26,6 +26,14 @@ export type AgentStreamEvent =
       webResults?: AgentWebSearchResults;
     }
   | { type: "markdown_set"; markdown: string }
+  /** 智能助手按块提案（不写盘）；前端 LexicalDiff 审阅 */
+  | {
+      type: "lexical_lines_set";
+      documentId: string;
+      mode: "patch_lines" | "replace_all";
+      lines: Record<string, string>;
+      markdown?: string;
+    }
   | {
       type: "choice_card";
       requestId: string;

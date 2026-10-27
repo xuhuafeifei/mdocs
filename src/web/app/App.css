@@ -5044,6 +5044,210 @@ button.small {
   bottom: 16px;
 }
 
+/* 智能助手按块提案：浮层挂在不滚动的 pane 上，避免跟正文滚到底 */
+.mdocs-editor-review-pane {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mdocs-editor-review-pane > .mdocs-editor-scroll-host {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.mdocs-editor-review-pane.is-reviewing > .mdocs-editor-scroll-host {
+  /* 顶栏约占位，避免第一行被挡住 */
+  padding-top: 52px;
+}
+
+.mdocs-document-editor-root.is-reviewing {
+  caret-color: transparent;
+}
+
+.mdocs-lexical-lines-review--overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.mdocs-lexical-lines-review--overlay .mdocs-lexical-lines-review__bar,
+.mdocs-lexical-lines-review--overlay .mdocs-inline-diff-hunk__actions {
+  pointer-events: auto;
+}
+
+.mdocs-lexical-lines-review {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  background: transparent;
+}
+
+.mdocs-lexical-lines-review__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--mdocs-border, #e8e8e8);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 7;
+  background: color-mix(in srgb, var(--mdocs-surface, #fff) 94%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.mdocs-inline-diff-hunk__actions--float {
+  position: absolute;
+  right: 12px;
+  left: auto;
+  z-index: 7;
+}
+
+.mdocs-inline-diff-hunk__actions--float.is-active {
+  outline: 1px solid color-mix(in srgb, var(--mdocs-accent, #2f6fed) 40%, transparent);
+  border-radius: 6px;
+}
+
+/* live Editor 顶层块上的红删/绿增（DOM class，不进最终 JSON） */
+.mdocs-document-editor-root.is-reviewing .mdocs-inline-diff-block.is-delete {
+  background: color-mix(in srgb, #ff4d4f 12%, transparent);
+  border-left: 3px solid #ff4d4f;
+  padding-left: 8px;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, #ff4d4f 55%, transparent);
+}
+
+.mdocs-document-editor-root.is-reviewing .mdocs-inline-diff-block.is-insert {
+  background: color-mix(in srgb, #52c41a 14%, transparent);
+  border-left: 3px solid #52c41a;
+  padding-left: 8px;
+}
+
+.mdocs-document-editor-root.is-reviewing .mdocs-inline-diff-block.is-hunk-active {
+  outline: 1px solid color-mix(in srgb, var(--mdocs-accent, #2f6fed) 35%, transparent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.mdocs-lexical-lines-review__doors,
+.mdocs-lexical-lines-review__hint {
+  padding: 8px 12px;
+  margin: 0;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--mdocs-border, #f0f0f0);
+}
+
+.mdocs-lexical-lines-review__diff {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 12px 72px;
+  position: relative;
+}
+
+/* 单栏 inline diff（红删绿增 + 段旁 Accept/Reject） */
+.mdocs-inline-diff {
+  max-width: 720px;
+  margin: 0 auto;
+  line-height: 1.75;
+  font-size: 15px;
+}
+
+.mdocs-inline-diff-block {
+  padding: 2px 10px;
+  border-left: 3px solid transparent;
+}
+
+.mdocs-inline-diff-block.is-delete {
+  background: color-mix(in srgb, #ff4d4f 12%, transparent);
+  border-left-color: #ff4d4f;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, #ff4d4f 55%, transparent);
+}
+
+.mdocs-inline-diff-block.is-insert {
+  background: color-mix(in srgb, #52c41a 14%, transparent);
+  border-left-color: #52c41a;
+}
+
+.mdocs-inline-diff-hunk {
+  position: relative;
+  margin: 8px 0;
+  border-radius: 6px;
+  outline: 1px solid transparent;
+}
+
+.mdocs-inline-diff-hunk.is-active {
+  outline-color: color-mix(in srgb, var(--mdocs-accent, #2f6fed) 40%, transparent);
+}
+
+.mdocs-inline-diff-hunk.is-settled {
+  /* 已接受/拒绝：变回普通正文，不再挂操作钮 */
+}
+
+.mdocs-inline-diff-hunk__actions {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  gap: 6px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--mdocs-bg, #fff) 92%, transparent);
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 8%);
+}
+
+.mdocs-inline-diff-hunk__accept.ant-btn-primary {
+  background: #52c41a;
+  border-color: #52c41a;
+}
+
+.mdocs-inline-diff-hunk__accept.ant-btn-primary:hover {
+  background: #73d13d !important;
+  border-color: #73d13d !important;
+}
+
+.mdocs-inline-diff-nav {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--mdocs-bg, #fff);
+  border: 1px solid var(--mdocs-border, #e8e8e8);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 10%);
+}
+
+.mdocs-inline-diff-nav__btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+  color: var(--mdocs-fg, #333);
+}
+
+.mdocs-inline-diff-nav__count {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  min-width: 3.5em;
+  text-align: center;
+}
+
 /* PC 中间正文上下分屏 */
 .mdocs-main-editor-stack {
   display: flex;
@@ -5214,6 +5418,7 @@ button.small {
   pointer-events: auto;
 }
 
+
 .mdocs-main-editor-stack.is-split .mdocs-editor-header-wrap:hover .mdocs-editor-toolbar--float,
 .mdocs-main-editor-stack.is-split .mdocs-editor-toolbar--float:focus-within {
   border-bottom: 1px solid color-mix(in srgb, var(--mdocs-border) 80%, transparent);
@@ -5327,7 +5532,7 @@ button.small {
   min-height: 0;
 }
 
-/* 顶栏可横向滚；scrollport 会裁切 ::before tooltip / absolute 菜单，改 portal（见 DocChrome） */
+/* 顶栏可横向滚；scrollport 会裁切 ::before tooltip，改走 title（见 DocChrome） */
 .mdocs-editor-header-wrap {
   min-width: 0;
   max-width: 100%;

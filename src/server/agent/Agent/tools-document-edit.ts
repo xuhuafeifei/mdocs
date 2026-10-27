@@ -110,7 +110,7 @@ export function appendDocumentTool({ visitorId }: ToolDeps): AgentTool {
     description:
       "在 .md 文末追加 Markdown（推荐：日记续写、文末加节；不覆写已有内容，无选择卡）。" +
       "写后直接发布。必须传 message（简短发布说明，类似 git commit）。写成功后请重新 get_document。" +
-      "改已有片段用 replace_document_markdown；仅整篇重写才用 overwrite_document。仅 fileType=md。",
+      "小改用 replace_document_markdown；大改/整篇重写用 overwrite_document。仅 fileType=md。",
     parameters: Type.Object({
       documentId: Type.String({ description: "目标文档 documentId" }),
       content: Type.String({ description: "追加的 Markdown" }),
@@ -187,8 +187,8 @@ export function replaceDocumentMarkdownTool({ visitorId }: ToolDeps): AgentTool 
     name: "replace_document_markdown",
     label: "替换文档片段",
     description:
-      "推荐：.md 局部改（改一段/标题/几句）用本工具，不要 overwrite 整篇。" +
-      "在 Markdown 源码层精确查找并替换（与 get_document 默认 format=md 同一层）；" +
+      ".md 小改（一两处、标题/几句/一小段）用本工具；大面积改写请用 overwrite_document，不要连打十几次 replace。" +
+      "在整篇 Markdown 字符串上做精确子串查找替换（与 get_document format=md 同一层；不是按行号、不是正则）。" +
       "find 须为该 MD 中的精确子串，默认恰好出现 1 次，多次时传 occurrence（1-based）。" +
       "一次改多处：多次调用，每次成功后重新 get_document 再取下一段 find。" +
       "无选择卡，写后直接发布。必须传 message（简短发布说明）。仅 fileType=md。",

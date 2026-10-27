@@ -80,8 +80,9 @@ export function overwriteDocumentTool({
     name: "overwrite_document",
     label: "覆写文档正文",
     description:
-      "整篇写入完整正文（服务端）。.md 局部修改请优先用 replace_document_markdown / append_document，勿用本工具重吐全文。" +
-      "适用：文档几乎为空、用户明确要求整篇重写、或目标是 html。" +
+      "整篇写入完整正文（服务端）。" +
+      "适用：.md 大改（重写大半篇/多段大面积改写/结构重排）、用户明确要求整篇重写、文档几乎为空、或目标是 html；" +
+      "小改（一两处片段）仍用 replace_document_markdown / append_document。" +
       "必须先确认 fileType：md → 完整 Markdown；html → 完整 HTML（禁止传 Markdown，不做 MD↔HTML 转换）。" +
       "几乎空则直接写入；已有实质正文时弹出选择卡：「直接覆写」「打开帮写审阅」「取消」。" +
       "有正文不是无法覆写，只是要用户点选。必须传 message（简短发布说明）。",

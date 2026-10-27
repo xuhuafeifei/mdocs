@@ -8,7 +8,7 @@
  * 4. 发布文档到服务器
  * 5. 处理内容类型检测（Lexical JSON vs Markdown）
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Block } from "@lobehub/ui";
 import { upsertContentDraft } from "../storage/drafts";
@@ -74,6 +74,12 @@ import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { computeDocumentStats, type DocTextStats } from "./docPlainCharCount";
+
+const LexicalLinesReview = lazy(() =>
+  import("./lexical-lines/LexicalLinesReview").then((m) => ({
+    default: m.LexicalLinesReview,
+  })),
+);
 
 function safeLexicalJsonString(editor: IEditor): string | null {
   try {
@@ -219,6 +225,12 @@ interface DocumentEditorProps {
   onOpenMobileNav?: () => void;
   /** 最近打开标签：须在 OutlineProvider 内渲染以接大纲开关 */
   recentTabsProps?: RecentDocTabsProps | null;
+  /**
+   * AI 按块审阅：提案写入 live Editor（不卸编辑器），浮层 Accept/Reject。
+   */
+  reviewProposal?: import("./lexical-lines/LexicalLinesReview").LexicalLinesProposal | null;
+  onReviewClose?: () => void;
+  onReviewApply?: (lexicalJson: string) => void;
 }
 
 /** 标签栏 + 大纲开关（必须在 OutlineProvider 内） */
@@ -319,6 +331,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
   // 用于在组件卸载时强制销毁编辑器实例，防止上游 ReactEditor 未调用 destroy 导致内存泄漏
   const editorRef = useRef<IEditor | null>(null);
   const scrollHostRef = useRef<HTMLDivElement | null>(null);
+  const reviewPaneRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
     setEditorSurfaceReady(false);
@@ -430,9 +443,21 @@ export function DocumentEditor(props: DocumentEditorProps) {
   // ---- 发布保护：拦截浏览器关闭事件，防止未保存内容丢失 ----
   usePublishGuard({ isDirty: _isDirty, draftExists });
 
+  /** 审阅预览：把提案 JSON 写入 live Editor，不卸掉编辑器实例 */
+  const [reviewPreview, setReviewPreview] = useState<string | null>(null);
+  const inReview = Boolean(
+    props.reviewProposal &&
+      props.reviewProposal.documentId === props.meta.documentId,
+  );
+
+  const handleReviewPreviewChange = useCallback((lexicalJson: string | null) => {
+    setReviewPreview(lexicalJson);
+  }, []);
+
   /** 仅在文档切换或 App 显式 bump contentRevision（pull / 冲突恢复等）时重载正文；勿依赖 editorSafeContent，避免发布后无意义 setDocument 带动视口跳动 */
   useEffect(() => {
     if (!editor) return;
+    if (inReview) return;
     beginExternalReload();
     try {
       editor.setDocument(contentType, editorSafeContent);
@@ -441,7 +466,35 @@ export function DocumentEditor(props: DocumentEditorProps) {
     }
     endExternalReload();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally omit editorSafeContent; begin/end 随 revision 同步
-  }, [editor, props.meta.documentId, props.contentRevision, contentType]);
+  }, [editor, props.meta.documentId, props.contentRevision, contentType, inReview]);
+
+  /** 审阅态：持续把 preview JSON 灌进同一 Editor */
+  useEffect(() => {
+    if (!editor || !inReview || reviewPreview == null) return;
+    beginExternalReload();
+    try {
+      editor.setDocument("json", ensureNonEmptyEditorContent(reviewPreview, "json"));
+    } catch {
+      /* 编辑器暂不可写 */
+    }
+    endExternalReload();
+  }, [editor, inReview, reviewPreview, beginExternalReload, endExternalReload]);
+
+  /** 退出审阅且未 apply 时，恢复底座正文 */
+  useEffect(() => {
+    if (!editor) return;
+    if (inReview) return;
+    if (reviewPreview != null) return;
+    // inReview 刚变 false：上面 contentRevision effect 可能因 inReview 跳过；这里补一次
+    beginExternalReload();
+    try {
+      editor.setDocument(contentType, editorSafeContent);
+    } catch {
+      /* ignore */
+    }
+    endExternalReload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, inReview]);
 
   /**
    * 同步编辑器语言与 mdocs 全局语言设置。
@@ -1312,27 +1365,56 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 horizontal
                 style={{ background: "var(--mdocs-surface)", flex: 1, minHeight: 0, minWidth: 0, borderRadius: 0, outline: "none" }}
               >
-                <div className="mdocs-editor-scroll-host" ref={scrollHostRef}>
-                  {editorSurfaceReady ? (
-                    <Editor
-                      key={props.meta.documentId}
-                      content={editorSafeContent}
-                      type={contentType}
-                      confirmPasteMarkdown
-                      // 编辑模式下可编辑，只读模式下不可编辑
-                      editable={editing}
-                      onInit={handleInit}
-                      plugins={plugins}
-                      lineEmptyPlaceholder={t("displayNamePlaceholder")}
-                      placeholder={t("displayNamePlaceholder")}
-                      slashOption={{ items: slashItems }}
-                      className="mdocs-document-editor-root"
-                    />
+                <div
+                  className={
+                    "mdocs-editor-review-pane" +
+                    (inReview ? " is-reviewing" : "")
+                  }
+                  ref={reviewPaneRef}
+                >
+                  <div className="mdocs-editor-scroll-host" ref={scrollHostRef}>
+                    {editorSurfaceReady ? (
+                      <Editor
+                        key={props.meta.documentId}
+                        content={editorSafeContent}
+                        type={contentType}
+                        confirmPasteMarkdown
+                        // 审阅期锁定编辑；否则按原编辑/只读
+                        editable={editing && !inReview}
+                        onInit={handleInit}
+                        plugins={plugins}
+                        lineEmptyPlaceholder={t("displayNamePlaceholder")}
+                        placeholder={t("displayNamePlaceholder")}
+                        slashOption={{ items: slashItems }}
+                        className={
+                          "mdocs-document-editor-root" +
+                          (inReview ? " is-reviewing" : "")
+                        }
+                      />
+                    ) : null}
+                  </div>
+                  {inReview && props.reviewProposal ? (
+                    <Suspense fallback={null}>
+                      <LexicalLinesReview
+                        proposal={props.reviewProposal}
+                        scrollHostRef={scrollHostRef}
+                        paneRef={reviewPaneRef}
+                        onClose={() => {
+                          setReviewPreview(null);
+                          props.onReviewClose?.();
+                        }}
+                        onApply={(json) => {
+                          setReviewPreview(null);
+                          props.onReviewApply?.(json);
+                        }}
+                        onPreviewChange={handleReviewPreviewChange}
+                      />
+                    </Suspense>
                   ) : null}
                 </div>
-                <ScrollToTopButton scrollRef={scrollHostRef} />
+                {inReview ? null : <ScrollToTopButton scrollRef={scrollHostRef} />}
                 {/* 大纲侧边栏：与 Editor 共享同一卡片，滚动时保持固定 */}
-                {editor && <OutlineSideRail editor={editor} />}
+                {editor && !inReview ? <OutlineSideRail editor={editor} /> : null}
               </Block>
             </div>
         </div>

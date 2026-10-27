@@ -1134,6 +1134,12 @@ export const AgentChatPanel = forwardRef<
     workingMarkdown?: string;
     baseMarkdown?: string;
     onMarkdownSet?: (markdown: string) => void;
+    onLexicalLinesSet?: (payload: {
+      documentId: string;
+      mode: "patch_lines" | "replace_all";
+      lines: Record<string, string>;
+      markdown?: string;
+    }) => void;
     onSendingChange?: (sending: boolean) => void;
     onSessionId?: (sessionId: string | null) => void;
   }
@@ -1167,6 +1173,7 @@ export const AgentChatPanel = forwardRef<
     workingMarkdown,
     baseMarkdown,
     onMarkdownSet,
+    onLexicalLinesSet,
     onSendingChange,
     onSessionId,
   } = props;
@@ -1963,6 +1970,13 @@ export const AgentChatPanel = forwardRef<
       );
     } else if (event.type === "markdown_set") {
       onMarkdownSet?.(event.markdown);
+    } else if (event.type === "lexical_lines_set") {
+      onLexicalLinesSet?.({
+        documentId: event.documentId,
+        mode: event.mode,
+        lines: event.lines ?? {},
+        ...(event.markdown != null ? { markdown: event.markdown } : {}),
+      });
     } else if (event.type === "tree_changed") {
       void onTreeChanged?.();
     } else if (event.type === "document_overwritten") {

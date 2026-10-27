@@ -254,6 +254,37 @@ function serializeBlock(node: LexNode, depth: number, listIndent = 0): string {
   }
 }
 
+/** 单个外层块 → Markdown（保留空块为 ""，便于按序编号） */
+export function lexicalBlockToMarkdown(block: unknown): string {
+  if (!block || typeof block !== "object") return "";
+  return serializeBlock(block as LexNode, 0).trimEnd();
+}
+
+/**
+ * 完整 Lexical JSON → md_format_lexical（1-based 外层块门牌）。
+ * 非 Lexical 时返回 null。
+ */
+export function lexicalJsonToLexicalLines(
+  rawContent: string,
+): Record<string, string> | null {
+  let doc: unknown;
+  try {
+    doc = JSON.parse(rawContent);
+  } catch {
+    return null;
+  }
+  if (!doc || typeof doc !== "object" || !("root" in doc)) return null;
+  const root = (doc as { root: LexNode }).root;
+  if (!root || typeof root !== "object") return null;
+  const children = asNodes(root.children);
+  const lines: Record<string, string> = {};
+  children.forEach((c, i) => {
+    const md = lexicalBlockToMarkdown(c);
+    lines[String(i + 1)] = md.length ? `${md}\n` : "\n";
+  });
+  return lines;
+}
+
 /**
  * 将 Lexical SerializedEditorState JSON 转为 Markdown。
  * 非 Lexical JSON（解析失败或无 root）原样返回。

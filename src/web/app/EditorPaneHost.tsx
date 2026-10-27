@@ -65,6 +65,10 @@ export function EditorPaneHost(props: {
   /** 最近打开标签：插入各编辑器 DocChrome 下方（md 在 OutlineProvider 内渲染以接大纲） */
   recentTabsProps?: RecentDocTabsProps | null;
   className?: string;
+  /** AI 按块审阅提案（写入 live Editor） */
+  reviewProposal?: import("./lexical-lines/LexicalLinesReview").LexicalLinesProposal | null;
+  onReviewClose?: () => void;
+  onReviewApply?: (lexicalJson: string) => void;
   /** 评论侧栏：必须挂在 .mdocs-editor-with-comments 内才能横排贴右 */
   commentsSlot?: ReactNode;
 }) {
@@ -184,6 +188,9 @@ export function EditorPaneHost(props: {
         readerChrome={props.readerChrome}
         onOpenMobileNav={props.onOpenMobileNav}
         recentTabsProps={props.recentTabsProps}
+        reviewProposal={props.reviewProposal}
+        onReviewClose={props.onReviewClose}
+        onReviewApply={props.onReviewApply}
       />
     );
 

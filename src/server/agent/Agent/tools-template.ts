@@ -38,6 +38,7 @@ import {
   getWorkingDocumentTool,
   setMarkdownDocumentTool,
 } from "./tools-coding.js";
+import { lexicalLinesTools } from "./tools-lexical-lines.js";
 import { userSkillTools } from "./tools-user-skills.js";
 import { getNowTool } from "./tools-time.js";
 import { setThinkingLevelTool } from "./tools-thinking.js";
@@ -94,6 +95,7 @@ export function overwriteTools(deps: ToolDeps): AgentTool[] {
     ...documentEditTools(deps),
     ...editorDraftTools(deps),
     ...documentMergeTools(deps),
+    ...lexicalLinesTools(deps),
   ];
 }
 

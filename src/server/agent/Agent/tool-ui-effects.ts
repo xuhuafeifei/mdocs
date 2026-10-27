@@ -291,5 +291,28 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
       onEvent({ type: "markdown_set", markdown });
       // 进度/摘要已由 tool_call 卡片展示；这里只推右侧提案，不再叠一句空 notice
     }
+
+    if (event.toolName === "set_document_lexical_lines") {
+      const documentId = String(details?.documentId ?? "").trim();
+      const mode =
+        details?.mode === "replace_all" ? "replace_all" : "patch_lines";
+      const lines =
+        details?.lines &&
+        typeof details.lines === "object" &&
+        !Array.isArray(details.lines)
+          ? (details.lines as Record<string, string>)
+          : {};
+      const markdown =
+        typeof details?.markdown === "string" ? details.markdown : undefined;
+      if (documentId) {
+        onEvent({
+          type: "lexical_lines_set",
+          documentId,
+          mode,
+          lines,
+          ...(markdown != null ? { markdown } : {}),
+        });
+      }
+    }
   };
 }

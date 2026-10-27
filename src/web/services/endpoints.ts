@@ -955,6 +955,13 @@ export type AgentStreamEvent =
     }
   | { type: "markdown_set"; markdown: string }
   | {
+      type: "lexical_lines_set";
+      documentId: string;
+      mode: "patch_lines" | "replace_all";
+      lines: Record<string, string>;
+      markdown?: string;
+    }
+  | {
       type: "choice_card";
       requestId: string;
       title: string;

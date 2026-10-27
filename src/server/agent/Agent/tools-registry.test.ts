@@ -78,6 +78,8 @@ describe("createToolsForMode", () => {
       "get_editor_draft",
       "suggest_document_merge",
       "suggest_document_merge_message",
+      "get_document_lexical_lines",
+      "set_document_lexical_lines",
       ...USER_SKILL_NAMES,
     ]);
   });
@@ -111,6 +113,8 @@ describe("createToolsForMode", () => {
       "get_editor_draft",
       "suggest_document_merge",
       "suggest_document_merge_message",
+      "get_document_lexical_lines",
+      "set_document_lexical_lines",
       ...USER_SKILL_NAMES,
     ]);
   });

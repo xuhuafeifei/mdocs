@@ -139,6 +139,7 @@ const AiWriteWorkbench = lazy(() =>
   import("./ai-write/AiWriteWorkbench").then((m) => ({ default: m.AiWriteWorkbench })),
 );
 const MergeView = lazy(() => import("./MergeView").then((m) => ({ default: m.MergeView })));
+type LexicalLinesProposal = import("./lexical-lines/LexicalLinesReview").LexicalLinesProposal;
 
 type Phase = "loading" | "needsRegister" | "ready";
 
@@ -463,6 +464,49 @@ export function App() {
     /** 写回目标：html → contentKind=html；否则 Lexical */
     fileType: string;
   } | null>(null);
+
+  /** 智能助手按块提案（LexicalDiff 审阅，不写服务器） */
+  const [lexicalLinesProposal, setLexicalLinesProposal] =
+    useState<LexicalLinesProposal | null>(null);
+
+  function handleLexicalLinesSet(payload: {
+    documentId: string;
+    mode: "patch_lines" | "replace_all";
+    lines: Record<string, string>;
+    markdown?: string;
+  }): void {
+    const live = editorContentRef.current;
+    const baseLexicalJson =
+      live && live.documentId === payload.documentId
+        ? live.content
+        : live?.content ?? "";
+    if (!baseLexicalJson.trim()) {
+      setMessage("请先打开目标文档再接收按块提案");
+      window.setTimeout(() => setMessage(null), 2000);
+      return;
+    }
+    if (live && live.documentId !== payload.documentId) {
+      setMessage("提案文档与当前打开文档不一致，已忽略");
+      window.setTimeout(() => setMessage(null), 2000);
+      return;
+    }
+    setLexicalLinesProposal({
+      documentId: payload.documentId,
+      mode: payload.mode,
+      lines: payload.lines,
+      markdown: payload.markdown,
+      baseLexicalJson,
+    });
+  }
+
+  function applyLexicalLinesToEditor(lexicalJson: string): void {
+    const prev = editorContentRef.current;
+    if (!prev || !lexicalLinesProposal) return;
+    if (prev.documentId !== lexicalLinesProposal.documentId) return;
+    setEditorContent({ ...prev, content: lexicalJson });
+    setContentRevision((n) => n + 1);
+    setLexicalLinesProposal(null);
+  }
 
   // ---- 导航前保存草稿的引用 ----
   // DocumentEditor 会通过这个 ref 暴露 saveDraft 方法
@@ -2205,6 +2249,7 @@ export function App() {
                     isNarrow ? undefined : (payload) => void openAiWriteForDocument(payload)
                   }
                   onProvideEditorDraft={provideEditorDraft}
+                  onLexicalLinesSet={handleLexicalLinesSet}
                 />
               </Suspense>
             ) : (
@@ -2394,6 +2439,14 @@ export function App() {
                       if (activeDocMeta) setFocus({ kind: "document", documentId: activeDocMeta.documentId });
                     }}
                     recentTabsProps={buildRecentTabsProps("primary")}
+                    reviewProposal={
+                      lexicalLinesProposal &&
+                      lexicalLinesProposal.documentId === activeDocMeta.documentId
+                        ? lexicalLinesProposal
+                        : null
+                    }
+                    onReviewClose={() => setLexicalLinesProposal(null)}
+                    onReviewApply={applyLexicalLinesToEditor}
                     commentsSlot={
                       commentPanelOpen && focusedPane === "primary" ? (
                         <CommentsPanel
@@ -3114,6 +3167,7 @@ export function App() {
                   isNarrow ? undefined : (payload) => void openAiWriteForDocument(payload)
                 }
                 onProvideEditorDraft={provideEditorDraft}
+                onLexicalLinesSet={handleLexicalLinesSet}
               />
             </Suspense>
           ) : null}

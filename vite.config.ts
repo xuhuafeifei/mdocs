@@ -5,6 +5,7 @@ import { defineConfig } from "vite";
 
 const require = createRequire(import.meta.url);
 const shikiPkg = path.dirname(require.resolve("shiki/package.json"));
+const lobeEditorPkg = path.dirname(require.resolve("@lobehub/editor/package.json"));
 
 export default defineConfig({
   root: path.resolve(__dirname, "src/web"),
@@ -64,6 +65,19 @@ export default defineConfig({
       { find: "shiki/wasm", replacement: path.join(shikiPkg, "dist/wasm.mjs") },
       // Exact `shiki` only — do not shadow `shiki/wasm`, `shiki/themes`, etc.
       { find: /^shiki$/, replacement: path.resolve(__dirname, "src/web/shiki/shiki-shim.ts") },
+      // file: 依赖下 Vite 可能解析不了 package exports 子路径；显式指到 es/
+      {
+        find: /^@lobehub\/editor\/renderer$/,
+        replacement: path.join(lobeEditorPkg, "es/renderer.js"),
+      },
+      {
+        find: /^@lobehub\/editor\/react$/,
+        replacement: path.join(lobeEditorPkg, "es/react.js"),
+      },
+      {
+        find: /^@lobehub\/editor\/headless$/,
+        replacement: path.join(lobeEditorPkg, "es/headless.js"),
+      },
     ],
   },
   optimizeDeps: {

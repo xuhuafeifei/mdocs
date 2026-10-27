@@ -140,6 +140,17 @@
   | `src/web/app/ai-write/markdown-hunks.ts` | `computeLineHunks` |
 - **需求**：[`../requirements/agent-normal-coding-modes/`](../requirements/agent-normal-coding-modes/)
 
+### 智能助手按块提案（LexicalDiff）
+
+- **关键词**：`md_format_lexical` `get_document_lexical_lines` `set_document_lexical_lines` `lexical_lines_set` `LexicalDiff` `Accept` `Reject`
+- **结论**：帮写不动；normal 助手试点；提案不写盘；应用进编辑器 Lexical。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/web/app/lexical-lines/LexicalLinesReview.tsx` | `LexicalLinesReview` |
+  | `src/web/app/App.tsx` | `handleLexicalLinesSet` |
+- **需求**：[`../requirements/agent-lexical-lines-diff/`](../requirements/agent-lexical-lines-diff/)
+
 ### Agent 选择卡吸底
 
 - **关键词**：`choice_card` `skill_form_card` `interaction-dock` `等待你选择`
