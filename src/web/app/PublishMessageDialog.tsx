@@ -101,8 +101,21 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
       >
         <h1 id="mdocs-publish-message-title">{title}</h1>
         <p className="muted mdocs-dialog-hint">{hint}</p>
-        <label className="mdocs-dialog-label">
-          <span className="muted">{t("publishMessageLabel")}</span>
+        <label className="mdocs-dialog-label mdocs-publish-message-field">
+          <span className="mdocs-publish-message-label-row">
+            <span className="muted">{t("publishMessageLabel")}</span>
+            <button
+              type="button"
+              className="ghost mdocs-publish-message-ai"
+              disabled={suggestBusy}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleSuggest();
+              }}
+            >
+              {suggestBusy ? "…" : t("publishMessageSuggestAi")}
+            </button>
+          </span>
           <textarea
             className="mdocs-publish-message-input"
             rows={3}
@@ -125,15 +138,6 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
           </p>
         ) : null}
         <div className="mdocs-dialog-actions mdocs-publish-message-actions">
-          <button
-            type="button"
-            className="secondary"
-            disabled={suggestBusy}
-            onClick={() => void handleSuggest()}
-          >
-            {suggestBusy ? "…" : t("publishMessageSuggestAi")}
-          </button>
-          <span className="mdocs-publish-message-actions-spacer" />
           <button type="button" className="secondary" onClick={props.onCancel} disabled={suggestBusy}>
             {t("cancel")}
           </button>

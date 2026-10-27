@@ -6137,9 +6137,24 @@ strong.label {
   width: min(440px, 94vw);
 }
 
+.mdocs-publish-message-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.mdocs-publish-message-ai {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--mdocs-accent, #2f6fed);
+}
+
 .mdocs-publish-message-input {
   width: 100%;
-  margin-top: 6px;
+  margin-top: 0;
   resize: vertical;
   min-height: 72px;
   font: inherit;
@@ -6149,14 +6164,75 @@ strong.label {
   box-sizing: border-box;
 }
 
-.mdocs-publish-message-actions {
-  flex-wrap: wrap;
-  align-items: center;
+.mdocs-publish-message-field {
+  gap: 8px;
 }
 
-.mdocs-publish-message-actions-spacer {
-  flex: 1 1 auto;
-  min-width: 8px;
+.mdocs-publish-message-actions {
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+  /* 发布说明：底栏 sheet，避免通用 dialog 三键 column-reverse 全宽堆叠 */
+  .mdocs-dialog-backdrop:has(.mdocs-publish-message-dialog) {
+    align-items: flex-end;
+    justify-content: stretch;
+    padding: 0;
+  }
+
+  .mdocs-dialog.card.mdocs-publish-message-dialog {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(72vh, 100%);
+    margin: 0;
+    border-radius: 16px 16px 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.12);
+  }
+
+  .mdocs-publish-message-dialog h1 {
+    margin: 4px 0 10px;
+    font-size: 17px;
+    text-align: center;
+  }
+
+  .mdocs-publish-message-input {
+    min-height: 88px;
+    font-size: 16px; /* 避免 iOS 聚焦自动放大 */
+    resize: none;
+  }
+
+  .mdocs-publish-message-input:focus {
+    box-shadow: 0 0 0 2px var(--mdocs-accent-ring, rgba(47, 111, 237, 0.25));
+  }
+
+  .mdocs-publish-message-actions {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .mdocs-publish-message-actions button {
+    width: auto;
+    min-height: 44px;
+  }
+
+  .mdocs-publish-message-actions button.secondary {
+    flex: 0 0 auto;
+    min-width: 88px;
+  }
+
+  .mdocs-publish-message-actions button.primary {
+    flex: 1 1 auto;
+  }
 }
 
 .mdocs-version-history-body {
@@ -7285,11 +7361,15 @@ strong.label {
   .mdocs-editor-toolbar--docked {
     display: flex;
     flex-direction: row;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 6px;
+    /* 覆盖桌面 width:max-content，避免标题区把发布挤到下一行 */
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     box-sizing: border-box;
-    overflow: visible;
+    overflow: hidden;
   }
 
   /* html：两行堆叠（第一行「导航 + 三角 + 三点」，第二行可折叠操作） */
@@ -7349,7 +7429,8 @@ strong.label {
     display: flex;
     align-items: center;
     gap: 4px;
-    flex: 1 1 auto;
+    /* 0 基准：只吃「右侧控件剩下的宽度」，不要按标题全文撑出空白 */
+    flex: 1 1 0;
     min-width: 0;
   }
 
@@ -7362,7 +7443,7 @@ strong.label {
   .mdocs-editor-toolbar--docked .mdocs-editor-toolbar-leading {
     touch-action: none;
     cursor: grab;
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-width: 0;
     max-width: none;
     padding-right: 0;
@@ -7374,9 +7455,10 @@ strong.label {
 
   .mdocs-editor-toolbar--float .mdocs-editor-title-input,
   .mdocs-editor-toolbar--docked .mdocs-editor-title-input {
-    width: auto;
+    /* input + width:auto 会按 ~20ch / 全文固有宽布局，留下大块空白并提前省略 */
+    width: 0;
     max-width: none;
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-width: 0;
     border: none;
     background: transparent;
