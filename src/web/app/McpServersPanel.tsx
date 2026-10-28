@@ -1,5 +1,5 @@
 /**
- * 设置页：通用 HTTP MCP 服务器配置。不内置某个具体产品的模板。
+ * 设置页：通用 MCP 服务器配置（HTTP + stdio）。不内置某个具体产品的模板。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
@@ -102,7 +102,7 @@ export function McpServersPanel() {
     setServers((prev) => [...prev, { ...base, id }]);
     setHeadersDraft((prev) => ({
       ...prev,
-      [id]: headersToText(base.headers),
+      [id]: "",
     }));
     setSaved(false);
   }
@@ -128,13 +128,25 @@ export function McpServersPanel() {
     setSaved(false);
     try {
       const payload: McpServerConfig[] = servers.map((s) => {
+        if (s.transport === "stdio") {
+          return {
+            id: s.id,
+            name: s.name.trim(),
+            enabled: s.enabled,
+            transport: "stdio" as const,
+            command: (s.command ?? "").trim(),
+            ...(s.args ? { args: s.args } : {}),
+            ...(s.env ? { env: s.env } : {}),
+            ...(s.cwd ? { cwd: s.cwd } : {}),
+          };
+        }
         const headers = parseHeadersJson(headersDraft[s.id] ?? "");
         return {
           id: s.id,
           name: s.name.trim(),
           enabled: s.enabled,
-          transport: "http",
-          url: s.url.trim(),
+          transport: "http" as const,
+          url: (s.url ?? "").trim(),
           ...(headers ? { headers } : {}),
         };
       });
@@ -258,29 +270,43 @@ export function McpServersPanel() {
                 style={{ width: "100%" }}
               />
             </label>
-            <label className="mdocs-settings-item" style={{ display: "block", marginBottom: 8 }}>
-              <span className="mdocs-settings-item-desc">{t("mcpUrl")}</span>
-              <input
-                type="url"
-                value={s.url}
-                onChange={(e) => updateServer(s.id, { url: e.target.value })}
-                placeholder="http://host:port/mcp"
-                style={{ width: "100%" }}
-              />
-            </label>
-            <label className="mdocs-settings-item" style={{ display: "block", marginBottom: 8 }}>
-              <span className="mdocs-settings-item-desc">{t("mcpHeaders")}</span>
-              <textarea
-                value={headersDraft[s.id] ?? ""}
-                onChange={(e) => {
-                  setHeadersDraft((prev) => ({ ...prev, [s.id]: e.target.value }));
-                  setSaved(false);
-                }}
-                rows={3}
-                placeholder='{ "Authorization": "Bearer …" }'
-                style={{ width: "100%", fontFamily: "ui-monospace, monospace", fontSize: 12 }}
-              />
-            </label>
+            {s.transport === "stdio" ? (
+              <label className="mdocs-settings-item" style={{ display: "block", marginBottom: 8 }}>
+                <span className="mdocs-settings-item-desc">{t("mcpCommand")}</span>
+                <input
+                  type="text"
+                  value={[s.command, ...(s.args ?? [])].filter(Boolean).join(" ")}
+                  readOnly
+                  style={{ width: "100%", fontFamily: "ui-monospace, monospace", fontSize: 12 }}
+                />
+              </label>
+            ) : (
+              <>
+                <label className="mdocs-settings-item" style={{ display: "block", marginBottom: 8 }}>
+                  <span className="mdocs-settings-item-desc">{t("mcpUrl")}</span>
+                  <input
+                    type="url"
+                    value={s.url ?? ""}
+                    onChange={(e) => updateServer(s.id, { url: e.target.value })}
+                    placeholder="http://host:port/mcp"
+                    style={{ width: "100%" }}
+                  />
+                </label>
+                <label className="mdocs-settings-item" style={{ display: "block", marginBottom: 8 }}>
+                  <span className="mdocs-settings-item-desc">{t("mcpHeaders")}</span>
+                  <textarea
+                    value={headersDraft[s.id] ?? ""}
+                    onChange={(e) => {
+                      setHeadersDraft((prev) => ({ ...prev, [s.id]: e.target.value }));
+                      setSaved(false);
+                    }}
+                    rows={3}
+                    placeholder='{ "Authorization": "Bearer …" }'
+                    style={{ width: "100%", fontFamily: "ui-monospace, monospace", fontSize: 12 }}
+                  />
+                </label>
+              </>
+            )}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button
                 type="button"

@@ -91,26 +91,27 @@
   | `src/server/agent/Agent/session-tool-persist.ts` | `get_document` / `web_search` / `web_fetch` → jsonl `role:tool`；API 仍只回 user/assistant |
 - **需求**：[`../requirements/user-agent-skills/`](../requirements/user-agent-skills/)（已同意）
 
-### Agent MCP Client（远程 Memorix）
+### Agent MCP Client（HTTP + stdio）
 
-- **关键词**：`MCP` `mcp-servers` `Memorix` `StreamableHTTP` `mcp__`
-- **结论**：一期仅 HTTP Client；配置在 `dataDir/mcp-servers.json`；每轮 listTools 挂进助手；不可达跳过。
+- **关键词**：`MCP` `mcp-servers` `Engram` `Memorix` `StreamableHTTP` `stdio` `mcp__`
+- **结论**：支持 HTTP Streamable 与本机 stdio；配置在 `dataDir/mcp-servers.json`；每轮 listTools 挂进助手；不可达跳过。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/server/mcp/mcp-servers-store.ts` | 配置读写 |
-  | `src/server/mcp/mcp-client.ts` | HTTP 连接 / AgentTool 桥 |
+  | `src/server/mcp/mcp-servers-store.ts` | 配置读写（http / stdio） |
+  | `src/server/mcp/mcp-client.ts` | 连接 / AgentTool 桥 |
   | `src/server/routes/mcp-servers.routes.ts` | `/api/mcp-servers` |
   | `src/web/app/McpServersPanel.tsx` | 设置 UI |
 - **需求**：[`../requirements/agent-mcp-client/`](../requirements/agent-mcp-client/)
 
-### 插件市场（Memorix 样板）
+### 插件市场（Engram 主推）
 
-- **关键词**：`plugins` `plugin-marketplace` `Memorix` `installPlugin`
-- **结论**：安装 Memorix → `npm install -g` + `memorix background start`，再 upsert `mcp-servers.json`。
+- **关键词**：`plugins` `plugin-marketplace` `Engram` `Memorix` `installPlugin`
+- **结论**：主推 Engram（GitHub release 二进制 + stdio `engram mcp`）；Memorix 仍为可选 npm+HTTP 样板。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
+  | `src/server/plugins/engram-runtime.ts` | `installEngramRuntime` |
   | `src/server/plugins/memorix-runtime.ts` | `installMemorixRuntime` |
   | `src/server/plugins/plugin-catalog.ts` | 内置目录 |
   | `src/server/plugins/plugins-store.ts` | 安装态 |

@@ -16,6 +16,14 @@ import {
   type McpServerConfig,
 } from "../mcp/mcp-servers-store.js";
 import {
+  buildEngramMcpEnv,
+  engramBinaryPath,
+  installEngramRuntime,
+  uninstallEngramRuntime,
+  type EngramInstallPhase,
+  type EngramOutput,
+} from "./engram-runtime.js";
+import {
   installMemorixRuntime,
   MEMORIX_HTTP_MCP_URL,
   uninstallMemorixRuntime,
@@ -23,7 +31,10 @@ import {
   type MemorixOutput,
 } from "./memorix-runtime.js";
 
-export type PluginInstallPhase = MemorixInstallPhase | "saving";
+export type PluginInstallPhase =
+  | MemorixInstallPhase
+  | EngramInstallPhase
+  | "saving";
 
 export type InstalledPluginRecord = {
   id: string;
@@ -85,19 +96,26 @@ export type InstallPluginOptions = {
   headers?: Record<string, string>;
 };
 
+export type PluginInstallOutput = MemorixOutput | EngramOutput;
+
 export async function installPlugin(
   pluginId: string,
   opts: InstallPluginOptions = {},
   hooks?: {
     onPhase?: (phase: PluginInstallPhase) => void;
-    onOutput?: MemorixOutput;
+    onOutput?: PluginInstallOutput;
   },
 ): Promise<PluginListItem> {
   const entry = getCatalogEntry(pluginId);
   if (!entry) throw new Error("plugin not found");
   if (entry.kind !== "mcp") throw new Error("unsupported plugin kind");
 
-  if (entry.id === "memorix") {
+  if (entry.id === "engram") {
+    await installEngramRuntime(
+      (phase) => hooks?.onPhase?.(phase),
+      hooks?.onOutput,
+    );
+  } else if (entry.id === "memorix") {
     await installMemorixRuntime(
       (phase) => hooks?.onPhase?.(phase),
       hooks?.onOutput,
@@ -105,17 +123,47 @@ export async function installPlugin(
   }
   hooks?.onPhase?.("saving");
 
-  const url = entry.id === "memorix" ? MEMORIX_HTTP_MCP_URL : entry.mcpTemplate.url;
-  upsertMcpServer({
-    id: entry.mcpServerId,
-    name: entry.mcpTemplate.name,
-    enabled: true,
-    transport: "http",
-    url,
-    ...(opts.headers ? { headers: opts.headers } : entry.mcpTemplate.headers
-      ? { headers: entry.mcpTemplate.headers }
-      : {}),
-  });
+  if (entry.id === "engram") {
+    upsertMcpServer({
+      id: entry.mcpServerId,
+      name: entry.mcpTemplate.name,
+      enabled: true,
+      transport: "stdio",
+      command: engramBinaryPath(),
+      args: ["mcp"],
+      env: buildEngramMcpEnv(),
+    });
+  } else if (entry.id === "memorix") {
+    upsertMcpServer({
+      id: entry.mcpServerId,
+      name: entry.mcpTemplate.name,
+      enabled: true,
+      transport: "http",
+      url: MEMORIX_HTTP_MCP_URL,
+      ...(opts.headers
+        ? { headers: opts.headers }
+        : entry.mcpTemplate.headers
+          ? { headers: entry.mcpTemplate.headers }
+          : {}),
+    });
+  } else {
+    upsertMcpServer({
+      id: entry.mcpServerId,
+      name: entry.mcpTemplate.name,
+      enabled: true,
+      transport: entry.mcpTemplate.transport,
+      ...(entry.mcpTemplate.url ? { url: entry.mcpTemplate.url } : {}),
+      ...(entry.mcpTemplate.command
+        ? { command: entry.mcpTemplate.command }
+        : {}),
+      ...(entry.mcpTemplate.args ? { args: entry.mcpTemplate.args } : {}),
+      ...(opts.headers
+        ? { headers: opts.headers }
+        : entry.mcpTemplate.headers
+          ? { headers: entry.mcpTemplate.headers }
+          : {}),
+    });
+  }
 
   const installedAt = new Date().toISOString();
   const others = listInstalled().filter((r) => r.id !== entry.id);
@@ -135,7 +183,9 @@ export async function uninstallPlugin(pluginId: string): Promise<PluginListItem>
   const entry = getCatalogEntry(pluginId);
   if (!entry) throw new Error("plugin not found");
 
-  if (entry.id === "memorix") {
+  if (entry.id === "engram") {
+    await uninstallEngramRuntime();
+  } else if (entry.id === "memorix") {
     await uninstallMemorixRuntime();
   }
 

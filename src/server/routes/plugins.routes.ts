@@ -3,11 +3,19 @@ import {
   getPluginInstallJob,
   startPluginInstall,
 } from "../plugins/plugin-install-job.js";
+import { isEngramBinaryReady } from "../plugins/engram-runtime.js";
 import { isMemorixHttpUp } from "../plugins/memorix-runtime.js";
 import {
   listPlugins,
   uninstallPlugin,
 } from "../plugins/plugins-store.js";
+
+async function runtimeRunningFor(pluginId: string, installed: boolean): Promise<boolean> {
+  if (!installed) return false;
+  if (pluginId === "engram") return isEngramBinaryReady();
+  if (pluginId === "memorix") return isMemorixHttpUp();
+  return false;
+}
 
 export function buildPluginsRouter(): ReturnType<typeof Router> {
   const router = Router();
@@ -16,9 +24,7 @@ export function buildPluginsRouter(): ReturnType<typeof Router> {
     const plugins = await Promise.all(
       listPlugins().map(async (plugin) => ({
         ...plugin,
-        runtimeRunning: plugin.id === "memorix" && plugin.installed
-          ? await isMemorixHttpUp()
-          : false,
+        runtimeRunning: await runtimeRunningFor(plugin.id, plugin.installed),
         installJob: getPluginInstallJob(plugin.id),
       })),
     );

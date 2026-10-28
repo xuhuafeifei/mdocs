@@ -1,8 +1,13 @@
 /**
- * 内置插件目录。Memorix 安装会在本机 npm 安装并启动 HTTP 服务，
- * 再把通用 MCP 列表里的对应项指到该服务。
+ * 内置插件目录。
+ * Engram：下载 GitHub release 二进制，stdio MCP（`engram mcp`）。
+ * Memorix：npm 全局安装 + HTTP MCP（可选样板）。
  */
-import { MEMORIX_MCP_TEMPLATE } from "../mcp/mcp-servers-store.js";
+import {
+  ENGRAM_MCP_TEMPLATE,
+  MEMORIX_MCP_TEMPLATE,
+  type McpServerConfig,
+} from "../mcp/mcp-servers-store.js";
 
 export type PluginKind = "mcp";
 
@@ -13,10 +18,19 @@ export type PluginCatalogEntry = {
   kind: PluginKind;
   /** 写入 MCP 时使用的稳定 id */
   mcpServerId: string;
-  mcpTemplate: typeof MEMORIX_MCP_TEMPLATE;
+  mcpTemplate: Omit<McpServerConfig, "id">;
 };
 
 export const PLUGIN_CATALOG: PluginCatalogEntry[] = [
+  {
+    id: "engram",
+    name: "Engram",
+    description:
+      "本机记忆（Go 单二进制 + SQLite）。安装会从 GitHub Releases 下载，并以 stdio MCP（engram mcp）接入。不依赖 git 仓库。",
+    kind: "mcp",
+    mcpServerId: "plugin-engram",
+    mcpTemplate: { ...ENGRAM_MCP_TEMPLATE },
+  },
   {
     id: "memorix",
     name: "Memorix",

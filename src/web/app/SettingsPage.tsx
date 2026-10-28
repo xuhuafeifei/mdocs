@@ -124,7 +124,7 @@ const SETTINGS_NAV: Array<{
   { id: "memberTemplates", labelKey: "memberTemplates", keywords: ["成员", "模板", "members", "template", "邀请"], Icon: Users },
   { id: "agentConfig", labelKey: "agentConfig", keywords: ["ai", "助手", "模型", "agent", "llm", "deepseek"], Icon: Sparkles },
   { id: "mcpServers", labelKey: "mcpServersTitle", keywords: ["mcp", "服务器", "server"], Icon: Cable },
-  { id: "pluginMarket", labelKey: "pluginMarketTitle", keywords: ["插件", "市场", "plugin", "memorix"], Icon: Puzzle },
+  { id: "pluginMarket", labelKey: "pluginMarketTitle", keywords: ["插件", "市场", "plugin", "engram", "memorix"], Icon: Puzzle },
   { id: "savePublish", labelKey: "saveAndPublish", keywords: ["草稿", "发布", "同步", "draft", "publish", "sync"], Icon: CloudUpload },
 ];
 

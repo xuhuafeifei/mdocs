@@ -1,9 +1,13 @@
 /**
- * HTTP MCP Client：连接远程 server，listTools / callTool，桥成 pi-agent AgentTool。
+ * MCP Client：HTTP（Streamable）或 stdio，listTools / callTool，桥成 pi-agent AgentTool。
  */
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import {
+  getDefaultEnvironment,
+  StdioClientTransport,
+} from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { useLogger } from "../logger/logger.js";
 import {
@@ -11,7 +15,7 @@ import {
   memorixProjectRoot,
 } from "../plugins/memorix-runtime.js";
 import {
-  listEnabledHttpMcpServers,
+  listEnabledMcpServers,
   type McpServerConfig,
 } from "./mcp-servers-store.js";
 
@@ -56,17 +60,53 @@ function asAgentToolParameters(inputSchema: unknown) {
   return Type.Object({}, { additionalProperties: true });
 }
 
-async function openHttpClient(server: McpServerConfig): Promise<{
+function serverLabel(server: McpServerConfig): string {
+  if (server.transport === "stdio") {
+    const args = (server.args ?? []).join(" ");
+    return `${server.command ?? ""}${args ? ` ${args}` : ""}`.trim() || server.name;
+  }
+  return server.url ?? server.name;
+}
+
+async function openClient(server: McpServerConfig): Promise<{
   client: Client;
   close: () => Promise<void>;
 }> {
   const client = new Client({
     name: "mdocs",
-    version: "3.0.4",
+    version: "3.0.8",
   });
-  const headers = server.headers
-    ? { ...server.headers }
-    : undefined;
+
+  if (server.transport === "stdio") {
+    const command = server.command?.trim();
+    if (!command) throw new Error("stdio MCP server missing command");
+    const transport = new StdioClientTransport({
+      command,
+      args: server.args ?? [],
+      env: {
+        ...getDefaultEnvironment(),
+        ...(server.env ?? {}),
+      },
+      cwd: server.cwd,
+      stderr: "pipe",
+    });
+    await client.connect(transport);
+    return {
+      client,
+      close: async () => {
+        try {
+          await client.close();
+        } catch (err) {
+          log.warn(
+            `close ${server.name}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      },
+    };
+  }
+
+  if (!server.url) throw new Error("http MCP server missing url");
+  const headers = server.headers ? { ...server.headers } : undefined;
   const transport = new StreamableHTTPClientTransport(new URL(server.url), {
     requestInit: headers ? { headers } : undefined,
   });
@@ -77,7 +117,9 @@ async function openHttpClient(server: McpServerConfig): Promise<{
       try {
         await client.close();
       } catch (err) {
-        log.warn(`close ${server.name}: ${err instanceof Error ? err.message : String(err)}`);
+        log.warn(
+          `close ${server.name}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     },
   };
@@ -101,7 +143,7 @@ function contentToText(content: unknown): string {
 }
 
 function looksLikeMemorix(server: McpServerConfig, toolNames: string[]): boolean {
-  const blob = `${server.id} ${server.name} ${server.url}`.toLowerCase();
+  const blob = `${server.id} ${server.name} ${server.url ?? ""} ${server.command ?? ""}`.toLowerCase();
   if (blob.includes("memorix")) return true;
   return toolNames.some((n) => n.startsWith("memorix_"));
 }
@@ -150,7 +192,7 @@ export async function testMcpServer(
   server: McpServerConfig,
 ): Promise<McpTestResult> {
   try {
-    const { client, close } = await openHttpClient(server);
+    const { client, close } = await openClient(server);
     try {
       const listed = await client.listTools();
       const tools = (listed.tools ?? []).map((t) => ({
@@ -174,11 +216,11 @@ export async function testMcpServer(
 }
 
 /**
- * 为当前 Agent 轮次加载所有已启用 HTTP MCP 工具。
+ * 为当前 Agent 轮次加载所有已启用 MCP 工具（HTTP + stdio）。
  * 单 server 失败跳过；调用方必须在 finally 里 close。
  */
 export async function loadMcpAgentTools(): Promise<McpAgentToolsBundle> {
-  const servers = listEnabledHttpMcpServers();
+  const servers = listEnabledMcpServers();
   if (servers.length === 0) {
     return { tools: [], close: async () => {} };
   }
@@ -188,7 +230,7 @@ export async function loadMcpAgentTools(): Promise<McpAgentToolsBundle> {
 
   for (const server of servers) {
     try {
-      const { client, close } = await openHttpClient(server);
+      const { client, close } = await openClient(server);
       closers.push(close);
       const listed = await client.listTools();
       const toolNames = (listed.tools ?? []).map((t) => t.name);
@@ -230,7 +272,7 @@ export async function loadMcpAgentTools(): Promise<McpAgentToolsBundle> {
         });
       }
       log.info(
-        `loaded ${listed.tools?.length ?? 0} tools from ${server.name} (${server.url})`,
+        `loaded ${listed.tools?.length ?? 0} tools from ${server.name} (${serverLabel(server)})`,
       );
     } catch (err) {
       log.warn(

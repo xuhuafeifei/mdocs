@@ -1,20 +1,27 @@
 /**
  * MCP 服务器配置：落盘 dataDir/mcp-servers.json，全实例共用。
+ * 支持 HTTP（Streamable）与 stdio（本机进程）。
  */
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { getConfig } from "../config/index.js";
 
-export type McpServerTransport = "http";
+export type McpServerTransport = "http" | "stdio";
 
 export type McpServerConfig = {
   id: string;
   name: string;
   enabled: boolean;
   transport: McpServerTransport;
-  url: string;
+  /** HTTP */
+  url?: string;
   headers?: Record<string, string>;
+  /** stdio */
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
 };
 
 type McpServersFile = {
@@ -55,6 +62,23 @@ function normalizeHeaders(
   return Object.keys(out).length ? out : undefined;
 }
 
+function normalizeStringMap(
+  raw: unknown,
+): Record<string, string> | undefined {
+  return normalizeHeaders(raw);
+}
+
+function normalizeArgs(raw: unknown): string[] | undefined {
+  if (raw == null) return undefined;
+  if (!Array.isArray(raw)) throw new Error("args must be an array of strings");
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") throw new Error("args must be an array of strings");
+    out.push(item);
+  }
+  return out;
+}
+
 /** 校验并归一化一条配置；非法抛 Error */
 export function normalizeMcpServerInput(
   raw: unknown,
@@ -73,6 +97,32 @@ export function normalizeMcpServerInput(
   if (requireId && !id) throw new Error("id is required");
   const name = String(r.name ?? "").trim();
   if (!name) throw new Error("name is required");
+
+  const transportRaw = r.transport == null ? "http" : String(r.transport);
+  if (transportRaw !== "http" && transportRaw !== "stdio") {
+    throw new Error('transport must be "http" or "stdio"');
+  }
+  const enabled = r.enabled !== false;
+
+  if (transportRaw === "stdio") {
+    const command = String(r.command ?? "").trim();
+    if (!command) throw new Error("command is required for stdio transport");
+    const args = normalizeArgs(r.args);
+    const env = normalizeStringMap(r.env);
+    const cwd =
+      typeof r.cwd === "string" && r.cwd.trim() ? r.cwd.trim() : undefined;
+    return {
+      id: id || randomUUID(),
+      name,
+      enabled,
+      transport: "stdio",
+      command,
+      ...(args ? { args } : {}),
+      ...(env ? { env } : {}),
+      ...(cwd ? { cwd } : {}),
+    };
+  }
+
   const url = String(r.url ?? "").trim();
   if (!url) throw new Error("url is required");
   let parsedUrl: URL;
@@ -84,9 +134,6 @@ export function normalizeMcpServerInput(
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     throw new Error("url must be http or https");
   }
-  const transport = r.transport === "http" || r.transport == null ? "http" : null;
-  if (!transport) throw new Error('transport must be "http"');
-  const enabled = r.enabled !== false;
   const headers = normalizeHeaders(r.headers);
   return {
     id: id || randomUUID(),
@@ -118,8 +165,13 @@ export function getMcpServerById(id: string): McpServerConfig | null {
   return listMcpServers().find((s) => s.id === want) ?? null;
 }
 
+export function listEnabledMcpServers(): McpServerConfig[] {
+  return listMcpServers().filter((s) => s.enabled);
+}
+
+/** @deprecated 用 listEnabledMcpServers；保留别名以免旧引用断裂 */
 export function listEnabledHttpMcpServers(): McpServerConfig[] {
-  return listMcpServers().filter((s) => s.enabled && s.transport === "http");
+  return listEnabledMcpServers().filter((s) => s.transport === "http");
 }
 
 /** 整表替换；返回归一化后的列表 */
@@ -145,6 +197,15 @@ export const MEMORIX_MCP_TEMPLATE: Omit<McpServerConfig, "id"> = {
   enabled: true,
   transport: "http",
   url: "http://127.0.0.1:3211/mcp",
+};
+
+/** Engram：stdio `engram mcp`；安装时会改写 command 为绝对路径并注入 ENGRAM_*。 */
+export const ENGRAM_MCP_TEMPLATE: Omit<McpServerConfig, "id"> = {
+  name: "Engram",
+  enabled: true,
+  transport: "stdio",
+  command: "engram",
+  args: ["mcp"],
 };
 
 /** 插件安装用：按 id upsert 一条；返回最新全表 */

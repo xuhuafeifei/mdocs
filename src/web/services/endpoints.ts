@@ -88,9 +88,13 @@ export type McpServerConfig = {
   id: string;
   name: string;
   enabled: boolean;
-  transport: "http";
-  url: string;
+  transport: "http" | "stdio";
+  url?: string;
   headers?: Record<string, string>;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
 };
 
 export type McpServersPayload = {

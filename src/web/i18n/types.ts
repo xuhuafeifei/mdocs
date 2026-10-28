@@ -551,6 +551,7 @@ export type TranslationKey =
   | "mcpEnabled"
   | "mcpName"
   | "mcpUrl"
+  | "mcpCommand"
   | "mcpHeaders"
   | "mcpTest"
   | "mcpTesting"

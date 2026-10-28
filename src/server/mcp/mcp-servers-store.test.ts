@@ -12,7 +12,7 @@ vi.mock("../config/index.js", () => ({
 }));
 
 import {
-  listEnabledHttpMcpServers,
+  listEnabledMcpServers,
   listMcpServers,
   normalizeMcpServerInput,
   replaceMcpServers,
@@ -35,6 +35,20 @@ describe("mcp-servers-store", () => {
     ).toThrow(/url/);
   });
 
+  it("normalize accepts stdio", () => {
+    const s = normalizeMcpServerInput({
+      name: "Engram",
+      transport: "stdio",
+      command: "/opt/engram",
+      args: ["mcp"],
+      env: { ENGRAM_PROJECT: "mdocs" },
+    });
+    expect(s.transport).toBe("stdio");
+    expect(s.command).toBe("/opt/engram");
+    expect(s.args).toEqual(["mcp"]);
+    expect(s.env?.ENGRAM_PROJECT).toBe("mdocs");
+  });
+
   it("replace + list + enabled filter", () => {
     const saved = replaceMcpServers([
       {
@@ -50,10 +64,18 @@ describe("mcp-servers-store", () => {
         enabled: false,
         url: "https://example.com/mcp",
       },
+      {
+        id: "c",
+        name: "Engram",
+        enabled: true,
+        transport: "stdio",
+        command: "/bin/engram",
+        args: ["mcp"],
+      },
     ]);
-    expect(saved).toHaveLength(2);
-    expect(listMcpServers()).toHaveLength(2);
-    expect(listEnabledHttpMcpServers().map((s) => s.id)).toEqual(["a"]);
+    expect(saved).toHaveLength(3);
+    expect(listMcpServers()).toHaveLength(3);
+    expect(listEnabledMcpServers().map((s) => s.id)).toEqual(["a", "c"]);
   });
 
   it("rejects duplicate ids", () => {
