@@ -63,18 +63,19 @@ export function getDocumentLexicalLinesTool({ visitorId }: ToolDeps): AgentTool 
 }
 
 /** 只校验参数并回传；真正推前端靠 tool-ui-effects → SSE */
-export function setDocumentLexicalLinesTool(_deps: ToolDeps): AgentTool {
+export function setDocumentLexicalLinesTool({ uiDocumentId }: ToolDeps): AgentTool {
   return {
     name: "set_document_lexical_lines",
     label: "按块设置提案",
     description:
-      "向当前打开文档提交按块 Markdown 提案（md_format_lexical），**不写服务器**。" +
-      "用户在前端 LexicalDiff 上 Accept/Reject 后再应用。" +
-      "mode=patch_lines：lines 只含要改的门牌（相对 get_document_lexical_lines）；" +
-      "mode=replace_all：整篇覆写，传完整 lines 表或 markdown 全文。" +
-      "新提案会覆盖未应用的旧提案。改前先 get_document_lexical_lines。",
+      "向**当前打开**文档提交按块 Markdown 提案（md_format_lexical），**不写服务器**。" +
+      "documentId 可省略（默认用 UI 当前打开文）。" +
+      "mode=patch_lines：lines 只含要改的门牌；mode=replace_all：整篇新稿。" +
+      "单槽改优先 update_slot / insert_after_slot / remove_slot；整篇也可用 overwrite_all。",
     parameters: Type.Object({
-      documentId: Type.String({ description: "目标文档 documentId（应与用户当前打开文一致）" }),
+      documentId: Type.Optional(
+        Type.String({ description: "可省略；默认当前 UI 打开文档" }),
+      ),
       mode: Type.Union([Type.Literal("patch_lines"), Type.Literal("replace_all")], {
         description: "patch_lines=按门牌补丁；replace_all=整篇新稿",
       }),
@@ -96,8 +97,7 @@ export function setDocumentLexicalLinesTool(_deps: ToolDeps): AgentTool {
         lines?: Record<string, string>;
         markdown?: string;
       };
-      const documentId = String(p.documentId ?? "").trim();
-      if (!documentId) throw new Error("documentId is required");
+      const documentId = resolveDiffDocumentId(p.documentId, uiDocumentId);
       const mode = p.mode === "replace_all" ? "replace_all" : "patch_lines";
       const lines =
         p.lines && typeof p.lines === "object" && !Array.isArray(p.lines)
@@ -115,12 +115,159 @@ export function setDocumentLexicalLinesTool(_deps: ToolDeps): AgentTool {
         mode,
         lines,
         ...(markdown != null ? { markdown } : {}),
-        applied: true,
+        queued: true,
+      });
+    },
+  };
+}
+
+/** Diff 只能打当前打开文：优先 UI 上下文，其次模型传入 */
+function resolveDiffDocumentId(
+  raw: unknown,
+  uiDocumentId: string | null | undefined,
+): string {
+  const fromUi = String(uiDocumentId ?? "").trim();
+  const fromArg = String(raw ?? "").trim();
+  const documentId = fromUi || fromArg;
+  if (!documentId) {
+    throw new Error("documentId is required (open a document in the UI, or pass documentId)");
+  }
+  return documentId;
+}
+
+function requireSlot(raw: unknown, { allowZero = false } = {}): number {
+  const slot = Number(raw);
+  if (!Number.isInteger(slot)) throw new Error("slot must be an integer");
+  if (allowZero ? slot < 0 : slot < 1) {
+    throw new Error(allowZero ? "slot must be >= 0 (0 = insert at start)" : "slot must be >= 1");
+  }
+  return slot;
+}
+
+function requireMarkdown(raw: unknown): string {
+  if (typeof raw !== "string") throw new Error("markdown is required");
+  return raw;
+}
+
+/** 单槽改：SSE → 前端 Lobe updateSlot */
+export function updateSlotTool({ uiDocumentId }: ToolDeps): AgentTool {
+  return {
+    name: "update_slot",
+    label: "更新文档块",
+    description:
+      "对**当前打开** .md 的某一外层块（1-based slot）提交替换提案，**不写服务器**。" +
+      "documentId 可省略（默认 UI 当前打开文）。markdown 须为单顶层块。" +
+      "改前先 get_document_lexical_lines 看门牌。",
+    parameters: Type.Object({
+      documentId: Type.Optional(
+        Type.String({ description: "可省略；默认当前 UI 打开文档" }),
+      ),
+      slot: Type.Integer({ description: "1-based 外层块门牌", minimum: 1 }),
+      markdown: Type.String({ description: "替换该槽的 Markdown（单顶层块）" }),
+    }),
+    execute: async (_id, params) => {
+      const p = params as { documentId?: string; slot?: number; markdown?: string };
+      return asToolResult({
+        documentId: resolveDiffDocumentId(p.documentId, uiDocumentId),
+        op: "update_slot" as const,
+        slot: requireSlot(p.slot),
+        markdown: requireMarkdown(p.markdown),
+        queued: true,
+      });
+    },
+  };
+}
+
+/** 单槽后插入：SSE → 前端 Lobe insertAfterSlot */
+export function insertAfterSlotTool({ uiDocumentId }: ToolDeps): AgentTool {
+  return {
+    name: "insert_after_slot",
+    label: "在块后插入",
+    description:
+      "在**当前打开**文档指定外层块之后插入 Markdown 提案，**不写服务器**。" +
+      "documentId 可省略。slot=0 插文首；slot≥1 插在该门牌之后。",
+    parameters: Type.Object({
+      documentId: Type.Optional(
+        Type.String({ description: "可省略；默认当前 UI 打开文档" }),
+      ),
+      slot: Type.Integer({
+        description: "锚点门牌：0=文首；≥1=插在该块之后",
+        minimum: 0,
+      }),
+      markdown: Type.String({ description: "要插入的 Markdown（可含多个顶层块）" }),
+    }),
+    execute: async (_id, params) => {
+      const p = params as { documentId?: string; slot?: number; markdown?: string };
+      return asToolResult({
+        documentId: resolveDiffDocumentId(p.documentId, uiDocumentId),
+        op: "insert_after_slot" as const,
+        slot: requireSlot(p.slot, { allowZero: true }),
+        markdown: requireMarkdown(p.markdown),
+        queued: true,
+      });
+    },
+  };
+}
+
+/** 单槽删：SSE → 前端 Lobe removeSlot */
+export function removeSlotTool({ uiDocumentId }: ToolDeps): AgentTool {
+  return {
+    name: "remove_slot",
+    label: "删除文档块",
+    description:
+      "对**当前打开** .md 某一外层块提交删除提案，**不写服务器**。" +
+      "documentId 可省略。改前先 get_document_lexical_lines。",
+    parameters: Type.Object({
+      documentId: Type.Optional(
+        Type.String({ description: "可省略；默认当前 UI 打开文档" }),
+      ),
+      slot: Type.Integer({ description: "1-based 外层块门牌", minimum: 1 }),
+    }),
+    execute: async (_id, params) => {
+      const p = params as { documentId?: string; slot?: number };
+      return asToolResult({
+        documentId: resolveDiffDocumentId(p.documentId, uiDocumentId),
+        op: "remove_slot" as const,
+        slot: requireSlot(p.slot),
+        queued: true,
+      });
+    },
+  };
+}
+
+/** 整篇 LCS Diff：SSE → 前端 Lobe overwriteAll */
+export function overwriteAllTool({ uiDocumentId }: ToolDeps): AgentTool {
+  return {
+    name: "overwrite_all",
+    label: "整篇 Diff 提案",
+    description:
+      "用完整 Markdown 对**当前打开** .md 做块级 LCS Diff 提案，**不写服务器**（≠ overwrite_document）。" +
+      "documentId 可省略。有未决 Diff 时会被前端拒绝。",
+    parameters: Type.Object({
+      documentId: Type.Optional(
+        Type.String({ description: "可省略；默认当前 UI 打开文档" }),
+      ),
+      markdown: Type.String({ description: "完整新稿 Markdown" }),
+    }),
+    execute: async (_id, params) => {
+      const p = params as { documentId?: string; markdown?: string };
+      return asToolResult({
+        documentId: resolveDiffDocumentId(p.documentId, uiDocumentId),
+        op: "overwrite_all" as const,
+        markdown: requireMarkdown(p.markdown),
+        queued: true,
       });
     },
   };
 }
 
 export function lexicalLinesTools(deps: ToolDeps): AgentTool[] {
-  return [getDocumentLexicalLinesTool(deps), setDocumentLexicalLinesTool(deps)];
+  return [
+    getDocumentLexicalLinesTool(deps),
+    setDocumentLexicalLinesTool(deps),
+    updateSlotTool(deps),
+    insertAfterSlotTool(deps),
+    removeSlotTool(deps),
+    overwriteAllTool(deps),
+  ];
 }

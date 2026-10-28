@@ -18,6 +18,7 @@ import { documentCommentsRouter } from "./routes/document-comments.routes.js";
 import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
 import { buildAgentRouter } from "./routes/agent.routes.js";
 import { buildGraphRouter } from "./routes/graph.routes.js";
+import { buildServerSettingsRouter } from "./routes/server-settings.routes.js";
 import { bootstrapAgentRuns } from "./agent/Agent/run-manager.js";
 import { startIndexTimer } from "./search/document-index-manager.js";
 import { ensureLocalEmbeddingModel } from "./search/embedding-model.js";
@@ -88,6 +89,7 @@ export function buildApp(): Application {
   app.use("/api/bookmarks", buildBookmarksRouter());
   app.use("/api/agent", buildAgentRouter());
   app.use("/api/graph", buildGraphRouter());
+  app.use("/api/server-settings", buildServerSettingsRouter());
   // 发表/删除评论：需要认证
   app.use("/api/documents", documentCommentsRouter);
 

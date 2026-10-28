@@ -2031,6 +2031,12 @@
   word-break: break-word;
 }
 
+.mdocs-agent-tool-call-detail--error,
+.mdocs-agent-tool-call-fold--error .mdocs-agent-tool-call-fold-label {
+  color: #a8071a;
+  white-space: pre-wrap;
+}
+
 .mdocs-agent-web-results-fold {
   margin-top: 8px;
 }
@@ -5728,6 +5734,14 @@ button.small {
   margin-bottom: 1em;
 }
 
+/*
+ * Diff：hunk 内部红/绿贴紧；hunk 之间间距由 lobe diffHunkTheme 控制，
+ * 这里不要把 [data-diff-kind] 自身 margin 清零，否则不相关改动会糊在一起。
+ */
+.mdocs-editor [data-diff-kind] > * {
+  margin-block: 0 !important;
+}
+
 .mdocs-editor ol,
 .mdocs-editor ul {
   padding-left: 24px;
@@ -6486,6 +6500,49 @@ strong.label {
 
 .mdocs-version-history-item-meta {
   font-size: 12px;
+}
+
+.mdocs-version-history-preview-inner {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+
+.mdocs-version-history-preview-inner.is-loading {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.mdocs-version-history-preview-busy {
+  position: absolute;
+  inset: auto 16px 12px auto;
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mdocs-surface, #fff) 88%, transparent);
+  font-size: 12px;
+  z-index: 2;
+}
+
+.mdocs-version-preview-markdown {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 24px;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.mdocs-version-preview-markdown > :first-child {
+  margin-top: 0;
+}
+
+.mdocs-version-preview-markdown pre {
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--mdocs-code-bg, #f6f8fa);
 }
 
 .mdocs-version-history-preview {
@@ -7574,7 +7631,8 @@ strong.label {
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
-    overflow: hidden;
+    /* 勿 hidden：域下拉已 portal，但仍避免裁切其它绝对层 */
+    overflow: visible;
   }
 
   /* html：两行堆叠（第一行「导航 + 三角 + 三点」，第二行可折叠操作） */

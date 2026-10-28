@@ -30,3 +30,4 @@
 | [mobile-doc-search-ui-2026-10-14](./mobile-doc-search-ui-2026-10-14.md) | 手机搜索输入被挤没；模式改 MiniSelect；取消全屏 |
 | [mobile-nav-push-vs-table-swipe-2026-10-14](./mobile-nav-push-vs-table-swipe-2026-10-14.md) | 窄屏目录 push；表先滚；收拢压缝；首滑要先点一下 |
 | [comments-slot-and-docchrome-tooltip-2026-10-27](./comments-slot-and-docchrome-tooltip-2026-10-27.md) | 评论须挂 with-comments；顶栏 overflow 裁 CSS tooltip→portal |
+| [vite-mermaid-cjs-dep-blank-screen-2026-10-28](./vite-mermaid-cjs-dep-blank-screen-2026-10-28.md) | mermaid 被 exclude 后其 CJS 依赖裸发→白屏，永远「加载中」 |

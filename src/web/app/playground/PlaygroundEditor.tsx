@@ -29,11 +29,15 @@ import {
   ReactMarkmapPlugin,
   ReactTablePlugin,
   ReactToolbarPlugin,
+  ReactMarkdownPlugin,
+  ReactDiffPlugin,
+  overwriteAll,
+  assertCanPublish,
   type SlashOptions,
   scrollIntoView,
 } from "@lobehub/editor";
 import { Editor, useEditor, withProps } from "@lobehub/editor/react";
-import { Avatar, type CollapseProps, Text } from "@lobehub/ui";
+import { Avatar, Button, type CollapseProps, Text } from "@lobehub/ui";
 import {
   Heading1Icon,
   Heading2Icon,
@@ -311,9 +315,48 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
     });
   }, []);
 
+  const [diffHint, setDiffHint] = useState("");
+
   return (
     <PlaygroundContainer json={json} markdown={markdown} onJSONChange={handleJSONChange} {...props}>
       <Toolbar editor={editor} />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+        <Button
+          onClick={() => {
+            const lexical = editor.getLexicalEditor();
+            if (!lexical) {
+              setDiffHint("编辑器未就绪");
+              return;
+            }
+            const r = overwriteAll(
+              lexical,
+              "第一段：Overwrite All（LCS）改过的正文。\n\n第二段：新增一段会出现绿 hunk。\n\n第三段：接受或拒绝会写回同一 Editor。",
+            );
+            setDiffHint(r.ok ? "overwriteAll 已写入 DiffHunk" : `失败：${r.error}`);
+          }}
+          onMouseDown={(e) => e.preventDefault()}
+          size="small"
+        >
+          Diff: Overwrite All
+        </Button>
+        <Button
+          onClick={() => {
+            const lexical = editor.getLexicalEditor();
+            if (!lexical) return;
+            const gate = assertCanPublish(lexical);
+            setDiffHint(gate.ok ? "assertCanPublish：通过" : `拦截：${gate.error}`);
+          }}
+          onMouseDown={(e) => e.preventDefault()}
+          size="small"
+        >
+          Diff: 检查可否发布
+        </Button>
+        {diffHint ? (
+          <Text fontSize={12} type="secondary">
+            {diffHint}
+          </Text>
+        ) : null}
+      </div>
       <Editor
         className="mdocs-playground-editor"
         content={content}
@@ -337,6 +380,8 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
         pasteVSCodeAsCodeBlock
         placeholder="Type something..."
         plugins={[
+          ReactMarkdownPlugin,
+          ReactDiffPlugin,
           ReactListPlugin,
           ReactLinkPlugin,
           ReactImagePlugin,

@@ -37,12 +37,19 @@ import {
   ReactTablePlugin,
   ReactToolbarPlugin,
   ReactMarkdownPlugin,
+  ReactDiffPlugin,
   OutlinePanel,
   OutlineProvider,
   enUS,
   zhCN,
   useOutlineVisibility,
+  assertCanPublish,
+  insertAfterSlot,
+  overwriteAll,
+  removeSlot,
+  updateSlot,
 } from "@lobehub/editor";
+import type { ApplyAgentDiffFn } from "./lexical-lines/agentDiff";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
 import { Heading1Icon, Heading2Icon, Heading3Icon, History, MinusIcon, Network, SigmaIcon, Table2Icon, ShieldUser, Users, Star, Workflow } from "lucide-react";
@@ -96,7 +103,7 @@ const EMPTY_PARAGRAPH_LEXICAL =
 function formatUploadError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
   const msg = raw.trim();
-  if (/^File too large$/i.test(msg)) return "文件过大（单文件上限 55MB）";
+  if (/^File too large$/i.test(msg)) return "文件过大（超过服务器单文件上限）";
   if (/^unsupported file type$/i.test(msg)) return "不支持的文件类型";
   if (/^not an image$/i.test(msg)) return "不是有效的图片文件";
   return msg || "上传失败";
@@ -207,6 +214,11 @@ interface DocumentEditorProps {
   saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
   /** 帮写进场：导出官方 Markdown（非 convert 纯文本近似） */
   exportMarkdownRef?: React.MutableRefObject<(() => string) | undefined>;
+  /**
+   * 智能助手提案：对 live Lexical 执行 Lobe Diff API
+   *（updateSlot / insertAfterSlot / removeSlot / overwriteAll）。
+   */
+  applyAgentDiffRef?: React.MutableRefObject<ApplyAgentDiffFn | undefined>;
   /** Toast message callback */
   onShowToast?: (message: string) => void;
   /** 版本恢复成功：App 刷新 meta + 正文并清草稿 */
@@ -593,6 +605,33 @@ export function DocumentEditor(props: DocumentEditorProps) {
     };
   });
 
+  useEffect(() => {
+    if (!props.applyAgentDiffRef) return;
+    props.applyAgentDiffRef.current = (op) => {
+      const ed = editorRef.current;
+      const lexical = ed?.getLexicalEditor?.() ?? null;
+      if (!lexical) return { ok: false, error: "编辑器未就绪" };
+      try {
+        if (op.op === "overwrite_all") return overwriteAll(lexical, op.markdown);
+        if (op.op === "update_slot") return updateSlot(lexical, op.slot, op.markdown);
+        if (op.op === "insert_after_slot") {
+          return insertAfterSlot(lexical, op.slot, op.markdown);
+        }
+        return removeSlot(lexical, op.slot);
+      } catch (err) {
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    };
+    return () => {
+      if (props.applyAgentDiffRef) {
+        props.applyAgentDiffRef.current = undefined;
+      }
+    };
+  });
+
   /**
    * 格式化文件大小显示
    */
@@ -646,6 +685,14 @@ export function DocumentEditor(props: DocumentEditorProps) {
   async function publish(): Promise<void> {
     // 如果没有编辑器实例或没有编辑权限，直接返回
     if (!editor || !props.canEdit) return;
+    const lexical = editor.getLexicalEditor();
+    if (lexical) {
+      const gate = assertCanPublish(lexical);
+      if (!gate.ok) {
+        props.onShowError?.(gate.error || "请先接受或拒绝全部 Diff 提案后再发布");
+        return;
+      }
+    }
     const scrollHost = document.querySelector(
       ".mdocs-editor-scroll-host",
     ) as HTMLElement | null;
@@ -933,6 +980,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const plugins = useMemo(
     () => [
       ReactMarkdownPlugin,
+      ReactDiffPlugin,
       ReactListPlugin,
       ReactLinkPlugin,
       ReactImagePlugin,

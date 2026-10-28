@@ -140,15 +140,19 @@
   | `src/web/app/ai-write/markdown-hunks.ts` | `computeLineHunks` |
 - **需求**：[`../requirements/agent-normal-coding-modes/`](../requirements/agent-normal-coding-modes/)
 
-### 智能助手按块提案（LexicalDiff）
+### 智能助手按块提案（DiffHunk）
 
-- **关键词**：`md_format_lexical` `get_document_lexical_lines` `set_document_lexical_lines` `lexical_lines_set` `LexicalDiff` `Accept` `Reject`
-- **结论**：帮写不动；normal 助手试点；提案不写盘；应用进编辑器 Lexical。
+- **关键词**：`md_format_lexical` `get_document_lexical_lines` `set_document_lexical_lines` `update_slot` `insert_after_slot` `remove_slot` `overwrite_all` `lexical_lines_set` `diff_slot_op` `ReactDiffPlugin` `updateSlot` `insertAfterSlot` `removeSlot` `overwriteAll` `assertCanPublish` `Accept` `Reject`
+- **结论**：帮写不动；normal 助手试点；提案不写盘；单槽走 `diff_slot_op` → Lobe slot API；多门牌/旧协议走 `lexical_lines_set` → `proposalToMarkdown` → `overwriteAll`。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/web/app/lexical-lines/LexicalLinesReview.tsx` | `LexicalLinesReview` |
-  | `src/web/app/App.tsx` | `handleLexicalLinesSet` |
+  | `src/server/agent/Agent/tools-lexical-lines.ts` | `update_slot` `insert_after_slot` `remove_slot` `overwrite_all` |
+  | `src/web/app/DocumentEditor.tsx` | `ReactDiffPlugin` `applyAgentDiffRef` `assertCanPublish` |
+  | `src/web/app/lexical-lines/agentDiff.ts` | `ApplyAgentDiffOp` |
+  | `src/web/app/lexical-lines/proposalToMarkdown.ts` | `proposalToMarkdown` |
+  | `src/web/app/App.tsx` | `handleLexicalLinesSet` `handleDiffSlotOp` |
+  | `src/web/app/playground/PlaygroundEditor.tsx` | Diff 试玩按钮 |
 - **需求**：[`../requirements/agent-lexical-lines-diff/`](../requirements/agent-lexical-lines-diff/)
 
 ### Agent 选择卡吸底
@@ -212,7 +216,7 @@
 ### 附件上传（类型政策）
 
 - **关键词**：`upload` `isAllowedAssetUpload` `unsupported file type` `.bin` `link-to-img` `附件`
-- **结论**：**不限制文件类型**（恒 `true`）；无扩展名存 `.bin`；55MB × 24；下载侧 `Content-Type` 走白名单，未登记一律 `application/octet-stream`，故放开上传≠可执行内联。
+- **结论**：**不限制文件类型**（恒 `true`）；无扩展名存 `.bin`；单文件上限 `MDOCS_MAX_UPLOAD_BYTES`（默认 100MiB）× 24；下载侧 `Content-Type` 走白名单，未登记一律 `application/octet-stream`，故放开上传≠可执行内联。
 - **定位**：
   | 路径 | 符号 |
   |------|------|

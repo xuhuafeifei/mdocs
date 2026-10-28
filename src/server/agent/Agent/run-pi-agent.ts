@@ -13,6 +13,7 @@ import {
   isWriteTool,
   toolCallDetailFromArgs,
   toolCallDetailFromResult,
+  toolCallErrorDetail,
   toolCallLabel,
   toolCallPreparingDetail,
   writeToolBodyText,
@@ -299,11 +300,13 @@ function bindAgentEvents(opts: {
     if (event.type === "tool_execution_end") {
       const startDetail = toolStartDetail.get(event.toolCallId);
       toolStartDetail.delete(event.toolCallId);
-      const detail = toolCallDetailFromResult(
-        event.toolName,
-        event.result,
-        startDetail,
-      );
+      const detail = event.isError
+        ? toolCallErrorDetail(event.result, startDetail)
+        : toolCallDetailFromResult(
+            event.toolName,
+            event.result,
+            startDetail,
+          );
       const webResults =
         !event.isError && event.toolName === "web_search"
           ? webResultsFromToolResult(event.result)

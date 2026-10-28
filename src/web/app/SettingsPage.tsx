@@ -54,6 +54,8 @@ import {
   fetchDomainsApi,
   fetchVisitorsDirectoryApi,
   searchDocumentsApi,
+  fetchServerSettingsApi,
+  updateServerSettingsApi,
 } from "../services/endpoints";
 import type { Bookmark, MyDocument, SearchMode, SearchResult } from "../services/endpoints";
 import type { DomainSummary } from "../../shared/types/domain";
@@ -151,6 +153,11 @@ export function SettingsPage(props: {
 
   // ---- 自动编辑开关（打开文档时自动进入编辑模式） ----
   const [autoEdit, setAutoEdit] = useState(() => getBool("mdocs.autoEdit", true));
+
+  // ---- 服务端单文件上传上限（MB，热更新） ----
+  const [uploadLimitMb, setUploadLimitMb] = useState("100");
+  const [uploadLimitBusy, setUploadLimitBusy] = useState(false);
+  const [uploadLimitMsg, setUploadLimitMsg] = useState<string | null>(null);
 
   // ---- 是否展示草稿列表抽屉 ----
   const [showDrafts, setShowDrafts] = useState(false);
@@ -267,6 +274,46 @@ export function SettingsPage(props: {
   useEffect(() => {
     localStorage.setItem("mdocs.autoEdit", String(autoEdit));
   }, [autoEdit]);
+
+  useEffect(() => {
+    if (isDemoMode()) return;
+    let cancelled = false;
+    void fetchServerSettingsApi()
+      .then((s) => {
+        if (cancelled || !mountedRef.current) return;
+        setUploadLimitMb(String(Math.round(s.maxUploadBytes / (1024 * 1024))));
+      })
+      .catch(() => {
+        /* 未登录或旧服务端无此接口时忽略 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleSaveUploadLimit(): Promise<void> {
+    const mb = Number(uploadLimitMb);
+    if (!Number.isFinite(mb) || mb < 1 || mb > 2048 || !Number.isInteger(mb)) {
+      setUploadLimitMsg(t("maxUploadSizeInvalid"));
+      return;
+    }
+    setUploadLimitBusy(true);
+    setUploadLimitMsg(null);
+    try {
+      const s = await updateServerSettingsApi(mb * 1024 * 1024);
+      if (!mountedRef.current) return;
+      setUploadLimitMb(String(Math.round(s.maxUploadBytes / (1024 * 1024))));
+      setUploadLimitMsg(t("maxUploadSizeSaved"));
+      window.setTimeout(() => {
+        if (mountedRef.current) setUploadLimitMsg(null);
+      }, 2000);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setUploadLimitMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (mountedRef.current) setUploadLimitBusy(false);
+    }
+  }
 
   /**
    * 切换到「保存与发布」Tab 时，统计未发布草稿数量用于展示徽标。
@@ -704,6 +751,45 @@ export function SettingsPage(props: {
                   </button>
                 </label>
               </div>
+
+              {/* 单文件上传上限（服务端） */}
+              {!isDemoMode() ? (
+                <div className="mdocs-settings-card">
+                  <div className="mdocs-settings-item">
+                    <span className="mdocs-settings-item-info">
+                      <span className="mdocs-settings-card-title">{t("maxUploadSize")}</span>
+                      <span className="mdocs-settings-item-desc">{t("maxUploadSizeDesc")}</span>
+                    </span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input
+                        type="number"
+                        min={1}
+                        max={2048}
+                        step={1}
+                        value={uploadLimitMb}
+                        onChange={(e) => setUploadLimitMb(e.target.value)}
+                        disabled={uploadLimitBusy}
+                        style={{ width: 88 }}
+                        aria-label={t("maxUploadSize")}
+                      />
+                      <span className="mdocs-settings-item-desc">MB</span>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={uploadLimitBusy}
+                        onClick={() => void handleSaveUploadLimit()}
+                      >
+                        {uploadLimitBusy ? "…" : t("maxUploadSizeSave")}
+                      </button>
+                    </span>
+                  </div>
+                  {uploadLimitMsg ? (
+                    <div className="mdocs-settings-item-desc" style={{ marginTop: 8 }}>
+                      {uploadLimitMsg}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               {/* CLI Token 管理卡片 */}
               <div className="mdocs-settings-card">

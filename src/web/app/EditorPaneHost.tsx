@@ -51,6 +51,9 @@ export function EditorPaneHost(props: {
   onDeleteFolder: (documentId: string, folderPath: string) => void;
   saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
   exportMarkdownRef?: React.MutableRefObject<(() => string) | undefined>;
+  applyAgentDiffRef?: React.MutableRefObject<
+    import("./lexical-lines/agentDiff").ApplyAgentDiffFn | undefined
+  >;
   onShowToast?: (msg: string) => void;
   onShowError?: (msg: string) => void;
   onVersionRestored: (doc: DocumentDetail) => void;
@@ -178,6 +181,7 @@ export function EditorPaneHost(props: {
         }}
         saveBeforeNavRef={props.saveBeforeNavRef}
         exportMarkdownRef={props.exportMarkdownRef}
+        applyAgentDiffRef={props.applyAgentDiffRef}
         onShowToast={props.onShowToast}
         onShowError={props.onShowError}
         onVersionRestored={props.onVersionRestored}

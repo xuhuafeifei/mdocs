@@ -61,6 +61,14 @@
   gap: 4px;
 }
 
+/* 顶栏 header-scroll overflow-x 会裁 absolute 菜单；DomainSelect portal 到 body */
+.mdocs-domain-select-menu--portal {
+  position: fixed;
+  right: auto;
+  min-width: 220px;
+  z-index: 12000;
+}
+
 .mdocs-domain-select-search {
   flex-shrink: 0;
   padding: 2px;

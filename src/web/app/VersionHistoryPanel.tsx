@@ -1,22 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ReactCodePlugin,
-  ReactCodemirrorPlugin,
-  ReactHRPlugin,
-  ReactImagePlugin,
-  ReactLinkPlugin,
-  ReactListPlugin,
-  ReactMarkdownPlugin,
-  ReactMarkmapPlugin,
-  ReactMathPlugin,
-  ReactMeta2dPlugin,
-  ReactTablePlugin,
-} from "@lobehub/editor";
-import { Editor } from "@lobehub/editor/react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useI18n } from "../i18n";
 import { ApiRequestError } from "../services/client";
 import type { DocumentDetail } from "../../shared/types/document";
 import {
+  convertContentApi,
   getDocumentCommitApi,
   listDocumentCommitsApi,
   restoreDocumentVersionApi,
@@ -24,63 +13,84 @@ import {
   type DocumentCommitSummary,
 } from "../services/endpoints";
 
-/** 与 DocumentEditor / LexicalMarkdownBridge 对齐的只读预览插件 */
-const PREVIEW_PLUGINS = [
-  ReactMarkdownPlugin,
-  ReactListPlugin,
-  ReactLinkPlugin,
-  ReactImagePlugin,
-  ReactCodemirrorPlugin,
-  ReactHRPlugin,
-  ReactTablePlugin,
-  ReactMathPlugin,
-  ReactMeta2dPlugin,
-  ReactMarkmapPlugin,
-  ReactCodePlugin,
-];
-
-const EMPTY_PARAGRAPH_LEXICAL =
-  '{"root":{"direction":"ltr","format":"","indent":0,"version":1,"type":"root","children":[{"direction":"ltr","format":"","indent":0,"version":1,"textFormat":0,"textStyle":"","children":[],"type":"paragraph"}]}}';
-
+/**
+ * 版本预览不再挂第二套 Lobe/Lexical Editor。
+ * 生产包 Lexical #38 = setEditorState empty；历史 blob 缺插件节点 / 空 root 时会炸整页。
+ * 统一转 Markdown + react-markdown 只读预览。
+ */
 function detectContentType(content: string): "json" | "markdown" {
   try {
     const parsed = JSON.parse(content) as { root?: { children?: unknown[] } };
-    return parsed?.root?.children ? "json" : "markdown";
+    return parsed?.root && Array.isArray(parsed.root.children) ? "json" : "markdown";
   } catch {
     return "markdown";
   }
 }
 
-function ensureNonEmptyLexical(content: string, contentType: "json" | "markdown"): string {
-  if (!content) return contentType === "json" ? EMPTY_PARAGRAPH_LEXICAL : "";
-  if (contentType !== "json") return content;
+/** 转换失败时从 Lexical JSON 抽纯文本，保证仍能看个大概 */
+function lexicalPlainFallback(content: string): string {
   try {
-    const parsed = JSON.parse(content) as { root?: { children?: unknown[] } };
-    if (parsed?.root && Array.isArray(parsed.root.children) && parsed.root.children.length === 0) {
-      return EMPTY_PARAGRAPH_LEXICAL;
-    }
+    const walk = (node: unknown): string => {
+      if (!node || typeof node !== "object") return "";
+      const rec = node as Record<string, unknown>;
+      if (typeof rec.text === "string") return rec.text;
+      if (!Array.isArray(rec.children)) return "";
+      return rec.children.map(walk).join(rec.type === "paragraph" || rec.type === "heading" ? "\n\n" : "");
+    };
+    const parsed = JSON.parse(content) as { root?: unknown };
+    return walk(parsed.root).trim() || "(空版本)";
   } catch {
-    /* keep */
+    return content.trim() || "(空版本)";
   }
-  return content;
 }
 
 function VersionMdPreview(props: { commitId: string; content: string }) {
-  const contentType = useMemo(() => detectContentType(props.content), [props.content]);
-  const safe = useMemo(
-    () => ensureNonEmptyLexical(props.content, contentType),
-    [props.content, contentType],
-  );
+  const { t } = useI18n();
+  const [markdown, setMarkdown] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMarkdown(null);
+    const raw = props.content ?? "";
+    const kind = detectContentType(raw);
+
+    void (async () => {
+      if (!raw.trim()) {
+        if (!cancelled) setMarkdown("(空版本)");
+        return;
+      }
+      if (kind === "markdown") {
+        if (!cancelled) setMarkdown(raw);
+        return;
+      }
+      try {
+        const converted = await convertContentApi({
+          content: raw,
+          from: "lexical",
+          to: "markdown",
+        });
+        if (!cancelled) setMarkdown(converted.content?.trim() ? converted.content : "(空版本)");
+      } catch {
+        if (!cancelled) setMarkdown(lexicalPlainFallback(raw));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.commitId, props.content]);
+
+  if (markdown === null) {
+    return (
+      <p className="muted" style={{ padding: 16 }}>
+        {t("loading")}
+      </p>
+    );
+  }
+
   return (
-    <div className="mdocs-version-preview-editor">
-      <Editor
-        key={props.commitId}
-        content={safe}
-        type={contentType}
-        editable={false}
-        plugins={PREVIEW_PLUGINS}
-        className="mdocs-document-editor-root"
-      />
+    <div className="mdocs-version-preview-markdown">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
     </div>
   );
 }
@@ -151,15 +161,17 @@ export function VersionHistoryPanel(props: {
     try {
       const data = await listDocumentCommitsApi(props.documentId);
       setItems(data);
-      const visible = hideAuto ? data.filter((c) => c.source !== "auto") : data;
-      const head = visible.find((c) => c.isHead) ?? visible[0] ?? data[0];
-      if (head) setSelectedId(head.commitId);
+      setSelectedId((prev) => {
+        if (prev && data.some((c) => c.commitId === prev)) return prev;
+        const head = data.find((c) => c.isHead) ?? data[0];
+        return head?.commitId ?? null;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  }, [props.documentId, hideAuto]);
+  }, [props.documentId]);
 
   useEffect(() => {
     void load();
@@ -300,16 +312,28 @@ export function VersionHistoryPanel(props: {
               ))}
             </ul>
             <div className="mdocs-version-history-preview">
-              {previewBusy || !preview ? (
+              {!preview ? (
                 <p className="muted" style={{ padding: 16 }}>
                   {t("loading")}
                 </p>
-              ) : fileType === "html" ? (
-                <VersionHtmlPreview content={preview.content} />
-              ) : fileType === "sheet" ? (
-                <VersionSheetPreview content={preview.content} />
               ) : (
-                <VersionMdPreview commitId={preview.commitId} content={preview.content} />
+                <div
+                  className={
+                    "mdocs-version-history-preview-inner" +
+                    (previewBusy ? " is-loading" : "")
+                  }
+                >
+                  {fileType === "html" ? (
+                    <VersionHtmlPreview content={preview.content} />
+                  ) : fileType === "sheet" ? (
+                    <VersionSheetPreview content={preview.content} />
+                  ) : (
+                    <VersionMdPreview commitId={preview.commitId} content={preview.content} />
+                  )}
+                  {previewBusy ? (
+                    <p className="mdocs-version-history-preview-busy muted">{t("loading")}</p>
+                  ) : null}
+                </div>
               )}
             </div>
           </div>

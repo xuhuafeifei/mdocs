@@ -6,6 +6,7 @@ import {
   streamingBodyPreview,
   toolCallDetailFromArgs,
   toolCallDetailFromResult,
+  toolCallErrorDetail,
   toolCallLabel,
   toolCallPreparingDetail,
   writeToolBodyText,
@@ -121,6 +122,19 @@ describe("toolCallDetailFromArgs", () => {
     expect(
       toolCallDetailFromArgs("search_documents", { query: "权限模型" }),
     ).toBe("权限模型");
+  });
+});
+
+describe("toolCallErrorDetail", () => {
+  it("prefers content text / message from tool error result", () => {
+    expect(
+      toolCallErrorDetail({
+        content: [{ type: "text", text: "requireDocumentId is not defined" }],
+      }),
+    ).toBe("requireDocumentId is not defined");
+    expect(toolCallErrorDetail({ message: "boom" })).toBe("boom");
+    expect(toolCallErrorDetail(null, "写入中")).toBe("写入中");
+    expect(toolCallErrorDetail(null)).toBe("工具执行失败");
   });
 });
 

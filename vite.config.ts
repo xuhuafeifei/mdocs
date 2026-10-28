@@ -19,6 +19,10 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    // Transform the shell early so first paint isn't waiting on random discovery order.
+    warmup: {
+      clientFiles: ["./main.tsx", "./app/Router.tsx", "./app/App.tsx", "./i18n/index.ts"],
+    },
   },
   build: {
     outDir: path.resolve(__dirname, "dist/web"),
@@ -81,13 +85,34 @@ export default defineConfig({
     ],
   },
   optimizeDeps: {
+    // First-paint only. Do NOT include `@lobehub/ui` / `@lobehub/editor` here:
+    // their package entries pull Highlighter → shiki (via alias) into a ~16MB
+    // prebundle and leave the UI stuck on「加载中...」for many seconds.
+    // Editor/UI are discovered when DocumentEditor / playground actually load.
     include: [
-      "@lobehub/ui",
       "motion",
+      "motion/react",
       "lucide-react",
       "react-router-dom",
+      // mermaid 被 exclude 后其 CJS 依赖不会进预构建，浏览器直接吃到裸 CJS：
+      // 首屏就报 "does not provide an export named 'sanitizeUrl'"（整页白屏 / 停在「加载中…」）。
+      // 逐个 nested include 做 interop；diagram 相关的 CJS 依赖在首次渲染图表时才会加载。
+      "mermaid > dayjs",
+      "mermaid > dayjs/plugin/advancedFormat",
+      "mermaid > dayjs/plugin/customParseFormat",
+      "mermaid > dayjs/plugin/duration",
+      "mermaid > dayjs/plugin/isoWeek",
+      "mermaid > @braintree/sanitize-url",
+      "mermaid > roughjs",
+      "mermaid > d3-sankey",
+      "mermaid > cytoscape-fcose",
+      "mermaid > cytoscape-cose-bilkent",
     ],
-    // Note: do NOT exclude @lobehub/editor — it pulls CJS deps (e.g. eventemitter3)
-    // that need Vite dep pre-bundle interop (see comment at top of this file).
+    // Note: @lobehub/editor has CJS deps (e.g. eventemitter3) that need interop —
+    // Vite will optimize it on first editor open (may briefly re-optimize once).
+    // mermaid 11 用相对路径动态加载 diagram chunks；预构建会改写成 .vite/deps/
+    // 下的假路径（如 sequenceDiagram-*.js），清缓存后就会 Failed to fetch。
+    // Keep shiki out of dep prebundle so theme/lang dynamic imports stay lazy.
+    exclude: ["mermaid", "shiki", "@shikijs/langs"],
   },
 });

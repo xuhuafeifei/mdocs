@@ -24,6 +24,8 @@ export interface AppConfig {
   webDistDir: string;
   logging: LoggingConfig;
   defaultDomainId: string;
+  /** 单文件上传上限（字节）：资源附件 + Agent 附件 + link-to-img；环境变量 MDOCS_MAX_UPLOAD_BYTES，默认 100MiB */
+  maxUploadBytes: number;
 }
 
 /** 日志配置子对象，控制输出级别、样式与文件保留策略。 */
@@ -81,6 +83,8 @@ export function getConfig(): AppConfig {
       : defaultWebDistDir,
     logging,
     defaultDomainId: "default",
+    /** 初始值；运行时请用 getMaxUploadBytes()（设置页可热更新） */
+    maxUploadBytes: 100 * 1024 * 1024,
   };
   return cached;
 }

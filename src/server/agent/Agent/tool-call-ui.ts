@@ -24,6 +24,10 @@ const TOOL_LABELS: Record<string, string> = {
   get_working_document: "读取帮写工作稿",
   set_markdown_document: "写入帮写正文",
   set_document_lexical_lines: "按块设置提案",
+  update_slot: "更新文档块",
+  insert_after_slot: "在块后插入",
+  remove_slot: "删除文档块",
+  overwrite_all: "整篇 Diff 提案",
   get_now: "获取当前时间",
   set_thinking_level: "设置思考强度",
   mdocs_manual_content: "查阅手册",
@@ -53,6 +57,10 @@ const WRITE_TOOLS = new Set([
   "replace_document_markdown",
   "set_markdown_document",
   "set_document_lexical_lines",
+  "update_slot",
+  "insert_after_slot",
+  "remove_slot",
+  "overwrite_all",
   "sheet_overwrite",
   "sheet_set_cells",
   "sheet_update_row",
@@ -176,6 +184,13 @@ export function writeToolBodyText(toolName: string, source: unknown): string {
   if (!a) return "";
 
   if (toolName === "set_markdown_document") {
+    return String(a.markdown ?? "");
+  }
+  if (
+    toolName === "update_slot" ||
+    toolName === "insert_after_slot" ||
+    toolName === "overwrite_all"
+  ) {
     return String(a.markdown ?? "");
   }
   if (toolName === "overwrite_document") {
@@ -312,6 +327,62 @@ function previewFromFallback(fallback?: string): string {
   if (!fallback) return "";
   const nl = fallback.indexOf("\n");
   return nl >= 0 ? fallback.slice(nl + 1) : "";
+}
+
+/** 失败态：抽出可读错误文案给前端卡片 */
+export function toolCallErrorDetail(
+  result: unknown,
+  fallback?: string,
+): string {
+  const text = extractErrorText(result).trim();
+  if (text) return text.length > 2400 ? `${text.slice(0, 2400)}…` : text;
+  const fb = String(fallback ?? "").trim();
+  return fb || "工具执行失败";
+}
+
+function extractErrorText(result: unknown): string {
+  if (result == null) return "";
+  if (typeof result === "string") return result;
+  if (typeof result !== "object") return String(result);
+  const r = result as {
+    content?: unknown;
+    details?: unknown;
+    message?: unknown;
+    error?: unknown;
+  };
+  if (typeof r.message === "string" && r.message.trim()) return r.message;
+  if (typeof r.error === "string" && r.error.trim()) return r.error;
+  if (r.error && typeof r.error === "object") {
+    const msg = (r.error as { message?: unknown }).message;
+    if (typeof msg === "string" && msg.trim()) return msg;
+  }
+  if (Array.isArray(r.content)) {
+    const parts = r.content
+      .map((c) => {
+        if (!c || typeof c !== "object") return "";
+        const block = c as { type?: string; text?: unknown };
+        if (block.type === "text" && typeof block.text === "string") return block.text;
+        return "";
+      })
+      .filter(Boolean);
+    if (parts.length > 0) return parts.join("\n");
+  }
+  if (typeof r.details === "string" && r.details.trim()) return r.details;
+  if (r.details && typeof r.details === "object") {
+    const d = r.details as { message?: unknown; error?: unknown };
+    if (typeof d.message === "string" && d.message.trim()) return d.message;
+    if (typeof d.error === "string" && d.error.trim()) return d.error;
+    try {
+      return JSON.stringify(r.details, null, 2);
+    } catch {
+      /* ignore */
+    }
+  }
+  try {
+    return JSON.stringify(result, null, 2);
+  } catch {
+    return String(result);
+  }
 }
 
 /** 调用结束时：优先用 result.details；写工具保留可滚动正文 */

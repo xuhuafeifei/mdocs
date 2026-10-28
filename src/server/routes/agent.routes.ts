@@ -28,7 +28,7 @@ import {
   allowedUploadAccept,
   getAttachmentStore,
 } from "../agent/attachments/index.js";
-import { agentAttachmentUpload } from "../agent/attachments/upload.js";
+import { createAgentAttachmentUpload } from "../agent/attachments/upload.js";
 import { resolveUserChoice, expireUserChoice, cancelUserChoice } from "../agent/Agent/choice-pending.js";
 import { resolveEditorDraft } from "../agent/Agent/editor-draft-wait.js";
 import {
@@ -80,7 +80,16 @@ export function buildAgentRouter(): Router {
     res.json({ data: { accept: allowedUploadAccept() } });
   });
 
-  router.post("/attachments", agentAttachmentUpload.single("file"), async (req, res) => {
+  router.post("/attachments", (req, res, next) => {
+    createAgentAttachmentUpload().single("file")(req, res, (err) => {
+      if (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        res.status(400).json({ error: { code: "BAD_REQUEST", message: msg } });
+        return;
+      }
+      next();
+    });
+  }, async (req, res) => {
     if (!req.visitor) {
       res.status(401).json({ error: { code: "UNAUTHORIZED", message: "login required" } });
       return;

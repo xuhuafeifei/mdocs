@@ -314,5 +314,40 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
         });
       }
     }
+
+    if (
+      event.toolName === "update_slot" ||
+      event.toolName === "insert_after_slot" ||
+      event.toolName === "remove_slot" ||
+      event.toolName === "overwrite_all"
+    ) {
+      const documentId = String(details?.documentId ?? "").trim();
+      const op =
+        details?.op === "update_slot" ||
+        details?.op === "insert_after_slot" ||
+        details?.op === "remove_slot" ||
+        details?.op === "overwrite_all"
+          ? details.op
+          : (event.toolName as
+              | "update_slot"
+              | "insert_after_slot"
+              | "remove_slot"
+              | "overwrite_all");
+      const slot =
+        typeof details?.slot === "number" && Number.isFinite(details.slot)
+          ? details.slot
+          : undefined;
+      const markdown =
+        typeof details?.markdown === "string" ? details.markdown : undefined;
+      if (documentId) {
+        onEvent({
+          type: "diff_slot_op",
+          documentId,
+          op,
+          ...(slot != null ? { slot } : {}),
+          ...(markdown != null ? { markdown } : {}),
+        });
+      }
+    }
   };
 }

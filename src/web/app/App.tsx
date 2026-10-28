@@ -10,7 +10,7 @@
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, PanelRightClose, Search, Star, Table } from "lucide-react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useMatch, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
 import type { ActiveDocumentMeta, DocumentDetail, VersionConflictDetails } from "../../shared/types/document";
@@ -48,7 +48,6 @@ import {
 import { VisitorRegisterDialog } from "./VisitorRegisterDialog";
 import { VisitorIdNotice } from "./VisitorIdNotice";
 import { DocumentTree, type TreeContextMenu as TreeContextMenuPayload } from "./DocumentTree";
-import { GraphPage } from "./GraphPage";
 import { TreeContextMenu } from "./TreeContextMenu";
 import { DomainSelect } from "./DomainSelect";
 import {
@@ -95,6 +94,7 @@ import { aiWriteResultToHtml, htmlToAiWriteSeed } from "./ai-write/htmlAiWrite";
 import { installAssetLinkDownloads } from "./assetLinkDownload";
 import { FILE_TYPE } from "../../shared/file-types";
 import { EditorPaneHost } from "./EditorPaneHost";
+import type { ApplyAgentDiffFn } from "./lexical-lines/agentDiff";
 import type { RecentDocTabsProps } from "./RecentDocTabs";
 import {
   clearSecondaryRecentDocTabs,
@@ -127,7 +127,7 @@ import "./merge.css";
 import "./domain.css";
 import "./comments.css";
 
-/** 重依赖按需加载：首屏只拉壳，编辑器/助手/设置进独立 chunk */
+/** 重依赖按需加载：首屏只拉壳，编辑器/助手/设置/图谱进独立 chunk */
 const SettingsPage = lazy(() =>
   import("./SettingsPage").then((m) => ({ default: m.SettingsPage })),
 );
@@ -139,8 +139,7 @@ const AiWriteWorkbench = lazy(() =>
   import("./ai-write/AiWriteWorkbench").then((m) => ({ default: m.AiWriteWorkbench })),
 );
 const MergeView = lazy(() => import("./MergeView").then((m) => ({ default: m.MergeView })));
-type LexicalLinesProposal = import("./lexical-lines/LexicalLinesReview").LexicalLinesProposal;
-
+const GraphPage = lazy(() => import("./GraphPage").then((m) => ({ default: m.GraphPage })));
 type Phase = "loading" | "needsRegister" | "ready";
 
 /**
@@ -270,8 +269,9 @@ export function App() {
   const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
   const createDropdownRef = useRef<HTMLDivElement>(null);
 
-  // ---- 路由参数：URL 中的文档 ID ----
-  const { documentId } = useParams();
+  // ---- 路由参数：URL 中的文档 ID（Router 用 path="*" 保 App 不重挂，故用 useMatch）----
+  const docMatch = useMatch("/doc/:documentId");
+  const documentId = docMatch?.params.documentId;
 
   // ---- 路由导航函数 ----
   const navigate = useNavigate();
@@ -465,53 +465,120 @@ export function App() {
     fileType: string;
   } | null>(null);
 
-  /** 智能助手按块提案（LexicalDiff 审阅，不写服务器） */
-  const [lexicalLinesProposal, setLexicalLinesProposal] =
-    useState<LexicalLinesProposal | null>(null);
+  /**
+   * Diff 只能作用在当前 live Editor。助手若带了别的 documentId（常见于会话里旧文残留），
+   * 仍对当前打开文档落 Diff，不整单丢弃。
+   */
+  function guardAgentDiffTarget(requestedDocumentId: string): boolean {
+    const live = editorContentRef.current;
+    if (!live?.content?.trim()) {
+      setAlertMessage("请先打开一篇文档再接收 Diff 提案（Diff 只能写进当前编辑器）");
+      return false;
+    }
+    if (
+      requestedDocumentId &&
+      live.documentId !== requestedDocumentId
+    ) {
+      const openName = live.displayName?.trim() || "当前文档";
+      setMessage(
+        `助手指定了另一篇文档，已改为对当前打开的「${openName}」写入 Diff`,
+      );
+      window.setTimeout(() => setMessage(null), 2800);
+    }
+    return true;
+  }
 
+  function applyAgentDiffWithToast(
+    applyArg: Parameters<ApplyAgentDiffFn>[0],
+  ): void {
+    const apply = applyAgentDiffRef.current;
+    if (!apply) {
+      setAlertMessage("编辑器未就绪，无法写入 Diff");
+      return;
+    }
+    const result = apply(applyArg);
+    if (!result.ok) {
+      setAlertMessage(result.error || "写入 Diff 失败");
+      return;
+    }
+    setMessage("已写入 Diff 提案，请在编辑器中 Accept / Reject");
+    window.setTimeout(() => setMessage(null), 2500);
+  }
+
+  /** 智能助手按块提案：合成 MD → overwriteAll（不写服务器） */
   function handleLexicalLinesSet(payload: {
     documentId: string;
     mode: "patch_lines" | "replace_all";
     lines: Record<string, string>;
     markdown?: string;
   }): void {
-    const live = editorContentRef.current;
-    const baseLexicalJson =
-      live && live.documentId === payload.documentId
-        ? live.content
-        : live?.content ?? "";
-    if (!baseLexicalJson.trim()) {
-      setMessage("请先打开目标文档再接收按块提案");
-      window.setTimeout(() => setMessage(null), 2000);
-      return;
-    }
-    if (live && live.documentId !== payload.documentId) {
-      setMessage("提案文档与当前打开文档不一致，已忽略");
-      window.setTimeout(() => setMessage(null), 2000);
-      return;
-    }
-    setLexicalLinesProposal({
-      documentId: payload.documentId,
-      mode: payload.mode,
-      lines: payload.lines,
-      markdown: payload.markdown,
-      baseLexicalJson,
-    });
+    if (!guardAgentDiffTarget(payload.documentId)) return;
+    const baseLexicalJson = editorContentRef.current!.content;
+    void (async () => {
+      try {
+        // Dynamic import keeps @lobehub/editor off the first-paint graph.
+        const { proposalToMarkdown } = await import("./lexical-lines/proposalToMarkdown");
+        const md = proposalToMarkdown(
+          baseLexicalJson,
+          payload.mode,
+          payload.lines,
+          payload.markdown,
+        );
+        applyAgentDiffWithToast({ op: "overwrite_all", markdown: md });
+      } catch (err) {
+        setAlertMessage(
+          err instanceof Error ? err.message : "提案 Markdown 合成失败",
+        );
+      }
+    })();
   }
 
-  function applyLexicalLinesToEditor(lexicalJson: string): void {
-    const prev = editorContentRef.current;
-    if (!prev || !lexicalLinesProposal) return;
-    if (prev.documentId !== lexicalLinesProposal.documentId) return;
-    setEditorContent({ ...prev, content: lexicalJson });
-    setContentRevision((n) => n + 1);
-    setLexicalLinesProposal(null);
+  /** 智能助手 slot Diff：直接调 Lobe updateSlot / insertAfter / remove / overwriteAll */
+  function handleDiffSlotOp(payload: {
+    documentId: string;
+    op: "update_slot" | "insert_after_slot" | "remove_slot" | "overwrite_all";
+    slot?: number;
+    markdown?: string;
+  }): void {
+    if (!guardAgentDiffTarget(payload.documentId)) return;
+    if (payload.op === "overwrite_all") {
+      if (typeof payload.markdown !== "string") {
+        setMessage("overwrite_all 缺少 markdown");
+        window.setTimeout(() => setMessage(null), 2000);
+        return;
+      }
+      applyAgentDiffWithToast({
+        op: "overwrite_all",
+        markdown: payload.markdown,
+      });
+      return;
+    }
+    if (payload.op === "remove_slot") {
+      if (typeof payload.slot !== "number") {
+        setMessage("remove_slot 缺少 slot");
+        window.setTimeout(() => setMessage(null), 2000);
+        return;
+      }
+      applyAgentDiffWithToast({ op: "remove_slot", slot: payload.slot });
+      return;
+    }
+    if (typeof payload.slot !== "number" || typeof payload.markdown !== "string") {
+      setMessage(`${payload.op} 缺少 slot 或 markdown`);
+      window.setTimeout(() => setMessage(null), 2000);
+      return;
+    }
+    applyAgentDiffWithToast({
+      op: payload.op,
+      slot: payload.slot,
+      markdown: payload.markdown,
+    });
   }
 
   // ---- 导航前保存草稿的引用 ----
   // DocumentEditor 会通过这个 ref 暴露 saveDraft 方法
   const saveBeforeNavRef = useRef<(() => Promise<void>) | undefined>(undefined);
   const exportMarkdownRef = useRef<(() => string) | undefined>(undefined);
+  const applyAgentDiffRef = useRef<ApplyAgentDiffFn | undefined>(undefined);
 
   // ---- 手动发布说明弹框（Promise 桥）----
   const [publishMsgPrompt, setPublishMsgPrompt] = useState<{
@@ -2250,6 +2317,7 @@ export function App() {
                   }
                   onProvideEditorDraft={provideEditorDraft}
                   onLexicalLinesSet={handleLexicalLinesSet}
+                  onDiffSlotOp={handleDiffSlotOp}
                 />
               </Suspense>
             ) : (
@@ -2364,16 +2432,18 @@ export function App() {
           {/* ========== 主内容区 ========== */}
           <main className="mdocs-main">
             {focus?.kind === "graph" ? (
-              <GraphPage
-                key={`${focus.scope}-${focus.resourceId}`}
-                scope={focus.scope}
-                resourceId={focus.resourceId}
-                name={focus.name}
-                onClose={closeGraph}
-                onOpenDocument={(docId) => {
-                  void guardNavigate(() => navigate(`/doc/${docId}`));
-                }}
-              />
+              <Suspense fallback={<div className="mdocs-loading muted">{t("loading")}</div>}>
+                <GraphPage
+                  key={`${focus.scope}-${focus.resourceId}`}
+                  scope={focus.scope}
+                  resourceId={focus.resourceId}
+                  name={focus.name}
+                  onClose={closeGraph}
+                  onOpenDocument={(docId) => {
+                    void guardNavigate(() => navigate(`/doc/${docId}`));
+                  }}
+                />
+              </Suspense>
             ) : activeDocMeta && editorContent && editorContent.documentId === activeDocMeta.documentId ? (
               <div
                 className={"mdocs-main-editor-stack" + (pcSplitActive ? " is-split" : "")}
@@ -2425,6 +2495,7 @@ export function App() {
                     onDeleteFolder={(id, p) => requestDeleteFolder(id, p)}
                     saveBeforeNavRef={saveBeforeNavRef}
                     exportMarkdownRef={exportMarkdownRef}
+                    applyAgentDiffRef={applyAgentDiffRef}
                     onShowToast={setMessage}
                     onShowError={setAlertMessage}
                     onVersionRestored={(doc) => void handleVersionRestored(doc)}
@@ -2439,14 +2510,6 @@ export function App() {
                       if (activeDocMeta) setFocus({ kind: "document", documentId: activeDocMeta.documentId });
                     }}
                     recentTabsProps={buildRecentTabsProps("primary")}
-                    reviewProposal={
-                      lexicalLinesProposal &&
-                      lexicalLinesProposal.documentId === activeDocMeta.documentId
-                        ? lexicalLinesProposal
-                        : null
-                    }
-                    onReviewClose={() => setLexicalLinesProposal(null)}
-                    onReviewApply={applyLexicalLinesToEditor}
                     commentsSlot={
                       commentPanelOpen && focusedPane === "primary" ? (
                         <CommentsPanel
@@ -3168,6 +3231,7 @@ export function App() {
                 }
                 onProvideEditorDraft={provideEditorDraft}
                 onLexicalLinesSet={handleLexicalLinesSet}
+                onDiffSlotOp={handleDiffSlotOp}
               />
             </Suspense>
           ) : null}

@@ -5,7 +5,10 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router-dom";
-import { ConfigProvider, ThemeProvider } from "@lobehub/ui";
+/** Deep imports — barrel `@lobehub/ui` pulls Highlighter/shiki into the first paint.
+ * Package exports map `./es/*.mjs`, so paths must include `/index`. */
+import ConfigProvider from "@lobehub/ui/es/ConfigProvider/index";
+import ThemeProvider from "@lobehub/ui/es/ThemeProvider/index";
 import { motion } from "motion/react";
 import { Router } from "./app/Router";
 import { I18nProvider } from "./i18n";

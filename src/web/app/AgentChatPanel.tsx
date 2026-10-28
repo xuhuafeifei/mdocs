@@ -638,19 +638,25 @@ function ToolCallDetailScroll({
   detail,
   followTail,
   grow,
+  error,
 }: {
   detail: string;
   followTail: boolean;
   grow?: boolean;
+  /** 失败态：红字展示错误原文 */
+  error?: boolean;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
   const animRef = useRef(0);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(error));
   const nl = detail.indexOf("\n");
   const meta = nl >= 0 ? detail.slice(0, nl) : detail;
   const body = nl >= 0 ? detail.slice(nl + 1) : "";
   const scrollable = body.length > 0;
+  const detailClass =
+    "mdocs-agent-tool-call-detail" +
+    (error ? " mdocs-agent-tool-call-detail--error" : "");
 
   useLayoutEffect(() => {
     if (!open || !followTail || !scrollable || !bodyRef.current) return;
@@ -678,7 +684,7 @@ function ToolCallDetailScroll({
 
   if (!scrollable) {
     return (
-      <p className="mdocs-agent-tool-call-detail">
+      <p className={detailClass}>
         <span
           className={
             "mdocs-agent-tool-call-fold-label" + (followTail ? " live" : "")
@@ -692,7 +698,10 @@ function ToolCallDetailScroll({
 
   return (
     <details
-      className="mdocs-agent-tool-call-fold"
+      className={
+        "mdocs-agent-tool-call-fold" +
+        (error ? " mdocs-agent-tool-call-fold--error" : "")
+      }
       open={open}
       onToggle={(e) => {
         setOpen((e.currentTarget as HTMLDetailsElement).open);
@@ -715,7 +724,8 @@ function ToolCallDetailScroll({
       <div
         ref={bodyRef}
         className={
-          "mdocs-agent-tool-call-detail scrollable" +
+          detailClass +
+          " scrollable" +
           (grow ? " grow" : "") +
           (followTail ? " live" : "")
         }
@@ -1140,6 +1150,12 @@ export const AgentChatPanel = forwardRef<
       lines: Record<string, string>;
       markdown?: string;
     }) => void;
+    onDiffSlotOp?: (payload: {
+      documentId: string;
+      op: "update_slot" | "insert_after_slot" | "remove_slot" | "overwrite_all";
+      slot?: number;
+      markdown?: string;
+    }) => void;
     onSendingChange?: (sending: boolean) => void;
     onSessionId?: (sessionId: string | null) => void;
   }
@@ -1174,6 +1190,7 @@ export const AgentChatPanel = forwardRef<
     baseMarkdown,
     onMarkdownSet,
     onLexicalLinesSet,
+    onDiffSlotOp,
     onSendingChange,
     onSessionId,
   } = props;
@@ -1975,6 +1992,13 @@ export const AgentChatPanel = forwardRef<
         documentId: event.documentId,
         mode: event.mode,
         lines: event.lines ?? {},
+        ...(event.markdown != null ? { markdown: event.markdown } : {}),
+      });
+    } else if (event.type === "diff_slot_op") {
+      onDiffSlotOp?.({
+        documentId: event.documentId,
+        op: event.op,
+        ...(event.slot != null ? { slot: event.slot } : {}),
         ...(event.markdown != null ? { markdown: event.markdown } : {}),
       });
     } else if (event.type === "tree_changed") {
@@ -2848,9 +2872,14 @@ export const AgentChatPanel = forwardRef<
                                         {statusLabel}
                                       </span>
                                     </div>
-                                    {block.detail ? (
+                                    {block.detail || block.status === "error" ? (
                                       <ToolCallDetailScroll
-                                        detail={block.detail}
+                                        detail={
+                                          block.detail ||
+                                          (block.status === "error"
+                                            ? "工具执行失败（无详细信息）"
+                                            : "")
+                                        }
                                         followTail={
                                           block.status === "preparing" ||
                                           block.status === "running"
@@ -2864,6 +2893,7 @@ export const AgentChatPanel = forwardRef<
                                               "overwrite_document" ||
                                             block.toolName === "web_fetch")
                                         }
+                                        error={block.status === "error"}
                                       />
                                     ) : null}
                                     {block.webResults &&

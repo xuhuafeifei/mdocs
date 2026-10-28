@@ -80,6 +80,10 @@ describe("createToolsForMode", () => {
       "suggest_document_merge_message",
       "get_document_lexical_lines",
       "set_document_lexical_lines",
+      "update_slot",
+      "insert_after_slot",
+      "remove_slot",
+      "overwrite_all",
       ...USER_SKILL_NAMES,
     ]);
   });
@@ -115,6 +119,10 @@ describe("createToolsForMode", () => {
       "suggest_document_merge_message",
       "get_document_lexical_lines",
       "set_document_lexical_lines",
+      "update_slot",
+      "insert_after_slot",
+      "remove_slot",
+      "overwrite_all",
       ...USER_SKILL_NAMES,
     ]);
   });

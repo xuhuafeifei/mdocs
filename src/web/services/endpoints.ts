@@ -66,6 +66,24 @@ export function loginWithPasswordApi(
 /**
  * 为当前访客设置密码。
  */
+export type ServerSettings = {
+  maxUploadBytes: number;
+  minUploadBytes: number;
+  maxUploadBytesCap: number;
+  defaultUploadBytes: number;
+};
+
+export function fetchServerSettingsApi(): Promise<ServerSettings> {
+  return api<ServerSettings>("/api/server-settings");
+}
+
+export function updateServerSettingsApi(maxUploadBytes: number): Promise<ServerSettings> {
+  return api<ServerSettings>("/api/server-settings", {
+    method: "PUT",
+    body: JSON.stringify({ maxUploadBytes }),
+  });
+}
+
 export function setPasswordApi(password: string): Promise<{ ok: boolean }> {
   return api<{ ok: boolean }>("/api/visitors/set-password", {
     method: "POST",
@@ -959,6 +977,13 @@ export type AgentStreamEvent =
       documentId: string;
       mode: "patch_lines" | "replace_all";
       lines: Record<string, string>;
+      markdown?: string;
+    }
+  | {
+      type: "diff_slot_op";
+      documentId: string;
+      op: "update_slot" | "insert_after_slot" | "remove_slot" | "overwrite_all";
+      slot?: number;
       markdown?: string;
     }
   | {

@@ -4,14 +4,12 @@ import path from "node:path";
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { getConfig } from "../config/index.js";
+import { getMaxUploadBytes } from "../config/server-settings.js";
 import { getDb } from "../db/connection.js";
 import { findDocumentById } from "../db/repositories/document.repo.js";
 import { useLogger } from "../logger/logger.js";
 
 const log = useLogger("assets-route");
-
-// 单文件最大 55 MB（附件：zip / 音频等）
-const MAX_BYTES = 55 * 1024 * 1024;
 
 /** Images only — used by link-to-img remote fetch. */
 const IMAGE_EXT = new Set([
@@ -234,7 +232,7 @@ function createUploader() {
         cb(null, `${crypto.randomUUID()}${ext}`);
       },
     }),
-    limits: { fileSize: MAX_BYTES, files: 24 },
+    limits: { fileSize: getMaxUploadBytes(), files: 24 },
     fileFilter: (_req, file, cb) => {
       if (!isAllowedAssetUpload(file.originalname, file.mimetype)) {
         cb(new Error("unsupported file type"));
@@ -289,17 +287,17 @@ export function serveAssetFile(req: Request, res: Response): void {
  * @returns Express Router 实例
  */
 export function buildAssetsUploadRouter(): ReturnType<typeof Router> {
-  const upload = createUploader();
   const router = Router();
 
   /**
    * POST /upload
    * 批量上传图片资源。先校验文档归属权，再将文件保存并返回公开访问路径。
+   * 每次请求新建 multer，以便读取最新 maxUploadBytes（设置页热更新）。
    */
   router.post(
     "/upload",
     (req: Request, res: Response, next) => {
-      upload.array("file[]", 20)(req, res, (err: unknown) => {
+      createUploader().array("file[]", 20)(req, res, (err: unknown) => {
         if (err) {
           res.status(400).json(vditorError(err instanceof Error ? err.message : "upload failed").body);
           return;
@@ -398,7 +396,7 @@ export function buildAssetsUploadRouter(): ReturnType<typeof Router> {
       }
       const buf = Buffer.from(await r.arrayBuffer());
       // 校验下载内容大小
-      if (buf.length > MAX_BYTES) {
+      if (buf.length > getMaxUploadBytes()) {
         res.status(400).json(vditorError("image too large").body);
         return;
       }
