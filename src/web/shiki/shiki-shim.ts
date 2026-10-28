@@ -40,26 +40,22 @@ function loadRuntime(): Promise<Runtime> {
   return runtimePromise;
 }
 
-export const codeToHtml: Runtime["codeToHtml"] = ((...args) =>
-  loadRuntime().then((m) => m.codeToHtml(...args))) as Runtime["codeToHtml"];
-
-export const codeToHast: Runtime["codeToHast"] = ((...args) =>
-  loadRuntime().then((m) => m.codeToHast(...args))) as Runtime["codeToHast"];
-
-export const codeToTokens: Runtime["codeToTokens"] = ((...args) =>
-  loadRuntime().then((m) => m.codeToTokens(...args))) as Runtime["codeToTokens"];
-
-export const codeToTokensBase: Runtime["codeToTokensBase"] = ((...args) =>
-  loadRuntime().then((m) => m.codeToTokensBase(...args))) as Runtime["codeToTokensBase"];
-
-export const codeToTokensWithThemes: Runtime["codeToTokensWithThemes"] = ((...args) =>
-  loadRuntime().then((m) => m.codeToTokensWithThemes(...args))) as Runtime["codeToTokensWithThemes"];
-
-export const getSingletonHighlighter: Runtime["getSingletonHighlighter"] = ((...args) =>
-  loadRuntime().then((m) => m.getSingletonHighlighter(...args))) as Runtime["getSingletonHighlighter"];
-
-export const getLastGrammarState: Runtime["getLastGrammarState"] = ((...args) =>
-  loadRuntime().then((m) => m.getLastGrammarState(...args))) as Runtime["getLastGrammarState"];
-
-export const createHighlighter: Runtime["createHighlighter"] = ((...args) =>
-  loadRuntime().then((m) => m.createHighlighter(...args))) as Runtime["createHighlighter"];
+// lobehub only needs these via dynamic `import("shiki")`; keep typings loose.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export const codeToHtml = ((...args: any[]) =>
+  loadRuntime().then((m) => (m.codeToHtml as any)(...args))) as any;
+export const codeToHast = ((...args: any[]) =>
+  loadRuntime().then((m) => (m.codeToHast as any)(...args))) as any;
+export const codeToTokens = ((...args: any[]) =>
+  loadRuntime().then((m) => (m.codeToTokens as any)(...args))) as any;
+export const codeToTokensBase = ((...args: any[]) =>
+  loadRuntime().then((m) => (m.codeToTokensBase as any)(...args))) as any;
+export const codeToTokensWithThemes = ((...args: any[]) =>
+  loadRuntime().then((m) => (m.codeToTokensWithThemes as any)(...args))) as any;
+export const getSingletonHighlighter = ((...args: any[]) =>
+  loadRuntime().then((m) => (m.getSingletonHighlighter as any)(...args))) as any;
+export const getLastGrammarState = ((...args: any[]) =>
+  loadRuntime().then((m) => (m.getLastGrammarState as any)(...args))) as any;
+export const createHighlighter = ((...args: any[]) =>
+  loadRuntime().then((m) => (m.createHighlighter as any)(...args))) as any;
+/* eslint-enable @typescript-eslint/no-explicit-any */

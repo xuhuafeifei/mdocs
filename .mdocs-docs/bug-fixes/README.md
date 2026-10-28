@@ -31,3 +31,5 @@
 | [mobile-nav-push-vs-table-swipe-2026-10-14](./mobile-nav-push-vs-table-swipe-2026-10-14.md) | 窄屏目录 push；表先滚；收拢压缝；首滑要先点一下 |
 | [comments-slot-and-docchrome-tooltip-2026-10-27](./comments-slot-and-docchrome-tooltip-2026-10-27.md) | 评论须挂 with-comments；顶栏 overflow 裁 CSS tooltip→portal |
 | [vite-mermaid-cjs-dep-blank-screen-2026-10-28](./vite-mermaid-cjs-dep-blank-screen-2026-10-28.md) | mermaid 被 exclude 后其 CJS 依赖裸发→白屏，永远「加载中」 |
+| [lobehub-ui-deep-import-named-export-2026-10-28](./lobehub-ui-deep-import-named-export-2026-10-28.md) | `@lobehub/ui/es/*` 只有 default，写成具名导入→白屏，症状与上一条相同 |
+| [overwrite-all-false-diff-hunks-2026-10-28](./overwrite-all-false-diff-hunks-2026-10-28.md) | overwrite_all 假 Diff + 红绿贴紧；比较放宽不强制同源 JSON（fork.35） |

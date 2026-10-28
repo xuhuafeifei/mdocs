@@ -20,6 +20,7 @@
 | [document-delete-recovery](./document-delete-recovery/设计契约.md) | **已同意**：删文审计 `recovery` + restore + deleted 列表 |
 | [document-trash-ui](./document-trash-ui/设计契约.md) | **已同意**：设置页回收站（接 deleted/restore） |
 | [document-version-restore](./document-version-restore/设计契约.md) | **已同意**：文章选历史版恢复（旧内容新 commit） |
+| [version-history-compare-fullscreen](./version-history-compare-fullscreen/设计契约.md) | **已同意 / 已实现**：版本历史双版 `LexicalDiff` 对比 + 面板全屏 |
 | [cli-multi-token](./cli-multi-token/设计契约.md) | **已同意**：多 CLI Token + 启停 + 硬删 |
 | [agent-md-append-replace](./agent-md-append-replace/设计契约.md) | **已同意**：md append/replace + 写后短提示重读 |
 | [agent-context-compact](./agent-context-compact/设计契约.md) | **已同意**：≥85% 自动 + 主动 LLM 压缩；UI + session 锁 |

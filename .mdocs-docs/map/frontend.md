@@ -44,10 +44,10 @@
 
 ### 文章版本历史
 
-- **关键词**：`version history` `restoreDocumentVersion` `commits` `版本历史`
-- **结论**：文档信息菜单打开面板；恢复 = 旧 blob 新 commit（parent=原 head）。
-- **定位**：`VersionHistoryPanel.tsx` · `restoreDocumentVersionApi`
-- **需求**：[`../requirements/document-version-restore/`](../requirements/document-version-restore/)
+- **关键词**：`version history` `restoreDocumentVersion` `commits` `版本历史` `LexicalDiff` `compare` `fullscreen`
+- **结论**：文档信息菜单打开面板；恢复 = 旧 blob 新 commit（parent=原 head）；预览|对比双选 + 全屏；对比用 `@lobehub/editor/renderer` `LexicalDiff`（仅 md）。
+- **定位**：`VersionHistoryPanel.tsx` · `restoreDocumentVersionApi` · `LexicalDiff`
+- **需求**：[`../requirements/document-version-restore/`](../requirements/document-version-restore/) · [`../requirements/version-history-compare-fullscreen/`](../requirements/version-history-compare-fullscreen/)
 
 ### 设置 · 回收站 / 多 CLI Token
 
@@ -142,8 +142,8 @@
 
 ### 智能助手按块提案（DiffHunk）
 
-- **关键词**：`md_format_lexical` `get_document_lexical_lines` `set_document_lexical_lines` `update_slot` `insert_after_slot` `remove_slot` `batch_update_slots` `overwrite_all` `lexical_lines_set` `diff_slot_op` `ReactDiffPlugin` `updateSlot` `insertAfterSlot` `removeSlot` `overwriteAll` `assertCanPublish` `Accept` `Reject`
-- **结论**：帮写不动；normal 助手试点；提案不写盘；单槽走 `diff_slot_op` → Lobe slot API；多段连续不相交区间走 `batch_update_slots`（span 替换合成 MD → 一次 `overwriteAll`）；多门牌/旧协议走 `lexical_lines_set` → `proposalToMarkdown` → `overwriteAll`。
+- **关键词**：`md_format_lexical` `get_document_lexical_lines` `set_document_lexical_lines` `update_slot` `insert_after_slot` `remove_slot` `batch_update_slots` `overwrite_all` `lexical_lines_set` `diff_slot_op` `ReactDiffPlugin` `updateSlot` `insertAfterSlot` `removeSlot` `overwriteAll` `assertCanPublish` `Accept` `Reject` `nodesEqual` `plainTextOf` `computeLexicalDiffRows`
+- **结论**：帮写不动；normal 助手试点；提案不写盘；单槽走 `diff_slot_op` → Lobe slot API；多段连续不相交区间走 `batch_update_slots`（span 替换合成 MD → 一次 `overwriteAll`）；多门牌/旧协议走 `lexical_lines_set` → `proposalToMarkdown` → `overwriteAll`。`overwriteAll` 双源 JSON（编辑器 toJSON vs MD 再解析）用 canonicalize + 同类型纯文本 equal，避免假 Diff；同 hunk 红绿贴紧、异 hunk 留距。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
@@ -155,6 +155,10 @@
   | `src/web/app/lexical-lines/proposalToMarkdown.ts` | `proposalToMarkdown` |
   | `src/web/app/App.tsx` | `handleLexicalLinesSet` `handleDiffSlotOp` |
   | `src/web/app/playground/PlaygroundEditor.tsx` | Diff 试玩按钮 |
+  | `my-lobe-editor/src/renderer/diff/compute.ts` | `computeLexicalDiffRows` `nodesEqual` |
+  | `my-lobe-editor/src/plugins/diff/api.ts` | `overwriteAll` |
+  | `my-lobe-editor/src/plugins/diff/react/style.ts` | `diffHunkTheme` |
+- **决策 / 修复**：[`../decisions/015-overwrite-all-diff-equality.md`](../decisions/015-overwrite-all-diff-equality.md) · [`../bug-fixes/overwrite-all-false-diff-hunks-2026-10-28.md`](../bug-fixes/overwrite-all-false-diff-hunks-2026-10-28.md)
 - **需求**：[`../requirements/agent-lexical-lines-diff/`](../requirements/agent-lexical-lines-diff/)
 
 ### Agent 选择卡吸底

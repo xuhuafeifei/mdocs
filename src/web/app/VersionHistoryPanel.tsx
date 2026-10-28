@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { SerializedEditorState } from "lexical";
+import { Expand, Minimize2 } from "lucide-react";
 import { useI18n } from "../i18n";
 import { ApiRequestError } from "../services/client";
 import type { DocumentDetail } from "../../shared/types/document";
@@ -12,6 +14,21 @@ import {
   type DocumentCommitDetail,
   type DocumentCommitSummary,
 } from "../services/endpoints";
+
+/** Local chunk + one retry against Vite 504 Outdated Optimize Dep. */
+const LexicalDiff = lazy(async () => {
+  try {
+    return await import("./VersionHistoryLexicalDiff");
+  } catch {
+    await new Promise((r) => window.setTimeout(r, 300));
+    return await import("./VersionHistoryLexicalDiff");
+  }
+});
+
+
+
+
+type PanelMode = "preview" | "compare";
 
 /**
  * 版本预览不再挂第二套 Lobe/Lexical Editor。
@@ -42,6 +59,47 @@ function lexicalPlainFallback(content: string): string {
   } catch {
     return content.trim() || "(空版本)";
   }
+}
+
+function emptyEditorState(): SerializedEditorState {
+  return {
+    root: {
+      children: [
+        {
+          children: [],
+          direction: "ltr",
+          format: "",
+          indent: 0,
+          type: "paragraph",
+          version: 1,
+        },
+      ],
+      direction: "ltr",
+      format: "",
+      indent: 0,
+      type: "root",
+      version: 1,
+    },
+  } as unknown as SerializedEditorState;
+}
+
+/** commit blob → LexicalDiff 所需 SerializedEditorState */
+async function contentToEditorState(content: string): Promise<SerializedEditorState> {
+  const raw = content ?? "";
+  if (!raw.trim()) return emptyEditorState();
+  if (detectContentType(raw) === "json") {
+    return JSON.parse(raw) as SerializedEditorState;
+  }
+  const converted = await convertContentApi({
+    content: raw,
+    from: "markdown",
+    to: "lexical",
+  });
+  if (!converted.content?.trim()) return emptyEditorState();
+  if (detectContentType(converted.content) === "json") {
+    return JSON.parse(converted.content) as SerializedEditorState;
+  }
+  throw new Error("markdown→lexical 结果无效");
 }
 
 function VersionMdPreview(props: { commitId: string; content: string }) {
@@ -124,6 +182,12 @@ function VersionSheetPreview(props: { content: string }) {
   return <pre className="mdocs-version-preview-sheet">{summary}</pre>;
 }
 
+function formatCommitLabel(c: DocumentCommitSummary | null | undefined): string {
+  if (!c) return "";
+  const time = new Date(c.createdAt).toLocaleString();
+  return c.message ? `${time} · ${c.message}` : time;
+}
+
 export function VersionHistoryPanel(props: {
   documentId: string;
   /** md | html | sheet — 决定预览方式 */
@@ -134,6 +198,7 @@ export function VersionHistoryPanel(props: {
 }) {
   const { t } = useI18n();
   const fileType = props.fileType || "md";
+  const compareSupported = fileType === "md";
   const [items, setItems] = useState<DocumentCommitSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +207,14 @@ export function VersionHistoryPanel(props: {
   const [previewBusy, setPreviewBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState(false);
+  const [mode, setMode] = useState<PanelMode>("preview");
+  const [fullscreen, setFullscreen] = useState(false);
+  const [oldCommitId, setOldCommitId] = useState<string | null>(null);
+  const [newCommitId, setNewCommitId] = useState<string | null>(null);
+  const [oldState, setOldState] = useState<SerializedEditorState | null>(null);
+  const [newState, setNewState] = useState<SerializedEditorState | null>(null);
+  const [compareBusy, setCompareBusy] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
   const [hideAuto, setHideAuto] = useState(() => {
     try {
       return sessionStorage.getItem("mdocs.versionHistory.hideAuto") === "1";
@@ -154,6 +227,9 @@ export function VersionHistoryPanel(props: {
     () => (hideAuto ? items.filter((c) => c.source !== "auto") : items),
     [items, hideAuto],
   );
+
+  const oldCommit = items.find((c) => c.commitId === oldCommitId) ?? null;
+  const newCommit = items.find((c) => c.commitId === newCommitId) ?? null;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -191,11 +267,19 @@ export function VersionHistoryPanel(props: {
         setConfirmRestore(false);
       }
     }
-  }, [hideAuto, items, selectedId]);
+    if (hideAuto) {
+      if (oldCommitId && !items.some((c) => c.commitId === oldCommitId && c.source !== "auto")) {
+        setOldCommitId(null);
+      }
+      if (newCommitId && !items.some((c) => c.commitId === newCommitId && c.source !== "auto")) {
+        setNewCommitId(null);
+      }
+    }
+  }, [hideAuto, items, selectedId, oldCommitId, newCommitId]);
 
   useEffect(() => {
-    if (!selectedId) {
-      setPreview(null);
+    if (mode !== "preview" || !selectedId) {
+      if (mode === "preview" && !selectedId) setPreview(null);
       return;
     }
     let cancelled = false;
@@ -216,7 +300,59 @@ export function VersionHistoryPanel(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.documentId, selectedId]);
+  }, [props.documentId, selectedId, mode]);
+
+  useEffect(() => {
+    if (mode !== "compare" || !compareSupported) {
+      return;
+    }
+    if (!oldCommitId || !newCommitId) {
+      setOldState(null);
+      setNewState(null);
+      setCompareError(null);
+      setCompareBusy(false);
+      return;
+    }
+    if (oldCommitId === newCommitId) {
+      setOldState(null);
+      setNewState(null);
+      setCompareError(t("versionHistoryCompareSame"));
+      setCompareBusy(false);
+      return;
+    }
+
+    let cancelled = false;
+    setCompareBusy(true);
+    setCompareError(null);
+    void (async () => {
+      try {
+        const [oldDetail, newDetail] = await Promise.all([
+          getDocumentCommitApi(props.documentId, oldCommitId),
+          getDocumentCommitApi(props.documentId, newCommitId),
+        ]);
+        const [o, n] = await Promise.all([
+          contentToEditorState(oldDetail.content),
+          contentToEditorState(newDetail.content),
+        ]);
+        if (!cancelled) {
+          setOldState(o);
+          setNewState(n);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setOldState(null);
+          setNewState(null);
+          setCompareError(err instanceof Error ? err.message : String(err));
+        }
+      } finally {
+        if (!cancelled) setCompareBusy(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, compareSupported, props.documentId, oldCommitId, newCommitId, t]);
 
   async function handleRestore(): Promise<void> {
     if (!selectedId || restoreBusy) return;
@@ -239,33 +375,109 @@ export function VersionHistoryPanel(props: {
     }
   }
 
+  function assignCompareSide(side: "old" | "new", commitId: string): void {
+    setError(null);
+    if (side === "old") {
+      // 再点一次已选的「旧」→ 取消
+      if (oldCommitId === commitId) {
+        setOldCommitId(null);
+        return;
+      }
+      // 点在已是「新」的那一行 → 互换
+      if (newCommitId === commitId) {
+        setNewCommitId(oldCommitId);
+        setOldCommitId(commitId);
+        return;
+      }
+      setOldCommitId(commitId);
+      return;
+    }
+    if (newCommitId === commitId) {
+      setNewCommitId(null);
+      return;
+    }
+    if (oldCommitId === commitId) {
+      setOldCommitId(newCommitId);
+      setNewCommitId(commitId);
+      return;
+    }
+    setNewCommitId(commitId);
+  }
+
+  function switchMode(next: PanelMode): void {
+    if (next === "compare" && !compareSupported) return;
+    setMode(next);
+    setConfirmRestore(false);
+    setError(null);
+  }
+
   const selected = items.find((c) => c.commitId === selectedId) ?? null;
 
   return (
-    <div className="mdocs-dialog-backdrop" role="presentation" onClick={props.onClose}>
+    <div
+      className={
+        "mdocs-dialog-backdrop" + (fullscreen ? " mdocs-version-history-backdrop--fullscreen" : "")
+      }
+      role="presentation"
+      onClick={fullscreen ? undefined : props.onClose}
+    >
       <div
-        className="mdocs-dialog card mdocs-version-history-dialog"
+        className={
+          "mdocs-dialog card mdocs-version-history-dialog" +
+          (fullscreen ? " is-fullscreen" : "")
+        }
         role="dialog"
         aria-modal="true"
         aria-labelledby="mdocs-version-history-title"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="mdocs-version-history-head">
-          <div>
+          <div className="mdocs-version-history-head-main">
             <h1 id="mdocs-version-history-title">{t("versionHistoryTitle")}</h1>
             <p className="mdocs-version-history-desc">{t("versionHistoryDesc")}</p>
-            <label className="mdocs-version-history-filter muted">
-              <input
-                type="checkbox"
-                checked={hideAuto}
-                onChange={(e) => setHideAuto(e.target.checked)}
-              />
-              {t("versionHistoryHideAuto")}
-            </label>
+            <div className="mdocs-version-history-head-tools">
+              <div className="mdocs-version-history-mode" role="group" aria-label={t("versionHistoryMode")}>
+                <button
+                  type="button"
+                  className={"ghost" + (mode === "preview" ? " is-active" : "")}
+                  onClick={() => switchMode("preview")}
+                >
+                  {t("versionHistoryModePreview")}
+                </button>
+                <button
+                  type="button"
+                  className={"ghost" + (mode === "compare" ? " is-active" : "")}
+                  disabled={!compareSupported}
+                  title={compareSupported ? undefined : t("versionHistoryCompareMdOnly")}
+                  onClick={() => switchMode("compare")}
+                >
+                  {t("versionHistoryModeCompare")}
+                </button>
+              </div>
+              <label className="mdocs-version-history-filter muted">
+                <input
+                  type="checkbox"
+                  checked={hideAuto}
+                  onChange={(e) => setHideAuto(e.target.checked)}
+                />
+                {t("versionHistoryHideAuto")}
+              </label>
+            </div>
           </div>
-          <button type="button" className="secondary" onClick={props.onClose}>
-            {t("close")}
-          </button>
+          <div className="mdocs-version-history-head-actions">
+            <button
+              type="button"
+              className="secondary mdocs-version-history-icon-btn"
+              onClick={() => setFullscreen((v) => !v)}
+              title={fullscreen ? t("versionHistoryExitFullscreen") : t("versionHistoryFullscreen")}
+              aria-label={fullscreen ? t("versionHistoryExitFullscreen") : t("versionHistoryFullscreen")}
+            >
+              {fullscreen ? <Minimize2 size={16} /> : <Expand size={16} />}
+            </button>
+            <button type="button" className="secondary" onClick={props.onClose}>
+              {t("close")}
+            </button>
+          </div>
         </header>
 
         {error ? (
@@ -275,64 +487,154 @@ export function VersionHistoryPanel(props: {
         ) : null}
 
         {loading ? (
-          <p className="muted">{t("loading")}</p>
+          <p className="muted" style={{ padding: "0 24px" }}>
+            {t("loading")}
+          </p>
         ) : items.length === 0 ? (
-          <p className="muted">{t("versionHistoryEmpty")}</p>
+          <p className="muted" style={{ padding: "0 24px" }}>
+            {t("versionHistoryEmpty")}
+          </p>
         ) : visibleItems.length === 0 ? (
-          <p className="muted">{t("versionHistoryEmpty")}</p>
+          <p className="muted" style={{ padding: "0 24px" }}>
+            {t("versionHistoryEmpty")}
+          </p>
         ) : (
           <div className="mdocs-version-history-body">
             <ul className="mdocs-version-history-list">
-              {visibleItems.map((c) => (
-                <li key={c.commitId}>
-                  <button
-                    type="button"
-                    className={
-                      "mdocs-version-history-item" +
-                      (c.commitId === selectedId ? " is-active" : "")
-                    }
-                    onClick={() => {
-                      setConfirmRestore(false);
-                      setSelectedId(c.commitId);
-                    }}
-                  >
-                    <span className="mdocs-version-history-item-time">
-                      {new Date(c.createdAt).toLocaleString()}
-                    </span>
-                    {c.message ? (
-                      <span className="mdocs-version-history-item-message">{c.message}</span>
-                    ) : null}
-                    <span className="mdocs-version-history-item-meta muted">
-                      {c.authorVisitorName || c.authorVisitorId.slice(0, 8)}
-                      {c.source === "auto" ? " · auto" : ""}
-                      {c.isHead ? ` · ${t("versionHistoryCurrent")}` : ""}
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {visibleItems.map((c) => {
+                const isPreviewActive = mode === "preview" && c.commitId === selectedId;
+                const isOld = mode === "compare" && c.commitId === oldCommitId;
+                const isNew = mode === "compare" && c.commitId === newCommitId;
+                return (
+                  <li key={c.commitId}>
+                    {mode === "preview" ? (
+                      <button
+                        type="button"
+                        className={
+                          "mdocs-version-history-item" + (isPreviewActive ? " is-active" : "")
+                        }
+                        onClick={() => {
+                          setConfirmRestore(false);
+                          setSelectedId(c.commitId);
+                        }}
+                      >
+                        <span className="mdocs-version-history-item-time">
+                          {new Date(c.createdAt).toLocaleString()}
+                        </span>
+                        {c.message ? (
+                          <span className="mdocs-version-history-item-message">{c.message}</span>
+                        ) : null}
+                        <span className="mdocs-version-history-item-meta muted">
+                          {c.authorVisitorName || c.authorVisitorId.slice(0, 8)}
+                          {c.source === "auto" ? " · auto" : ""}
+                          {c.isHead ? ` · ${t("versionHistoryCurrent")}` : ""}
+                        </span>
+                      </button>
+                    ) : (
+                      <div
+                        className={
+                          "mdocs-version-history-item mdocs-version-history-item--compare" +
+                          (isOld ? " is-old" : "") +
+                          (isNew ? " is-new" : "")
+                        }
+                      >
+                        <div className="mdocs-version-history-item-main">
+                          <span className="mdocs-version-history-item-time">
+                            {new Date(c.createdAt).toLocaleString()}
+                          </span>
+                          {c.message ? (
+                            <span className="mdocs-version-history-item-message">{c.message}</span>
+                          ) : null}
+                          <span className="mdocs-version-history-item-meta muted">
+                            {c.authorVisitorName || c.authorVisitorId.slice(0, 8)}
+                            {c.source === "auto" ? " · auto" : ""}
+                            {c.isHead ? ` · ${t("versionHistoryCurrent")}` : ""}
+                          </span>
+                        </div>
+                        <div className="mdocs-version-history-item-sides">
+                          <button
+                            type="button"
+                            className={"ghost mdocs-version-side" + (isOld ? " is-active" : "")}
+                            onClick={() => assignCompareSide("old", c.commitId)}
+                          >
+                            {t("versionHistoryCompareOld")}
+                          </button>
+                          <button
+                            type="button"
+                            className={"ghost mdocs-version-side" + (isNew ? " is-active" : "")}
+                            onClick={() => assignCompareSide("new", c.commitId)}
+                          >
+                            {t("versionHistoryCompareNew")}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
             <div className="mdocs-version-history-preview">
-              {!preview ? (
+              {mode === "preview" ? (
+                !preview ? (
+                  <p className="muted" style={{ padding: 16 }}>
+                    {t("loading")}
+                  </p>
+                ) : (
+                  <div
+                    className={
+                      "mdocs-version-history-preview-inner" + (previewBusy ? " is-loading" : "")
+                    }
+                  >
+                    {fileType === "html" ? (
+                      <VersionHtmlPreview content={preview.content} />
+                    ) : fileType === "sheet" ? (
+                      <VersionSheetPreview content={preview.content} />
+                    ) : (
+                      <VersionMdPreview commitId={preview.commitId} content={preview.content} />
+                    )}
+                    {previewBusy ? (
+                      <p className="mdocs-version-history-preview-busy muted">{t("loading")}</p>
+                    ) : null}
+                  </div>
+                )
+              ) : !compareSupported ? (
+                <p className="muted" style={{ padding: 16 }}>
+                  {t("versionHistoryCompareMdOnly")}
+                </p>
+              ) : !oldCommitId || !newCommitId ? (
+                <p className="muted" style={{ padding: 16 }}>
+                  {!oldCommitId && !newCommitId
+                    ? t("versionHistoryComparePickBoth")
+                    : !oldCommitId
+                      ? t("versionHistoryComparePickOld")
+                      : t("versionHistoryComparePickNew")}
+                </p>
+              ) : compareError ? (
+                <p className="mdocs-dialog-error" style={{ margin: 16 }} role="alert">
+                  {compareError}
+                </p>
+              ) : compareBusy || !oldState || !newState ? (
                 <p className="muted" style={{ padding: 16 }}>
                   {t("loading")}
                 </p>
               ) : (
-                <div
-                  className={
-                    "mdocs-version-history-preview-inner" +
-                    (previewBusy ? " is-loading" : "")
-                  }
-                >
-                  {fileType === "html" ? (
-                    <VersionHtmlPreview content={preview.content} />
-                  ) : fileType === "sheet" ? (
-                    <VersionSheetPreview content={preview.content} />
-                  ) : (
-                    <VersionMdPreview commitId={preview.commitId} content={preview.content} />
-                  )}
-                  {previewBusy ? (
-                    <p className="mdocs-version-history-preview-busy muted">{t("loading")}</p>
-                  ) : null}
+                <div className="mdocs-version-history-diff">
+                  <Suspense
+                    fallback={
+                      <p className="muted" style={{ padding: 16 }}>
+                        {t("loading")}
+                      </p>
+                    }
+                  >
+                    <LexicalDiff
+                      oldValue={oldState}
+                      newValue={newState}
+                      labels={{
+                        old: formatCommitLabel(oldCommit),
+                        new: formatCommitLabel(newCommit),
+                      }}
+                    />
+                  </Suspense>
                 </div>
               )}
             </div>
@@ -340,7 +642,13 @@ export function VersionHistoryPanel(props: {
         )}
 
         <footer className="mdocs-version-history-foot">
-          {props.canRestore && selected && !selected.isHead ? (
+          {mode === "compare" ? (
+            <span className="muted" style={{ fontSize: 13 }}>
+              {oldCommit && newCommit
+                ? `${formatCommitLabel(oldCommit)} → ${formatCommitLabel(newCommit)}`
+                : t("versionHistoryCompareHint")}
+            </span>
+          ) : props.canRestore && selected && !selected.isHead ? (
             confirmRestore ? (
               <>
                 <span className="muted" style={{ fontSize: 13 }}>

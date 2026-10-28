@@ -32,10 +32,11 @@
 
 ### requirements 状态
 
-均为历史已落地功能；契约视为 **已同意（历史迁入）**。正文即原 `fgbg-docs` 长文，未拆成完整三件套。
+多为历史已落地功能；契约视为 **已同意（历史迁入）**。正文即原 `fgbg-docs` 长文，未拆成完整三件套。进行中单独标注。
 
 | 需求夹 | 说明 |
 |--------|------|
+| `version-history-compare-fullscreen` | **已同意 / 已实现**：版本历史双版 `LexicalDiff` 对比 + 面板全屏 — [需求分析](./requirements/version-history-compare-fullscreen/需求分析.md) · [设计契约](./requirements/version-history-compare-fullscreen/设计契约.md) · [代码索引](./requirements/version-history-compare-fullscreen/代码索引.md) |
 | `publish-commit-message` | **已同意 / 已实现**（含 **merge-message 增量已同意 2026-10-23**：合并说明弹窗 + `suggest-merge-message`）— [需求分析](./requirements/publish-commit-message/需求分析.md) · [设计契约](./requirements/publish-commit-message/设计契约.md) · [代码索引](./requirements/publish-commit-message/代码索引.md) |
 | `ai-merge` | **已同意（2026-10-23）**：行级冲突 AI 选票（标记全文 → resolution）；与 merge-message 分接口 — [需求分析](./requirements/ai-merge/需求分析.md) · [设计契约](./requirements/ai-merge/设计契约.md) · [代码索引](./requirements/ai-merge/代码索引.md) |
 | `agent-get-editor-draft` | **已同意 / 已实现（2026-10-23）**：按需 `get_editor_draft`（SSE+requestId 静默取本地 MD/HTML）；不提供 CLI ai-merge — [需求分析](./requirements/agent-get-editor-draft/需求分析.md) · [设计契约](./requirements/agent-get-editor-draft/设计契约.md) · [代码索引](./requirements/agent-get-editor-draft/代码索引.md) |

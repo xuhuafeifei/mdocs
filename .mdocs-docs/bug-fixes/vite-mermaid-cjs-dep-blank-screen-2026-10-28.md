@@ -54,3 +54,4 @@
 - **`optimizeDeps.exclude` 一个包 = 手动接管它全部依赖的 interop**。排除后要把它 `package.json` 里 **module 入口实际 import 到的 CJS 包**逐个 nested include；只补跑得起来的那几个，等于给自己埋延迟爆炸的地雷。
 - **「永远加载中」优先当"JS 未执行"查**：先看 `#root` 子节点数、`pageerror`、`document.querySelector('vite-error-overlay')`，不要先怀疑接口/慢查询。
 - 判断某依赖是否会被裸发：看它 `package.json` 有无 `type: module` / `module` 字段；只有 CJS 且不在 `.vite/deps` 里，才会命中 `does not provide an export named`。
+- **同症状不同因**：如果 `does not provide an export named 'X'` 里的 `X` 是**自家 import 写的成员名**（且路径是 `.vite/deps/…`），那不是预构建问题，是导入写法错 → 见 [`lobehub-ui-deep-import-named-export-2026-10-28.md`](./lobehub-ui-deep-import-named-export-2026-10-28.md)。

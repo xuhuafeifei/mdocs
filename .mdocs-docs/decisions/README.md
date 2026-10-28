@@ -25,3 +25,4 @@
 | 012 | [桌面壳用 Tauri 2](./012-desktop-tauri-webview-shell.md) | accepted | Mac + Windows 薄壳；系统 WebView，不内置前端 |
 | 013 | [附件上传不做类型限制](./013-asset-upload-no-type-restriction.md) | accepted | `isAllowedAssetUpload` 恒 true；下载侧 Content-Type 白名单解耦，误拒成本 > 防护收益 |
 | 014 | [手机左缘右滑 vs 系统返回](./014-mobile-edge-swipe-vs-system-back.md) | accepted | 系统手势抢边为主因；exclusion 尽力；可靠入口靠汉堡 |
+| 015 | [overwrite_all Diff 相等放宽](./015-overwrite-all-diff-equality.md) | accepted | 双源 JSON 不强制同源；canonicalize + 纯文本兜底；异 hunk 留距、同 hunk 贴紧 |

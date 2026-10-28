@@ -21,8 +21,16 @@ export default defineConfig({
     },
     // Transform the shell early so first paint isn't waiting on random discovery order.
     warmup: {
-      clientFiles: ["./main.tsx", "./app/Router.tsx", "./app/App.tsx", "./i18n/index.ts"],
+      clientFiles: [
+        "./main.tsx",
+        "./app/Router.tsx",
+        "./app/App.tsx",
+        "./i18n/index.ts",
+        // Pre-transform compare chunk so first LexicalDiff open doesn't race optimizeDeps.
+        "./app/VersionHistoryLexicalDiff.tsx",
+      ],
     },
+
   },
   build: {
     outDir: path.resolve(__dirname, "dist/web"),
@@ -94,6 +102,9 @@ export default defineConfig({
       "motion/react",
       "lucide-react",
       "react-router-dom",
+      // Version-history compare lazy-loads this. Without include, first open triggers
+      // a mid-session re-optimize → browser gets 504 Outdated Optimize Dep.
+      "@lobehub/editor/renderer",
       // mermaid 被 exclude 后其 CJS 依赖不会进预构建，浏览器直接吃到裸 CJS：
       // 首屏就报 "does not provide an export named 'sanitizeUrl'"（整页白屏 / 停在「加载中…」）。
       // 逐个 nested include 做 interop；diagram 相关的 CJS 依赖在首次渲染图表时才会加载。
@@ -108,11 +119,13 @@ export default defineConfig({
       "mermaid > cytoscape-fcose",
       "mermaid > cytoscape-cose-bilkent",
     ],
-    // Note: @lobehub/editor has CJS deps (e.g. eventemitter3) that need interop —
-    // Vite will optimize it on first editor open (may briefly re-optimize once).
+    // Note: full `@lobehub/editor` / `@lobehub/ui` barrels still not included — they
+    // drag Highlighter/shiki into a huge cold prebundle. Renderer alone is enough
+    // for LexicalDiff; DocumentEditor discovery may still re-optimize once.
     // mermaid 11 用相对路径动态加载 diagram chunks；预构建会改写成 .vite/deps/
     // 下的假路径（如 sequenceDiagram-*.js），清缓存后就会 Failed to fetch。
     // Keep shiki out of dep prebundle so theme/lang dynamic imports stay lazy.
     exclude: ["mermaid", "shiki", "@shikijs/langs"],
   },
 });
+
