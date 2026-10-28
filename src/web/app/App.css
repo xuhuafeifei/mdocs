@@ -6463,30 +6463,27 @@ strong.label {
 }
 
 @media (max-width: 768px) {
-  /* 发布说明：底栏 sheet，避免通用 dialog 三键 column-reverse 全宽堆叠 */
+  /* 发布说明：居中弹层；按钮仍横排，避免通用 dialog 的 column-reverse 全宽堆叠 */
   .mdocs-dialog-backdrop:has(.mdocs-publish-message-dialog) {
-    align-items: flex-end;
-    justify-content: stretch;
-    padding: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
   }
 
   .mdocs-dialog.card.mdocs-publish-message-dialog {
-    width: 100%;
+    width: min(440px, 100%);
     max-width: 100%;
-    max-height: min(72vh, 100%);
+    max-height: min(88vh, 100%);
     margin: 0;
-    border-radius: 16px 16px 0 0;
-    border-left: none;
-    border-right: none;
-    border-bottom: none;
-    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
-    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.12);
+    border-radius: 12px;
+    padding: 20px 16px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
   }
 
   .mdocs-publish-message-dialog h1 {
-    margin: 4px 0 10px;
+    margin: 0 0 12px;
     font-size: 17px;
-    text-align: center;
+    text-align: left;
   }
 
   .mdocs-publish-message-input {
