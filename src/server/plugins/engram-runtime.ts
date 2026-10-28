@@ -36,6 +36,13 @@ export function engramDataDir(): string {
   return path.join(getConfig().dataDir, "engram-data");
 }
 
+/** cwd：`engram init mdocs` 写 `.engram/config.json`，避免无 git 时项目检测失败。 */
+export function engramWorkspaceRoot(): string {
+  return path.join(getConfig().dataDir, "engram-workspace");
+}
+
+export const ENGRAM_PROJECT_NAME = "mdocs";
+
 export function isEngramBinaryReady(): boolean {
   try {
     return fs.existsSync(engramBinaryPath());
@@ -273,11 +280,54 @@ function findExtractedBinary(root: string): string {
 export function buildEngramMcpEnv(): Record<string, string> {
   return {
     ENGRAM_DATA_DIR: engramDataDir(),
-    ENGRAM_PROJECT: "mdocs",
+    ENGRAM_PROJECT: ENGRAM_PROJECT_NAME,
   };
 }
 
-/** 下载 release → 解压到 dataDir/plugins/engram/bin → `engram version` 校验。 */
+/**
+ * 初始化工作区 + `engram init mdocs`，并写一条 bootstrap 记忆，
+ * 避免 ENGRAM_PROJECT=mdocs 时库里还没有该项目（unknown_project）。
+ */
+export async function ensureEngramProject(
+  onOutput?: EngramOutput,
+): Promise<string> {
+  const root = engramWorkspaceRoot();
+  fs.mkdirSync(root, { recursive: true });
+  fs.mkdirSync(engramDataDir(), { recursive: true });
+  const bin = engramBinaryPath();
+  if (!fs.existsSync(bin)) {
+    throw new Error(`Engram 二进制不存在：${bin}`);
+  }
+  const env = { ...process.env, ...buildEngramMcpEnv() };
+  const cfg = path.join(root, ".engram", "config.json");
+  if (!fs.existsSync(cfg)) {
+    onOutput?.("stdout", `engram init ${ENGRAM_PROJECT_NAME} @ ${root}`);
+    await run(bin, ["init", ENGRAM_PROJECT_NAME, "--force"], 30_000, onOutput, {
+      cwd: root,
+      env,
+    });
+    try {
+      await run(
+        bin,
+        [
+          "save",
+          "--project",
+          ENGRAM_PROJECT_NAME,
+          "mdocs-bootstrap",
+          "mdocs Engram memory project",
+        ],
+        30_000,
+        onOutput,
+        { cwd: root, env },
+      );
+    } catch {
+      /* 首次写入失败可忽略；后续 mem_session_start 仍会登记会话 */
+    }
+  }
+  return root;
+}
+
+/** 下载 release → 解压到 dataDir/plugins/engram/bin → init 项目 → version 校验。 */
 export async function installEngramRuntime(
   onPhase?: (phase: EngramInstallPhase) => void,
   onOutput?: EngramOutput,
@@ -307,6 +357,7 @@ export async function installEngramRuntime(
     }
     fs.mkdirSync(engramDataDir(), { recursive: true });
     onOutput?.("stdout", `二进制：${dest}`);
+    await ensureEngramProject(onOutput);
 
     onPhase?.("health");
     const { stdout } = await run(
@@ -314,7 +365,7 @@ export async function installEngramRuntime(
       ["version"],
       30_000,
       onOutput,
-      { env: { ...process.env, ...buildEngramMcpEnv() } },
+      { env: { ...process.env, ...buildEngramMcpEnv() }, cwd: engramWorkspaceRoot() },
     );
     const ver = stdout.trim() || "(ok)";
     onOutput?.("stdout", `engram version → ${ver.slice(0, 200)}`);

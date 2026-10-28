@@ -11,6 +11,10 @@ import {
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { useLogger } from "../logger/logger.js";
 import {
+  ensureEngramProject,
+  engramWorkspaceRoot,
+} from "../plugins/engram-runtime.js";
+import {
   ensureMemorixGitWorkspace,
   memorixProjectRoot,
 } from "../plugins/memorix-runtime.js";
@@ -74,7 +78,7 @@ async function openClient(server: McpServerConfig): Promise<{
 }> {
   const client = new Client({
     name: "mdocs",
-    version: "3.0.9",
+    version: "3.0.10",
   });
 
   if (server.transport === "stdio") {
@@ -148,6 +152,11 @@ function looksLikeMemorix(server: McpServerConfig, toolNames: string[]): boolean
   return toolNames.some((n) => n.startsWith("memorix_"));
 }
 
+function looksLikeEngram(server: McpServerConfig, _toolNames: string[]): boolean {
+  const blob = `${server.id} ${server.name} ${server.command ?? ""}`.toLowerCase();
+  return blob.includes("engram");
+}
+
 /**
  * HTTP Memorix 必须显式绑 projectRoot（且路径须含 .git），否则 store/search 会报
  * "No git project could be resolved"。
@@ -187,6 +196,57 @@ async function bindMemorixHttpSession(
   }
 }
 
+/**
+ * Engram：仅有 ENGRAM_PROJECT 不够，库里未登记会话时 mem_stats/search 会 unknown_project。
+ * 每轮加载工具时调用 mem_session_start（幂等），把 directory 绑到工作区。
+ */
+async function bindEngramSession(
+  client: Client,
+  toolNames: string[],
+): Promise<void> {
+  if (!toolNames.includes("mem_session_start")) return;
+  let directory = engramWorkspaceRoot();
+  try {
+    directory = await ensureEngramProject();
+  } catch (err) {
+    log.warn(
+      `ensure engram project: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  try {
+    const result = await client.callTool({
+      name: "mem_session_start",
+      arguments: {
+        id: `mdocs-${process.pid}`,
+        directory,
+      },
+    });
+    if ((result as { isError?: boolean }).isError) {
+      const text = contentToText((result as { content?: unknown }).content);
+      log.warn(`mem_session_start: ${text.slice(0, 300)}`);
+    } else {
+      log.info(`engram session bound to ${directory}`);
+    }
+  } catch (err) {
+    log.warn(
+      `mem_session_start failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+async function bindMemorySessions(
+  server: McpServerConfig,
+  client: Client,
+  toolNames: string[],
+): Promise<void> {
+  if (looksLikeMemorix(server, toolNames)) {
+    await bindMemorixHttpSession(client, toolNames);
+  }
+  if (looksLikeEngram(server, toolNames)) {
+    await bindEngramSession(client, toolNames);
+  }
+}
+
 /** 测试连接：listTools 摘要 */
 export async function testMcpServer(
   server: McpServerConfig,
@@ -200,9 +260,7 @@ export async function testMcpServer(
         ...(t.description ? { description: t.description } : {}),
       }));
       const names = tools.map((t) => t.name);
-      if (looksLikeMemorix(server, names)) {
-        await bindMemorixHttpSession(client, names);
-      }
+      await bindMemorySessions(server, client, names);
       return { ok: true, tools };
     } finally {
       await close();
@@ -234,9 +292,7 @@ export async function loadMcpAgentTools(): Promise<McpAgentToolsBundle> {
       closers.push(close);
       const listed = await client.listTools();
       const toolNames = (listed.tools ?? []).map((t) => t.name);
-      if (looksLikeMemorix(server, toolNames)) {
-        await bindMemorixHttpSession(client, toolNames);
-      }
+      await bindMemorySessions(server, client, toolNames);
       const prefix = toolPrefix(server);
       for (const mcpTool of listed.tools ?? []) {
         const originalName = mcpTool.name;

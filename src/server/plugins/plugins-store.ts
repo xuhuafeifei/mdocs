@@ -18,6 +18,7 @@ import {
 import {
   buildEngramMcpEnv,
   engramBinaryPath,
+  engramWorkspaceRoot,
   installEngramRuntime,
   uninstallEngramRuntime,
   type EngramInstallPhase,
@@ -130,7 +131,8 @@ export async function installPlugin(
       enabled: true,
       transport: "stdio",
       command: engramBinaryPath(),
-      args: ["mcp"],
+      args: ["mcp", "--project=mdocs"],
+      cwd: engramWorkspaceRoot(),
       env: buildEngramMcpEnv(),
     });
   } else if (entry.id === "memorix") {

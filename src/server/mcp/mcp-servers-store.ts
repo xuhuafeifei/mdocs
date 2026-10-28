@@ -199,13 +199,13 @@ export const MEMORIX_MCP_TEMPLATE: Omit<McpServerConfig, "id"> = {
   url: "http://127.0.0.1:3211/mcp",
 };
 
-/** Engram：stdio `engram mcp`；安装时会改写 command 为绝对路径并注入 ENGRAM_*。 */
+/** Engram：stdio `engram mcp --project=mdocs`；安装时改写 command / cwd / env。 */
 export const ENGRAM_MCP_TEMPLATE: Omit<McpServerConfig, "id"> = {
   name: "Engram",
   enabled: true,
   transport: "stdio",
   command: "engram",
-  args: ["mcp"],
+  args: ["mcp", "--project=mdocs"],
 };
 
 /** 插件安装用：按 id upsert 一条；返回最新全表 */
