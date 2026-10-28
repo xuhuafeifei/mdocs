@@ -6,6 +6,10 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { assertDocumentAccess, DocumentError } from "../../access/access-control.js";
 import { getDocument } from "../../documents/document.service.js";
 import { lexicalJsonToLexicalLines } from "../../documents/lexical-to-markdown.js";
+import {
+  validateBatchSlotRanges,
+  type BatchSlotRange,
+} from "../../../shared/batchSlotRanges.js";
 import { asToolResult, type ToolDeps } from "./tool-deps.js";
 
 const MAX_CHARS = 50_000;
@@ -71,7 +75,7 @@ export function setDocumentLexicalLinesTool({ uiDocumentId }: ToolDeps): AgentTo
       "向**当前打开**文档提交按块 Markdown 提案（md_format_lexical），**不写服务器**。" +
       "documentId 可省略（默认用 UI 当前打开文）。" +
       "mode=patch_lines：lines 只含要改的门牌；mode=replace_all：整篇新稿。" +
-      "单槽改优先 update_slot / insert_after_slot / remove_slot；整篇也可用 overwrite_all。",
+      "单槽改优先 update_slot / insert_after_slot / remove_slot；多段连续区间用 batch_update_slots；整篇也可用 overwrite_all。",
     parameters: Type.Object({
       documentId: Type.Optional(
         Type.String({ description: "可省略；默认当前 UI 打开文档" }),
@@ -261,6 +265,52 @@ export function overwriteAllTool({ uiDocumentId }: ToolDeps): AgentTool {
   };
 }
 
+/**
+ * 多段连续区间一次提案：SSE → 前端按 base 门牌 span 替换后 overwriteAll。
+ * 区间必须不相交；md 块数不必与区间长度 1:1（可增删）。
+ */
+export function batchUpdateSlotsTool({ uiDocumentId }: ToolDeps): AgentTool {
+  return {
+    name: "batch_update_slots",
+    label: "批量更新文档块",
+    description:
+      "对**当前打开** .md 一次提交多个**连续且互不相交**的外层块区间替换提案，**不写服务器**。" +
+      "documentId 可省略。ranges 每项：start/end（1-based 闭区间）+ markdown；" +
+      "markdown 按 Markdown 外层块拆分后整体替换该区间（块数可多于或少于原区间，空串=删除）。" +
+      "所有门牌相对**本次调用前**的文档；改多处（如 3–8 与 10–25）必须放进同一次 ranges，禁止拆成两次工具调用。" +
+      "改前先 get_document_lexical_lines。单块仍用 update_slot；整篇大改用 overwrite_all。",
+    parameters: Type.Object({
+      documentId: Type.Optional(
+        Type.String({ description: "可省略；默认当前 UI 打开文档" }),
+      ),
+      ranges: Type.Array(
+        Type.Object({
+          start: Type.Integer({ description: "区间起点门牌（含）", minimum: 1 }),
+          end: Type.Integer({ description: "区间终点门牌（含）", minimum: 1 }),
+          markdown: Type.String({
+            description: "替换该区间的 Markdown（可多块；空=删除）",
+          }),
+        }),
+        { minItems: 1, description: "不相交的连续区间列表" },
+      ),
+    }),
+    execute: async (_id, params) => {
+      const p = params as {
+        documentId?: string;
+        ranges?: BatchSlotRange[];
+      };
+      const validated = validateBatchSlotRanges(p.ranges);
+      if (!validated.ok) throw new Error(validated.error);
+      return asToolResult({
+        documentId: resolveDiffDocumentId(p.documentId, uiDocumentId),
+        op: "batch_update_slots" as const,
+        ranges: validated.sorted,
+        queued: true,
+      });
+    },
+  };
+}
+
 export function lexicalLinesTools(deps: ToolDeps): AgentTool[] {
   return [
     getDocumentLexicalLinesTool(deps),
@@ -268,6 +318,7 @@ export function lexicalLinesTools(deps: ToolDeps): AgentTool[] {
     updateSlotTool(deps),
     insertAfterSlotTool(deps),
     removeSlotTool(deps),
+    batchUpdateSlotsTool(deps),
     overwriteAllTool(deps),
   ];
 }

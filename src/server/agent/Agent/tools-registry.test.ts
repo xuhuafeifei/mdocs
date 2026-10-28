@@ -83,6 +83,7 @@ describe("createToolsForMode", () => {
       "update_slot",
       "insert_after_slot",
       "remove_slot",
+      "batch_update_slots",
       "overwrite_all",
       ...USER_SKILL_NAMES,
     ]);
@@ -122,6 +123,7 @@ describe("createToolsForMode", () => {
       "update_slot",
       "insert_after_slot",
       "remove_slot",
+      "batch_update_slots",
       "overwrite_all",
       ...USER_SKILL_NAMES,
     ]);

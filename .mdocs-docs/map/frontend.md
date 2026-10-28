@@ -142,14 +142,16 @@
 
 ### 智能助手按块提案（DiffHunk）
 
-- **关键词**：`md_format_lexical` `get_document_lexical_lines` `set_document_lexical_lines` `update_slot` `insert_after_slot` `remove_slot` `overwrite_all` `lexical_lines_set` `diff_slot_op` `ReactDiffPlugin` `updateSlot` `insertAfterSlot` `removeSlot` `overwriteAll` `assertCanPublish` `Accept` `Reject`
-- **结论**：帮写不动；normal 助手试点；提案不写盘；单槽走 `diff_slot_op` → Lobe slot API；多门牌/旧协议走 `lexical_lines_set` → `proposalToMarkdown` → `overwriteAll`。
+- **关键词**：`md_format_lexical` `get_document_lexical_lines` `set_document_lexical_lines` `update_slot` `insert_after_slot` `remove_slot` `batch_update_slots` `overwrite_all` `lexical_lines_set` `diff_slot_op` `ReactDiffPlugin` `updateSlot` `insertAfterSlot` `removeSlot` `overwriteAll` `assertCanPublish` `Accept` `Reject`
+- **结论**：帮写不动；normal 助手试点；提案不写盘；单槽走 `diff_slot_op` → Lobe slot API；多段连续不相交区间走 `batch_update_slots`（span 替换合成 MD → 一次 `overwriteAll`）；多门牌/旧协议走 `lexical_lines_set` → `proposalToMarkdown` → `overwriteAll`。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/server/agent/Agent/tools-lexical-lines.ts` | `update_slot` `insert_after_slot` `remove_slot` `overwrite_all` |
+  | `src/shared/batchSlotRanges.ts` | `validateBatchSlotRanges` `applyBatchSlotRangesToBlocks` |
+  | `src/server/agent/Agent/tools-lexical-lines.ts` | `update_slot` `insert_after_slot` `remove_slot` `batch_update_slots` `overwrite_all` |
   | `src/web/app/DocumentEditor.tsx` | `ReactDiffPlugin` `applyAgentDiffRef` `assertCanPublish` |
   | `src/web/app/lexical-lines/agentDiff.ts` | `ApplyAgentDiffOp` |
+  | `src/web/app/lexical-lines/batchSlotRangesApply.ts` | `batchRangesToProposedMarkdown` |
   | `src/web/app/lexical-lines/proposalToMarkdown.ts` | `proposalToMarkdown` |
   | `src/web/app/App.tsx` | `handleLexicalLinesSet` `handleDiffSlotOp` |
   | `src/web/app/playground/PlaygroundEditor.tsx` | Diff 试玩按钮 |

@@ -27,6 +27,7 @@ const TOOL_LABELS: Record<string, string> = {
   update_slot: "更新文档块",
   insert_after_slot: "在块后插入",
   remove_slot: "删除文档块",
+  batch_update_slots: "批量更新文档块",
   overwrite_all: "整篇 Diff 提案",
   get_now: "获取当前时间",
   set_thinking_level: "设置思考强度",
@@ -60,6 +61,7 @@ const WRITE_TOOLS = new Set([
   "update_slot",
   "insert_after_slot",
   "remove_slot",
+  "batch_update_slots",
   "overwrite_all",
   "sheet_overwrite",
   "sheet_set_cells",
@@ -192,6 +194,19 @@ export function writeToolBodyText(toolName: string, source: unknown): string {
     toolName === "overwrite_all"
   ) {
     return String(a.markdown ?? "");
+  }
+  if (toolName === "batch_update_slots") {
+    const ranges = Array.isArray(a.ranges) ? a.ranges : [];
+    return ranges
+      .map((raw, i) => {
+        const r = asRecord(raw);
+        if (!r) return `range[${i}]`;
+        const start = r.start;
+        const end = r.end;
+        const md = String(r.markdown ?? "");
+        return `[${start},${end}]\n${md}`;
+      })
+      .join("\n\n---\n\n");
   }
   if (toolName === "overwrite_document") {
     return String(a.content ?? a.markdown ?? "");

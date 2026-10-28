@@ -533,14 +533,50 @@ export function App() {
     })();
   }
 
-  /** 智能助手 slot Diff：直接调 Lobe updateSlot / insertAfter / remove / overwriteAll */
+  /** 智能助手 slot Diff：直接调 Lobe updateSlot / insertAfter / remove / overwriteAll / batch */
   function handleDiffSlotOp(payload: {
     documentId: string;
-    op: "update_slot" | "insert_after_slot" | "remove_slot" | "overwrite_all";
+    op:
+      | "update_slot"
+      | "insert_after_slot"
+      | "remove_slot"
+      | "overwrite_all"
+      | "batch_update_slots";
     slot?: number;
     markdown?: string;
+    ranges?: Array<{ start: number; end: number; markdown: string }>;
   }): void {
     if (!guardAgentDiffTarget(payload.documentId)) return;
+    if (payload.op === "batch_update_slots") {
+      const ranges = payload.ranges;
+      if (!Array.isArray(ranges) || ranges.length === 0) {
+        setMessage("batch_update_slots 缺少 ranges");
+        window.setTimeout(() => setMessage(null), 2000);
+        return;
+      }
+      const baseLexicalJson = editorContentRef.current!.content;
+      void (async () => {
+        try {
+          const { batchRangesToProposedMarkdown } = await import(
+            "./lexical-lines/batchSlotRangesApply"
+          );
+          const built = batchRangesToProposedMarkdown(baseLexicalJson, ranges);
+          if (!built.ok) {
+            setAlertMessage(built.error);
+            return;
+          }
+          applyAgentDiffWithToast({
+            op: "overwrite_all",
+            markdown: built.markdown,
+          });
+        } catch (err) {
+          setAlertMessage(
+            err instanceof Error ? err.message : "批量 slot 提案合成失败",
+          );
+        }
+      })();
+      return;
+    }
     if (payload.op === "overwrite_all") {
       if (typeof payload.markdown !== "string") {
         setMessage("overwrite_all 缺少 markdown");

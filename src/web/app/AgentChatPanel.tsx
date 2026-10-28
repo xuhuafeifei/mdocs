@@ -1152,9 +1152,15 @@ export const AgentChatPanel = forwardRef<
     }) => void;
     onDiffSlotOp?: (payload: {
       documentId: string;
-      op: "update_slot" | "insert_after_slot" | "remove_slot" | "overwrite_all";
+      op:
+        | "update_slot"
+        | "insert_after_slot"
+        | "remove_slot"
+        | "overwrite_all"
+        | "batch_update_slots";
       slot?: number;
       markdown?: string;
+      ranges?: Array<{ start: number; end: number; markdown: string }>;
     }) => void;
     onSendingChange?: (sending: boolean) => void;
     onSessionId?: (sessionId: string | null) => void;
@@ -2000,6 +2006,7 @@ export const AgentChatPanel = forwardRef<
         op: event.op,
         ...(event.slot != null ? { slot: event.slot } : {}),
         ...(event.markdown != null ? { markdown: event.markdown } : {}),
+        ...(event.ranges != null ? { ranges: event.ranges } : {}),
       });
     } else if (event.type === "tree_changed") {
       void onTreeChanged?.();

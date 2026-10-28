@@ -319,26 +319,36 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
       event.toolName === "update_slot" ||
       event.toolName === "insert_after_slot" ||
       event.toolName === "remove_slot" ||
-      event.toolName === "overwrite_all"
+      event.toolName === "overwrite_all" ||
+      event.toolName === "batch_update_slots"
     ) {
       const documentId = String(details?.documentId ?? "").trim();
       const op =
         details?.op === "update_slot" ||
         details?.op === "insert_after_slot" ||
         details?.op === "remove_slot" ||
-        details?.op === "overwrite_all"
+        details?.op === "overwrite_all" ||
+        details?.op === "batch_update_slots"
           ? details.op
           : (event.toolName as
               | "update_slot"
               | "insert_after_slot"
               | "remove_slot"
-              | "overwrite_all");
+              | "overwrite_all"
+              | "batch_update_slots");
       const slot =
         typeof details?.slot === "number" && Number.isFinite(details.slot)
           ? details.slot
           : undefined;
       const markdown =
         typeof details?.markdown === "string" ? details.markdown : undefined;
+      const ranges = Array.isArray(details?.ranges)
+        ? (details.ranges as Array<{
+            start: number;
+            end: number;
+            markdown: string;
+          }>)
+        : undefined;
       if (documentId) {
         onEvent({
           type: "diff_slot_op",
@@ -346,6 +356,7 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
           op,
           ...(slot != null ? { slot } : {}),
           ...(markdown != null ? { markdown } : {}),
+          ...(ranges != null ? { ranges } : {}),
         });
       }
     }

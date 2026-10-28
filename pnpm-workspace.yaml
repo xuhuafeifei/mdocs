@@ -8,3 +8,8 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   node-llama-cpp: true
+
+minimumReleaseAgeExclude:
+  - "@fgbg/lobe-editor@1.0.0-fork.35"
+  # lobe-editor@fork.35 拉起的传递依赖，发布未满 minimumReleaseAge
+  - "ahooks"

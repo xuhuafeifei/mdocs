@@ -34,13 +34,19 @@ export type AgentStreamEvent =
       lines: Record<string, string>;
       markdown?: string;
     }
-  /** 智能助手 slot Diff（不写盘）；前端调 Lobe updateSlot / insertAfterSlot / removeSlot / overwriteAll */
+  /** 智能助手 slot Diff（不写盘）；前端调 Lobe updateSlot / insertAfterSlot / removeSlot / overwriteAll / batch */
   | {
       type: "diff_slot_op";
       documentId: string;
-      op: "update_slot" | "insert_after_slot" | "remove_slot" | "overwrite_all";
+      op:
+        | "update_slot"
+        | "insert_after_slot"
+        | "remove_slot"
+        | "overwrite_all"
+        | "batch_update_slots";
       slot?: number;
       markdown?: string;
+      ranges?: Array<{ start: number; end: number; markdown: string }>;
     }
   | {
       type: "choice_card";
