@@ -5,6 +5,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { getConfig } from "../config/index.js";
 import { MDOCS_UPDATE_SOURCES } from "../cli/self-update.js";
 
 export const MEMORIX_HTTP_MCP_URL = "http://127.0.0.1:3211/mcp";
@@ -16,6 +17,14 @@ const MEMORIX_NPM_REGISTRIES = [
   MDOCS_UPDATE_SOURCES.taobao,
   MDOCS_UPDATE_SOURCES.npm,
 ] as const;
+
+/**
+ * Memorix 以 git 仓库识别「项目」。npm 装的 /opt/mdocs 没有 .git，
+ * 因此单独给它一个 dataDir 下的 git 工作区，并用 MEMORIX_PROJECT_ROOT 绑死。
+ */
+export function memorixProjectRoot(): string {
+  return path.join(getConfig().dataDir, "memorix-workspace");
+}
 
 function assertNodeForMemorix(): void {
   const match = /^v(\d+)\.(\d+)\.(\d+)/.exec(process.version);
@@ -56,6 +65,7 @@ function run(
   args: string[],
   timeoutMs: number,
   onOutput?: MemorixOutput,
+  opts?: { cwd?: string; env?: NodeJS.ProcessEnv },
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const onWindows = process.platform === "win32";
@@ -67,7 +77,8 @@ function run(
         shell: onWindows,
         windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
-        env: process.env,
+        cwd: opts?.cwd,
+        env: opts?.env ?? process.env,
       },
     );
     let stdout = "";
@@ -192,6 +203,40 @@ async function npmInstallMemorixGlobal(onOutput?: MemorixOutput): Promise<void> 
   throw lastError ?? new Error("npm install -g memorix 失败");
 }
 
+/** 确保 dataDir/memorix-workspace 是 git 仓库（Memorix 项目身份依赖 .git）。 */
+export async function ensureMemorixGitWorkspace(
+  onOutput?: MemorixOutput,
+): Promise<string> {
+  const root = memorixProjectRoot();
+  fs.mkdirSync(root, { recursive: true });
+  const gitDir = path.join(root, ".git");
+  if (!fs.existsSync(gitDir)) {
+    onOutput?.("stdout", `git init ${root}`);
+    await run("git", ["init"], 30_000, onOutput, { cwd: root });
+    const readme = path.join(root, "README.md");
+    if (!fs.existsSync(readme)) {
+      fs.writeFileSync(
+        readme,
+        "# mdocs Memorix workspace\n\nGit-backed project root for Memorix MCP memory.\n",
+        "utf8",
+      );
+    }
+    try {
+      await run("git", ["add", "README.md"], 15_000, onOutput, { cwd: root });
+      await run(
+        "git",
+        ["-c", "user.email=mdocs@local", "-c", "user.name=mdocs", "commit", "-m", "init memorix workspace"],
+        30_000,
+        onOutput,
+        { cwd: root },
+      );
+    } catch {
+      /* 无 commit 也有 .git，足够做项目检测 */
+    }
+  }
+  return root;
+}
+
 /** 全局安装 memorix，初始化（失败可继续），并启动后台 HTTP。 */
 export async function installMemorixRuntime(
   onPhase?: (phase: MemorixInstallPhase) => void,
@@ -202,14 +247,27 @@ export async function installMemorixRuntime(
   await npmInstallMemorixGlobal(onOutput);
   const bin = await memorixCommand();
   onPhase?.("init");
+  const projectRoot = await ensureMemorixGitWorkspace(onOutput);
   try {
-    await run(bin, ["init", "--global"], 20_000, onOutput);
+    await run(bin, ["init", "--global"], 20_000, onOutput, {
+      cwd: projectRoot,
+      env: { ...process.env, MEMORIX_PROJECT_ROOT: projectRoot },
+    });
   } catch {
     /* init 可能已完成，或在无 TTY 下退出；随后仍尝试启动 */
   }
   onPhase?.("start");
   try {
-    await run(bin, ["background", "start"], 60_000, onOutput);
+    // 先停旧进程，避免仍绑在 /opt/mdocs（无 git）上
+    try {
+      await run(bin, ["background", "stop"], 30_000, onOutput);
+    } catch {
+      /* 本来没在跑 */
+    }
+    await run(bin, ["background", "start"], 60_000, onOutput, {
+      cwd: projectRoot,
+      env: { ...process.env, MEMORIX_PROJECT_ROOT: projectRoot },
+    });
   } catch (err) {
     if (!(await isMemorixHttpUp())) {
       throw err instanceof Error ? err : new Error(String(err));

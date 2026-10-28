@@ -7,6 +7,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { useLogger } from "../logger/logger.js";
 import {
+  ensureMemorixGitWorkspace,
+  memorixProjectRoot,
+} from "../plugins/memorix-runtime.js";
+import {
   listEnabledHttpMcpServers,
   type McpServerConfig,
 } from "./mcp-servers-store.js";
@@ -96,6 +100,51 @@ function contentToText(content: unknown): string {
   return parts.join("\n") || "";
 }
 
+function looksLikeMemorix(server: McpServerConfig, toolNames: string[]): boolean {
+  const blob = `${server.id} ${server.name} ${server.url}`.toLowerCase();
+  if (blob.includes("memorix")) return true;
+  return toolNames.some((n) => n.startsWith("memorix_"));
+}
+
+/**
+ * HTTP Memorix 必须显式绑 projectRoot（且路径须含 .git），否则 store/search 会报
+ * "No git project could be resolved"。
+ */
+async function bindMemorixHttpSession(
+  client: Client,
+  toolNames: string[],
+): Promise<void> {
+  if (!toolNames.includes("memorix_session_start")) return;
+  let projectRoot = memorixProjectRoot();
+  try {
+    projectRoot = await ensureMemorixGitWorkspace();
+  } catch (err) {
+    log.warn(
+      `ensure memorix workspace: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  try {
+    const result = await client.callTool({
+      name: "memorix_session_start",
+      arguments: {
+        agent: "mdocs",
+        agentType: "mdocs",
+        projectRoot,
+      },
+    });
+    if ((result as { isError?: boolean }).isError) {
+      const text = contentToText((result as { content?: unknown }).content);
+      log.warn(`memorix_session_start: ${text.slice(0, 300)}`);
+    } else {
+      log.info(`memorix session bound to ${projectRoot}`);
+    }
+  } catch (err) {
+    log.warn(
+      `memorix_session_start failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 /** 测试连接：listTools 摘要 */
 export async function testMcpServer(
   server: McpServerConfig,
@@ -108,6 +157,10 @@ export async function testMcpServer(
         name: t.name,
         ...(t.description ? { description: t.description } : {}),
       }));
+      const names = tools.map((t) => t.name);
+      if (looksLikeMemorix(server, names)) {
+        await bindMemorixHttpSession(client, names);
+      }
       return { ok: true, tools };
     } finally {
       await close();
@@ -138,6 +191,10 @@ export async function loadMcpAgentTools(): Promise<McpAgentToolsBundle> {
       const { client, close } = await openHttpClient(server);
       closers.push(close);
       const listed = await client.listTools();
+      const toolNames = (listed.tools ?? []).map((t) => t.name);
+      if (looksLikeMemorix(server, toolNames)) {
+        await bindMemorixHttpSession(client, toolNames);
+      }
       const prefix = toolPrefix(server);
       for (const mcpTool of listed.tools ?? []) {
         const originalName = mcpTool.name;
