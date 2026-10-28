@@ -26,7 +26,7 @@ export const PLUGIN_CATALOG: PluginCatalogEntry[] = [
     id: "engram",
     name: "Engram",
     description:
-      "本机记忆（Go 单二进制 + SQLite）。安装会从 GitHub Releases 下载，并以 stdio MCP（engram mcp）接入。不依赖 git 仓库。",
+      "本机记忆（Go 单二进制 + SQLite）。安装从 GitHub Releases 下载（国内会自动试镜像代理），stdio MCP（engram mcp）。无官方 Gitee；可设 ENGRAM_DOWNLOAD_URL。",
     kind: "mcp",
     mcpServerId: "plugin-engram",
     mcpTemplate: { ...ENGRAM_MCP_TEMPLATE },

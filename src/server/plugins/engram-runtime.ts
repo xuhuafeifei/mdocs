@@ -76,9 +76,26 @@ function assetFileName(plat: PlatformAsset): string {
   return `engram_${ENGRAM_VERSION}_${plat.goos}_${plat.goarch}${plat.ext}`;
 }
 
-function releaseDownloadUrl(plat: PlatformAsset): string {
+function githubReleaseUrl(plat: PlatformAsset): string {
   const file = assetFileName(plat);
   return `https://github.com/Gentleman-Programming/engram/releases/download/${ENGRAM_RELEASE_TAG}/${file}`;
+}
+
+/**
+ * Engram 官方无 Gitee。国内直连 GitHub Releases 常失败，
+ * 依次试直连 + 常用反代（前缀拼完整 URL）。也可用环境变量
+ * `ENGRAM_DOWNLOAD_URL` 指定完整包地址（跳过候选列表）。
+ */
+function releaseDownloadCandidates(plat: PlatformAsset): string[] {
+  const override = process.env.ENGRAM_DOWNLOAD_URL?.trim();
+  if (override) return [override];
+  const origin = githubReleaseUrl(plat);
+  const proxies = [
+    "https://ghfast.top/",
+    "https://gh-proxy.com/",
+    "https://gh.llkk.cc/",
+  ];
+  return [origin, ...proxies.map((p) => `${p}${origin}`)];
 }
 
 function emitLines(
@@ -155,7 +172,7 @@ function run(
   });
 }
 
-async function downloadFile(
+async function downloadFileOnce(
   url: string,
   dest: string,
   onOutput?: EngramOutput,
@@ -166,15 +183,48 @@ async function downloadFile(
     signal: AbortSignal.timeout(300_000),
   });
   if (!res.ok || !res.body) {
-    throw new Error(`下载 Engram 失败：HTTP ${res.status}`);
+    throw new Error(`HTTP ${res.status}`);
   }
   fs.mkdirSync(path.dirname(dest), { recursive: true });
+  if (fs.existsSync(dest)) fs.unlinkSync(dest);
   await pipeline(
     Readable.fromWeb(res.body as import("node:stream/web").ReadableStream),
     createWriteStream(dest),
   );
   const size = fs.statSync(dest).size;
+  // 反代失败时常返回一小段 HTML/JSON；正式包约 8MB+
+  if (size < 1_000_000) {
+    throw new Error(`文件过小（${size} bytes），可能不是 release 包`);
+  }
   onOutput?.("stdout", `已下载 ${path.basename(dest)}（${size} bytes）`);
+}
+
+async function downloadFile(
+  urls: string[],
+  dest: string,
+  onOutput?: EngramOutput,
+): Promise<void> {
+  let lastError: Error | null = null;
+  for (let i = 0; i < urls.length; i += 1) {
+    const url = urls[i]!;
+    try {
+      if (i > 0) onOutput?.("stdout", `改用备用下载源（${i + 1}/${urls.length}）…`);
+      await downloadFileOnce(url, dest, onOutput);
+      return;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      onOutput?.(
+        "stderr",
+        `下载失败：${lastError.message.slice(0, 400)}`,
+      );
+      try {
+        if (fs.existsSync(dest)) fs.unlinkSync(dest);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  throw lastError ?? new Error("Engram 下载失败（官方无 Gitee；可设 ENGRAM_DOWNLOAD_URL）");
 }
 
 async function extractArchive(
@@ -233,14 +283,14 @@ export async function installEngramRuntime(
   onOutput?: EngramOutput,
 ): Promise<void> {
   const plat = detectPlatform();
-  const url = releaseDownloadUrl(plat);
+  const urls = releaseDownloadCandidates(plat);
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mdocs-engram-"));
   const archivePath = path.join(tmpRoot, assetFileName(plat));
   const extractDir = path.join(tmpRoot, "out");
 
   try {
     onPhase?.("npm");
-    await downloadFile(url, archivePath, onOutput);
+    await downloadFile(urls, archivePath, onOutput);
 
     onPhase?.("init");
     fs.mkdirSync(extractDir, { recursive: true });

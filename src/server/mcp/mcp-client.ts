@@ -74,7 +74,7 @@ async function openClient(server: McpServerConfig): Promise<{
 }> {
   const client = new Client({
     name: "mdocs",
-    version: "3.0.8",
+    version: "3.0.9",
   });
 
   if (server.transport === "stdio") {
