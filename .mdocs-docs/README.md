@@ -48,6 +48,8 @@
 | `agent-rename-document` | **已同意**：Agent 工具 `rename_document` 改同目录下文件名（不动父目录） — [需求分析](./requirements/agent-rename-document/需求分析.md) · [设计契约](./requirements/agent-rename-document/设计契约.md) |
 | `agent-sheet-insert-rows` | **已同意**：行工具拆为 `append_rows` / `update_row` / `insert_rows_at` — [需求分析](./requirements/agent-sheet-insert-rows/需求分析.md) · [设计契约](./requirements/agent-sheet-insert-rows/设计契约.md) |
 | `agent-thinking-level` | **已同意**：模型配置思考档位 + `set_thinking_level` — [需求分析](./requirements/agent-thinking-level/需求分析.md) · [设计契约](./requirements/agent-thinking-level/设计契约.md) |
+| `agent-mcp-client` | **已同意**：Agent HTTP MCP Client（远程 Memorix）— [需求分析](./requirements/agent-mcp-client/需求分析.md) · [设计契约](./requirements/agent-mcp-client/设计契约.md) · [代码索引](./requirements/agent-mcp-client/代码索引.md) |
+| `plugin-marketplace` | **已同意**：插件市场（一期 Memorix 安装样板 → 写 MCP）— [需求分析](./requirements/plugin-marketplace/需求分析.md) · [设计契约](./requirements/plugin-marketplace/设计契约.md) · [代码索引](./requirements/plugin-marketplace/代码索引.md) |
 | `agent-sheet-overwrite` | **已同意**：Agent `sheet_overwrite` 整表替换指定工作表的列与行 — [需求分析](./requirements/agent-sheet-overwrite/需求分析.md) · [设计契约](./requirements/agent-sheet-overwrite/设计契约.md) |
 | `agent-sheet-get-styles` | **已同意**：Agent `sheet_get_styles` 按格/行/列/整表只读返回单元格样式 — [需求分析](./requirements/agent-sheet-get-styles/需求分析.md) · [设计契约](./requirements/agent-sheet-get-styles/设计契约.md) · [代码索引](./requirements/agent-sheet-get-styles/代码索引.md) |
 | `document-delete-recovery` | **已同意**：删文审计丰富 `recovery` metadata + 按 audit 恢复 head + 最近删除列表 — [需求分析](./requirements/document-delete-recovery/需求分析.md) · [设计契约](./requirements/document-delete-recovery/设计契约.md) · [代码索引](./requirements/document-delete-recovery/代码索引.md) |

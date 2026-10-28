@@ -44,22 +44,30 @@ const CODING_RULES = `你是 mdocs「帮写」助手（coding 模式）：在纯
 export function buildSystemPrompt(
   mode: AgentMode = "normal",
   refs?: AgentUiReferences | null,
+  opts?: { hasMcpTools?: boolean },
 ): string {
   const base = mode === "coding" ? CODING_RULES : NORMAL_RULES;
-  if (mode !== "normal" || (!refs?.domainId && !refs?.documentId && !refs?.graphFileId)) {
-    return base;
+  const parts: string[] = [base];
+  if (mode === "normal" && (refs?.domainId || refs?.documentId || refs?.graphFileId)) {
+    const lines = ["当前 UI 上下文（仅 id，无正文）："];
+    if (refs.domainId) lines.push(`- domainId: ${refs.domainId}`);
+    if (refs.graphFileId) {
+      lines.push(`- 当前焦点为图谱缓存（只读）：graphFileId=${refs.graphFileId}`);
+      lines.push(`  可用「读取文档内容」(get_document, format=json) 读取该图谱 JSON；禁止 overwrite 覆写图谱。`);
+    } else {
+      lines.push(
+        refs.documentId
+          ? `- documentId: ${refs.documentId}`
+          : "- documentId: （未打开文档）",
+      );
+    }
+    parts.push(lines.join("\n"));
   }
-  const lines = ["当前 UI 上下文（仅 id，无正文）："];
-  if (refs.domainId) lines.push(`- domainId: ${refs.domainId}`);
-  if (refs.graphFileId) {
-    lines.push(`- 当前焦点为图谱缓存（只读）：graphFileId=${refs.graphFileId}`);
-    lines.push(`  可用「读取文档内容」(get_document, format=json) 读取该图谱 JSON；禁止 overwrite 覆写图谱。`);
-  } else {
-    lines.push(
-      refs.documentId
-        ? `- documentId: ${refs.documentId}`
-        : "- documentId: （未打开文档）",
+  if (opts?.hasMcpTools) {
+    parts.push(
+      "本轮已挂载外部 MCP 工具（名称形如 mcp__…）。若含记忆类工具（如 Memorix 的 search/store），" +
+        "在需要跨会话回忆项目结论、决策或 gotcha 时先 search，重要新结论可 store；勿在无关闲聊时滥调。",
     );
   }
-  return `${base}\n\n${lines.join("\n")}`;
+  return parts.join("\n\n");
 }

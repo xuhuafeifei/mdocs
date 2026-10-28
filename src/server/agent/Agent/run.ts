@@ -104,7 +104,7 @@ export async function runOnboardingChat(params: {
   if (!skills.isReady()) throw new Error("skills_missing");
 
   const { models, model } = createAgentModel(cfg);
-  const tools = createToolsForMode(mode, {
+  const nativeTools = createToolsForMode(mode, {
     visitorId,
     onEvent,
     signal,
@@ -129,103 +129,112 @@ export async function runOnboardingChat(params: {
         }
       : {}),
   });
+
+  const { loadMcpAgentTools } = await import("../../mcp/mcp-client.js");
+  const mcpBundle = await loadMcpAgentTools();
+  const tools = [...nativeTools, ...mcpBundle.tools];
   const systemPrompt = buildSystemPrompt(
     mode,
     mode === "normal" ? params.references : null,
+    { hasMcpTools: mcpBundle.tools.length > 0 },
   );
 
-  const sessionManager = new AgentSessionManager(visitorId, {
-    kind: mode === "coding" ? "coding" : "normal",
-  });
+  try {
+    const sessionManager = new AgentSessionManager(visitorId, {
+      kind: mode === "coding" ? "coding" : "normal",
+    });
 
-  const { maybeCompactBeforeChat } = await import("./context-compact.js");
-  await maybeCompactBeforeChat({
-    visitorId,
-    kind: mode === "coding" ? "coding" : "normal",
-    documentId: mode === "coding" ? params.documentId ?? null : undefined,
-    onEvent,
-  });
+    const { maybeCompactBeforeChat } = await import("./context-compact.js");
+    await maybeCompactBeforeChat({
+      visitorId,
+      kind: mode === "coding" ? "coding" : "normal",
+      documentId: mode === "coding" ? params.documentId ?? null : undefined,
+      onEvent,
+    });
 
-  const { sessionId, messages: history } =
-    await sessionManager.loadLastOpenedMessages(
-      mode === "coding" ? params.documentId ?? null : undefined,
+    const { sessionId, messages: history } =
+      await sessionManager.loadLastOpenedMessages(
+        mode === "coding" ? params.documentId ?? null : undefined,
+      );
+
+    const prepared =
+      assetIds.length > 0
+        ? await prepareUserTurn({
+            store: getAttachmentStore(),
+            visitorId,
+            sessionId,
+            message,
+            assetIds,
+          })
+        : null;
+    const promptText = prepared?.pi.text ?? message;
+    const promptImages = prepared?.pi.images ?? [];
+    const persistContent = message.trim()
+      ? message.trim()
+      : prepared?.refs.length
+        ? `(附件 ${prepared.refs.map((r) => r.name).join(", ")})`
+        : message;
+
+    // 含本轮标定展开点（越新越先 → 本轮优先）；历史 hydrate；本轮假 tool；原文 prompt
+    const expandAt = markSkillExpandPoints([
+      ...history,
+      { role: "user", content: persistContent, skillNames },
+    ]);
+    const { messages: historyPi } = hydrateSessionMessagesToPi(
+      visitorId,
+      history,
+      model,
+      expandAt,
+    );
+    const currentIndex = history.length;
+    const currentRefs = skillNames.filter((ref) => expandAt.get(ref) === currentIndex);
+    const currentSkillPairs = expandCurrentTurnSkillPairs(
+      visitorId,
+      currentRefs,
+      model,
+      new Set(),
     );
 
-  const prepared =
-    assetIds.length > 0
-      ? await prepareUserTurn({
-          store: getAttachmentStore(),
-          visitorId,
-          sessionId,
-          message,
-          assetIds,
-        })
-      : null;
-  const promptText = prepared?.pi.text ?? message;
-  const promptImages = prepared?.pi.images ?? [];
-  const persistContent = message.trim()
-    ? message.trim()
-    : prepared?.refs.length
-      ? `(附件 ${prepared.refs.map((r) => r.name).join(", ")})`
-      : message;
+    const agent = new Agent({
+      initialState: {
+        systemPrompt,
+        model,
+        tools,
+        messages: [...historyPi, ...currentSkillPairs],
+        /** 来自默认模型配置；off 关闭思考。DeepSeek 勿用 medium（官方映成 high）。 */
+        thinkingLevel: cfg.thinkingLevel,
+      },
+      streamFn: models.streamSimple.bind(models),
+    });
 
-  // 含本轮标定展开点（越新越先 → 本轮优先）；历史 hydrate；本轮假 tool；原文 prompt
-  const expandAt = markSkillExpandPoints([
-    ...history,
-    { role: "user", content: persistContent, skillNames },
-  ]);
-  const { messages: historyPi } = hydrateSessionMessagesToPi(
-    visitorId,
-    history,
-    model,
-    expandAt,
-  );
-  const currentIndex = history.length;
-  const currentRefs = skillNames.filter((ref) => expandAt.get(ref) === currentIndex);
-  const currentSkillPairs = expandCurrentTurnSkillPairs(
-    visitorId,
-    currentRefs,
-    model,
-    new Set(),
-  );
+    const track = await runPiAgent({
+      agent,
+      message: promptText,
+      images: promptImages.length > 0 ? promptImages : undefined,
+      skillNames,
+      assets: prepared?.refs,
+      persistContent,
+      visitorId,
+      sessionId,
+      sessionManager,
+      onEvent,
+      signal,
+    });
 
-  const agent = new Agent({
-    initialState: {
-      systemPrompt,
-      model,
-      tools,
-      messages: [...historyPi, ...currentSkillPairs],
-      /** 来自默认模型配置；off 关闭思考。DeepSeek 勿用 medium（官方映成 high）。 */
-      thinkingLevel: cfg.thinkingLevel,
-    },
-    streamFn: models.streamSimple.bind(models),
-  });
+    if (signal?.aborted) return;
 
-  const track = await runPiAgent({
-    agent,
-    message: promptText,
-    images: promptImages.length > 0 ? promptImages : undefined,
-    skillNames,
-    assets: prepared?.refs,
-    persistContent,
-    visitorId,
-    sessionId,
-    sessionManager,
-    onEvent,
-    signal,
-  });
-
-  if (signal?.aborted) return;
-
-  const estimated = await getAgentContextUsageForApi(visitorId);
-  const usage = mergeContextUsage(estimated, track.lastUsageInput);
-  onEvent({
-    type: "context_usage",
-    percent: usage.percent,
-    used: usage.used,
-    limit: usage.limit,
-  });
-  onEvent({ type: "done" });
+    const estimated = await getAgentContextUsageForApi(visitorId);
+    const usage = mergeContextUsage(estimated, track.lastUsageInput);
+    onEvent({
+      type: "context_usage",
+      percent: usage.percent,
+      used: usage.used,
+      limit: usage.limit,
+    });
+    onEvent({ type: "done" });
+  } finally {
+    await mcpBundle.close();
+  }
 }
 
 // —— 装配 helpers ——

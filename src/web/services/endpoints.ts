@@ -84,6 +84,102 @@ export function updateServerSettingsApi(maxUploadBytes: number): Promise<ServerS
   });
 }
 
+export type McpServerConfig = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  transport: "http";
+  url: string;
+  headers?: Record<string, string>;
+};
+
+export type McpServersPayload = {
+  servers: McpServerConfig[];
+};
+
+export type McpToolSummary = {
+  name: string;
+  description?: string;
+};
+
+export function fetchMcpServersApi(): Promise<McpServersPayload> {
+  return api<McpServersPayload>("/api/mcp-servers");
+}
+
+export function saveMcpServersApi(
+  servers: McpServerConfig[],
+): Promise<McpServersPayload> {
+  return api<McpServersPayload>("/api/mcp-servers", {
+    method: "PUT",
+    body: JSON.stringify({ servers }),
+  });
+}
+
+export function testMcpServerApi(
+  id: string,
+): Promise<{ ok: true; tools: McpToolSummary[] }> {
+  return api<{ ok: true; tools: McpToolSummary[] }>(
+    `/api/mcp-servers/${encodeURIComponent(id)}/test`,
+    { method: "POST", body: "{}" },
+  );
+}
+
+export type PluginInstallLog = {
+  ts: string;
+  event: string;
+  level: "info" | "warn" | "error";
+  data?: { line?: string; phase?: string };
+};
+
+export type PluginInstallJob = {
+  pluginId: string;
+  phase: "npm" | "init" | "start" | "health" | "saving" | "done" | "error";
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  logs?: PluginInstallLog[];
+};
+
+export type PluginListItem = {
+  id: string;
+  name: string;
+  description: string;
+  kind: "mcp";
+  mcpServerId: string;
+  installed: boolean;
+  installedAt: string | null;
+  runtimeRunning?: boolean;
+  installJob?: PluginInstallJob | null;
+  mcpServer: McpServerConfig | null;
+  mcpTemplate: Omit<McpServerConfig, "id">;
+};
+
+export function fetchPluginsApi(): Promise<{ plugins: PluginListItem[] }> {
+  return api<{ plugins: PluginListItem[] }>("/api/plugins");
+}
+
+export function installPluginApi(
+  id: string,
+  body?: { headers?: Record<string, string> },
+): Promise<{ job: PluginInstallJob }> {
+  return api<{ job: PluginInstallJob }>(
+    `/api/plugins/${encodeURIComponent(id)}/install`,
+    {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    },
+  );
+}
+
+export function uninstallPluginApi(
+  id: string,
+): Promise<{ plugin: PluginListItem }> {
+  return api<{ plugin: PluginListItem }>(
+    `/api/plugins/${encodeURIComponent(id)}/uninstall`,
+    { method: "POST", body: "{}" },
+  );
+}
+
 export function setPasswordApi(password: string): Promise<{ ok: boolean }> {
   return api<{ ok: boolean }>("/api/visitors/set-password", {
     method: "POST",

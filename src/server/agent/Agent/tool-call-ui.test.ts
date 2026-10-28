@@ -20,6 +20,9 @@ describe("toolCallLabel", () => {
     expect(toolCallLabel("suggest_document_merge")).toBe("AI 合并文档冲突");
     expect(toolCallLabel("suggest_document_merge_message")).toBe("生成合并说明");
     expect(toolCallLabel("unknown_tool_xyz")).toBe("unknown_tool_xyz");
+    expect(toolCallLabel("mcp__memorix__memorix_search")).toBe(
+      "MCP · memorix/memorix_search",
+    );
   });
 });
 

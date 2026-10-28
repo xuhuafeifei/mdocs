@@ -91,6 +91,33 @@
   | `src/server/agent/Agent/session-tool-persist.ts` | `get_document` / `web_search` / `web_fetch` → jsonl `role:tool`；API 仍只回 user/assistant |
 - **需求**：[`../requirements/user-agent-skills/`](../requirements/user-agent-skills/)（已同意）
 
+### Agent MCP Client（远程 Memorix）
+
+- **关键词**：`MCP` `mcp-servers` `Memorix` `StreamableHTTP` `mcp__`
+- **结论**：一期仅 HTTP Client；配置在 `dataDir/mcp-servers.json`；每轮 listTools 挂进助手；不可达跳过。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/server/mcp/mcp-servers-store.ts` | 配置读写 |
+  | `src/server/mcp/mcp-client.ts` | HTTP 连接 / AgentTool 桥 |
+  | `src/server/routes/mcp-servers.routes.ts` | `/api/mcp-servers` |
+  | `src/web/app/McpServersPanel.tsx` | 设置 UI |
+- **需求**：[`../requirements/agent-mcp-client/`](../requirements/agent-mcp-client/)
+
+### 插件市场（Memorix 样板）
+
+- **关键词**：`plugins` `plugin-marketplace` `Memorix` `installPlugin`
+- **结论**：安装 Memorix → `npm install -g` + `memorix background start`，再 upsert `mcp-servers.json`。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/server/plugins/memorix-runtime.ts` | `installMemorixRuntime` |
+  | `src/server/plugins/plugin-catalog.ts` | 内置目录 |
+  | `src/server/plugins/plugins-store.ts` | 安装态 |
+  | `src/server/routes/plugins.routes.ts` | `/api/plugins` |
+  | `src/web/app/PluginMarketplacePanel.tsx` | 设置 Tab |
+- **需求**：[`../requirements/plugin-marketplace/`](../requirements/plugin-marketplace/)
+
 ### 搜索
 
 - **关键词**：`FTS5` `search` `index` `title` `display_name` `bm25` `documents_fts_title` `embedding` `nomic` `semantic` `search mode` `keyword` `rebuild_semantic_index`

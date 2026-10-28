@@ -71,6 +71,16 @@ const WRITE_TOOLS = new Set([
 ]);
 
 export function toolCallLabel(toolName: string): string {
+  if (toolName.startsWith("mcp__")) {
+    const rest = toolName.slice("mcp__".length);
+    const sep = rest.indexOf("__");
+    if (sep > 0) {
+      const server = rest.slice(0, sep);
+      const tool = rest.slice(sep + 2);
+      return `MCP · ${server}/${tool}`;
+    }
+    return `MCP · ${rest || toolName}`;
+  }
   return TOOL_LABELS[toolName] ?? toolName;
 }
 

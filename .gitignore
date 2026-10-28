@@ -177,3 +177,5 @@ desktop/*.exe
 desktop/*.msi
 desktop/*.app
 
+# Local portable Node / deploy helpers (not published)
+.tools/

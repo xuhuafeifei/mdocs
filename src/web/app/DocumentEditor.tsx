@@ -37,7 +37,6 @@ import {
   ReactTablePlugin,
   ReactToolbarPlugin,
   ReactMarkdownPlugin,
-  ReactDiffPlugin,
   OutlinePanel,
   OutlineProvider,
   enUS,
@@ -50,6 +49,7 @@ import {
   updateSlot,
 } from "@lobehub/editor";
 import type { ApplyAgentDiffFn } from "./lexical-lines/agentDiff";
+import { MdocsDiffPlugin } from "./lexical-lines/MdocsDiffPlugin";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
 import { Heading1Icon, Heading2Icon, Heading3Icon, History, MinusIcon, Network, SigmaIcon, Table2Icon, ShieldUser, Users, Star, Workflow } from "lucide-react";
@@ -611,14 +611,31 @@ export function DocumentEditor(props: DocumentEditorProps) {
       const ed = editorRef.current;
       const lexical = ed?.getLexicalEditor?.() ?? null;
       if (!lexical) return { ok: false, error: "编辑器未就绪" };
+      // agent 写入 Diff 时 Lexical 常把选区滚入视野 → 整栏掉到底；这里钉住 scroll-host
+      const scrollHost = scrollHostRef.current;
+      const savedScrollTop = scrollHost?.scrollTop ?? null;
       try {
-        if (op.op === "overwrite_all") return overwriteAll(lexical, op.markdown);
-        if (op.op === "update_slot") return updateSlot(lexical, op.slot, op.markdown);
-        if (op.op === "insert_after_slot") {
-          return insertAfterSlot(lexical, op.slot, op.markdown);
+        let result: { ok: true } | { ok: false; error: string };
+        if (op.op === "overwrite_all") result = overwriteAll(lexical, op.markdown);
+        else if (op.op === "update_slot") {
+          result = updateSlot(lexical, op.slot, op.markdown);
+        } else if (op.op === "insert_after_slot") {
+          result = insertAfterSlot(lexical, op.slot, op.markdown);
+        } else result = removeSlot(lexical, op.slot);
+        if (scrollHost && savedScrollTop != null) {
+          scrollHost.scrollTop = savedScrollTop;
+          requestAnimationFrame(() => {
+            scrollHost.scrollTop = savedScrollTop;
+            requestAnimationFrame(() => {
+              scrollHost.scrollTop = savedScrollTop;
+            });
+          });
         }
-        return removeSlot(lexical, op.slot);
+        return result;
       } catch (err) {
+        if (scrollHost && savedScrollTop != null) {
+          scrollHost.scrollTop = savedScrollTop;
+        }
         return {
           ok: false,
           error: err instanceof Error ? err.message : String(err),
@@ -980,7 +997,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const plugins = useMemo(
     () => [
       ReactMarkdownPlugin,
-      ReactDiffPlugin,
+      MdocsDiffPlugin,
       ReactListPlugin,
       ReactLinkPlugin,
       ReactImagePlugin,
