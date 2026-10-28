@@ -5,10 +5,17 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { MDOCS_UPDATE_REGISTRY } from "../cli/self-update.js";
+import { MDOCS_UPDATE_SOURCES } from "../cli/self-update.js";
 
 export const MEMORIX_HTTP_MCP_URL = "http://127.0.0.1:3211/mcp";
 const HEALTH_URL = "http://127.0.0.1:3211/health";
+
+/** 全局 install 易慢（尤其跨境）；先淘宝再官方，单源最长 10 分钟。 */
+const NPM_INSTALL_TIMEOUT_MS = 600_000;
+const MEMORIX_NPM_REGISTRIES = [
+  MDOCS_UPDATE_SOURCES.taobao,
+  MDOCS_UPDATE_SOURCES.npm,
+] as const;
 
 function assertNodeForMemorix(): void {
   const match = /^v(\d+)\.(\d+)\.(\d+)/.exec(process.version);
@@ -147,6 +154,44 @@ async function waitUntilUp(): Promise<void> {
 
 export type MemorixInstallPhase = "npm" | "init" | "start" | "health";
 
+async function npmInstallMemorixGlobal(onOutput?: MemorixOutput): Promise<void> {
+  const npm = npmCommand();
+  const common = [
+    "install",
+    "-g",
+    "memorix",
+    "--fetch-retries=5",
+    "--fetch-retry-mintimeout=20000",
+    "--fetch-retry-maxtimeout=120000",
+    "--fetch-timeout=300000",
+  ];
+  let lastError: Error | null = null;
+  for (let i = 0; i < MEMORIX_NPM_REGISTRIES.length; i += 1) {
+    const registry = MEMORIX_NPM_REGISTRIES[i]!;
+    const installArgs = [...common, `--registry=${registry}`];
+    onOutput?.(
+      "stdout",
+      i === 0
+        ? `${npm} ${installArgs.join(" ")}`
+        : `改用备用源：${npm} ${installArgs.join(" ")}`,
+    );
+    try {
+      await run(npm, installArgs, NPM_INSTALL_TIMEOUT_MS, onOutput);
+      return;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      onOutput?.(
+        "stderr",
+        `registry ${registry} 失败：${lastError.message.slice(0, 400)}`,
+      );
+      if (i < MEMORIX_NPM_REGISTRIES.length - 1) {
+        onOutput?.("stdout", "尝试下一个 npm registry…");
+      }
+    }
+  }
+  throw lastError ?? new Error("npm install -g memorix 失败");
+}
+
 /** 全局安装 memorix，初始化（失败可继续），并启动后台 HTTP。 */
 export async function installMemorixRuntime(
   onPhase?: (phase: MemorixInstallPhase) => void,
@@ -154,9 +199,7 @@ export async function installMemorixRuntime(
 ): Promise<void> {
   assertNodeForMemorix();
   onPhase?.("npm");
-  const installArgs = ["install", "-g", "memorix", `--registry=${MDOCS_UPDATE_REGISTRY}`];
-  onOutput?.("stdout", `${npmCommand()} ${installArgs.join(" ")}`);
-  await run(npmCommand(), installArgs, 180_000, onOutput);
+  await npmInstallMemorixGlobal(onOutput);
   const bin = await memorixCommand();
   onPhase?.("init");
   try {
