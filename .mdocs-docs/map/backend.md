@@ -91,7 +91,6 @@
   | `src/server/agent/Agent/session-tool-persist.ts` | `get_document` / `web_search` / `web_fetch` → jsonl `role:tool`；API 仍只回 user/assistant |
 - **需求**：[`../requirements/user-agent-skills/`](../requirements/user-agent-skills/)（已同意）
 
-<<<<<<< HEAD
 ### Agent MCP Client（HTTP + stdio）
 
 - **关键词**：`MCP` `mcp-servers` `Engram` `Memorix` `StreamableHTTP` `stdio` `mcp__`
@@ -119,7 +118,7 @@
   | `src/server/routes/plugins.routes.ts` | `/api/plugins` |
   | `src/web/app/PluginMarketplacePanel.tsx` | 设置 Tab |
 - **需求**：[`../requirements/plugin-marketplace/`](../requirements/plugin-marketplace/)
-=======
+
 ### Agent 聊天附件
 
 - **关键词**：`agent attachment` `xlsx` `xls` `read_attachment` `assetCapabilities` `parseXlsx`
@@ -134,7 +133,6 @@
   | `src/web/app/AgentChatPanel.tsx` | `accept` |
   | `src/web/app/agent-file-mark.ts` | `fileMarkKind` |
 - **需求**：[`../requirements/agent-xlsx-attachment/`](../requirements/agent-xlsx-attachment/) · [`../requirements/agent-multimedia-assets/`](../requirements/agent-multimedia-assets/)
->>>>>>> 1a227f8 (feat(agent): parse xlsx/xls chat attachments as JSON for the LLM)
 
 ### 搜索
 
