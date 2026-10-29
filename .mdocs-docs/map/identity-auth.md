@@ -52,7 +52,7 @@
 ### 域成员读写角色
 
 - **关键词**：`domain_members.role` `read` `write` `domainMemberCanWrite` `domainMemberWrite`
-- **结论**：成员默认 `read`（可看）；`write` + 文档 `domain_write` 才能编。与 invite 互斥、无关。见 [`domain-member-role`](../requirements/domain-member-role/设计契约.md)。
+- **结论**：成员默认 `read`（可看）；`write` 可编受限域内 `domain_read`/`domain_write` 文档（不再要求文档必须是 domain_write）。与 invite 互斥、无关。见 [`domain-member-role`](../requirements/domain-member-role/设计契约.md)。
 - **定位**：
   | 路径 | 符号 |
   |------|------|

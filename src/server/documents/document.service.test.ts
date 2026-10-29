@@ -202,12 +202,22 @@ describe("canEditDocument", () => {
     ).toBe(false);
   });
 
-  it("restricted 域：域成员不可写 domain_read(1) 档（即使 write 角色）", () => {
+  it("restricted 域：write 成员可写 domain_read(1) 档（默认新建档）", () => {
     expect(
       canEditDocument(
         makeDoc({ permission: Permission.DOMAIN_READ }),
         OTHER,
         ctx("restricted", true, true),
+      ),
+    ).toBe(true);
+  });
+
+  it("restricted 域：read 成员不可写 domain_read(1) 档", () => {
+    expect(
+      canEditDocument(
+        makeDoc({ permission: Permission.DOMAIN_READ }),
+        OTHER,
+        ctx("restricted", true, false),
       ),
     ).toBe(false);
   });

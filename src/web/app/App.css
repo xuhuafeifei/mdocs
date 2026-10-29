@@ -6632,6 +6632,13 @@ strong.label {
   word-break: break-word;
 }
 
+.mdocs-publish-message-backdrop {
+  /* 桌面也显式居中；窄屏规则在下方 media 再锁 100dvh */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .mdocs-publish-message-dialog {
   width: min(440px, 94vw);
 }
@@ -6677,14 +6684,24 @@ strong.label {
 
 @media (max-width: 768px) {
   /*
-   * 发布说明：viewport 居中（组件 portal 到 body，避开 reader 壳 transform）。
-   * 按钮仍横排，避免通用 dialog 的 column-reverse 全宽堆叠。
+   * 发布说明：真正相对可视视口居中。
+   * - backdrop 显式 class（不靠 :has），portal 到 body 后仍可能被旧缓存/弱 :has 搞偏
+   * - 用 100dvh + grid place-items，避免 iOS 地址栏让 flex「视觉偏下」
+   * - 卡片禁用 scale 动画（transform 易和居中叠味）
    */
+  .mdocs-dialog-backdrop.mdocs-publish-message-backdrop,
   .mdocs-dialog-backdrop:has(.mdocs-publish-message-dialog) {
+    display: grid;
+    place-items: center;
     align-items: center;
     justify-content: center;
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    inset: 0;
     padding: max(16px, env(safe-area-inset-top, 0px)) 16px
       max(16px, env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
   }
 
   .mdocs-dialog.card.mdocs-publish-message-dialog {
@@ -6695,6 +6712,9 @@ strong.label {
     border-radius: 12px;
     padding: 20px 16px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+    animation: none;
+    justify-self: center;
+    align-self: center;
   }
 
   .mdocs-publish-message-dialog h1 {

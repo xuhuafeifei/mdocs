@@ -320,12 +320,22 @@ describe("assertDocumentAccess", () => {
     expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).toThrow(DocumentError);
   });
 
-  it("restricted 域：成员不可写 domain_read(1) 文档", () => {
+  it("restricted 域：write 成员可写 domain_read(1) 文档", () => {
     seedDocInDomain({
       domainPermission: "restricted",
       docPermission: Permission.DOMAIN_READ,
       memberIds: [OTHER],
       memberRole: "write",
+    });
+    expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).not.toThrow();
+  });
+
+  it("restricted 域：read 成员不可写 domain_read(1) 文档", () => {
+    seedDocInDomain({
+      domainPermission: "restricted",
+      docPermission: Permission.DOMAIN_READ,
+      memberIds: [OTHER],
+      memberRole: "read",
     });
     expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).toThrow(DocumentError);
   });

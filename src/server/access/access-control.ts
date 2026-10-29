@@ -47,9 +47,9 @@ export class DocumentError extends Error {
 export const Permission = {
   /** 仅创建者读+写 */
   PRIVATE: 0,
-  /** 域成员可读，仅创建者可写 */
+  /** 域成员可读；write 角色成员亦可写（见 canEditDocument） */
   DOMAIN_READ: 1,
-  /** 域成员可读+写 */
+  /** 域成员可读；write 角色成员可写（与 DOMAIN_READ 对成员写权同义，档位保留兼容） */
   DOMAIN_WRITE: 2,
   /** 任何人可读，仅创建者可写 */
   PUBLIC_READ: 3,
@@ -201,8 +201,13 @@ export function canEditDocument(
   }
 
   if (domainInfo.domainPermission === "restricted") {
-    // restricted：domain_write + 成员 write 角色才可写；非成员靠 invite
-    if (row.permission === Permission.DOMAIN_WRITE && domainInfo.domainMemberCanWrite) return true;
+    // restricted：成员 write 可编 domain_read/domain_write（默认新建是 domain_read）；非成员靠 invite
+    if (
+      domainInfo.domainMemberCanWrite &&
+      (row.permission === Permission.DOMAIN_READ || row.permission === Permission.DOMAIN_WRITE)
+    ) {
+      return true;
+    }
     const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
     return invite?.permission === "edit";
   }
@@ -213,13 +218,8 @@ export function canEditDocument(
     const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
     return invite?.permission === "edit";
   }
-  if (row.permission === Permission.DOMAIN_READ) {
-    // domain_read：仅创建者可写，或靠 invite
-    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
-    return invite?.permission === "edit";
-  }
-  if (row.permission === Permission.DOMAIN_WRITE) {
-    // domain_write：成员 write 角色可写，或靠 invite
+  if (row.permission === Permission.DOMAIN_READ || row.permission === Permission.DOMAIN_WRITE) {
+    // 成员 write 可写；否则靠 invite
     if (domainInfo.domainMemberCanWrite) return true;
     const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
     return invite?.permission === "edit";

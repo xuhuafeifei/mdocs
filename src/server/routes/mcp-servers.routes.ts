@@ -4,7 +4,6 @@ import {
   listMcpServers,
   replaceMcpServers,
 } from "../mcp/mcp-servers-store.js";
-import { testMcpServer } from "../mcp/mcp-client.js";
 
 export function buildMcpServersRouter(): ReturnType<typeof Router> {
   const router = Router();
@@ -42,6 +41,19 @@ export function buildMcpServersRouter(): ReturnType<typeof Router> {
     if (!server) {
       res.status(404).json({
         error: { code: "NOT_FOUND", message: "mcp server not found" },
+      });
+      return;
+    }
+    // 懒加载：缺 @modelcontextprotocol/sdk 时不应拖垮整个 mdocs 启动
+    let testMcpServer: typeof import("../mcp/mcp-client.js").testMcpServer;
+    try {
+      ({ testMcpServer } = await import("../mcp/mcp-client.js"));
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "MCP client unavailable";
+      res.status(503).json({
+        error: { code: "MCP_SDK_MISSING", message },
+        data: { ok: false, error: message },
       });
       return;
     }

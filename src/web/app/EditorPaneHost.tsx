@@ -6,10 +6,7 @@ import { Suspense, lazy, type ReactNode } from "react";
 import type { DomainSummary } from "../../shared/types/domain";
 import type { ActiveDocumentMeta, DocumentDetail } from "../../shared/types/document";
 import { isFolderDescPath } from "../../shared/folderDesc";
-import {
-  isDomainWritePermission,
-  isPublicWritePermission,
-} from "../../shared/permissions.js";
+import { isPublicWritePermission } from "../../shared/permissions.js";
 import type { RecentDocTabsProps } from "./RecentDocTabs";
 
 const DocumentEditor = lazy(() =>
@@ -84,7 +81,8 @@ export function EditorPaneHost(props: {
       (meta.ownerVisitorId === props.visitorId ||
         isPublicWritePermission(meta.permission) ||
         meta.invitedEdit === true ||
-        (meta.domainMemberWrite === true && isDomainWritePermission(meta.permission))),
+        // 服务端已按成员 role=write 判定；不再要求文档必须是 domain_write
+        meta.domainMemberWrite === true),
   );
   const canManageInvites = Boolean(props.visitorId && props.visitorId === meta.ownerVisitorId);
   const toggleComments = props.onToggleComments ?? (() => undefined);

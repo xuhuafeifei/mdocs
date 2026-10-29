@@ -116,7 +116,11 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
     mode === "merge" ? t("mergePublishMessagePlaceholder") : t("publishMessagePlaceholder");
 
   return createPortal(
-    <div className="mdocs-dialog-backdrop" role="presentation" onClick={props.onCancel}>
+    <div
+      className="mdocs-dialog-backdrop mdocs-publish-message-backdrop"
+      role="presentation"
+      onClick={props.onCancel}
+    >
       <div
         className="mdocs-dialog card mdocs-publish-message-dialog"
         role="dialog"

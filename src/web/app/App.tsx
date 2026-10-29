@@ -2778,27 +2778,6 @@ export function App() {
               </Suspense>
             )}
 
-            {publishMsgPrompt ? (
-              <PublishMessageDialog
-                open
-                mode={publishMsgPrompt.mode ?? "publish"}
-                documentId={publishMsgPrompt.documentId}
-                content={publishMsgPrompt.content}
-                contentFormat={publishMsgPrompt.contentFormat}
-                mergeSuggest={publishMsgPrompt.mergeSuggest}
-                onCancel={() => {
-                  const resolve = publishMsgPrompt.resolve;
-                  setPublishMsgPrompt(null);
-                  resolve(null);
-                }}
-                onConfirm={(msg) => {
-                  const resolve = publishMsgPrompt.resolve;
-                  setPublishMsgPrompt(null);
-                  resolve(msg);
-                }}
-              />
-            ) : null}
-
             {/* 全局 Toast 消息 */}
             {message && (
               <div className="mdocs-toast" role="status">
@@ -2871,6 +2850,27 @@ export function App() {
       </div>
 
       {/* 弹层放在 shell 外：窄屏侧栏用 transform 滑动，fixed 若留在里面会相对整条轨道定位 */}
+      {publishMsgPrompt ? (
+        <PublishMessageDialog
+          open
+          mode={publishMsgPrompt.mode ?? "publish"}
+          documentId={publishMsgPrompt.documentId}
+          content={publishMsgPrompt.content}
+          contentFormat={publishMsgPrompt.contentFormat}
+          mergeSuggest={publishMsgPrompt.mergeSuggest}
+          onCancel={() => {
+            const resolve = publishMsgPrompt.resolve;
+            setPublishMsgPrompt(null);
+            resolve(null);
+          }}
+          onConfirm={(msg) => {
+            const resolve = publishMsgPrompt.resolve;
+            setPublishMsgPrompt(null);
+            resolve(msg);
+          }}
+        />
+      ) : null}
+
       {alertMessage && (
         <MessageDialog
           title={t("error")}
