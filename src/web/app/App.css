@@ -3226,6 +3226,11 @@
   color: #087443;
 }
 
+.mdocs-agent-file-mark-xlsx {
+  background: #def7ec;
+  color: #046c4e;
+}
+
 .mdocs-agent-file-mark-file {
   background: #f2f4f7;
   color: #667085;

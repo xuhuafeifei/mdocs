@@ -16,6 +16,7 @@
 | [agent-sheet-insert-rows](./agent-sheet-insert-rows/设计契约.md) | **已同意**：`append_rows` / `update_row` / `insert_rows_at` |
 | [agent-thinking-level](./agent-thinking-level/设计契约.md) | **已同意**：思考档位 off/low/high/max + tool |
 | [agent-sheet-overwrite](./agent-sheet-overwrite/设计契约.md) | **已同意**：Agent `sheet_overwrite` 整表替换工作表 |
+| [agent-xlsx-attachment](./agent-xlsx-attachment/设计契约.md) | **已同意 / 已实现**：聊天附件 `.xlsx`/`.xls` → JSON 内嵌 LLM |
 | [agent-sheet-get-styles](./agent-sheet-get-styles/设计契约.md) | **已同意**：`sheet_get_styles` 只读返回格/行/列/整表样式 |
 | [document-delete-recovery](./document-delete-recovery/设计契约.md) | **已同意**：删文审计 `recovery` + restore + deleted 列表 |
 | [document-trash-ui](./document-trash-ui/设计契约.md) | **已同意**：设置页回收站（接 deleted/restore） |

@@ -28,6 +28,10 @@ function mimeGuess(name: string, fallback?: string): string {
   if (lower.endsWith(".csv")) return "text/csv";
   if (lower.endsWith(".json")) return "application/json";
   if (lower.endsWith(".txt")) return "text/plain";
+  if (lower.endsWith(".xlsx")) {
+    return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  }
+  if (lower.endsWith(".xls")) return "application/vnd.ms-excel";
   return fallback?.trim() || "application/octet-stream";
 }
 

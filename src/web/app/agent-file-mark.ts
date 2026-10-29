@@ -1,4 +1,14 @@
-export type FileMarkKind = "image" | "pdf" | "md" | "txt" | "csv" | "json" | "html" | "sheet" | "file";
+export type FileMarkKind =
+  | "image"
+  | "pdf"
+  | "md"
+  | "txt"
+  | "csv"
+  | "json"
+  | "html"
+  | "sheet"
+  | "xlsx"
+  | "file";
 
 const LABEL: Record<FileMarkKind, string> = {
   image: "IMG",
@@ -9,6 +19,7 @@ const LABEL: Record<FileMarkKind, string> = {
   json: "JSON",
   html: "HTM",
   sheet: "SHT",
+  xlsx: "XLS",
   file: "FILE",
 };
 
@@ -28,5 +39,13 @@ export function fileMarkKind(name: string, mime = ""): FileMarkKind {
   if (type === "text/plain" || ext === "txt") return "txt";
   if (type === "text/html" || ext === "html" || ext === "htm") return "html";
   if (ext === "sheet") return "sheet";
+  if (
+    ext === "xlsx" ||
+    ext === "xls" ||
+    type.includes("spreadsheetml") ||
+    type === "application/vnd.ms-excel"
+  ) {
+    return "xlsx";
+  }
   return "file";
 }

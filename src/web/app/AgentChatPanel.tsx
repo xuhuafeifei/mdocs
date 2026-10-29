@@ -3224,7 +3224,7 @@ export const AgentChatPanel = forwardRef<
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".png,.jpg,.jpeg,.webp,.gif,.txt,.md,.csv,.json,.pdf"
+                accept=".png,.jpg,.jpeg,.webp,.gif,.txt,.md,.csv,.json,.pdf,.xlsx,.xls"
                 hidden
                 onChange={(e) => void onPickAttachment(e.target.files)}
               />

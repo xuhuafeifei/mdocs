@@ -10,10 +10,18 @@ describe("asset capabilities", () => {
   it("allows registered types", () => {
     expect(findCapability("a.PNG")?.ext).toBe(".png");
     expect(() => assertUploadAllowed("note.md", 10)).not.toThrow();
+    expect(findCapability("book.XLSX")?.ext).toBe(".xlsx");
+    expect(() => assertUploadAllowed("book.xls", 10)).not.toThrow();
   });
 
   it("rejects unknown types", () => {
     expect(() => assertUploadAllowed("x.exe", 10)).toThrow("unsupported_type");
+  });
+
+  it("rejects oversized xlsx", () => {
+    expect(() => assertUploadAllowed("a.xlsx", 6 * 1024 * 1024)).toThrow(
+      "file_too_large",
+    );
   });
 
   it("plain text strategy returns text", async () => {

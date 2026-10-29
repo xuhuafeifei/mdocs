@@ -2,6 +2,7 @@ import path from "node:path";
 import { parseImage } from "./parse/image.js";
 import { parsePlainText } from "./parse/plain-text.js";
 import { parsePdfText } from "./parse/pdf.js";
+import { parseXlsx } from "./parse/xlsx.js";
 import {
   DEFAULT_PARSE_LIMITS,
   type AssetMeta,
@@ -35,6 +36,9 @@ const plainStrategy: ParseStrategy = async ({ data, limits }) =>
 const pdfStrategy: ParseStrategy = async ({ data, limits }) =>
   parsePdfText({ data, limits });
 
+const xlsxStrategy: ParseStrategy = async ({ data, limits }) =>
+  parseXlsx({ data, limits });
+
 export const assetCapabilities: readonly AssetCapability[] = [
   { ext: ".png", parse: imageStrategy, maxBytes: DEFAULT_PARSE_LIMITS.maxImageBytes },
   { ext: ".jpg", parse: imageStrategy, maxBytes: DEFAULT_PARSE_LIMITS.maxImageBytes },
@@ -46,6 +50,8 @@ export const assetCapabilities: readonly AssetCapability[] = [
   { ext: ".csv", parse: plainStrategy, maxBytes: 2 * 1024 * 1024 },
   { ext: ".json", parse: plainStrategy, maxBytes: 2 * 1024 * 1024 },
   { ext: ".pdf", parse: pdfStrategy, maxBytes: 20 * 1024 * 1024 },
+  { ext: ".xlsx", parse: xlsxStrategy, maxBytes: 5 * 1024 * 1024 },
+  { ext: ".xls", parse: xlsxStrategy, maxBytes: 5 * 1024 * 1024 },
 ];
 
 const byExt = new Map(assetCapabilities.map((c) => [c.ext, c]));
