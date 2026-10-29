@@ -398,6 +398,8 @@ export const en: Record<TranslationKey, string> = {
   versionHistoryRestoreConfirm: "Confirm restore? Unsaved drafts will be overwritten.",
   versionHistoryRestored: "Restored to selected version",
   versionHistorySheetHint: "Sheet preview shows a summary only; restore to view full content in the editor.",
+  htmlScriptPreviewHint:
+    "Scripts enabled (sandboxed): no network, no cookies/storage, cannot escape the preview. External images and CDNs will not load — inline them.",
   versionHistoryHideAuto: "Hide auto-publishes",
   versionHistoryMode: "View mode",
   versionHistoryModePreview: "Preview",

@@ -390,6 +390,7 @@ export type TranslationKey =
   | "versionHistoryRestoreConfirm"
   | "versionHistoryRestored"
   | "versionHistorySheetHint"
+  | "htmlScriptPreviewHint"
   | "versionHistoryHideAuto"
   | "versionHistoryMode"
   | "versionHistoryModePreview"

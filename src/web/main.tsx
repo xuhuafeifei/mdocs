@@ -7,6 +7,12 @@ import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router-dom";
 /** Deep imports — barrel `@lobehub/ui` pulls Highlighter/shiki into the first paint.
  * Package exports map `./es/*.mjs`, so paths must include `/index`. */
+// 注意：@lobehub/ui 的 ConfigProvider 两处导出形状不一致 ——
+//   index.d.mts: export { ConfigProvider }（具名）
+//   index.mjs  : export { ConfigProvider as default }（默认）
+// 运行时以 .mjs 为准（Vite 走 exports 的 import 条件），所以必须 default 导入；
+// 改成具名会在浏览器里炸 "does not provide an export named 'ConfigProvider'"。
+// @ts-expect-error d.mts 与 index.mjs 不一致；上游修好后此行会报 unused，届时删掉即可
 import ConfigProvider from "@lobehub/ui/es/ConfigProvider/index";
 import ThemeProvider from "@lobehub/ui/es/ThemeProvider/index";
 import { motion } from "motion/react";

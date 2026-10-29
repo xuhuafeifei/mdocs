@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import type { SerializedEditorState } from "lexical";
 import { Expand, Minimize2 } from "lucide-react";
 import { useI18n } from "../i18n";
+import { buildHtmlPreviewDocument, htmlPreviewSandbox } from "./html-preview";
 import { ApiRequestError } from "../services/client";
 import type { DocumentDetail } from "../../shared/types/document";
 import {
@@ -154,12 +155,21 @@ function VersionMdPreview(props: { commitId: string; content: string }) {
 }
 
 function VersionHtmlPreview(props: { content: string }) {
+  // 历史版本只读：脚本一律不执行（sandbox="" + CSP script-src 'none'）。
+  const srcDoc = useMemo(
+    () =>
+      buildHtmlPreviewDocument(props.content, {
+        allowScripts: false,
+        assetOrigin: window.location.origin,
+      }),
+    [props.content],
+  );
   return (
     <iframe
       title="html-preview"
       className="mdocs-version-preview-html"
-      sandbox=""
-      srcDoc={props.content}
+      sandbox={htmlPreviewSandbox(false)}
+      srcDoc={srcDoc}
     />
   );
 }

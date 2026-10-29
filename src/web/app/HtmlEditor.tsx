@@ -15,6 +15,7 @@ import {
 } from "../../shared/permissions.js";
 import { useI18n } from "../i18n";
 import { localizeDomainName } from "./utils";
+import { buildHtmlPreviewDocument, hasInlineScript, htmlPreviewSandbox } from "./html-preview";
 import { DocChrome } from "./DocChrome";
 import { RecentDocTabs, type RecentDocTabsProps } from "./RecentDocTabs";
 import { getDocumentTaskQueue } from "./documentTaskQueue";
@@ -498,7 +499,14 @@ export function HtmlEditor(props: HtmlEditorProps) {
     [props, scheduleSave],
   );
 
-  const previewHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${content}</body></html>`;
+  // 预览允许内联脚本（做交互原型），但沙箱不含 allow-same-origin、CSP 断网断存储。
+  const allowScripts = true;
+  // assetOrigin 让 /api/assets/<id> 这类站内图片可以直接引用（该路由公开只读）。
+  const previewHtml = useMemo(
+    () => buildHtmlPreviewDocument(content, { allowScripts, assetOrigin: window.location.origin }),
+    [content],
+  );
+  const scriptHintVisible = hasInlineScript(content);
 
   return (
     <div className={"mdocs-editor" + (props.readerChrome ? " mdocs-editor--reader" : "")}>
@@ -632,10 +640,15 @@ export function HtmlEditor(props: HtmlEditorProps) {
             className="mdocs-html-editor-preview"
             style={!previewMode && props.canEdit ? { width: "50%" } : { width: "100%" }}
           >
+            {scriptHintVisible ? (
+              <p className="muted" style={{ fontSize: 12, margin: "0 0 6px", lineHeight: 1.4 }}>
+                {t("htmlScriptPreviewHint")}
+              </p>
+            ) : null}
             <iframe
               className="mdocs-html-editor-iframe"
               srcDoc={previewHtml}
-              sandbox=""
+              sandbox={htmlPreviewSandbox(allowScripts)}
               title={displayName}
             />
           </div>

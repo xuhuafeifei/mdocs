@@ -394,6 +394,8 @@ export const zh: Record<TranslationKey, string> = {
   versionHistoryRestoreConfirm: "确认恢复？将覆盖未发布草稿。",
   versionHistoryRestored: "已恢复到所选版本",
   versionHistorySheetHint: "表格版本预览仅显示工作表摘要；恢复后在编辑器中查看完整内容。",
+  htmlScriptPreviewHint:
+    "脚本已启用（沙箱隔离）：无网络、无 cookie/存储、不能跳出预览；外链图片与 CDN 不会加载，请内联。",
   versionHistoryHideAuto: "隐藏自动发布",
   versionHistoryMode: "查看模式",
   versionHistoryModePreview: "预览",

@@ -26,3 +26,5 @@
 | 013 | [附件上传不做类型限制](./013-asset-upload-no-type-restriction.md) | accepted | `isAllowedAssetUpload` 恒 true；下载侧 Content-Type 白名单解耦，误拒成本 > 防护收益 |
 | 014 | [手机左缘右滑 vs 系统返回](./014-mobile-edge-swipe-vs-system-back.md) | accepted | 系统手势抢边为主因；exclusion 尽力；可靠入口靠汉堡 |
 | 015 | [overwrite_all Diff 相等放宽](./015-overwrite-all-diff-equality.md) | accepted | 双源 JSON 不强制同源；canonicalize + 纯文本兜底；异 hunk 留距、同 hunk 贴紧 |
+| 016 | [HTML 文档允许内联脚本](./016-html-js-prototype-sandbox.md) | accepted | 只给 `allow-scripts`（绝不 `allow-same-origin`）+ `default-src 'none'` CSP；版本预览仍禁脚本 |
+| 017 | [CLI 直传 assets](./017-cli-asset-upload.md) | accepted | `mdocs asset upload` 直接落 `files/assets`，不引入 token / 文档归属，命名与网页上传一致 |

@@ -160,4 +160,5 @@
   | `src/server/domains/personal-domain.service.ts` | 个人域 |
   | `src/server/cli/main.ts` | CLI 入口 |
   | `src/server/cli/self-update.ts` | `runSelfUpdate`（npmmirror 原地升级，保留 node_modules） |
+  | `src/server/cli/asset-upload.ts` | `uploadAssetFiles`（`mdocs asset upload`，uuid+ext 落 assets，输出 `/api/assets/<id>`） |
   | `src/server/migrations/visitor-migration.service.ts` | 访客迁移 |

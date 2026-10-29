@@ -4,7 +4,7 @@
 
 面向个人开发者与小团队：产品内 **智能助手 + 帮写**，外部 **CLI / Skills** 接入 Cursor / Claude；SQLite + 本地文件，**无账户**即可协作。
 
-[文档站点](https://xuhuafeifei.github.io/mdocs-site/) · [GitHub](https://github.com/xuhuafeifei/mdocs) · [npm `@fgbg/mdocs`](https://www.npmjs.com/package/@fgbg/mdocs) · 当前版本 **2.1.10**
+[文档站点](https://xuhuafeifei.github.io/mdocs-site/) · [GitHub](https://github.com/xuhuafeifei/mdocs) · [npm `@fgbg/mdocs`](https://www.npmjs.com/package/@fgbg/mdocs) · 当前版本 **3.1.0**
 
 <p align="center">
   <img src="image/site主页.png" alt="mdocs 文档站点首页" width="860" />
@@ -143,6 +143,19 @@ src/
 mdocs visitor migrate --from Alice --to Bob --dry-run
 mdocs visitor migrate --from Alice --to Bob --confirm
 ```
+
+## 上传图片资源（CLI）
+
+HTML 原型里可以直接引用站内资源，不必把图 base64 内联：
+
+```bash
+mdocs asset upload ./shot.png
+# → http://localhost:4000/api/assets/<uuid>.png
+mdocs asset upload ./a.png ./b.svg --base-url https://docs.example.com --json
+```
+
+命名规则与网页上传一致（`uuid` + 小写扩展名），落到 `<数据目录>/files/assets/`，通过公开只读的
+`GET /api/assets/:id` 访问；单文件上限跟随设置页的「上传大小」。
 
 ## 相关链接
 

@@ -37,6 +37,7 @@ function printUsage(): void {
       "  mdocs visitor list [--active|--disabled|--all]",
       "  mdocs visitor migrate --from OLD --to NEW [--dry-run] [--confirm]",
       "  mdocs agent session repair [--visitor ID|name] [--kind normal|coding|all] [--dry-run|--confirm]",
+      "  mdocs asset upload <file...> [--base-url URL] [--json]",
       "",
       "Notes:",
       "  version also accepts -v / --version.",
@@ -48,6 +49,9 @@ function printUsage(): void {
       "  Either --dry-run or --confirm must be supplied.",
       "  --confirm performs the migration inside a transaction and makes a backup first.",
       "  agent session repair rebuilds session.json from orphan *.jsonl (does not delete transcripts).",
+      "  asset upload copies files into <data>/files/assets as <uuid><ext> and prints",
+      "  /api/assets/<uuid><ext> — the same path shape as the web uploader, ready to",
+      "  paste into HTML / Markdown. --base-url adds the origin, --json prints a report.",
       "",
     ].join("\n"),
   );
@@ -83,6 +87,10 @@ async function main(): Promise<void> {
   }
   if (command === "visitor" && sub === "migrate") {
     await runVisitorMigrate(parseFlags(rest));
+    return;
+  }
+  if (command === "asset" && sub === "upload") {
+    await runAssetUpload(rest);
     return;
   }
   if (command === "agent" && sub === "session" && rest[0] === "repair") {
@@ -319,6 +327,59 @@ function printMigrationResult(result: {
       "",
     ].join("\n"),
   );
+}
+
+/** 值型 flag：它们后面那个 token 是参数，不是待上传文件。 */
+const ASSET_VALUE_FLAGS = new Set(["base-url"]);
+
+/**
+ * `mdocs asset upload <file...>`：把本地图片/附件复制进 assets 目录。
+ * 命名与 HTTP 上传一致（uuid + 小写扩展名），输出可直接放进 HTML 的站内路径。
+ */
+async function runAssetUpload(argv: string[]): Promise<void> {
+  const flags = parseFlags(argv);
+  const files: string[] = [];
+  for (let i = 0; i < argv.length; i += 1) {
+    const token = argv[i];
+    if (!token) continue;
+    if (token.startsWith("--")) {
+      if (ASSET_VALUE_FLAGS.has(token.slice(2))) i += 1;
+      continue;
+    }
+    files.push(token);
+  }
+
+  if (files.length === 0) {
+    process.stderr.write("usage: mdocs asset upload <file...> [--base-url URL] [--json]\n");
+    process.exit(1);
+  }
+
+  const { getConfig } = await import("../config/index.js");
+  const { getMaxUploadBytes } = await import("../config/server-settings.js");
+  const { AssetUploadError, uploadAssetFiles } = await import("./asset-upload.js");
+
+  const cfg = getConfig();
+  const baseUrl =
+    typeof flags["base-url"] === "string" ? flags["base-url"] : `http://localhost:${cfg.port}`;
+
+  try {
+    const assets = uploadAssetFiles(files, {
+      assetsDir: cfg.assetsDir,
+      maxBytes: getMaxUploadBytes(),
+      baseUrl,
+    });
+    if (flags.json === true) {
+      process.stdout.write(`${JSON.stringify({ assets }, null, 2)}\n`);
+      return;
+    }
+    for (const asset of assets) {
+      process.stdout.write(`${asset.url ?? asset.publicPath}\n`);
+    }
+  } catch (err) {
+    const message = err instanceof AssetUploadError ? err.message : (err as Error).message;
+    process.stderr.write(`asset upload failed: ${message}\n`);
+    process.exit(1);
+  }
 }
 
 void main();
