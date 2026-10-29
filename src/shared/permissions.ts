@@ -16,6 +16,10 @@ export function isPublicWritePermission(permission: number): boolean {
   return permission === DocumentPermission.PUBLIC_WRITE;
 }
 
+export function isDomainWritePermission(permission: number): boolean {
+  return permission === DocumentPermission.DOMAIN_WRITE;
+}
+
 export function allowedPermissionsForDomain(domainPermission: string): DocumentPermissionValue[] {
   if (domainPermission === "public") {
     return [DocumentPermission.PUBLIC_READ, DocumentPermission.PUBLIC_WRITE];

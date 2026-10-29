@@ -12,10 +12,9 @@ import type Database from "better-sqlite3";
 import { Jieba } from "@node-rs/jieba";
 import { dict } from "@node-rs/jieba/dict.js";
 import { getDb } from "../db/connection.js";
-import { findDomainById, isDomainMember } from "../db/repositories/domain.repo.js";
-import { canReadDocument } from "../access/access-control.js";
+import { findDomainById } from "../db/repositories/domain.repo.js";
+import { canReadDocument, makeDomainAccessInfo } from "../access/access-control.js";
 import type { DocumentRow } from "../db/repositories/document.repo.js";
-import type { DomainAccessInfo } from "../access/access-control.js";
 import { querySemanticNeighbors } from "./embedding-store.js";
 
 /** 与索引写入侧一致：查询也先 jieba，再交给 FTS5 */
@@ -138,8 +137,12 @@ export async function searchDocuments(params: {
 
     const domain = domainCache.get(row.domain_id);
     const domainPermission = domain?.permission ?? "public";
-    const isMember = !!(params.visitorId && domain && isDomainMember(db, row.domain_id, params.visitorId));
-    const domainInfo: DomainAccessInfo = { domainPermission, isDomainMember: isMember };
+    const domainInfo = makeDomainAccessInfo(
+      db,
+      row.domain_id,
+      params.visitorId,
+      domainPermission,
+    );
 
     if (!canReadDocument(docRow, params.visitorId ?? null, domainInfo)) continue;
 

@@ -55,12 +55,15 @@ function seedDocInDomain(options: {
   docId?: string;
   domainId?: string;
   memberIds?: string[];
+  /** 成员角色，默认 read；写测例传 write */
+  memberRole?: "read" | "write";
 }): string {
   const db = testDbRef.db!;
   const domainId = options.domainId ?? "test-domain";
   const docId = options.docId ?? "test-doc";
   const ownerId = options.ownerId ?? OWNER;
   const now = new Date().toISOString();
+  const memberRole = options.memberRole === "write" ? "write" : "read";
 
   // 创建域
   db.prepare(
@@ -80,8 +83,8 @@ function seedDocInDomain(options: {
   if (options.memberIds) {
     for (const mid of options.memberIds) {
       db.prepare(
-        `INSERT OR IGNORE INTO domain_members (domain_id, visitor_id, joined_at) VALUES (?, ?, ?)`,
-      ).run(domainId, mid, now);
+        `INSERT OR IGNORE INTO domain_members (domain_id, visitor_id, joined_at, role) VALUES (?, ?, ?, ?)`,
+      ).run(domainId, mid, now, memberRole);
     }
   }
 
@@ -151,12 +154,13 @@ describe("document invite — edit", () => {
     expect(() => assertDocumentAccess("edit-doc6", OTHER, "edit")).not.toThrow();
   });
 
-  it("private 域 + domain_write：域成员可编辑，无需 invite", () => {
+  it("private 域 + domain_write：write 成员可编辑，无需 invite", () => {
     seedDocInDomain({
       domainPermission: "private",
       docPermission: Permission.DOMAIN_WRITE,
       docId: "edit-doc7",
       memberIds: [OTHER],
+      memberRole: "write",
     });
     expect(() => assertDocumentAccess("edit-doc7", OTHER, "edit")).not.toThrow();
   });
@@ -296,13 +300,33 @@ describe("assertDocumentAccess", () => {
 
   // ── restricted 域写 ──
 
-  it("restricted 域：成员可写 domain_write(2) 文档", () => {
-    seedDocInDomain({ domainPermission: "restricted", docPermission: Permission.DOMAIN_WRITE, memberIds: [OTHER] });
+  it("restricted 域：write 成员可写 domain_write(2) 文档", () => {
+    seedDocInDomain({
+      domainPermission: "restricted",
+      docPermission: Permission.DOMAIN_WRITE,
+      memberIds: [OTHER],
+      memberRole: "write",
+    });
     expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).not.toThrow();
   });
 
+  it("restricted 域：read 成员不可写 domain_write(2) 文档", () => {
+    seedDocInDomain({
+      domainPermission: "restricted",
+      docPermission: Permission.DOMAIN_WRITE,
+      memberIds: [OTHER],
+      memberRole: "read",
+    });
+    expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).toThrow(DocumentError);
+  });
+
   it("restricted 域：成员不可写 domain_read(1) 文档", () => {
-    seedDocInDomain({ domainPermission: "restricted", docPermission: Permission.DOMAIN_READ, memberIds: [OTHER] });
+    seedDocInDomain({
+      domainPermission: "restricted",
+      docPermission: Permission.DOMAIN_READ,
+      memberIds: [OTHER],
+      memberRole: "write",
+    });
     expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).toThrow(DocumentError);
   });
 

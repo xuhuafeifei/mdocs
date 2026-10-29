@@ -45,9 +45,13 @@ function makeDoc(overrides: Partial<DocumentRow> & { permission: number }): Docu
   };
 }
 
-/** 构造域上下文快捷方式 */
-function ctx(domainPermission: string, isDomainMember: boolean): DomainAccessInfo {
-  return { domainPermission, isDomainMember };
+/** 构造域上下文快捷方式；canWrite 默认 false（只读成员），写测例需显式传 true。 */
+function ctx(
+  domainPermission: string,
+  isDomainMember: boolean,
+  domainMemberCanWrite = false,
+): DomainAccessInfo {
+  return { domainPermission, isDomainMember, domainMemberCanWrite };
 }
 
 /* ── 生命周期 ── */
@@ -178,12 +182,34 @@ describe("canEditDocument", () => {
 
   // ── restricted 域 ──
 
-  it("restricted 域：域成员可写 domain_write(2) 档", () => {
-    expect(canEditDocument(makeDoc({ permission: Permission.DOMAIN_WRITE }), OTHER, ctx("restricted", true))).toBe(true);
+  it("restricted 域：write 成员可写 domain_write(2) 档", () => {
+    expect(
+      canEditDocument(
+        makeDoc({ permission: Permission.DOMAIN_WRITE }),
+        OTHER,
+        ctx("restricted", true, true),
+      ),
+    ).toBe(true);
   });
 
-  it("restricted 域：域成员不可写 domain_read(1) 档", () => {
-    expect(canEditDocument(makeDoc({ permission: Permission.DOMAIN_READ }), OTHER, ctx("restricted", true))).toBe(false);
+  it("restricted 域：read 成员不可写 domain_write(2) 档", () => {
+    expect(
+      canEditDocument(
+        makeDoc({ permission: Permission.DOMAIN_WRITE }),
+        OTHER,
+        ctx("restricted", true, false),
+      ),
+    ).toBe(false);
+  });
+
+  it("restricted 域：域成员不可写 domain_read(1) 档（即使 write 角色）", () => {
+    expect(
+      canEditDocument(
+        makeDoc({ permission: Permission.DOMAIN_READ }),
+        OTHER,
+        ctx("restricted", true, true),
+      ),
+    ).toBe(false);
   });
 
   it("restricted 域：非成员不可写（无 invite）", () => {

@@ -24,6 +24,7 @@ import {
 } from "@shared/domainUi";
 import { domainPermissionChange } from "@shared/domainPermissionRank";
 import { VisitorPickerModal } from "./VisitorPickerModal";
+import { translateError } from "./utils";
 
 export function DomainManagementPanel() {
   const { t } = useI18n();
@@ -360,7 +361,7 @@ export function DomainManagementPanel() {
                                 title={typeTitle}
                                 onClick={() => {
                                   dm.setRenamingId(null);
-                                  setTypeDraft(d.permission);
+                                  setTypeDraft(d.permission as DomainPermissionValue);
                                   dm.setChangeTypeForId(d.domainId);
                                 }}
                                 disabled={!canUpgrade}
@@ -397,14 +398,36 @@ export function DomainManagementPanel() {
         lockedIds={memberModal ? [memberModal.creatorVisitorId] : []}
         seedMembers={memberModal?.memberRows}
         templates={templates}
+        showPermissionSelect={true}
+        permissionOptions={[
+          { value: "read", label: t("invitePermissionRead") },
+          { value: "write", label: t("invitePermissionEdit") },
+        ]}
+        initialPermissions={
+          memberModal
+            ? new Map(
+                memberModal.memberRows.map((m) => [
+                  m.visitorId,
+                  m.role === "write" || m.visitorId === memberModal.creatorVisitorId
+                    ? "write"
+                    : "read",
+                ]),
+              )
+            : undefined
+        }
         onClose={() => setMemberModal(null)}
-        onConfirm={async (visitorIds) => {
+        onConfirm={async (result) => {
           if (!memberModal) return;
-          // 调用 API 更新域成员列表
-          await putDomainMembersApi(memberModal.domainId, visitorIds);
+          const members = (
+            result as Array<{ visitorId: string; permission: string }>
+          ).map((row) => ({
+            visitorId: row.visitorId,
+            role: (row.permission === "write" ? "write" : "read") as "read" | "write",
+          }));
+          await putDomainMembersApi(memberModal.domainId, members);
           setImportBanner({
             kind: "ok",
-            text: t("domainMembersSaved", { count: String(visitorIds.length) }),
+            text: t("domainMembersSaved", { count: String(members.length) }),
           });
         }}
       />

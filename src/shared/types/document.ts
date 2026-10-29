@@ -19,6 +19,8 @@ export interface DocumentDetail extends DocumentSummary {
   contentHash: string;
   /** 当前请求的访客是否通过邀请获得了编辑权限 */
   invitedEdit?: boolean;
+  /** 当前访客是域成员且 role=write（仍需文档 domain_write 才能编） */
+  domainMemberWrite?: boolean;
 }
 
 /** 当前打开文档的服务端 meta（不含正文），供 UI 壳共享。见 .mdocs-docs/archive/active-doc-meta-and-draft-model.md */

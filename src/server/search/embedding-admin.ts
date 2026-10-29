@@ -2,9 +2,13 @@
  * 语义索引管理：列表（含上次构建时间）+ 按文档勾选重建。
  */
 import { getDb } from "../db/connection.js";
-import { findDomainById, isDomainMember, listDomains } from "../db/repositories/domain.repo.js";
+import { findDomainById, listDomains } from "../db/repositories/domain.repo.js";
 import type { DocumentRow } from "../db/repositories/document.repo.js";
-import { canReadDocument, type DomainAccessInfo } from "../access/access-control.js";
+import {
+  canReadDocument,
+  makeDomainAccessInfo,
+  type DomainAccessInfo,
+} from "../access/access-control.js";
 import { resolveDomainAccess } from "../access/domain-access.js";
 import { readDocument } from "../storage/file-store.js";
 import { listDomainIdsWithDocumentInviteForVisitor } from "../db/repositories/document.repo.js";
@@ -92,8 +96,7 @@ export function listEmbeddingIndex(params: {
     if (!domainInfo) {
       const domain = findDomainById(db, row.domain_id);
       const domainPermission = domain?.permission ?? "public";
-      const isMember = !!(visitorId && domain && isDomainMember(db, row.domain_id, visitorId));
-      domainInfo = { domainPermission, isDomainMember: isMember };
+      domainInfo = makeDomainAccessInfo(db, row.domain_id, visitorId, domainPermission);
       domainCache.set(row.domain_id, domainInfo);
     }
 
@@ -190,12 +193,12 @@ export async function rebuildEmbeddingIndex(params: {
 
       const domain = findDomainById(db, row.domain_id);
       const domainPermission = domain?.permission ?? "public";
-      const isMember = !!(
-        params.visitorId &&
-        domain &&
-        isDomainMember(db, row.domain_id, params.visitorId)
+      const domainInfo = makeDomainAccessInfo(
+        db,
+        row.domain_id,
+        params.visitorId,
+        domainPermission,
       );
-      const domainInfo: DomainAccessInfo = { domainPermission, isDomainMember: isMember };
       const docRow: DocumentRow = {
         document_id: row.document_id,
         domain_id: row.domain_id,

@@ -5,9 +5,9 @@ import {
   listDocumentsByDomain,
   type DocumentRow,
 } from "../db/repositories/document.repo.js";
-import { findDomainById, isDomainMember } from "../db/repositories/domain.repo.js";
+import { findDomainById } from "../db/repositories/domain.repo.js";
 import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access.js";
-import { canReadDocument, DocumentError, type DomainAccessInfo } from "../access/access-control.js";
+import { canReadDocument, DocumentError, makeDomainAccessInfo } from "../access/access-control.js";
 import { getConfig } from "../config/index.js";
 import { FOLDER_DESC_FILENAME } from "../../shared/folderDesc.js";
 import { getPolicy } from "../../shared/file-type-policy.js";
@@ -37,10 +37,7 @@ export function buildDocumentTree(
   if (!canEnterDomainTree(access)) return [];
 
   const domainPermission = domain?.permission ?? "public";
-  const isMember = !!(
-    visitorId && domain && isDomainMember(db, domain.domain_id, visitorId)
-  );
-  const domainInfo: DomainAccessInfo = { domainPermission, isDomainMember: isMember };
+  const domainInfo = makeDomainAccessInfo(db, effective, visitorId, domainPermission);
 
   const rows = listDocumentsByDomain(db, effective);
   const filtered = rows.filter((r) => canReadDocument(r, visitorId ?? null, domainInfo));
@@ -77,10 +74,7 @@ export function buildFolderSubtree(
   if (!canEnterDomainTree(access)) return [];
 
   const domainPermission = domain?.permission ?? "public";
-  const isMember = !!(
-    visitorId && domain && isDomainMember(db, domain.domain_id, visitorId)
-  );
-  const domainInfo: DomainAccessInfo = { domainPermission, isDomainMember: isMember };
+  const domainInfo = makeDomainAccessInfo(db, folder.domain_id, visitorId, domainPermission);
 
   if (!canReadDocument(folder, visitorId ?? null, domainInfo)) {
     return [];

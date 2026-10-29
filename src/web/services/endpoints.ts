@@ -274,12 +274,15 @@ export function fetchDomainMembersApi(domainId: string): Promise<DomainMemberLis
 }
 
 /**
- * 批量设置受限域的成员（覆盖式）。
+ * 批量设置受限域的成员（覆盖式，含 read/write 角色）。
  */
-export function putDomainMembersApi(domainId: string, visitorIds: string[]): Promise<{ memberCount: number }> {
+export function putDomainMembersApi(
+  domainId: string,
+  members: Array<{ visitorId: string; role: "read" | "write" }>,
+): Promise<{ memberCount: number }> {
   return api<{ memberCount: number }>(`/api/domains/${encodeURIComponent(domainId)}/members`, {
     method: "PUT",
-    body: JSON.stringify({ visitorIds }),
+    body: JSON.stringify({ members }),
   });
 }
 

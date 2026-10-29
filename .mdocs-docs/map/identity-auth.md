@@ -49,6 +49,17 @@
   | `src/server/routes/domains.routes.ts` | `…/members` |
   | `src/server/routes/graph.routes.ts` | 图谱 GET/analyze（落地门禁） |
 
+### 域成员读写角色
+
+- **关键词**：`domain_members.role` `read` `write` `domainMemberCanWrite` `domainMemberWrite`
+- **结论**：成员默认 `read`（可看）；`write` + 文档 `domain_write` 才能编。与 invite 互斥、无关。见 [`domain-member-role`](../requirements/domain-member-role/设计契约.md)。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/server/db/repositories/domain.repo.ts` | `getDomainMemberRole` `replaceDomainMembers` |
+  | `src/server/access/access-control.ts` | `DomainAccessInfo.domainMemberCanWrite` |
+  | `src/web/app/EditorPaneHost.tsx` | `canEdit` |
+
 ### CLI Token
 
 - **关键词**：`x-cli-token` `cli_tokens` `MDOCS_TOKEN` `多 Token` `启停` `硬删`

@@ -280,7 +280,11 @@ async function demoApi<T>(
     return { members: [] } as unknown as T;
   }
   if (path.match(/^\/api\/domains\/[^/]+\/members$/) && method === "PUT") {
-    return { memberCount: (body?.visitorIds as string[] | undefined)?.length ?? 0 } as unknown as T;
+    const members = body?.members as Array<{ visitorId: string }> | undefined;
+    const visitorIds = body?.visitorIds as string[] | undefined;
+    return {
+      memberCount: members?.length ?? visitorIds?.length ?? 0,
+    } as unknown as T;
   }
 
   // 域操作（只返回成功，不做实际存储）

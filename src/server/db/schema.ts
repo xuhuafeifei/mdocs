@@ -112,6 +112,7 @@ const SCHEMA_STATEMENTS: string[] = [
     domain_id TEXT NOT NULL,
     visitor_id TEXT NOT NULL,
     joined_at TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'read',
     PRIMARY KEY (domain_id, visitor_id)
   )`,
   `CREATE INDEX IF NOT EXISTS idx_domain_members_domain ON domain_members (domain_id)`,
@@ -265,9 +266,18 @@ export function applySchema(db: Database.Database): void {
     migrateAgentModelConfigMultiDefault(db);
     migrateAgentModelConfigThinkingLevel(db);
     migrateAgentModelConfigRunTimeout(db);
+    migrateDomainMembersRole(db);
     ensureDefaultDomain(db);
   });
   tx();
+}
+
+/** 为 domain_members 添加 role 列（read|write，默认 read）。 */
+function migrateDomainMembersRole(db: Database.Database): void {
+  const rows = db.prepare(`PRAGMA table_info(domain_members)`).all() as { name: string }[];
+  if (rows.length === 0) return;
+  if (rows.some((r) => r.name === "role")) return;
+  db.exec(`ALTER TABLE domain_members ADD COLUMN role TEXT NOT NULL DEFAULT 'read'`);
 }
 
 /** 获取 domains 表当前已有的列名集合。 */

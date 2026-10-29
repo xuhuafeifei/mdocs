@@ -24,6 +24,9 @@ export interface DomainSummary {
  *              → missing=true, visitorName=空字符串
  *              前端右栏显示完整 UUID +「已删除的访客（库中无记录）」
  */
+/** 受限域成员角色：默认可读；write 才有资格写 domain_write 文档。 */
+export type DomainMemberRole = "read" | "write";
+
 export interface DomainMemberListEntry {
   visitorId: string;
   visitorName: string;
@@ -31,6 +34,8 @@ export interface DomainMemberListEntry {
   missing: boolean;
   /** visitors 表有行，但 disabled_at 非空（已停用） */
   disabled: boolean;
+  /** 成员读写角色；缺省按 read 处理（兼容旧响应） */
+  role?: DomainMemberRole;
 }
 
 /** Private-type domains: exactly one domain member (the domain owner). No multi-member list. */

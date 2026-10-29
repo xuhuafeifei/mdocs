@@ -38,6 +38,7 @@ import {
 import { findVisitorById } from "../db/repositories/visitor.repo.js";
 import {
   findDomainById,
+  getDomainMemberRole,
   isDomainMember,
 } from "../db/repositories/domain.repo.js";
 import {
@@ -49,7 +50,7 @@ import {
   Permission,
   canReadDocument,
   canEditDocument,
-  type DomainAccessInfo,
+  makeDomainAccessInfo,
   validateDomainPermission,
 } from "../access/access-control.js";
 import {
@@ -142,15 +143,7 @@ export function listDocuments(
   if (!canEnterDomainTree(access)) return [];
 
   const domainPermission = domain?.permission ?? "public";
-  const isMember = !!(
-    visitorId &&
-    domain &&
-    isDomainMember(db, domain.domain_id, visitorId)
-  );
-  const domainInfo: DomainAccessInfo = {
-    domainPermission,
-    isDomainMember: isMember,
-  };
+  const domainInfo = makeDomainAccessInfo(db, effective, visitorId, domainPermission);
 
   const rows = listDocumentsByDomain(db, effective);
   const filtered = rows.filter((r) =>
@@ -178,15 +171,12 @@ export function listFolderChildren(
   if (!canEnterDomainTree(access)) return [];
 
   const domainPermission = domain?.permission ?? "public";
-  const isMember = !!(
-    visitorId &&
-    domain &&
-    isDomainMember(db, domain.domain_id, visitorId)
-  );
-  const domainInfo: DomainAccessInfo = {
+  const domainInfo = makeDomainAccessInfo(
+    db,
+    folder.domain_id,
+    visitorId,
     domainPermission,
-    isDomainMember: isMember,
-  };
+  );
 
   // 检查对文件夹本身是否有读权限
   if (!canReadDocument(folder, visitorId ?? null, domainInfo)) {
@@ -420,12 +410,12 @@ export function getDocument(
     row.domain_id,
     row.relative_path,
   );
-  // 检查访客是否通过邀请获得编辑权限
-  let invitedEdit = false;
-  if (visitorId && row.owner_visitor_id !== visitorId) {
-    const invite = findDocumentInvite(getDb(), documentId, visitorId);
-    invitedEdit = invite?.permission === "edit";
-  }
+  const invitedEdit = visitorId
+    ? resolveInvitedEditFlag(getDb(), row, visitorId)
+    : false;
+  const domainMemberWrite = visitorId
+    ? resolveDomainMemberWriteFlag(getDb(), row, visitorId)
+    : false;
   // 根据政策表的 textExtract 决定 format 行为
   const policy = getPolicy(row.file_type as any);
   let finalContent: string;
@@ -449,6 +439,7 @@ export function getDocument(
     contentHash,
     permission: row.permission,
     ...(invitedEdit ? { invitedEdit: true } : {}),
+    ...(domainMemberWrite ? { domainMemberWrite: true } : {}),
   };
 }
 
@@ -511,13 +502,12 @@ export function updateDocument(params: {
 
   const domain = findDomainById(db, row.domain_id);
   const domainPermission = domain?.permission ?? "public";
-  const isMember = !!(
-    domain && isDomainMember(db, domain.domain_id, params.actorVisitorId)
-  );
-  const domainInfo: DomainAccessInfo = {
+  const domainInfo = makeDomainAccessInfo(
+    db,
+    row.domain_id,
+    params.actorVisitorId,
     domainPermission,
-    isDomainMember: isMember,
-  };
+  );
   if (!canEditDocument(row, params.actorVisitorId, domainInfo)) {
     throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
   }
@@ -642,6 +632,11 @@ export function updateDocument(params: {
   // 1) 降低竞争态：避免 PUT 与后续 GET 间隙被他人再次推进 head；
   // 2) 单一真相：以后端实际落库结果为准（权限、head、invite 派生字段等）。
   const invitedEdit = resolveInvitedEditFlag(db, row, params.actorVisitorId);
+  const domainMemberWrite = resolveDomainMemberWriteFlag(
+    db,
+    row,
+    params.actorVisitorId,
+  );
   return buildDocumentDetail(row, {
     displayName,
     content,
@@ -652,6 +647,7 @@ export function updateDocument(params: {
       params.permission !== undefined ? params.permission : row.permission,
     headCommitId: commitId,
     invitedEdit,
+    domainMemberWrite,
   });
 }
 
@@ -1042,13 +1038,12 @@ export function restoreDocumentVersion(params: {
 
   const domain = findDomainById(db, row.domain_id);
   const domainPermission = domain?.permission ?? "public";
-  const isMember = !!(
-    domain && isDomainMember(db, domain.domain_id, params.actorVisitorId)
-  );
-  const domainInfo: DomainAccessInfo = {
+  const domainInfo = makeDomainAccessInfo(
+    db,
+    row.domain_id,
+    params.actorVisitorId,
     domainPermission,
-    isDomainMember: isMember,
-  };
+  );
   if (!canEditDocument(row, params.actorVisitorId, domainInfo)) {
     throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
   }
@@ -1133,6 +1128,11 @@ export function restoreDocumentVersion(params: {
   );
 
   const invitedEdit = resolveInvitedEditFlag(db, row, params.actorVisitorId);
+  const domainMemberWrite = resolveDomainMemberWriteFlag(
+    db,
+    row,
+    params.actorVisitorId,
+  );
   return buildDocumentDetail(row, {
     displayName: row.display_name,
     content,
@@ -1142,6 +1142,7 @@ export function restoreDocumentVersion(params: {
     permission: row.permission,
     headCommitId: newCommitId,
     invitedEdit,
+    domainMemberWrite,
   });
 }
 
@@ -1746,6 +1747,7 @@ function buildDocumentDetail(
     permission: number;
     headCommitId: string;
     invitedEdit?: boolean;
+    domainMemberWrite?: boolean;
   },
 ): DocumentDetail {
   return {
@@ -1757,6 +1759,7 @@ function buildDocumentDetail(
     updatedAt: overrides.updatedAt,
     permission: overrides.permission,
     ...(overrides.invitedEdit ? { invitedEdit: true } : {}),
+    ...(overrides.domainMemberWrite ? { domainMemberWrite: true } : {}),
   };
 }
 
@@ -1952,6 +1955,7 @@ function publishMergeDocument(params: {
   // - 避免前端二次查询引入时序偏差；
   // - 确保 UI 使用服务端合并后的最终状态作为唯一真相。
   const invitedEdit = resolveInvitedEditFlag(db, row, actorVisitorId);
+  const domainMemberWrite = resolveDomainMemberWriteFlag(db, row, actorVisitorId);
   return buildDocumentDetail(row, {
     displayName,
     content,
@@ -1962,6 +1966,7 @@ function publishMergeDocument(params: {
       params.permission !== undefined ? params.permission : row.permission,
     headCommitId: mergeCommitId,
     invitedEdit,
+    domainMemberWrite,
   });
 }
 
@@ -1991,6 +1996,15 @@ function resolveInvitedEditFlag(
   if (row.owner_visitor_id === actorVisitorId) return false;
   const invite = findDocumentInvite(db, row.document_id, actorVisitorId);
   return invite?.permission === "edit";
+}
+
+function resolveDomainMemberWriteFlag(
+  db: ReturnType<typeof getDb>,
+  row: DocumentRow,
+  actorVisitorId: string,
+): boolean {
+  if (row.owner_visitor_id === actorVisitorId) return false;
+  return getDomainMemberRole(db, row.domain_id, actorVisitorId) === "write";
 }
 
 // ============================================================

@@ -8,7 +8,9 @@ import {
   findDomainById,
   insertDomain,
   listDomainMemberIds,
+  listDomainMembers,
   listDomains,
+  type DomainMemberRole,
 } from "../../db/repositories/domain.repo.js";
 import {
   countDocumentsByDomain,
@@ -103,7 +105,7 @@ export function createDomainTool({ visitorId }: ToolDeps): AgentTool {
         permission,
       });
       if (permission === "restricted") {
-        addDomainMember(db, domainId, visitorId);
+        addDomainMember(db, domainId, visitorId, "write");
       }
       return asToolResult({
         domainId,
@@ -121,7 +123,7 @@ export function listDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
     name: "list_domain_members",
     label: "列出工作空间成员",
     description:
-      "列出 restricted 工作空间的成员（仅创建者可用）。返回 visitorId / visitorName / missing / disabled。",
+      "列出 restricted 工作空间的成员（仅创建者可用）。返回 visitorId / visitorName / missing / disabled / role(read|write)。",
     parameters: Type.Object({
       domainId: Type.String({ description: "工作空间 ID" }),
     }),
@@ -129,17 +131,24 @@ export function listDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
       const domainId = (params as { domainId: string }).domainId?.trim();
       if (!domainId) throw new Error("domainId is required");
       const { db, domain } = requireRestrictedDomainAsCreator(domainId, visitorId);
-      const ids = listDomainMemberIds(db, domainId);
-      const members = ids.map((id) => {
-        const v = findVisitorById(db, id);
+      const rows = listDomainMembers(db, domainId);
+      const members = rows.map((row) => {
+        const v = findVisitorById(db, row.visitor_id);
         if (!v) {
-          return { visitorId: id, visitorName: "", missing: true, disabled: false };
+          return {
+            visitorId: row.visitor_id,
+            visitorName: "",
+            missing: true,
+            disabled: false,
+            role: row.role,
+          };
         }
         return {
-          visitorId: id,
+          visitorId: row.visitor_id,
           visitorName: v.visitor_name,
           missing: false,
           disabled: v.disabled_at != null,
+          role: row.role,
         };
       });
       return asToolResult({
@@ -157,30 +166,39 @@ export function addDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
     name: "add_domain_members",
     label: "添加工作空间成员",
     description:
-      "向 restricted 工作空间追加成员（仅创建者可用；不会清空现有成员）。visitorIds 来自「列出活跃访客」。创建者始终保留。",
+      "向 restricted 工作空间追加成员（仅创建者可用；不会清空现有成员）。visitorIds 来自「列出活跃访客」。默认 role=read；可传 role=write。创建者始终保留为 write。",
     parameters: Type.Object({
       domainId: Type.String({ description: "工作空间 ID" }),
       visitorIds: Type.Array(Type.String({ description: "要添加的访客 ID" }), {
         description: "访客 ID 数组",
       }),
+      role: Type.Optional(
+        Type.String({ description: "成员角色 read|write，默认 read" }),
+      ),
     }),
     execute: async (_id, params) => {
-      const { domainId: rawDomainId, visitorIds } = params as {
+      const {
+        domainId: rawDomainId,
+        visitorIds,
+        role: rawRole,
+      } = params as {
         domainId: string;
         visitorIds: string[];
+        role?: string;
       };
       const domainId = rawDomainId?.trim();
       if (!domainId) throw new Error("domainId is required");
       if (!Array.isArray(visitorIds) || visitorIds.length === 0) {
         throw new Error("visitorIds must be a non-empty array");
       }
+      const role: DomainMemberRole = rawRole === "write" ? "write" : "read";
 
       const { db, domain } = requireRestrictedDomainAsCreator(domainId, visitorId);
       const uniqueIds = [...new Set(visitorIds.map((id) => id.trim()).filter(Boolean))];
       if (uniqueIds.length === 0) throw new Error("visitorIds must be a non-empty array");
 
       const invalid: string[] = [];
-      const added: { visitorId: string; visitorName: string }[] = [];
+      const added: { visitorId: string; visitorName: string; role: DomainMemberRole }[] = [];
       const alreadyMember: string[] = [];
       const before = new Set(listDomainMemberIds(db, domainId));
 
@@ -194,15 +212,15 @@ export function addDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
           alreadyMember.push(vid);
           continue;
         }
-        addDomainMember(db, domainId, vid);
-        added.push({ visitorId: vid, visitorName: v.visitor_name });
+        addDomainMember(db, domainId, vid, role);
+        added.push({ visitorId: vid, visitorName: v.visitor_name, role });
       }
 
       if (invalid.length > 0 && added.length === 0) {
         throw new Error(`unknown visitor ids: ${invalid.join(", ")}`);
       }
 
-      addDomainMember(db, domainId, domain.creator_visitor_id);
+      addDomainMember(db, domainId, domain.creator_visitor_id, "write");
 
       return asToolResult({
         domainId,

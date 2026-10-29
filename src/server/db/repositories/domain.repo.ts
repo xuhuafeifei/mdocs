@@ -10,6 +10,15 @@ export interface DomainRow {
   permission: string;
 }
 
+/** 受限域成员角色：默认可读；write 才有资格写 domain_write 文档。 */
+export type DomainMemberRole = "read" | "write";
+
+export interface DomainMemberRow {
+  visitor_id: string;
+  role: DomainMemberRole;
+  joined_at: string;
+}
+
 /**
  * 列出所有域，按 domain_id 排序。
  */
@@ -105,26 +114,51 @@ export function deleteDomainRow(db: Database.Database, domainId: string): void {
   db.prepare(`DELETE FROM domains WHERE domain_id = ?`).run(domainId);
 }
 
+function normalizeRole(role: DomainMemberRole | undefined): DomainMemberRole {
+  return role === "write" ? "write" : "read";
+}
+
 /**
- * 向指定域添加一位成员；若已存在则忽略（INSERT OR IGNORE）。
+ * 向指定域添加一位成员。
+ * 已存在时：传入 write 可升级；传入 read 不降级。
  */
-export function addDomainMember(db: Database.Database, domainId: string, visitorId: string): void {
+export function addDomainMember(
+  db: Database.Database,
+  domainId: string,
+  visitorId: string,
+  role: DomainMemberRole = "read",
+): void {
   const now = new Date().toISOString();
+  const r = normalizeRole(role);
   db.prepare(
-    `INSERT OR IGNORE INTO domain_members (domain_id, visitor_id, joined_at) VALUES (?, ?, ?)`,
-  ).run(domainId, visitorId, now);
+    `INSERT INTO domain_members (domain_id, visitor_id, joined_at, role) VALUES (?, ?, ?, ?)
+     ON CONFLICT(domain_id, visitor_id) DO UPDATE SET
+       role = CASE WHEN excluded.role = 'write' THEN 'write' ELSE domain_members.role END`,
+  ).run(domainId, visitorId, now, r);
 }
 
 /**
  * 判断指定访客是否是指定域的成员。
  */
 export function isDomainMember(db: Database.Database, domainId: string, visitorId: string): boolean {
+  return getDomainMemberRole(db, domainId, visitorId) !== null;
+}
+
+/**
+ * 查询成员角色；非成员返回 null。
+ */
+export function getDomainMemberRole(
+  db: Database.Database,
+  domainId: string,
+  visitorId: string,
+): DomainMemberRole | null {
   const row = db
-    .prepare<[string, string], { c: number }>(
-      `SELECT COUNT(*) as c FROM domain_members WHERE domain_id = ? AND visitor_id = ?`,
+    .prepare<[string, string], { role: string }>(
+      `SELECT role FROM domain_members WHERE domain_id = ? AND visitor_id = ?`,
     )
     .get(domainId, visitorId);
-  return (row?.c ?? 0) > 0;
+  if (!row) return null;
+  return row.role === "write" ? "write" : "read";
 }
 
 /**
@@ -143,31 +177,42 @@ export function countDomainMembers(db: Database.Database, domainId: string): num
  * 列出指定域的所有成员 visitor_id。
  */
 export function listDomainMemberIds(db: Database.Database, domainId: string): string[] {
-  const rows = db
-    .prepare<string, { visitor_id: string }>(
-      `SELECT visitor_id FROM domain_members WHERE domain_id = ?`,
-    )
-    .all(domainId);
-  return rows.map((r) => r.visitor_id);
+  return listDomainMembers(db, domainId).map((r) => r.visitor_id);
 }
 
 /**
- * 替换域成员表（先删后插）；调用方保证 visitorId 列表已校验。
+ * 列出指定域成员（含角色）。
+ */
+export function listDomainMembers(db: Database.Database, domainId: string): DomainMemberRow[] {
+  const rows = db
+    .prepare<string, { visitor_id: string; role: string; joined_at: string }>(
+      `SELECT visitor_id, role, joined_at FROM domain_members WHERE domain_id = ?`,
+    )
+    .all(domainId);
+  return rows.map((r) => ({
+    visitor_id: r.visitor_id,
+    role: r.role === "write" ? "write" : "read",
+    joined_at: r.joined_at,
+  }));
+}
+
+/**
+ * 替换域成员表（先删后插）；调用方保证列表已校验。
  * 整个操作在单个事务中完成。
  */
 export function replaceDomainMembers(
   db: Database.Database,
   domainId: string,
-  visitorIds: string[],
+  members: Array<{ visitorId: string; role?: DomainMemberRole }>,
   joinedAt: string,
 ): void {
   const tx = db.transaction(() => {
     db.prepare(`DELETE FROM domain_members WHERE domain_id = ?`).run(domainId);
     const ins = db.prepare(
-      `INSERT INTO domain_members (domain_id, visitor_id, joined_at) VALUES (?, ?, ?)`,
+      `INSERT INTO domain_members (domain_id, visitor_id, joined_at, role) VALUES (?, ?, ?, ?)`,
     );
-    for (const vid of visitorIds) {
-      ins.run(domainId, vid, joinedAt);
+    for (const m of members) {
+      ins.run(domainId, m.visitorId, joinedAt, normalizeRole(m.role));
     }
   });
   tx();

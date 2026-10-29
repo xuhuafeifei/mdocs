@@ -19,7 +19,7 @@
 
 import { getDb } from "../db/connection.js";
 import { findDocumentById, findDocumentInvite } from "../db/repositories/document.repo.js";
-import { findDomainById, isDomainMember as checkDomainMember } from "../db/repositories/domain.repo.js";
+import { findDomainById, getDomainMemberRole } from "../db/repositories/domain.repo.js";
 import type { DocumentRow } from "../db/repositories/document.repo.js";
 import { isGraphFileType } from "../../shared/file-types.js";
 import { canAccessGraph, resolveDomainAccess } from "./domain-access.js";
@@ -88,6 +88,28 @@ export interface DomainAccessInfo {
   domainPermission: string;
   /** 当前访客是否是该域成员 */
   isDomainMember: boolean;
+  /** 成员 role=write 时为 true；只读成员 / 非成员为 false */
+  domainMemberCanWrite: boolean;
+}
+
+/**
+ * 组装域访问上下文（含成员读写角色）。
+ */
+export function makeDomainAccessInfo(
+  db: { prepare: Function },
+  domainId: string,
+  visitorId: string | null | undefined,
+  domainPermission: string,
+): DomainAccessInfo {
+  if (!visitorId) {
+    return { domainPermission, isDomainMember: false, domainMemberCanWrite: false };
+  }
+  const role = getDomainMemberRole(db as any, domainId, visitorId);
+  return {
+    domainPermission,
+    isDomainMember: role !== null,
+    domainMemberCanWrite: role === "write",
+  };
 }
 
 /**
@@ -96,8 +118,10 @@ export interface DomainAccessInfo {
 export function getDomainInfo(db: any, domainId: string, visitorId: string | null): DomainAccessInfo {
   const domain = findDomainById(db, domainId);
   const domainPermission = domain?.permission ?? "public";
-  const isDomainMember = !!(visitorId && domain && checkDomainMember(db, domain.domain_id, visitorId));
-  return { domainPermission, isDomainMember };
+  if (!visitorId || !domain) {
+    return { domainPermission, isDomainMember: false, domainMemberCanWrite: false };
+  }
+  return makeDomainAccessInfo(db, domain.domain_id, visitorId, domainPermission);
 }
 
 // ============================================================
@@ -177,9 +201,8 @@ export function canEditDocument(
   }
 
   if (domainInfo.domainPermission === "restricted") {
-    // restricted 域仅 1/2 档，仅 2 (domain_write) 允许域成员写
-    if (row.permission === Permission.DOMAIN_WRITE && domainInfo.isDomainMember) return true;
-    // 非成员靠 invite
+    // restricted：domain_write + 成员 write 角色才可写；非成员靠 invite
+    if (row.permission === Permission.DOMAIN_WRITE && domainInfo.domainMemberCanWrite) return true;
     const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
     return invite?.permission === "edit";
   }
@@ -196,8 +219,8 @@ export function canEditDocument(
     return invite?.permission === "edit";
   }
   if (row.permission === Permission.DOMAIN_WRITE) {
-    // domain_write：域成员可写，或靠 invite
-    if (domainInfo.isDomainMember) return true;
+    // domain_write：成员 write 角色可写，或靠 invite
+    if (domainInfo.domainMemberCanWrite) return true;
     const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
     return invite?.permission === "edit";
   }
@@ -240,8 +263,7 @@ export function assertDocumentAccess(
   // 读/写：需要域上下文
   const domain = findDomainById(db, row.domain_id);
   const domainPermission = domain?.permission ?? "public";
-  const isMember = !!(visitorId && domain && checkDomainMember(db, domain.domain_id, visitorId));
-  const domainInfo: DomainAccessInfo = { domainPermission, isDomainMember: isMember };
+  const domainInfo = makeDomainAccessInfo(db, row.domain_id, visitorId, domainPermission);
 
   // 图谱缓存：隐藏文件 permission/owner 不作鉴权依据。
   // 能读图 = 域协作 full（能进工作空间协作）；单篇 invite 不授图谱。

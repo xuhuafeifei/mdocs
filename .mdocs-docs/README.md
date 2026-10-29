@@ -36,6 +36,7 @@
 
 | 需求夹 | 说明 |
 |--------|------|
+| `domain-member-role` | **已同意 / 已实现**：受限域成员 `read`/`write` 角色（默认只读；写需文档 `domain_write`）— [需求分析](./requirements/domain-member-role/需求分析.md) · [设计契约](./requirements/domain-member-role/设计契约.md) · [代码索引](./requirements/domain-member-role/代码索引.md) |
 | `version-history-compare-fullscreen` | **已同意 / 已实现**：版本历史双版 `LexicalDiff` 对比 + 面板全屏 — [需求分析](./requirements/version-history-compare-fullscreen/需求分析.md) · [设计契约](./requirements/version-history-compare-fullscreen/设计契约.md) · [代码索引](./requirements/version-history-compare-fullscreen/代码索引.md) |
 | `publish-commit-message` | **已同意 / 已实现**（含 **merge-message 增量已同意 2026-10-23**：合并说明弹窗 + `suggest-merge-message`）— [需求分析](./requirements/publish-commit-message/需求分析.md) · [设计契约](./requirements/publish-commit-message/设计契约.md) · [代码索引](./requirements/publish-commit-message/代码索引.md) |
 | `ai-merge` | **已同意（2026-10-23）**：行级冲突 AI 选票（标记全文 → resolution）；与 merge-message 分接口 — [需求分析](./requirements/ai-merge/需求分析.md) · [设计契约](./requirements/ai-merge/设计契约.md) · [代码索引](./requirements/ai-merge/代码索引.md) |

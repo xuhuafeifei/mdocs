@@ -8,8 +8,9 @@ import {
   updateDomainName,
   deleteDomainRow,
   addDomainMember,
-  listDomainMemberIds,
+  listDomainMembers,
   replaceDomainMembers,
+  type DomainMemberRole,
 } from "../db/repositories/domain.repo.js";
 import {
   countDocumentsByDomain,
@@ -39,6 +40,41 @@ function normaliseVisitorIdsBody(body: unknown): string[] | null {
     out.push(id);
   }
   return out;
+}
+
+function parseMemberRole(raw: unknown): DomainMemberRole | null {
+  if (raw === "read" || raw === "write") return raw;
+  return null;
+}
+
+/**
+ * 解析 PUT members 请求体。
+ * 优先 `members: { visitorId, role }[]`；兼容旧 `visitorIds`（全 read）。
+ */
+function normaliseMembersBody(
+  body: unknown,
+): Array<{ visitorId: string; role: DomainMemberRole }> | null {
+  if (!body || typeof body !== "object") return null;
+  const membersRaw = (body as { members?: unknown }).members;
+  if (Array.isArray(membersRaw)) {
+    const out: Array<{ visitorId: string; role: DomainMemberRole }> = [];
+    const seen = new Set<string>();
+    for (const item of membersRaw) {
+      if (!item || typeof item !== "object") return null;
+      const visitorId =
+        typeof (item as { visitorId?: unknown }).visitorId === "string"
+          ? (item as { visitorId: string }).visitorId.trim()
+          : "";
+      if (!visitorId || seen.has(visitorId)) continue;
+      const role = parseMemberRole((item as { role?: unknown }).role) ?? "read";
+      seen.add(visitorId);
+      out.push({ visitorId, role });
+    }
+    return out;
+  }
+  const ids = normaliseVisitorIdsBody(body);
+  if (ids === null) return null;
+  return ids.map((visitorId) => ({ visitorId, role: "read" as const }));
 }
 
 /**
@@ -119,9 +155,9 @@ export function buildDomainsRouter(): Router {
       updatedAt: now,
       permission,
     });
-    // restricted 域需将创建者自动设为成员，确保其能继续管理该域
+    // restricted 域需将创建者自动设为可写成员，确保其能继续管理该域
     if (permission === "restricted") {
-      addDomainMember(db, domainId, req.visitor.visitor_id);
+      addDomainMember(db, domainId, req.visitor.visitor_id, "write");
     }
     res.status(201).json({
       data: {
@@ -161,20 +197,33 @@ export function buildDomainsRouter(): Router {
       });
       return;
     }
-    const ids = listDomainMemberIds(db, domainId);
-    const members: { visitorId: string; visitorName: string; missing: boolean; disabled: boolean }[] = [];
-    for (const id of ids) {
-      const v = findVisitorById(db, id);
+    const rows = listDomainMembers(db, domainId);
+    const members: {
+      visitorId: string;
+      visitorName: string;
+      missing: boolean;
+      disabled: boolean;
+      role: DomainMemberRole;
+    }[] = [];
+    for (const row of rows) {
+      const v = findVisitorById(db, row.visitor_id);
       if (!v) {
         /* 1) visitors 表中已无此行（物理删除）→ missing，右栏显示「库中无记录」 */
-        members.push({ visitorId: id, visitorName: "", missing: true, disabled: false });
+        members.push({
+          visitorId: row.visitor_id,
+          visitorName: "",
+          missing: true,
+          disabled: false,
+          role: row.role,
+        });
       } else {
         members.push({
-          visitorId: id,
+          visitorId: row.visitor_id,
           visitorName: v.visitor_name,
           missing: false,
           /* 2) disabled_at 非空 → 已停用（被 migrate 合并到了其他访客）*/
           disabled: v.disabled_at != null,
+          role: row.role,
         });
       }
     }
@@ -191,9 +240,14 @@ export function buildDomainsRouter(): Router {
       return;
     }
     const domainId = req.params.id!;
-    const ids = normaliseVisitorIdsBody(req.body);
-    if (ids === null) {
-      res.status(400).json({ error: { code: "BAD_REQUEST", message: "visitorIds must be an array of strings" } });
+    const parsed = normaliseMembersBody(req.body);
+    if (parsed === null) {
+      res.status(400).json({
+        error: {
+          code: "BAD_REQUEST",
+          message: "members must be an array of { visitorId, role }, or visitorIds string[]",
+        },
+      });
       return;
     }
     const db = getDb();
@@ -212,16 +266,16 @@ export function buildDomainsRouter(): Router {
       });
       return;
     }
-    /* 无论模板/前端传了哪些成员，域创建者必须保留在成员列表中 */
-    const mergedSet = new Set(ids);
-    mergedSet.add(domain.creator_visitor_id);
-    const merged = [...mergedSet];
+    /* 无论模板/前端传了哪些成员，域创建者必须保留且强制 write */
+    const byId = new Map(parsed.map((m) => [m.visitorId, m.role]));
+    byId.set(domain.creator_visitor_id, "write");
+    const merged = [...byId.entries()].map(([visitorId, role]) => ({ visitorId, role }));
     // 校验所有待添加的访客ID是否真实存在
     const invalid: string[] = [];
-    for (const vid of merged) {
-      const v = findVisitorById(db, vid);
+    for (const m of merged) {
+      const v = findVisitorById(db, m.visitorId);
       if (!v) {
-        invalid.push(vid);
+        invalid.push(m.visitorId);
       }
     }
     if (invalid.length > 0) {
