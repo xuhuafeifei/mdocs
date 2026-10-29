@@ -1,8 +1,13 @@
 /**
  * 手动发布 / 合并发布前的说明弹框：可选填写 message，可 AI 生成。
  * mode=publish → suggest-commit-message；mode=merge → suggest-merge-message。
+ *
+ * 必须 portal 到 document.body：窄屏 reader 壳对 `.mdocs-layout--reader` 做了
+ * translate3d，会变成 fixed 的 containing block，弹层会相对「侧栏宽+一屏」居中，
+ * 在可视区里偏左甚至裁切。
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useI18n } from "../i18n";
 import { ApiRequestError } from "../services/client";
 import { suggestCommitMessageApi, suggestMergeMessageApi } from "../services/endpoints";
@@ -26,18 +31,38 @@ export type PublishMessageDialogProps = {
   onCancel: () => void;
 };
 
+function preferImmediateAutofocus(): boolean {
+  if (typeof window === "undefined") return true;
+  // 窄屏 / 触控：立即 focus 会弹键盘压缩 visualViewport，弹层看起来「偏下」
+  if (window.matchMedia("(max-width: 768px)").matches) return false;
+  if (window.matchMedia("(hover: none) and (pointer: coarse)").matches) return false;
+  return true;
+}
+
 export function PublishMessageDialog(props: PublishMessageDialogProps) {
   const { t } = useI18n();
   const mode = props.mode ?? "publish";
   const [message, setMessage] = useState("");
   const [suggestBusy, setSuggestBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!props.open) return;
     setMessage("");
     setError(null);
     setSuggestBusy(false);
+  }, [props.open, props.documentId, mode]);
+
+  useEffect(() => {
+    if (!props.open) return;
+    if (!preferImmediateAutofocus()) return;
+    const el = inputRef.current;
+    if (!el) return;
+    const id = window.requestAnimationFrame(() => {
+      el.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(id);
   }, [props.open, props.documentId, mode]);
 
   if (!props.open) return null;
@@ -90,7 +115,7 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
   const placeholder =
     mode === "merge" ? t("mergePublishMessagePlaceholder") : t("publishMessagePlaceholder");
 
-  return (
+  return createPortal(
     <div className="mdocs-dialog-backdrop" role="presentation" onClick={props.onCancel}>
       <div
         className="mdocs-dialog card mdocs-publish-message-dialog"
@@ -117,6 +142,7 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
             </button>
           </span>
           <textarea
+            ref={inputRef}
             className="mdocs-publish-message-input"
             rows={3}
             maxLength={PUBLISH_MESSAGE_MAX_LENGTH}
@@ -129,7 +155,6 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
               confirmPublish();
             }}
             placeholder={placeholder}
-            autoFocus
           />
         </label>
         {error ? (
@@ -151,6 +176,7 @@ export function PublishMessageDialog(props: PublishMessageDialogProps) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

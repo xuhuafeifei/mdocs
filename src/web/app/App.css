@@ -6676,17 +6676,21 @@ strong.label {
 }
 
 @media (max-width: 768px) {
-  /* 发布说明：居中弹层；按钮仍横排，避免通用 dialog 的 column-reverse 全宽堆叠 */
+  /*
+   * 发布说明：viewport 居中（组件 portal 到 body，避开 reader 壳 transform）。
+   * 按钮仍横排，避免通用 dialog 的 column-reverse 全宽堆叠。
+   */
   .mdocs-dialog-backdrop:has(.mdocs-publish-message-dialog) {
     align-items: center;
     justify-content: center;
-    padding: 24px 16px;
+    padding: max(16px, env(safe-area-inset-top, 0px)) 16px
+      max(16px, env(safe-area-inset-bottom, 0px));
   }
 
   .mdocs-dialog.card.mdocs-publish-message-dialog {
     width: min(440px, 100%);
     max-width: 100%;
-    max-height: min(88vh, 100%);
+    max-height: min(88dvh, 100%);
     margin: 0;
     border-radius: 12px;
     padding: 20px 16px;
