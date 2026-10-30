@@ -368,10 +368,14 @@ export function upsertVisitorAgentConfig(input: {
   apiType?: string;
 }): VisitorAgentConfig {
   const db = getDb();
-  const existing = input.id
+  let existing = input.id
     ? findAgentModelConfigById(db, input.id, input.ownerVisitorId)
     : null;
   if (input.id && !existing) throw new Error("config_not_found");
+  // 不带 id 且没重填 key：视为更新当前默认配置（设置页常见“只改超时/档位”）。
+  if (!input.id && !existing && !input.apiKey?.trim()) {
+    existing = findDefaultAgentModelConfigByOwner(db, input.ownerVisitorId);
+  }
 
   // apiKey 校验：新建必须传，更新可选（不传就保留原有）
   let apiKeyToSave: string;
@@ -393,7 +397,7 @@ export function upsertVisitorAgentConfig(input: {
 
   const row = buildConfigRow({
     ...input,
-    id: input.id ?? randomUUID(),
+    id: existing?.id ?? input.id ?? randomUUID(),
     existing: existing ?? null,
     isDefault: false,
   });
