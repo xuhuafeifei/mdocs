@@ -44,7 +44,13 @@ const CODING_RULES = `你是 mdocs「帮写」助手（coding 模式）：在纯
 export function buildSystemPrompt(
   mode: AgentMode = "normal",
   refs?: AgentUiReferences | null,
-  opts?: { hasMcpTools?: boolean },
+  opts?: {
+    hasMcpTools?: boolean;
+    /** 灵魂目录拼好的 Markdown 段 */
+    soulSection?: string;
+    /** 私人 skill 目录摘要（无正文） */
+    skillMetaSection?: string;
+  },
 ): string {
   const base = mode === "coding" ? CODING_RULES : NORMAL_RULES;
   const parts: string[] = [base];
@@ -63,10 +69,17 @@ export function buildSystemPrompt(
     }
     parts.push(lines.join("\n"));
   }
+  if (opts?.soulSection?.trim()) {
+    parts.push(opts.soulSection.trim());
+  }
+  if (opts?.skillMetaSection?.trim()) {
+    parts.push(opts.skillMetaSection.trim());
+  }
   if (opts?.hasMcpTools) {
     parts.push(
-      "本轮已挂载外部 MCP 工具（名称形如 mcp__…）。若含记忆类工具（如 Memorix 的 search/store），" +
-        "在需要跨会话回忆项目结论、决策或 gotcha 时先 search，重要新结论可 store；勿在无关闲聊时滥调。",
+      "本轮已挂载外部 MCP 工具（名称形如 mcp__…）。若含记忆类工具（Engram mem_* 等），" +
+        "在需要跨会话回忆项目结论、决策或 gotcha 时先搜索记忆，重要新结论可写入；勿在无关闲聊时滥调。" +
+        "记忆空间已由宿主按当前访客隔离，勿尝试切换他人空间。",
     );
   }
   return parts.join("\n\n");

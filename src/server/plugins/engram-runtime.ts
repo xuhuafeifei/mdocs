@@ -9,7 +9,14 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createWriteStream } from "node:fs";
+import {
+  pluginDataDir,
+  pluginInstallDir,
+  SYSTEM_ENGRAM_ID,
+} from "./plugin-paths.js";
 import { getConfig } from "../config/index.js";
+import { getMcpServerById, upsertMcpServer } from "../mcp/mcp-servers-store.js";
+import { markPipelineInstalled } from "./installed-store.js";
 
 /** 钉死稳定版；升级时改这里并测一遍。 */
 export const ENGRAM_RELEASE_TAG = "v3.6.0";
@@ -18,8 +25,9 @@ const ENGRAM_VERSION = ENGRAM_RELEASE_TAG.replace(/^v/, "");
 export type EngramInstallPhase = "npm" | "init" | "start" | "health";
 export type EngramOutput = (stream: "stdout" | "stderr", line: string) => void;
 
+/** 安装物：plugins/install/<system engram id>/（契约路径；旧 plugins/engram 已废弃） */
 export function engramInstallRoot(): string {
-  return path.join(getConfig().dataDir, "plugins", "engram");
+  return pluginInstallDir(SYSTEM_ENGRAM_ID);
 }
 
 export function engramBinDir(): string {
@@ -31,17 +39,65 @@ export function engramBinaryPath(): string {
   return path.join(engramBinDir(), name);
 }
 
-/** Engram SQLite 数据目录（与 mdocs dataDir 同树，避免散落 ~/.engram）。 */
+/** Engram SQLite 等：plugins-data/engram（契约 data_key）。 */
 export function engramDataDir(): string {
-  return path.join(getConfig().dataDir, "engram-data");
+  return pluginDataDir("engram");
 }
 
-/** cwd：`engram init mdocs` 写 `.engram/config.json`，避免无 git 时项目检测失败。 */
+/** cwd：init / mcp；落在 plugins-data/engram/workspace。 */
 export function engramWorkspaceRoot(): string {
-  return path.join(getConfig().dataDir, "engram-workspace");
+  return path.join(engramDataDir(), "workspace");
 }
 
-export const ENGRAM_PROJECT_NAME = "mdocs";
+/** 装机模板 project；访客隔离用 engramProjectForVisitor。 */
+export const ENGRAM_PROJECT_NAME = "mdocs-bootstrap";
+
+export function engramProjectForVisitor(visitorId: string): string {
+  const id = visitorId.trim();
+  if (!id) return ENGRAM_PROJECT_NAME;
+  return `mdocs-${id}`;
+}
+
+/**
+ * 旧版安装在 plugins/engram/bin/engram；新契约是 plugins/install/<id>/bin/engram。
+ * 一次性把二进制搬到新路径、修正 MCP command、补 plugins.json 的 pipelines 记录。
+ */
+export function migrateLegacyEngramInstall(): void {
+  try {
+    const legacyRoot = path.join(getConfig().dataDir, "plugins", "engram");
+    const legacyBin = path.join(
+      legacyRoot,
+      "bin",
+      process.platform === "win32" ? "engram.exe" : "engram",
+    );
+    const next = engramBinaryPath();
+    if (!fs.existsSync(legacyBin) || fs.existsSync(next)) return;
+    fs.mkdirSync(path.dirname(next), { recursive: true, mode: 0o700 });
+    fs.copyFileSync(legacyBin, next);
+    if (process.platform !== "win32") fs.chmodSync(next, 0o755);
+
+    const server = getMcpServerById("plugin-engram");
+    if (server?.command?.includes(path.join("plugins", "engram"))) {
+      upsertMcpServer({
+        ...server,
+        command: next,
+        cwd: server.cwd || engramWorkspaceRoot(),
+      });
+    }
+    markPipelineInstalled({
+      id: SYSTEM_ENGRAM_ID,
+      name: "Engram",
+      kind: "system",
+      runtime: "engram",
+      installMode: "local_binary",
+      outputs: ["mcp"],
+      mcpServerId: "plugin-engram",
+    });
+    fs.rmSync(legacyRoot, { recursive: true, force: true });
+  } catch {
+    // 迁移失败不挡启动；用户仍可在市场重装
+  }
+}
 
 export function isEngramBinaryReady(): boolean {
   try {
@@ -57,7 +113,7 @@ type PlatformAsset = {
   ext: ".tar.gz" | ".zip";
 };
 
-function detectPlatform(): PlatformAsset {
+export function detectPlatform(): PlatformAsset {
   const arch =
     process.arch === "arm64"
       ? "arm64"
@@ -79,7 +135,7 @@ function detectPlatform(): PlatformAsset {
   throw new Error(`Engram 暂不支持本机系统：${process.platform}`);
 }
 
-function assetFileName(plat: PlatformAsset): string {
+export function assetFileName(plat: PlatformAsset): string {
   return `engram_${ENGRAM_VERSION}_${plat.goos}_${plat.goarch}${plat.ext}`;
 }
 
@@ -93,7 +149,7 @@ function githubReleaseUrl(plat: PlatformAsset): string {
  * 依次试直连 + 常用反代（前缀拼完整 URL）。也可用环境变量
  * `ENGRAM_DOWNLOAD_URL` 指定完整包地址（跳过候选列表）。
  */
-function releaseDownloadCandidates(plat: PlatformAsset): string[] {
+export function releaseDownloadCandidates(plat: PlatformAsset): string[] {
   const override = process.env.ENGRAM_DOWNLOAD_URL?.trim();
   if (override) return [override];
   const origin = githubReleaseUrl(plat);
@@ -102,7 +158,8 @@ function releaseDownloadCandidates(plat: PlatformAsset): string[] {
     "https://gh-proxy.com/",
     "https://gh.llkk.cc/",
   ];
-  return [origin, ...proxies.map((p) => `${p}${origin}`)];
+  // 镜像优先，GitHub 直连垫底（国内直连常失败）
+  return [...proxies.map((p) => `${p}${origin}`), origin];
 }
 
 function emitLines(
@@ -260,8 +317,17 @@ async function extractArchive(
   );
 }
 
+/** 本机对应的 Engram release 下载候选（镜像优先，GitHub 垫底）。 */
+export function engramDownloadCandidates(): { urls: string[]; filename: string } {
+  const plat = detectPlatform();
+  return {
+    urls: releaseDownloadCandidates(plat),
+    filename: assetFileName(plat),
+  };
+}
+
 /** 在解压目录里找到 engram 二进制（release 可能带一层目录）。 */
-function findExtractedBinary(root: string): string {
+export function findExtractedBinary(root: string): string {
   const want = process.platform === "win32" ? "engram.exe" : "engram";
   const direct = path.join(root, want);
   if (fs.existsSync(direct)) return direct;
@@ -277,20 +343,25 @@ function findExtractedBinary(root: string): string {
   throw new Error(`解压后未找到 ${want}`);
 }
 
-export function buildEngramMcpEnv(): Record<string, string> {
+export function buildEngramMcpEnv(project?: string): {
+  ENGRAM_DATA_DIR: string;
+  ENGRAM_PROJECT: string;
+} {
   return {
     ENGRAM_DATA_DIR: engramDataDir(),
-    ENGRAM_PROJECT: ENGRAM_PROJECT_NAME,
+    ENGRAM_PROJECT: project?.trim() || ENGRAM_PROJECT_NAME,
   };
 }
 
 /**
- * 初始化工作区 + `engram init mdocs`，并写一条 bootstrap 记忆，
- * 避免 ENGRAM_PROJECT=mdocs 时库里还没有该项目（unknown_project）。
+ * 初始化工作区 + `engram init <project>`（幂等）。
+ * 访客隔离时传入 engramProjectForVisitor(visitorId)。
  */
 export async function ensureEngramProject(
   onOutput?: EngramOutput,
+  projectName: string = ENGRAM_PROJECT_NAME,
 ): Promise<string> {
+  const project = projectName.trim() || ENGRAM_PROJECT_NAME;
   const root = engramWorkspaceRoot();
   fs.mkdirSync(root, { recursive: true });
   fs.mkdirSync(engramDataDir(), { recursive: true });
@@ -298,11 +369,11 @@ export async function ensureEngramProject(
   if (!fs.existsSync(bin)) {
     throw new Error(`Engram 二进制不存在：${bin}`);
   }
-  const env = { ...process.env, ...buildEngramMcpEnv() };
-  const cfg = path.join(root, ".engram", "config.json");
-  if (!fs.existsSync(cfg)) {
-    onOutput?.("stdout", `engram init ${ENGRAM_PROJECT_NAME} @ ${root}`);
-    await run(bin, ["init", ENGRAM_PROJECT_NAME, "--force"], 30_000, onOutput, {
+  const env = { ...process.env, ...buildEngramMcpEnv(project) };
+  const marker = path.join(root, ".engram", `inited-${project}`);
+  if (!fs.existsSync(marker)) {
+    onOutput?.("stdout", `engram init ${project} @ ${root}`);
+    await run(bin, ["init", project, "--force"], 30_000, onOutput, {
       cwd: root,
       env,
     });
@@ -312,7 +383,7 @@ export async function ensureEngramProject(
         [
           "save",
           "--project",
-          ENGRAM_PROJECT_NAME,
+          project,
           "mdocs-bootstrap",
           "mdocs Engram memory project",
         ],
@@ -323,6 +394,8 @@ export async function ensureEngramProject(
     } catch {
       /* 首次写入失败可忽略；后续 mem_session_start 仍会登记会话 */
     }
+    fs.mkdirSync(path.dirname(marker), { recursive: true });
+    fs.writeFileSync(marker, new Date().toISOString(), "utf8");
   }
   return root;
 }

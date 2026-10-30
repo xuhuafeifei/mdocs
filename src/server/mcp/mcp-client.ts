@@ -1,6 +1,7 @@
 /**
  * MCP Client：HTTP（Streamable）或 stdio，listTools / callTool，桥成 pi-agent AgentTool。
  */
+import fs from "node:fs";
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -11,7 +12,10 @@ import {
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { useLogger } from "../logger/logger.js";
 import {
+  buildEngramMcpEnv,
   ensureEngramProject,
+  engramBinaryPath,
+  engramProjectForVisitor,
   engramWorkspaceRoot,
 } from "../plugins/engram-runtime.js";
 import {
@@ -24,6 +28,9 @@ import {
 } from "./mcp-servers-store.js";
 
 const log = useLogger("mcp-client");
+
+/** Engram：宿主代调后不对 Agent 暴露，避免模型改绑 session/project */
+const ENGRAM_HIDE_FROM_AGENT = new Set(["mem_session_start"]);
 
 export type McpToolSummary = {
   name: string;
@@ -198,16 +205,18 @@ async function bindMemorixHttpSession(
 
 /**
  * Engram：仅有 ENGRAM_PROJECT 不够，库里未登记会话时 mem_stats/search 会 unknown_project。
- * 每轮加载工具时调用 mem_session_start（幂等），把 directory 绑到工作区。
+ * 每轮由宿主代调 mem_session_start（不对 Agent 暴露该 tool）。
  */
 async function bindEngramSession(
   client: Client,
   toolNames: string[],
+  visitorId: string,
 ): Promise<void> {
   if (!toolNames.includes("mem_session_start")) return;
+  const project = engramProjectForVisitor(visitorId);
   let directory = engramWorkspaceRoot();
   try {
-    directory = await ensureEngramProject();
+    directory = await ensureEngramProject(undefined, project);
   } catch (err) {
     log.warn(
       `ensure engram project: ${err instanceof Error ? err.message : String(err)}`,
@@ -217,7 +226,7 @@ async function bindEngramSession(
     const result = await client.callTool({
       name: "mem_session_start",
       arguments: {
-        id: `mdocs-${process.pid}`,
+        id: `mdocs-${visitorId.trim() || process.pid}`,
         directory,
       },
     });
@@ -225,7 +234,7 @@ async function bindEngramSession(
       const text = contentToText((result as { content?: unknown }).content);
       log.warn(`mem_session_start: ${text.slice(0, 300)}`);
     } else {
-      log.info(`engram session bound to ${directory}`);
+      log.info(`engram session bound project=${project} dir=${directory}`);
     }
   } catch (err) {
     log.warn(
@@ -238,12 +247,46 @@ async function bindMemorySessions(
   server: McpServerConfig,
   client: Client,
   toolNames: string[],
+  visitorId: string,
 ): Promise<void> {
   if (looksLikeMemorix(server, toolNames)) {
     await bindMemorixHttpSession(client, toolNames);
   }
   if (looksLikeEngram(server, toolNames)) {
-    await bindEngramSession(client, toolNames);
+    await bindEngramSession(client, toolNames, visitorId);
+  }
+}
+
+/** 按访客改写 Engram stdio 的 project / env（共享二进制，数据按 project 分桶）。 */
+function resolveServerForVisitor(
+  server: McpServerConfig,
+  visitorId: string,
+): McpServerConfig {
+  if (!looksLikeEngram(server, [])) return server;
+  const project = engramProjectForVisitor(visitorId);
+  const bin = engramBinaryPath();
+  const command =
+    server.command && fsExists(server.command) ? server.command : bin;
+  const args = ["mcp", `--project=${project}`];
+  return {
+    ...server,
+    command,
+    args,
+    cwd: server.cwd || engramWorkspaceRoot(),
+    env: {
+      ...buildEngramMcpEnv(project),
+      ...(server.env ?? {}),
+      ENGRAM_PROJECT: project,
+      ENGRAM_DATA_DIR: buildEngramMcpEnv(project).ENGRAM_DATA_DIR,
+    },
+  };
+}
+
+function fsExists(p: string): boolean {
+  try {
+    return fs.existsSync(p);
+  } catch {
+    return false;
   }
 }
 
@@ -260,7 +303,7 @@ export async function testMcpServer(
         ...(t.description ? { description: t.description } : {}),
       }));
       const names = tools.map((t) => t.name);
-      await bindMemorySessions(server, client, names);
+      await bindMemorySessions(server, client, names, "");
       return { ok: true, tools };
     } finally {
       await close();
@@ -275,9 +318,12 @@ export async function testMcpServer(
 
 /**
  * 为当前 Agent 轮次加载所有已启用 MCP 工具（HTTP + stdio）。
+ * Engram：按 visitorId 注入 project，并隐藏 mem_session_start。
  * 单 server 失败跳过；调用方必须在 finally 里 close。
  */
-export async function loadMcpAgentTools(): Promise<McpAgentToolsBundle> {
+export async function loadMcpAgentTools(
+  visitorId = "",
+): Promise<McpAgentToolsBundle> {
   const servers = listEnabledMcpServers();
   if (servers.length === 0) {
     return { tools: [], close: async () => {} };
@@ -285,17 +331,22 @@ export async function loadMcpAgentTools(): Promise<McpAgentToolsBundle> {
 
   const closers: Array<() => Promise<void>> = [];
   const tools: AgentTool[] = [];
+  const vid = visitorId.trim();
 
-  for (const server of servers) {
+  for (const raw of servers) {
+    const server = resolveServerForVisitor(raw, vid);
     try {
       const { client, close } = await openClient(server);
       closers.push(close);
       const listed = await client.listTools();
       const toolNames = (listed.tools ?? []).map((t) => t.name);
-      await bindMemorySessions(server, client, toolNames);
+      await bindMemorySessions(server, client, toolNames, vid);
       const prefix = toolPrefix(server);
+      const hide =
+        looksLikeEngram(server, toolNames) ? ENGRAM_HIDE_FROM_AGENT : null;
       for (const mcpTool of listed.tools ?? []) {
         const originalName = mcpTool.name;
+        if (hide?.has(originalName)) continue;
         const name = `${prefix}${originalName}`;
         const description =
           (mcpTool.description?.trim() || `MCP tool ${originalName}`) +

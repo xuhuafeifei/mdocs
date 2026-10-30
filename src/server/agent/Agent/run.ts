@@ -131,12 +131,18 @@ export async function runOnboardingChat(params: {
   });
 
   const { loadMcpAgentTools } = await import("../../mcp/mcp-client.js");
-  const mcpBundle = await loadMcpAgentTools();
+  const mcpBundle = await loadMcpAgentTools(visitorId);
   const tools = [...nativeTools, ...mcpBundle.tools];
+  const { loadSoulPromptSection } = await import("../../soul/load-for-agent.js");
+  const { buildSkillMetaSection } = await import("./skill-meta-prompt.js");
   const systemPrompt = buildSystemPrompt(
     mode,
     mode === "normal" ? params.references : null,
-    { hasMcpTools: mcpBundle.tools.length > 0 },
+    {
+      hasMcpTools: mcpBundle.tools.length > 0,
+      soulSection: loadSoulPromptSection(visitorId),
+      skillMetaSection: buildSkillMetaSection(visitorId),
+    },
   );
 
   try {

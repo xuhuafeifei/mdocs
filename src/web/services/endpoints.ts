@@ -158,8 +158,200 @@ export type PluginListItem = {
   mcpTemplate: Omit<McpServerConfig, "id">;
 };
 
+export type PipelineJobStepStatus =
+  | "pending"
+  | "running"
+  | "done"
+  | "skipped"
+  | "error";
+
+export type PipelineJobStep = {
+  index: number;
+  type: string;
+  label: string;
+  status: PipelineJobStepStatus;
+  detail?: string;
+  error?: string;
+  startedAt?: string;
+  finishedAt?: string;
+};
+
+export type PipelineJobLog = {
+  ts: string;
+  level: "info" | "warn" | "error";
+  line: string;
+  stepIndex?: number;
+};
+
+export type PipelineJob = {
+  id: string;
+  pipelineId: string;
+  pipelineName: string;
+  scope: "system" | "tenant";
+  action: "install" | "uninstall";
+  status: "running" | "done" | "error";
+  startedAt: string;
+  finishedAt: string | null;
+  error: string | null;
+  steps: PipelineJobStep[];
+  probe: {
+    results: Array<{
+      type: string;
+      label: string;
+      ok: boolean;
+      detail?: string;
+    }>;
+    passed: boolean;
+  } | null;
+  logs: PipelineJobLog[];
+};
+
+export type PipelineInstallHistoryEntry = {
+  id?: string;
+  name?: string;
+  action: "install" | "uninstall";
+  at: string;
+  ok: boolean;
+  error?: string;
+};
+
+export type PipelineInstallMode =
+  | "local_binary"
+  | "command"
+  | "remote"
+  | "skill_package";
+
+export type PipelineListItem = {
+  id: string;
+  name: string;
+  kind: "system" | "user" | "tenant";
+  runtime?: string;
+  version?: string;
+  description?: string;
+  outputs: string[];
+  installMode: PipelineInstallMode;
+  stepCount: number;
+  uninstallStepCount: number;
+  probeCount: number;
+  dataKey?: string;
+  soulFiles: string[];
+  installCatalogId?: string | null;
+  installed: boolean;
+  installedAt: string | null;
+  mcpServerId: string | null;
+  runtimeRunning: boolean;
+  installJob: PipelineJob | null;
+  storage: {
+    installDir: string;
+    dataDir: string | null;
+    soulFiles: string[];
+  };
+};
+
 export function fetchPluginsApi(): Promise<{ plugins: PluginListItem[] }> {
   return api<{ plugins: PluginListItem[] }>("/api/plugins");
+}
+
+export function fetchPipelinesApi(): Promise<{
+  system: PipelineListItem[];
+  custom: PipelineListItem[];
+  history: PipelineInstallHistoryEntry[];
+}> {
+  return api<{
+    system: PipelineListItem[];
+    custom: PipelineListItem[];
+    history: PipelineInstallHistoryEntry[];
+  }>("/api/plugins/pipelines");
+}
+
+export type PipelineStepFieldDef = {
+  name: string;
+  label?: string;
+  type: "text" | "textarea" | "string_list" | "select" | "keyvalue" | "bool";
+  required?: boolean;
+  default?: unknown;
+  options?: Array<{ value: string; label: string }>;
+  description?: string;
+  advanced?: boolean;
+  visibleWhen?: { field: string; equals: string };
+};
+
+export type PipelineStepDefinition = {
+  type: string;
+  label: string;
+  description: string;
+  category: "install" | "configure" | "uninstall" | "probe";
+  group: string;
+  fields: PipelineStepFieldDef[];
+};
+
+export type PipelineInstallModeDefinition = {
+  value: PipelineInstallMode;
+  label: string;
+  description: string;
+  outputs: Array<"mcp" | "skill">;
+  starterSteps: Array<Record<string, unknown>>;
+};
+
+export function fetchStepDefinitionsApi(): Promise<{
+  steps: PipelineStepDefinition[];
+  probes: PipelineStepDefinition[];
+  installModes: PipelineInstallModeDefinition[];
+  whenOptions: Array<{ value: string; label: string }>;
+}> {
+  return api<{
+    steps: PipelineStepDefinition[];
+    probes: PipelineStepDefinition[];
+    installModes: PipelineInstallModeDefinition[];
+    whenOptions: Array<{ value: string; label: string }>;
+  }>("/api/plugins/step-definitions");
+}
+
+export function fetchPipelineYamlApi(
+  scope: "system" | "tenant",
+  id: string,
+): Promise<{ id: string; scope: string; yaml: string }> {
+  return api<{ id: string; scope: string; yaml: string }>(
+    `/api/plugins/pipelines/${scope}/${encodeURIComponent(id)}`,
+  );
+}
+
+export function savePipelineYamlApi(
+  scope: "system" | "tenant",
+  id: string,
+  yaml: string,
+): Promise<{ id: string; scope: string }> {
+  return api<{ id: string; scope: string }>(
+    `/api/plugins/pipelines/${scope}/${encodeURIComponent(id)}`,
+    { method: "PUT", body: JSON.stringify({ yaml }) },
+  );
+}
+
+export function resetSystemPipelineApi(
+  id: string,
+): Promise<{ id: string; yaml: string }> {
+  return api<{ id: string; yaml: string }>(
+    `/api/plugins/pipelines/system/${encodeURIComponent(id)}/reset`,
+    { method: "POST", body: "{}" },
+  );
+}
+
+export function createCustomPipelineApi(input: {
+  name?: string;
+  installMode?: PipelineInstallMode;
+  outputs?: Array<"mcp" | "skill">;
+}): Promise<{ id: string; yaml: string }> {
+  return api<{ id: string; yaml: string }>("/api/plugins/pipelines/custom", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteCustomPipelineApi(id: string): Promise<{ ok: boolean }> {
+  return api<{ ok: boolean }>(
+    `/api/plugins/pipelines/custom/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
 }
 
 export function installPluginApi(
@@ -182,6 +374,75 @@ export function uninstallPluginApi(
     `/api/plugins/${encodeURIComponent(id)}/uninstall`,
     { method: "POST", body: "{}" },
   );
+}
+
+/* ---- 流水线安装器（v2）---- */
+
+export function installPipelineApi(
+  scope: "system" | "tenant",
+  id: string,
+): Promise<{ job: PipelineJob }> {
+  return api<{ job: PipelineJob }>(
+    `/api/plugins/pipelines/${scope}/${encodeURIComponent(id)}/install`,
+    { method: "POST", body: "{}" },
+  );
+}
+
+export function uninstallPipelineApi(
+  scope: "system" | "tenant",
+  id: string,
+): Promise<{ job: PipelineJob }> {
+  return api<{ job: PipelineJob }>(
+    `/api/plugins/pipelines/${scope}/${encodeURIComponent(id)}/uninstall`,
+    { method: "POST", body: "{}" },
+  );
+}
+
+export function fetchPipelineJobApi(
+  scope: "system" | "tenant",
+  id: string,
+  action?: "install" | "uninstall",
+): Promise<{ job: PipelineJob | null }> {
+  const query = action ? `?action=${action}` : "";
+  return api<{ job: PipelineJob | null }>(
+    `/api/plugins/pipelines/${scope}/${encodeURIComponent(id)}/job${query}`,
+  );
+}
+
+export function fetchSystemPipelineDefaultApi(
+  id: string,
+): Promise<{ id: string; yaml: string }> {
+  return api<{ id: string; yaml: string }>(
+    `/api/plugins/pipelines/system/${encodeURIComponent(id)}/default`,
+  );
+}
+
+export type PipelineAiToolTrace = {
+  tool: string;
+  summary: string;
+  ok: boolean;
+  durationMs: number;
+};
+
+export type AiPipelineDraft = {
+  yaml: string;
+  valid: boolean;
+  error?: string;
+  model: string;
+  notes?: string;
+  trace?: PipelineAiToolTrace[];
+};
+
+export function generatePipelineDraftApi(body: {
+  prompt: string;
+  kind?: "skill" | "mcp";
+  installMode?: PipelineInstallMode;
+  currentYaml?: string;
+}): Promise<AiPipelineDraft> {
+  return api<AiPipelineDraft>("/api/plugins/pipelines/ai/draft", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export function setPasswordApi(password: string): Promise<{ ok: boolean }> {

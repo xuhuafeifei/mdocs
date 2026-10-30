@@ -24,6 +24,8 @@ import { buildPluginsRouter } from "./routes/plugins.routes.js";
 import { bootstrapAgentRuns } from "./agent/Agent/run-manager.js";
 import { startIndexTimer } from "./search/document-index-manager.js";
 import { ensureLocalEmbeddingModel } from "./search/embedding-model.js";
+import { ensureSystemPipelinesSeeded } from "./plugins/pipeline/catalog.js";
+import { ensureGlobalSoulShell } from "./soul/ensure-shells.js";
 import { useLogger } from "./logger/logger.js";
 
 const log = useLogger("app");
@@ -156,9 +158,15 @@ function ensureRuntimeDirs(): void {
     cfg.agentAttachmentsDir,
     path.join(cfg.agentAttachmentsDir, "objects"),
     cfg.logsDir,
+    path.join(cfg.dataDir, "soul"),
+    path.join(cfg.dataDir, "plugins", "install"),
+    path.join(cfg.dataDir, "plugins", "system"),
+    path.join(cfg.dataDir, "plugins-data"),
   ]) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
+  ensureGlobalSoulShell();
+  ensureSystemPipelinesSeeded();
 }
 
 const WEB_ASSET_CONTENT_TYPE: Record<string, string> = {

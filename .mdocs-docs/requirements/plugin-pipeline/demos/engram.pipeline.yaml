@@ -1,0 +1,46 @@
+# Engram — 系统自带流水线 DEMO（与 bundled 同源语义）
+
+id: "847291036512"
+name: Engram
+kind: system
+runtime: engram
+data_key: engram
+version: "3.6.0"
+description: >
+  本机 Agent 记忆（单二进制 + SQLite）。安装后按需拉起，非常驻服务。
+outputs:
+  - mcp
+
+probe:
+  - type: file_exists
+    path: root/bin/engram
+
+steps:
+  - type: download
+    # url 留空：Engram 由系统按平台选镜像包
+
+  - type: extract
+
+  - type: upsert_mcp
+    mcp_server_id: plugin-engram
+    name: Engram
+    enabled: true
+    transport: stdio
+    command: bin/engram
+    args:
+      - mcp
+
+  - type: write_soul_sidecar
+    scope: global
+    file: engram.md
+    content: |
+      # Engram
+
+      本机记忆已接入。空间按当前访客隔离。
+
+uninstall:
+  - type: delete_soul_sidecar
+    scope: global
+    file: engram.md
+  - type: remove_mcp
+    mcp_server_id: plugin-engram

@@ -17,6 +17,7 @@ import {
 } from "../mcp/mcp-servers-store.js";
 import {
   buildEngramMcpEnv,
+  ENGRAM_PROJECT_NAME,
   engramBinaryPath,
   engramWorkspaceRoot,
   installEngramRuntime,
@@ -131,7 +132,7 @@ export async function installPlugin(
       enabled: true,
       transport: "stdio",
       command: engramBinaryPath(),
-      args: ["mcp", "--project=mdocs"],
+      args: ["mcp", `--project=${ENGRAM_PROJECT_NAME}`],
       cwd: engramWorkspaceRoot(),
       env: buildEngramMcpEnv(),
     });

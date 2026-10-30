@@ -1,0 +1,62 @@
+# Engram — 系统自带流水线（可视化编排器可编辑；恢复初始用 .default）
+#
+# 下载：不填 url，runtime=engram 时由系统按平台选镜像包（ghfast 优先）。
+# 初始化：exec 只在首次安装（probe 未通过）时跑；访客 project 由 MCP 连接时注入。
+# MCP：只写「跑哪个程序、带什么参数」；mcp_server_id / env / project 系统生成。
+
+id: "847291036512"
+name: Engram
+kind: system
+runtime: engram
+data_key: engram
+version: "3.6.0"
+install_mode: local_binary
+description: >
+  本机 Agent 记忆（单二进制 + SQLite）。安装后按需拉起，非常驻服务。
+outputs:
+  - mcp
+
+probe:
+  - type: file_exists
+    path: bin/engram
+
+steps:
+  - type: download
+    # url 留空：Engram 专用，系统自动选镜像下载地址
+
+  - type: extract
+    dest: bin
+
+  - type: exec
+    command: bin/engram
+    args:
+      - init
+      - mdocs-bootstrap
+      - --force
+    cwd: "{{plugins_data}}/engram/workspace"
+    when: probe_failed
+
+  - type: upsert_mcp
+    # 沿用旧 id，升级/迁移后卸载能删到同一条 MCP
+    mcp_server_id: plugin-engram
+    name: Engram
+    enabled: true
+    transport: stdio
+    command: bin/engram
+    args:
+      - mcp
+
+  - type: write_soul_sidecar
+    scope: global
+    file: engram.md
+    content: |
+      # Engram
+
+      本机记忆已接入。空间按当前访客隔离，无需也不应切换他人记忆。
+
+uninstall:
+  - type: delete_soul_sidecar
+    scope: global
+    file: engram.md
+  - type: remove_mcp
+    mcp_server_id: plugin-engram

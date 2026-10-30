@@ -19,11 +19,12 @@ vi.mock("./memorix-runtime.js", () => ({
 }));
 
 vi.mock("./engram-runtime.js", () => ({
+  ENGRAM_PROJECT_NAME: "mdocs-bootstrap",
   engramBinaryPath: () => path.join(tmpRoot, "plugins", "engram", "bin", "engram"),
-  engramWorkspaceRoot: () => path.join(tmpRoot, "engram-workspace"),
+  engramWorkspaceRoot: () => path.join(tmpRoot, "plugins-data", "engram", "workspace"),
   buildEngramMcpEnv: () => ({
-    ENGRAM_DATA_DIR: path.join(tmpRoot, "engram-data"),
-    ENGRAM_PROJECT: "mdocs",
+    ENGRAM_DATA_DIR: path.join(tmpRoot, "plugins-data", "engram"),
+    ENGRAM_PROJECT: "mdocs-bootstrap",
   }),
   installEngramRuntime: vi.fn(async () => {}),
   uninstallEngramRuntime: vi.fn(async () => {}),
@@ -75,9 +76,9 @@ describe("plugins-store", () => {
     expect(plugin.mcpServer?.id).toBe("plugin-engram");
     expect(plugin.mcpServer?.transport).toBe("stdio");
     expect(plugin.mcpServer?.command).toContain("engram");
-    expect(plugin.mcpServer?.args).toEqual(["mcp", "--project=mdocs"]);
-    expect(plugin.mcpServer?.cwd).toContain("engram-workspace");
-    expect(plugin.mcpServer?.env?.ENGRAM_PROJECT).toBe("mdocs");
+    expect(plugin.mcpServer?.args).toEqual(["mcp", "--project=mdocs-bootstrap"]);
+    expect(plugin.mcpServer?.cwd).toContain("engram");
+    expect(plugin.mcpServer?.env?.ENGRAM_PROJECT).toBe("mdocs-bootstrap");
     expect(getMcpServerById("plugin-engram")?.name).toBe("Engram");
   });
 

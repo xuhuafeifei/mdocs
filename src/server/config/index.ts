@@ -39,6 +39,11 @@ export interface LoggingConfig {
 
 let cached: AppConfig | null = null;
 
+/** 测试用：清掉配置缓存以便改 MDOCS_DATA_DIR 后重读。 */
+export function resetConfigCacheForTests(): void {
+  cached = null;
+}
+
 /**
  * 读取并缓存应用配置。
  * 优先从环境变量获取，未设置时使用默认值；首次调用后结果会被缓存。

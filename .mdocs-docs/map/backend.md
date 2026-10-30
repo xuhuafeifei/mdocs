@@ -93,26 +93,44 @@
 
 ### Agent MCP Client（HTTP + stdio）
 
-- **关键词**：`MCP` `mcp-servers` `Engram` `Memorix` `StreamableHTTP` `stdio` `mcp__`
-- **结论**：支持 HTTP Streamable 与本机 stdio；配置在 `dataDir/mcp-servers.json`；每轮 listTools 挂进助手；不可达跳过。
+- **关键词**：`MCP` `mcp-servers` `Engram` `StreamableHTTP` `stdio` `mcp__` `mem_session_start` `visitorId`
+- **结论**：HTTP/stdio；每轮 listTools；Engram 按 visitor 注入 `ENGRAM_PROJECT=mdocs-<visitorId>`，宿主代调并隐藏 `mem_session_start`。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `src/server/mcp/mcp-servers-store.ts` | 配置读写（http / stdio） |
-  | `src/server/mcp/mcp-client.ts` | 连接 / AgentTool 桥 |
+  | `src/server/mcp/mcp-client.ts` | `loadMcpAgentTools` `resolveServerForVisitor` |
   | `src/server/routes/mcp-servers.routes.ts` | `/api/mcp-servers` |
   | `src/web/app/McpServersPanel.tsx` | 设置 UI |
-- **需求**：[`../requirements/agent-mcp-client/`](../requirements/agent-mcp-client/)
+- **需求**：[`../requirements/agent-mcp-client/`](../requirements/agent-mcp-client/)、[`../requirements/plugin-pipeline/`](../requirements/plugin-pipeline/)
+
+### 插件流水线 / 灵魂
+
+- **关键词**：`pipeline.yaml` `soul` `plugins-data` `parsePipelineYaml` `loadSoulPromptSection` `skill meta`
+- **结论**：YAML 流水线由 **解释器逐步执行**（download/extract/copy_file/exec/upsert_mcp/upsert_skill/soul/remove）；Probe 通过时跳下载类步骤；安装态写 `plugins.json` 的 `pipelines` 段。灵魂在 `soul/`；Agent run 注入 soul + skill meta。Engram 数据 `plugins-data/engram/`，二进制 `plugins/install/<id>/bin/`。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/server/plugins/pipeline/parse.ts` | `parsePipelineYaml` |
+  | `src/server/plugins/pipeline/executor.ts` | `runPipeline` `resolveUninstallSteps` |
+  | `src/server/plugins/pipeline-job.ts` | `startPipelineJob` `getPipelineJob` |
+  | `src/server/plugins/pipeline/ai-draft.ts` | `generatePipelineDraft`（独立 Agent，无 session） |
+  | `src/server/plugins/pipeline/pipeline-ai-tools.ts` | `executePipelineAiTool`（exec/download/fetch/submit） |
+  | `src/server/plugins/installed-store.ts` | `markPipelineInstalled` `markPipelineUninstalled` |
+  | `src/server/plugins/pipeline/step-definitions.ts` | `listStepDefinitions`（Schema 驱动表单） |
+  | `src/server/soul/load-for-agent.ts` | `loadSoulPromptSection` |
+  | `src/server/agent/Agent/skill-meta-prompt.ts` | `buildSkillMetaSection` |
+  | `src/server/plugins/engram-runtime.ts` | `engramProjectForVisitor` `migrateLegacyEngramInstall` |
+- **需求**：[`../requirements/plugin-pipeline/`](../requirements/plugin-pipeline/)
 
 ### 插件市场（Engram 主推）
 
-- **关键词**：`plugins` `plugin-marketplace` `Engram` `Memorix` `installPlugin`
-- **结论**：主推 Engram（GitHub release 二进制 + stdio `engram mcp`）；Memorix 仍为可选 npm+HTTP 样板。
+- **关键词**：`plugins` `plugin-marketplace` `Engram` `installPlugin`
+- **结论**：市场以 **流水线** 为准（`GET /api/plugins/pipelines` 含安装态/存储/任务）；旧 catalog 安装接口保留兼容，UI 不再使用。Engram 旧路径启动时一次性迁到新契约。Memorix 废弃中。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `src/server/plugins/engram-runtime.ts` | `installEngramRuntime` |
-  | `src/server/plugins/memorix-runtime.ts` | `installMemorixRuntime` |
   | `src/server/plugins/plugin-catalog.ts` | 内置目录 |
   | `src/server/plugins/plugins-store.ts` | 安装态 |
   | `src/server/routes/plugins.routes.ts` | `/api/plugins` |

@@ -179,6 +179,11 @@ export function SettingsPage(props: {
     if (isNarrow) setMobileNavOpen(false);
   }
 
+  // 各 Tab 高度差异大；切换后回到顶部，避免标题被残留滚动裁掉。
+  useEffect(() => {
+    document.querySelector(".mdocs-settings")?.scrollTo({ top: 0 });
+  }, [tab]);
+
   const navItems = useMemo(() => {
     const q = navQuery.trim().toLowerCase();
     if (!q) return SETTINGS_NAV;
@@ -1346,7 +1351,9 @@ export function SettingsPage(props: {
         ) : tab === "mcpServers" ? (
           <McpServersPanel />
         ) : tab === "pluginMarket" ? (
-          <PluginMarketplacePanel />
+          <div className="mdocs-settings">
+            <PluginMarketplacePanel />
+          </div>
         ) : (
           // ---- 保存与发布 Tab ----
           <div className="mdocs-settings">
