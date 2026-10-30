@@ -96,6 +96,53 @@ function safeLexicalJsonString(editor: IEditor): string | null {
   }
 }
 
+function countRootChildren(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  try {
+    const doc = JSON.parse(raw) as { root?: { children?: unknown[] } };
+    return Array.isArray(doc?.root?.children) ? doc.root.children.length : null;
+  } catch {
+    return null;
+  }
+}
+
+type MdocsLexicalDump = {
+  documentId: string;
+  liveRootChildren: number | null;
+  initialRootChildren: number | null;
+  liveTypes: string[];
+  liveJson: string | null;
+  initialContentPreview: string;
+};
+
+declare global {
+  interface Window {
+    /** 控制台：`console.log(__mdocsDumpLexical())` — live 编辑器 Lexical */
+    __mdocsDumpLexical?: () => MdocsLexicalDump | null;
+    /** 控制台：`console.log(__mdocsGetEditorContent())` — React editorContent（batch 用的那份） */
+    __mdocsGetEditorContent?: () => {
+      documentId: string;
+      content: string;
+      rootChildren: number | null;
+      types: string[];
+    } | null;
+    /** 控制台一键对比 live vs editorContent 块数 */
+    __mdocsCompareLexical?: () => void;
+  }
+}
+
+function rootChildTypes(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const doc = JSON.parse(raw) as { root?: { children?: Array<{ type?: string }> } };
+    const kids = doc?.root?.children;
+    if (!Array.isArray(kids)) return [];
+    return kids.map((c, i) => `${i + 1}:${String(c?.type ?? "?")}`);
+  } catch {
+    return [];
+  }
+}
+
 /** Lexical 禁止 root.children 为空；空文档至少保留一个空段落 */
 const EMPTY_PARAGRAPH_LEXICAL =
   '{"root":{"direction":"ltr","format":"","indent":0,"version":1,"type":"root","children":[{"direction":"ltr","format":"","indent":0,"version":1,"textFormat":0,"textStyle":"","children":[],"type":"paragraph"}]}}';
@@ -214,6 +261,8 @@ interface DocumentEditorProps {
   saveBeforeNavRef?: React.MutableRefObject<(() => Promise<void>) | undefined>;
   /** 帮写进场：导出官方 Markdown（非 convert 纯文本近似） */
   exportMarkdownRef?: React.MutableRefObject<(() => string) | undefined>;
+  /** 智能助手 batch / 按块提案：导出当前 live Lexical JSON（与门牌一致） */
+  exportLexicalJsonRef?: React.MutableRefObject<(() => string | null) | undefined>;
   /**
    * 智能助手提案：对 live Lexical 执行 Lobe Diff API
    *（updateSlot / insertAfterSlot / removeSlot / overwriteAll）。
@@ -606,6 +655,20 @@ export function DocumentEditor(props: DocumentEditorProps) {
   });
 
   useEffect(() => {
+    if (!props.exportLexicalJsonRef) return;
+    props.exportLexicalJsonRef.current = () => {
+      const ed = editorRef.current;
+      if (!ed) return null;
+      return safeLexicalJsonString(ed);
+    };
+    return () => {
+      if (props.exportLexicalJsonRef) {
+        props.exportLexicalJsonRef.current = undefined;
+      }
+    };
+  });
+
+  useEffect(() => {
     if (!props.applyAgentDiffRef) return;
     props.applyAgentDiffRef.current = (op) => {
       const ed = editorRef.current;
@@ -663,6 +726,38 @@ export function DocumentEditor(props: DocumentEditorProps) {
    * 使用已预计算的 contentType（来自 useMemo），避免重复 JSON 解析。
    * 通过 editor API 在微任务中重新设置内容，确保编辑器已完全挂载。
    */
+  useEffect(() => {
+    window.__mdocsDumpLexical = () => {
+      const ed = editorRef.current;
+      const liveJson = ed ? safeLexicalJsonString(ed) : null;
+      return {
+        documentId: props.meta.documentId,
+        liveRootChildren: countRootChildren(liveJson),
+        initialRootChildren: countRootChildren(props.initialContent),
+        liveTypes: rootChildTypes(liveJson),
+        liveJson,
+        initialContentPreview: (props.initialContent || "").slice(0, 120),
+      };
+    };
+    window.__mdocsCompareLexical = () => {
+      const live = window.__mdocsDumpLexical?.() ?? null;
+      const app = window.__mdocsGetEditorContent?.() ?? null;
+      console.log("[mdocs lexical compare]", {
+        diskHint: "disk untitled.md = 24 root children (verified)",
+        liveRootChildren: live?.liveRootChildren ?? null,
+        liveTypes: live?.liveTypes ?? [],
+        propsInitialRootChildren: live?.initialRootChildren ?? null,
+        editorContentRootChildren: app?.rootChildren ?? null,
+        editorContentTypes: app?.types ?? [],
+        documentId: live?.documentId ?? app?.documentId ?? null,
+      });
+    };
+    return () => {
+      if (window.__mdocsDumpLexical) delete window.__mdocsDumpLexical;
+      if (window.__mdocsCompareLexical) delete window.__mdocsCompareLexical;
+    };
+  }, [props.meta.documentId, props.initialContent, props.contentRevision]);
+
   const handleInit = useCallback((e: IEditor) => {
     // 保存编辑器实例到 ref，确保卸载时一定能拿到实例进行 destroy
     editorRef.current = e;

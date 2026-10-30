@@ -295,6 +295,36 @@ export function App() {
   const editorContentRef = useRef(editorContent);
   editorContentRef.current = editorContent;
 
+  useEffect(() => {
+    window.__mdocsGetEditorContent = () => {
+      const cur = editorContentRef.current;
+      if (!cur) return null;
+      let rootChildren: number | null = null;
+      let types: string[] = [];
+      try {
+        const doc = JSON.parse(cur.content) as {
+          root?: { children?: Array<{ type?: string }> };
+        };
+        const kids = doc?.root?.children;
+        if (Array.isArray(kids)) {
+          rootChildren = kids.length;
+          types = kids.map((c, i) => `${i + 1}:${String(c?.type ?? "?")}`);
+        }
+      } catch {
+        rootChildren = null;
+      }
+      return {
+        documentId: cur.documentId,
+        content: cur.content,
+        rootChildren,
+        types,
+      };
+    };
+    return () => {
+      if (window.__mdocsGetEditorContent) delete window.__mdocsGetEditorContent;
+    };
+  }, []);
+
   /** PC「最近打开」标签：上下栏分列（窄屏不渲染） */
   const [recentTabsByPane, setRecentTabsByPane] = useState<RecentDocTabsByPane>(() =>
     loadRecentDocTabsByPane(),
@@ -554,7 +584,26 @@ export function App() {
         window.setTimeout(() => setMessage(null), 2000);
         return;
       }
-      const baseLexicalJson = editorContentRef.current!.content;
+      const baseSnap = editorContentRef.current;
+      const baseLexicalJson = baseSnap!.content;
+      let baseRootChildren: number | null = null;
+      try {
+        const doc = JSON.parse(baseLexicalJson) as { root?: { children?: unknown[] } };
+        baseRootChildren = Array.isArray(doc?.root?.children)
+          ? doc.root.children.length
+          : null;
+      } catch {
+        baseRootChildren = null;
+      }
+      console.warn("[batch_update_slots] apply base", {
+        requestedDocumentId: payload.documentId,
+        editorContentDocumentId: baseSnap?.documentId,
+        editorContentDisplayName: baseSnap?.displayName,
+        baseRootChildren,
+        ranges,
+        contentIsJson: baseRootChildren != null,
+        contentPreview: baseLexicalJson.slice(0, 160),
+      });
       void (async () => {
         try {
           const { batchRangesToProposedMarkdown } = await import(
@@ -562,6 +611,13 @@ export function App() {
           );
           const built = batchRangesToProposedMarkdown(baseLexicalJson, ranges);
           if (!built.ok) {
+            console.error("[batch_update_slots] failed", {
+              error: built.error,
+              requestedDocumentId: payload.documentId,
+              editorContentDocumentId: baseSnap?.documentId,
+              baseRootChildren,
+              ranges,
+            });
             setAlertMessage(built.error);
             return;
           }
