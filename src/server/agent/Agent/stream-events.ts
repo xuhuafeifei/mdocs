@@ -101,6 +101,55 @@ export type AgentStreamEvent =
       runId: string;
       sessionId: string;
       deadlineAt: string;
+    }
+  /** plugin-pipeline：submit_pipeline 交卷，供右栏节点渲染 */
+  | {
+      type: "pipeline_draft";
+      draft: {
+        yaml: string;
+        valid: boolean;
+        error?: string;
+        model: string;
+        notes?: string;
+        trace?: Array<{
+          tool: string;
+          summary: string;
+          ok: boolean;
+          durationMs: number;
+        }>;
+      };
+    }
+  /** plugin-pipeline：Agent 触发安装后推任务态，供右栏轮询/展示 */
+  | {
+      type: "pipeline_job";
+      scope: "system" | "tenant";
+      id: string;
+      yaml?: string;
+      job: {
+        id: string;
+        pipelineId: string;
+        pipelineName: string;
+        scope: "system" | "tenant";
+        action: "install" | "uninstall";
+        status: "running" | "done" | "error";
+        startedAt: string;
+        finishedAt: string | null;
+        error: string | null;
+        steps: Array<{
+          index: number;
+          type: string;
+          label: string;
+          status: string;
+          detail?: string;
+          error?: string;
+        }>;
+        logs: Array<{
+          ts: string;
+          level: string;
+          line: string;
+          stepIndex?: number;
+        }>;
+      };
     };
 
 export interface AgentDocumentTableRow {

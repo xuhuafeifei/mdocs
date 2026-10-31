@@ -142,7 +142,7 @@ Probe 通过时，`skip_on_probe`（默认 download/extract/copy_file）步骤�
 | Engram MCP id | 固定 `plugin-engram`（`upsert_mcp.mcp_server_id`），卸载同一 id，避免迁移后删不到。新建插件默认仍是 `plugin-<pipeline.id>`。 |
 | 旧 Engram 路径 | 启动/首次读取市场时，把 `plugins/engram/bin/engram` 一次性搬到 `plugins/install/847291036512/bin/`，修正 MCP command，补 `plugins.json.pipelines`，删旧目录。 |
 | AI 草稿归一 | 模型常把 `kind` 写成 mcp/skill；服务端强制 `kind` 为当前流水线的 kind（新草稿 tenant）、沿用当前 id、缺失 outputs 时按步骤推断、丢弃 `remove_mcp` 的显示名 id。 |
-| AI 只翻译 | AI 模块不 import `runPipeline` / `startPipelineJob`；`/ai/draft` 只返回草稿。安装由用户点「安装」后执行器完成。探测 `exec` 会拒绝 npm/pnpm/pip/brew 等安装命令。 |
+| AI 只翻译 | AI 模块不 import `runPipeline` / `startPipelineJob`；交卷只出草稿（`pipeline_draft`）。安装由用户点「安装」后执行器完成。探测 `exec` 会拒绝 npm/pnpm/pip/brew 等安装命令。 |
 | Probe 通过 | `skip_on_probe` 默认对 download/extract/copy_file 生效；`when` 支持 always/first_install/probe_passed/probe_failed。 |
 | 卸载失败 | 保留安装态记录（不只写失败历史），避免 UI 假装已卸载。 |
 | 安装失败 | 保留安装目录，执行窗提示“可能留下部分安装物”；不自动回滚。 |

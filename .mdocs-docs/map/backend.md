@@ -107,20 +107,27 @@
 ### 插件流水线 / 灵魂
 
 - **关键词**：`pipeline.yaml` `soul` `plugins-data` `parsePipelineYaml` `loadSoulPromptSection` `skill meta`
-- **结论**：YAML 流水线由 **解释器逐步执行**（download/extract/copy_file/exec/upsert_mcp/upsert_skill/soul/remove）；Probe 通过时跳下载类步骤；安装态写 `plugins.json` 的 `pipelines` 段。灵魂在 `soul/`；Agent run 注入 soul + skill meta。Engram 数据 `plugins-data/engram/`，二进制 `plugins/install/<id>/bin/`。
+- **结论**：YAML 流水线由 **解释器逐步执行**；安装实体在 `plugins-home/<name>/`，母版在 `plugins-catalog/`，租户数据/MCP/Skill 在 `tenant/{vid}/plugins-data|mcp|skills`。Engram 二进制共用，连接时注入该访客 `ENGRAM_DATA_DIR`。**无旧路径兼容**。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
+  | `src/server/plugins/plugin-paths.ts` | `pluginHomeDir` `visitorPluginDataDir` `visitorMcpFile` |
+  | `src/server/plugins/plugin-cli.ts` | `runPluginCli` `listPluginHomeFiles` |
+  | `src/server/agent/Agent/tools-plugin-cli.ts` | `query_skill` `run_plugin_cli` `list_plugin_home` |
+  | `src/server/mcp/tenant-mcp-store.ts` | `listEnabledVisitorMcpServers` `upsertVisitorMcpServer` |
+  | `src/server/plugins/skill-fs.ts` | `writeSkillFs` `listSkillsFs` |
   | `src/server/plugins/pipeline/parse.ts` | `parsePipelineYaml` |
   | `src/server/plugins/pipeline/executor.ts` | `runPipeline` `resolveUninstallSteps` |
   | `src/server/plugins/pipeline-job.ts` | `startPipelineJob` `getPipelineJob` |
-  | `src/server/plugins/pipeline/ai-draft.ts` | `generatePipelineDraft`（独立 Agent，无 session） |
+  | `src/server/agent/Agent/tools-pipeline.ts` | `pipelineTools`（`mode=plugin-pipeline`） |
+  | `src/server/agent/Agent/session-manager.ts` | `AgentSessionKind` 含 `plugin-pipeline` |
   | `src/server/plugins/pipeline/pipeline-ai-tools.ts` | `executePipelineAiTool`（exec/download/fetch/submit） |
+  | `src/server/plugins/pipeline/draft-normalize.ts` | `normalizeDraftYaml` |
   | `src/server/plugins/installed-store.ts` | `markPipelineInstalled` `markPipelineUninstalled` |
   | `src/server/plugins/pipeline/step-definitions.ts` | `listStepDefinitions`（Schema 驱动表单） |
   | `src/server/soul/load-for-agent.ts` | `loadSoulPromptSection` |
   | `src/server/agent/Agent/skill-meta-prompt.ts` | `buildSkillMetaSection` |
-  | `src/server/plugins/engram-runtime.ts` | `engramProjectForVisitor` `migrateLegacyEngramInstall` |
+  | `src/server/plugins/engram-runtime.ts` | `engramProjectForVisitor` `ensureEngramProject` `migrateLegacyEngramInstall` |
 - **需求**：[`../requirements/plugin-pipeline/`](../requirements/plugin-pipeline/)
 
 ### 插件市场（Engram 主推）

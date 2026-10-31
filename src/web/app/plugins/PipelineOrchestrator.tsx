@@ -15,7 +15,6 @@ import {
   resetSystemPipelineApi,
   savePipelineYamlApi,
 } from "../../services/endpoints";
-import { AiPipelinePanel } from "./AiPipelinePanel";
 import {
   defaultStep,
   parsePipelineAst,
@@ -275,7 +274,6 @@ export function PipelineOrchestrator(props: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
   const [defaultOpen, setDefaultOpen] = useState(false);
   const [defaultYaml, setDefaultYaml] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -499,25 +497,6 @@ export function PipelineOrchestrator(props: Props) {
     }
   }
 
-  function applyAiYaml(yaml: string) {
-    try {
-      const parsed = parsePipelineAst(yaml);
-      if (ast && parsed.id !== ast.id) {
-        throw new Error("id must stay " + ast.id);
-      }
-      setAst(parsed);
-      setYamlText(stringifyPipelineAst(parsed));
-      setAstDirty(false);
-      setFlow("install");
-      setSelection(null);
-      setError(null);
-    } catch (err) {
-      setYamlText(yaml);
-      setView("yaml");
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
   function close() {
     if (dirty && !window.confirm(t("plUnsavedConfirm"))) return;
     props.onClose();
@@ -613,9 +592,6 @@ export function PipelineOrchestrator(props: Props) {
                 {t("pluginOrchYaml")}
               </button>
             </div>
-            <button type="button" className="pl-btn" onClick={() => setAiOpen(true)}>
-              ✨ {t("plAiTitle")}
-            </button>
             <button type="button" className="pl-x" onClick={close} aria-label={t("close")}>
               ×
             </button>
@@ -893,9 +869,12 @@ export function PipelineOrchestrator(props: Props) {
                             checked={
                               configStep.skip_on_probe === true ||
                               (configStep.skip_on_probe === undefined &&
-                                ["download", "extract", "copy_file"].includes(
-                                  stepTypeOf(configStep),
-                                ))
+                                [
+                                  "download",
+                                  "extract",
+                                  "copy_file",
+                                  "git_clone",
+                                ].includes(stepTypeOf(configStep)))
                             }
                             onChange={(e) =>
                               updateStep(configStepIndex, {
@@ -1126,16 +1105,6 @@ export function PipelineOrchestrator(props: Props) {
         </div>
       ) : null}
 
-      {aiOpen ? (
-        <AiPipelinePanel
-          initialKind={props.pipe.outputs.includes("skill") ? "skill" : "mcp"}
-          initialMode={props.pipe.installMode}
-          modes={props.defs.installModes}
-          currentYaml={yamlText}
-          onClose={() => setAiOpen(false)}
-          onApply={applyAiYaml}
-        />
-      ) : null}
     </div>
   );
 }

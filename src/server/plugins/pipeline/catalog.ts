@@ -5,14 +5,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { stringify as stringifyYaml } from "yaml";
-import { getConfig } from "../../config/index.js";
 import { parsePipelineYaml } from "./parse.js";
 import {
   PIPELINE_INSTALL_MODE_DEFINITIONS,
   type PipelineInstallModeDefinition,
 } from "./step-definitions.js";
-import { SYSTEM_ENGRAM_ID } from "../plugin-paths.js";
-import { migrateLegacyEngramInstall } from "../engram-runtime.js";
+import { BUNDLED_ENGRAM_PIPELINE_YAML } from "../bundled/engram-pipeline-text.js";
+import {
+  SYSTEM_ENGRAM_ID,
+  pluginsCatalogRoot,
+  visitorPipelinesRoot as visitorPipelinesRootPath,
+} from "../plugin-paths.js";
 import type {
   PipelineInstallMode,
   PipelineOutput,
@@ -26,17 +29,38 @@ function bundledEngramYamlPath(): string {
   );
 }
 
+/** 曾因 yaml 未打进包而种下的空壳（仅 extract） */
+function isStubEngramYaml(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  try {
+    const p = parsePipelineYaml(t);
+    if (p.id !== SYSTEM_ENGRAM_ID) return false;
+    // 没有 download / upsert_mcp 的系统稿视为损坏空壳
+    const types = new Set(p.steps.map((s) => s.type));
+    return !types.has("download") || !types.has("upsert_mcp");
+  } catch {
+    return true;
+  }
+}
+
+function loadBundledEngramYaml(): string {
+  try {
+    const fromFile = fs.readFileSync(bundledEngramYamlPath(), "utf8");
+    if (fromFile.trim() && !isStubEngramYaml(fromFile)) return fromFile;
+  } catch {
+    /* use embedded */
+  }
+  return BUNDLED_ENGRAM_PIPELINE_YAML;
+}
+
+/** 系统母版根：plugins-catalog */
 export function systemPipelinesRoot(): string {
-  return path.join(getConfig().dataDir, "plugins", "system");
+  return pluginsCatalogRoot();
 }
 
 export function visitorPipelinesRoot(visitorId: string): string {
-  return path.join(
-    getConfig().dataDir,
-    "tenant",
-    visitorId.trim(),
-    "plugins",
-  );
+  return visitorPipelinesRootPath(visitorId);
 }
 
 function pipelineDir(root: string, id: string): string {
@@ -56,36 +80,25 @@ export function rollPluginId(): string {
   return n.toString();
 }
 
-/** 首次启动：把包内 Engram DEMO 种到 dataDir（不覆盖已有用户改稿）。 */
+/**
+ * 把包内 Engram 母版种到 plugins-catalog/engram。
+ * default 始终覆盖；live 仅在缺失或检测到空壳 stub 时写入（不覆盖用户改稿）。
+ */
 export function ensureSystemPipelinesSeeded(): void {
-  const root = systemPipelinesRoot();
+  const root = pluginsCatalogRoot();
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
   const dir = pipelineDir(root, SYSTEM_ENGRAM_ID);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const defPath = pipelineDefaultPath(root, SYSTEM_ENGRAM_ID);
   const livePath = pipelineYamlPath(root, SYSTEM_ENGRAM_ID);
-  let bundled = "";
-  try {
-    bundled = fs.readFileSync(bundledEngramYamlPath(), "utf8");
-  } catch {
-    bundled = [
-      `id: "${SYSTEM_ENGRAM_ID}"`,
-      "name: Engram",
-      "kind: system",
-      "runtime: engram",
-      "data_key: engram",
-      "outputs: [mcp]",
-      "steps:",
-      "  - type: extract",
-      "",
-    ].join("\n");
-  }
-  // 出厂 default 始终与包内模板对齐（便于「恢复初始」拿到镜像 URL 等更新）
+  const bundled = loadBundledEngramYaml();
   fs.writeFileSync(defPath, bundled, "utf8");
-  if (!fs.existsSync(livePath)) {
+  const liveMissing = !fs.existsSync(livePath);
+  const liveStub =
+    !liveMissing && isStubEngramYaml(fs.readFileSync(livePath, "utf8"));
+  if (liveMissing || liveStub) {
     fs.writeFileSync(livePath, bundled, "utf8");
   }
-  migrateLegacyEngramInstall();
 }
 
 export type PipelineListItem = {
@@ -292,7 +305,19 @@ export function createVisitorPipeline(
 ): { id: string; yaml: string } {
   const vid = visitorId.trim();
   if (!vid) throw new Error("visitor required");
-  const id = rollPluginId();
+  const base =
+    (opts?.name ?? "custom")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "custom";
+  let id = base;
+  let n = 2;
+  while (fs.existsSync(pipelineYamlPath(visitorPipelinesRoot(vid), id))) {
+    id = `${base}-${n}`;
+    n += 1;
+  }
   const mode =
     opts?.installMode ??
     (opts?.outputs?.includes("skill") && !opts?.outputs?.includes("mcp")

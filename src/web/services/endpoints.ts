@@ -424,6 +424,7 @@ export type PipelineAiToolTrace = {
   durationMs: number;
 };
 
+/** plugin-pipeline：submit_pipeline 交卷事件载荷 */
 export type AiPipelineDraft = {
   yaml: string;
   valid: boolean;
@@ -432,18 +433,6 @@ export type AiPipelineDraft = {
   notes?: string;
   trace?: PipelineAiToolTrace[];
 };
-
-export function generatePipelineDraftApi(body: {
-  prompt: string;
-  kind?: "skill" | "mcp";
-  installMode?: PipelineInstallMode;
-  currentYaml?: string;
-}): Promise<AiPipelineDraft> {
-  return api<AiPipelineDraft>("/api/plugins/pipelines/ai/draft", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-}
 
 export function setPasswordApi(password: string): Promise<{ ok: boolean }> {
   return api<{ ok: boolean }>("/api/visitors/set-password", {
@@ -1398,6 +1387,18 @@ export type AgentStreamEvent =
       runId: string;
       sessionId: string;
       deadlineAt: string;
+    }
+  /** plugin-pipeline：submit_pipeline 交卷 */
+  | {
+      type: "pipeline_draft";
+      draft: AiPipelineDraft;
+    }
+  | {
+      type: "pipeline_job";
+      scope: "system" | "tenant";
+      id: string;
+      yaml?: string;
+      job: PipelineJob;
     };
 
 export interface AgentSourceRef {
@@ -1473,34 +1474,32 @@ export interface AgentSessionListResponse {
   sessions: AgentSessionSummary[];
 }
 
+export type AgentSessionMode = "normal" | "coding" | "plugin-pipeline";
+
 export function fetchAgentSessionApi(
-  mode: "normal" | "coding" = "normal",
+  mode: AgentSessionMode = "normal",
   documentId?: string | null,
 ): Promise<AgentSessionResponse> {
   const params = new URLSearchParams();
-  if (mode === "coding") {
-    params.set("mode", "coding");
-    if (documentId) params.set("documentId", documentId);
-  }
+  if (mode !== "normal") params.set("mode", mode);
+  if (mode === "coding" && documentId) params.set("documentId", documentId);
   const q = params.toString();
   return api<AgentSessionResponse>(`/api/agent/session${q ? `?${q}` : ""}`);
 }
 
 export function fetchAgentSessionsApi(
-  mode: "normal" | "coding" = "normal",
+  mode: AgentSessionMode = "normal",
   documentId?: string | null,
 ): Promise<AgentSessionListResponse> {
   const params = new URLSearchParams();
-  if (mode === "coding") {
-    params.set("mode", "coding");
-    if (documentId) params.set("documentId", documentId);
-  }
+  if (mode !== "normal") params.set("mode", mode);
+  if (mode === "coding" && documentId) params.set("documentId", documentId);
   const q = params.toString();
   return api<AgentSessionListResponse>(`/api/agent/sessions${q ? `?${q}` : ""}`);
 }
 
 export function createAgentSessionApi(
-  mode: "normal" | "coding" = "normal",
+  mode: AgentSessionMode = "normal",
   documentId?: string | null,
   domainId?: string | null,
 ): Promise<AgentSessionResponse> {
@@ -1517,7 +1516,7 @@ export function createAgentSessionApi(
 export function renameAgentSessionApi(
   sessionId: string,
   title: string,
-  mode: "normal" | "coding" = "normal",
+  mode: AgentSessionMode = "normal",
 ): Promise<AgentSessionSummary> {
   return api<AgentSessionSummary>("/api/agent/session/rename", {
     method: "POST",
@@ -1528,7 +1527,7 @@ export function renameAgentSessionApi(
 export function pinAgentSessionApi(
   sessionId: string,
   pinned: boolean,
-  mode: "normal" | "coding" = "normal",
+  mode: AgentSessionMode = "normal",
 ): Promise<AgentSessionSummary> {
   return api<AgentSessionSummary>("/api/agent/session/pin", {
     method: "POST",
@@ -1538,7 +1537,7 @@ export function pinAgentSessionApi(
 
 export function openAgentSessionApi(
   sessionId: string,
-  mode: "normal" | "coding" = "normal",
+  mode: AgentSessionMode = "normal",
   documentId?: string | null,
 ): Promise<AgentSessionResponse> {
   return api<AgentSessionResponse>("/api/agent/session/open", {
@@ -1562,7 +1561,7 @@ export type AgentSessionCompactResult = {
 
 /** 主动压缩当前（或指定）session 上下文；不要求已到 85% */
 export function compactAgentSessionApi(
-  mode: "normal" | "coding" = "normal",
+  mode: AgentSessionMode = "normal",
   opts?: { sessionId?: string; documentId?: string | null },
 ): Promise<AgentSessionCompactResult> {
   return api<AgentSessionCompactResult>("/api/agent/session/compact", {
@@ -1749,7 +1748,7 @@ export async function uploadAgentAttachmentApi(
 export async function streamAgentChatApi(
   message: string,
   opts: {
-    mode?: "normal" | "coding";
+    mode?: AgentSessionMode;
     /** 本轮引用的私人 skill 名称 */
     skillNames?: string[];
     /** @deprecated */
@@ -1760,6 +1759,8 @@ export async function streamAgentChatApi(
     documentId?: string | null;
     workingMarkdown?: string;
     baseMarkdown?: string;
+    /** plugin-pipeline：右侧当前草稿 YAML */
+    pipelineCurrentYaml?: string | null;
     /** normal：当前 UI 域 / 打开文 / 图谱 */
     references?: {
       domainId?: string;
@@ -1770,9 +1771,15 @@ export async function streamAgentChatApi(
     onEvent: (event: AgentStreamEvent) => void;
   },
 ): Promise<void> {
+  const mode: AgentSessionMode =
+    opts.mode === "coding"
+      ? "coding"
+      : opts.mode === "plugin-pipeline"
+        ? "plugin-pipeline"
+        : "normal";
   const body: Record<string, unknown> = {
     message,
-    mode: opts.mode === "coding" ? "coding" : "normal",
+    mode,
   };
   if (opts.assetIds && opts.assetIds.length > 0) body.assetIds = opts.assetIds;
   const names =
@@ -1782,10 +1789,14 @@ export async function streamAgentChatApi(
         ? opts.skillIds
         : undefined;
   if (names) body.skillNames = names;
-  if (opts.mode === "coding") {
+  if (mode === "coding") {
     if (opts.documentId !== undefined) body.documentId = opts.documentId;
     if (typeof opts.workingMarkdown === "string") body.workingMarkdown = opts.workingMarkdown;
     if (typeof opts.baseMarkdown === "string") body.baseMarkdown = opts.baseMarkdown;
+  } else if (mode === "plugin-pipeline") {
+    if (typeof opts.pipelineCurrentYaml === "string") {
+      body.pipelineCurrentYaml = opts.pipelineCurrentYaml;
+    }
   } else if (opts.references) {
     body.references = opts.references;
   }

@@ -44,6 +44,14 @@ export type PipelineStep = StepCommon &
     | { type: "extract"; dest?: string; archive?: string }
     | { type: "copy_file"; from: string; to: string }
     | {
+        type: "git_clone";
+        url: string;
+        /** 相对 {{install_root}}；默认 "."（仓库根 = plugins-home/<name>/） */
+        dest?: string;
+        branch?: string;
+        depth?: number;
+      }
+    | {
         type: "exec";
         command: string;
         args?: string[];

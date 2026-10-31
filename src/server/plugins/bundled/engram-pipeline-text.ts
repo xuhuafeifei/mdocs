@@ -1,0 +1,66 @@
+/**
+ * Engram 系统流水线正文（与 engram.pipeline.yaml 同步）。
+ * 打包进 dist，避免 yaml 未拷贝时 seed 落成空壳。
+ */
+export const BUNDLED_ENGRAM_PIPELINE_YAML = `# Engram — 系统流水线母版（plugins-catalog/engram；启用后 copy 到 tenant）
+#
+# 下载：不填 url，runtime=engram 时由系统按平台选国内镜像（不直连 GitHub）。
+# 数据：连接时 ENGRAM_DATA_DIR → tenant/.../plugins-data/engram
+# MCP：写入 tenant/.../mcp/engram.json
+
+id: engram
+name: Engram
+kind: system
+runtime: engram
+data_key: engram
+version: "3.6.0"
+install_mode: local_binary
+description: >
+  本机 Agent 记忆（单二进制 + SQLite）。安装后按需拉起，非常驻服务。
+outputs:
+  - mcp
+
+probe:
+  - type: file_exists
+    path: bin/engram
+
+steps:
+  - type: download
+    # url 留空：Engram 专用，系统自动选镜像下载地址
+
+  - type: extract
+    dest: bin
+
+  - type: exec
+    command: bin/engram
+    args:
+      - init
+      - mdocs-bootstrap
+      - --force
+    cwd: "{{plugins_data}}/workspace"
+    when: probe_failed
+
+  - type: upsert_mcp
+    mcp_server_id: engram
+    name: Engram
+    enabled: true
+    transport: stdio
+    command: bin/engram
+    args:
+      - mcp
+
+  - type: write_soul_sidecar
+    scope: tenant
+    file: engram.md
+    content: |
+      # Engram
+
+      本机记忆已接入。空间按当前访客隔离，无需也不应切换他人记忆。
+
+uninstall:
+  - type: delete_soul_sidecar
+    scope: tenant
+    file: engram.md
+  - type: remove_mcp
+    mcp_server_id: engram
+`;

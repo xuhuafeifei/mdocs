@@ -22,10 +22,9 @@ import {
   ensureMemorixGitWorkspace,
   memorixProjectRoot,
 } from "../plugins/memorix-runtime.js";
-import {
-  listEnabledMcpServers,
-  type McpServerConfig,
-} from "./mcp-servers-store.js";
+import { type McpServerConfig } from "./mcp-servers-store.js";
+import { listEnabledVisitorMcpServers } from "./tenant-mcp-store.js";
+import { visitorPluginDataDir } from "../plugins/plugin-paths.js";
 
 const log = useLogger("mcp-client");
 
@@ -214,9 +213,10 @@ async function bindEngramSession(
 ): Promise<void> {
   if (!toolNames.includes("mem_session_start")) return;
   const project = engramProjectForVisitor(visitorId);
-  let directory = engramWorkspaceRoot();
+  const vid = visitorId.trim() || null;
+  let directory = engramWorkspaceRoot(vid);
   try {
-    directory = await ensureEngramProject(undefined, project);
+    directory = await ensureEngramProject(undefined, project, vid);
   } catch (err) {
     log.warn(
       `ensure engram project: ${err instanceof Error ? err.message : String(err)}`,
@@ -257,13 +257,17 @@ async function bindMemorySessions(
   }
 }
 
-/** 按访客改写 Engram stdio 的 project / env（共享二进制，数据按 project 分桶）。 */
+/** 按访客改写 Engram：共享二进制，DATA_DIR 指到 tenant/.../plugins-data/engram。 */
 function resolveServerForVisitor(
   server: McpServerConfig,
   visitorId: string,
 ): McpServerConfig {
   if (!looksLikeEngram(server, [])) return server;
-  const project = engramProjectForVisitor(visitorId);
+  const vid = visitorId.trim();
+  if (!vid) return server;
+  const project = engramProjectForVisitor(vid);
+  const dataDir = visitorPluginDataDir(vid, "engram");
+  const eg = buildEngramMcpEnv(project, dataDir);
   const bin = engramBinaryPath();
   const command =
     server.command && fsExists(server.command) ? server.command : bin;
@@ -272,12 +276,12 @@ function resolveServerForVisitor(
     ...server,
     command,
     args,
-    cwd: server.cwd || engramWorkspaceRoot(),
+    cwd: server.cwd || engramWorkspaceRoot(vid),
     env: {
-      ...buildEngramMcpEnv(project),
       ...(server.env ?? {}),
+      ...eg,
       ENGRAM_PROJECT: project,
-      ENGRAM_DATA_DIR: buildEngramMcpEnv(project).ENGRAM_DATA_DIR,
+      ENGRAM_DATA_DIR: eg.ENGRAM_DATA_DIR,
     },
   };
 }
@@ -324,14 +328,14 @@ export async function testMcpServer(
 export async function loadMcpAgentTools(
   visitorId = "",
 ): Promise<McpAgentToolsBundle> {
-  const servers = listEnabledMcpServers();
+  const vid = visitorId.trim();
+  const servers = vid ? listEnabledVisitorMcpServers(vid) : [];
   if (servers.length === 0) {
     return { tools: [], close: async () => {} };
   }
 
   const closers: Array<() => Promise<void>> = [];
   const tools: AgentTool[] = [];
-  const vid = visitorId.trim();
 
   for (const raw of servers) {
     const server = resolveServerForVisitor(raw, vid);

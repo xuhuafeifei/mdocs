@@ -11,6 +11,7 @@ const STEP_TYPES = new Set([
   "download",
   "extract",
   "copy_file",
+  "git_clone",
   "exec",
   "upsert_mcp",
   "upsert_skill",
@@ -61,6 +62,9 @@ function asSteps(raw: unknown, label: string): PipelineStep[] {
     }
     if (type === "exec" && !String(step.command ?? "").trim()) {
       throw new Error("exec.command is required");
+    }
+    if (type === "git_clone" && !String(step.url ?? "").trim()) {
+      throw new Error("git_clone.url is required");
     }
     if (type === "upsert_mcp") {
       const transport = String(step.transport ?? "");

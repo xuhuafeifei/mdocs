@@ -28,3 +28,4 @@
 | 015 | [overwrite_all Diff 相等放宽](./015-overwrite-all-diff-equality.md) | accepted | 双源 JSON 不强制同源；canonicalize + 纯文本兜底；异 hunk 留距、同 hunk 贴紧 |
 | 016 | [HTML 文档允许内联脚本](./016-html-js-prototype-sandbox.md) | accepted | 只给 `allow-scripts`（绝不 `allow-same-origin`）+ `default-src 'none'` CSP；版本预览仍禁脚本 |
 | 017 | [CLI 直传 assets](./017-cli-asset-upload.md) | accepted | `mdocs asset upload` 直接落 `files/assets`，不引入 token / 文档归属，命名与网页上传一致 |
+| 018 | [插件 CLI：cwd / 假 HOME，非 env 魔法](./018-plugin-cli-cwd-home-not-env-magic.md) | accepted | `run_plugin_cli` 靠 cwd + 假 HOME 控落盘；`MDOCS_PLUGIN_*` 仅合约信号 |

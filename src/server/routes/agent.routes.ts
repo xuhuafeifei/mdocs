@@ -60,8 +60,12 @@ function writeSse(res: Response, event: AgentStreamEvent) {
   if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
-function parseAgentMode(raw: unknown): "normal" | "coding" {
-  return typeof raw === "string" && raw.trim() === "coding" ? "coding" : "normal";
+function parseAgentMode(raw: unknown): "normal" | "coding" | "plugin-pipeline" {
+  if (typeof raw !== "string") return "normal";
+  const t = raw.trim();
+  if (t === "coding") return "coding";
+  if (t === "plugin-pipeline") return "plugin-pipeline";
+  return "normal";
 }
 
 /** query/body 的 documentId；空串视为 null（空白帮写） */
@@ -479,7 +483,7 @@ export function buildAgentRouter(): Router {
     try {
       const result = await compactAgentSession({
         visitorId: req.visitor.visitor_id,
-        kind: mode === "coding" ? "coding" : "normal",
+        kind: mode,
         documentId: documentId ?? null,
         sessionId,
         force: true,
@@ -880,8 +884,14 @@ export function buildAgentRouter(): Router {
       return;
     }
 
+    const mode = parseAgentMode(req.body?.mode);
     const status = getAgentStatus(req.visitor.visitor_id);
-    if (!status.enabled || !status.skillsReady) {
+    // plugin-pipeline 不依赖手册 skills；其它 mode 仍要求 enabled
+    const available =
+      mode === "plugin-pipeline"
+        ? status.reason !== "missing_api_key"
+        : status.enabled && status.skillsReady;
+    if (!available) {
       res.status(503).json({
         error: {
           code: "AGENT_UNAVAILABLE",
@@ -891,8 +901,6 @@ export function buildAgentRouter(): Router {
       return;
     }
 
-    const modeRaw = typeof req.body?.mode === "string" ? req.body.mode.trim() : "";
-    const mode = modeRaw === "coding" ? "coding" : "normal";
     const workingMarkdown =
       mode === "coding" && typeof req.body?.workingMarkdown === "string"
         ? req.body.workingMarkdown
@@ -905,9 +913,15 @@ export function buildAgentRouter(): Router {
       mode === "coding" && typeof req.body?.documentId === "string"
         ? req.body.documentId.trim() || null
         : undefined;
-    const skillNames = normalizeSkillRefs(
-      req.body?.skillNames ?? req.body?.skillIds,
-    );
+    const pipelineCurrentYaml =
+      mode === "plugin-pipeline" && typeof req.body?.pipelineCurrentYaml === "string"
+        ? req.body.pipelineCurrentYaml
+        : undefined;
+    const skillNames =
+      mode === "plugin-pipeline"
+        ? []
+        : normalizeSkillRefs(req.body?.skillNames ?? req.body?.skillIds);
+    const chatAssetIds = mode === "plugin-pipeline" ? [] : assetIds;
     const ref = req.body?.references;
     const references =
       mode === "normal" && ref && typeof ref === "object"
@@ -932,11 +946,12 @@ export function buildAgentRouter(): Router {
         message,
         mode,
         skillNames,
-        assetIds,
+        assetIds: chatAssetIds,
         documentId,
         workingMarkdown,
         baseMarkdown,
         references,
+        pipelineCurrentYaml,
       });
     } catch (err) {
       if (err instanceof SessionCompactingError) {

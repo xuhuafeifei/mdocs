@@ -6,32 +6,33 @@ import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { pipeline as streamPipeline } from "node:stream/promises";
 import { createWriteStream } from "node:fs";
-import { getDb } from "../../db/connection.js";
 import {
-  deleteAgentUserSkillByName,
-  findAgentUserSkillByName,
-  insertAgentUserSkill,
-  updateAgentUserSkill,
-} from "../../db/repositories/agent-user-skill.repo.js";
-import {
-  removeMcpServerById,
-  upsertMcpServer,
-} from "../../mcp/mcp-servers-store.js";
+  removeVisitorMcpServer,
+  upsertMcpServerForVisitor,
+} from "../../mcp/tenant-mcp-store.js";
 import { ensureGlobalSoulShell, ensureVisitorSoulShell } from "../../soul/ensure-shells.js";
 import { globalSoulDir, visitorSoulDir } from "../../soul/paths.js";
+import {
+  createUserSkill,
+  getUserSkillByName,
+  removeUserSkillByName,
+  updateUserSkillByName,
+} from "../../agent/Agent/user-skills.js";
 import {
   buildEngramMcpEnv,
   detectPlatform,
   engramDownloadCandidates,
+  engramProjectForVisitor,
 } from "../engram-runtime.js";
 import {
+  normalizePluginName,
   pluginDataDir,
-  pluginInstallDir,
-  pluginsDataRoot,
+  pluginHomeDir,
+  visitorPluginDataDir,
+  visitorPluginsDataRoot,
 } from "../plugin-paths.js";
 import {
   getPipelineInstall,
@@ -122,9 +123,12 @@ function resolveCwd(ctx: Ctx, rel: string): string {
   const rendered = render(rel, ctx.vars);
   if (!path.isAbsolute(rendered)) return within(ctx.installRoot, rendered);
   const abs = path.resolve(rendered);
-  const roots = [ctx.installRoot, ctx.dataDir, pluginsDataRoot()].map((r) =>
-    path.resolve(r),
-  );
+  if (!ctx.visitorId) throw new Error(`路径越界：${rel}`);
+  const roots = [
+    ctx.installRoot,
+    ctx.dataDir,
+    visitorPluginsDataRoot(ctx.visitorId),
+  ].map((r) => path.resolve(r));
   const ok = roots.some((root) => abs === root || abs.startsWith(root + path.sep));
   if (!ok) throw new Error(`路径越界：${rel}`);
   return abs;
@@ -474,7 +478,8 @@ function shouldSkip(step: PipelineStep, probePassed: boolean): string | null {
   const skipDefault =
     step.type === "download" ||
     step.type === "extract" ||
-    step.type === "copy_file";
+    step.type === "copy_file" ||
+    step.type === "git_clone";
   const skipOnProbe = step.skip_on_probe ?? skipDefault;
   if (probePassed && skipOnProbe) return "安装检测已通过";
   return null;
@@ -555,6 +560,41 @@ async function runStep(
       log(`已复制到 ${to}`);
       return;
     }
+    case "git_clone": {
+      const url = render(step.url, ctx.vars).trim();
+      if (!url) throw new Error("git_clone.url 为空");
+      if (!/^https:\/\//i.test(url)) {
+        throw new Error("git_clone 仅支持 https:// 仓库地址");
+      }
+      const destRel = (render(step.dest ?? ".", ctx.vars).trim() || ".").replace(
+        /\\/g,
+        "/",
+      );
+      if (destRel.includes("..") || path.isAbsolute(destRel)) {
+        throw new Error("git_clone.dest 必须是相对 install_root 的路径");
+      }
+      within(ctx.installRoot, destRel === "." ? "." : destRel);
+      const args = ["clone"];
+      const depth = Number(step.depth);
+      if (Number.isFinite(depth) && depth > 0) {
+        args.push("--depth", String(Math.floor(depth)));
+      }
+      const branch = render(step.branch ?? "", ctx.vars).trim();
+      if (branch) args.push("--branch", branch);
+      args.push(url, destRel);
+      log(`$ git ${args.join(" ")}`);
+      await runProcess({
+        command: "git",
+        args,
+        cwd: ctx.installRoot,
+        env: process.env,
+        timeoutMs: 300_000,
+        stepIndex: index,
+        emit,
+        signal,
+      });
+      return;
+    }
     case "exec": {
       const command = resolveExecutable(ctx, step.command);
       chmodExec(command);
@@ -563,7 +603,12 @@ async function runStep(
       ensureDir(cwd);
       const env: NodeJS.ProcessEnv = {
         ...process.env,
-        ...(ctx.pipeline.runtime === "engram" ? buildEngramMcpEnv() : {}),
+        ...(ctx.pipeline.runtime === "engram"
+          ? buildEngramMcpEnv(
+              engramProjectForVisitor(ctx.visitorId),
+              visitorPluginDataDir(ctx.visitorId, "engram"),
+            )
+          : {}),
       };
       for (const [k, v] of Object.entries(step.env ?? {})) {
         env[k] = render(v, ctx.vars);
@@ -586,7 +631,9 @@ async function runStep(
       return;
     }
     case "upsert_mcp": {
-      const id = mcpIdFor(ctx, step.mcp_server_id);
+      const id = normalizePluginName(
+        mcpIdFor(ctx, step.mcp_server_id).replace(/^plugin-/, ""),
+      );
       if (step.transport === "stdio") {
         const command = resolveExecutable(ctx, step.command ?? "");
         chmodExec(command);
@@ -597,7 +644,15 @@ async function runStep(
         for (const [k, v] of Object.entries(step.env ?? {})) {
           env[k] = render(v, ctx.vars);
         }
-        upsertMcpServer({
+        // Engram：把租户 DATA_DIR 写进 MCP env，连接时即隔离
+        if (ctx.pipeline.runtime === "engram" && ctx.visitorId) {
+          const eg = buildEngramMcpEnv(
+            undefined,
+            visitorPluginDataDir(ctx.visitorId, "engram"),
+          );
+          Object.assign(env, eg);
+        }
+        upsertMcpServerForVisitor(ctx.visitorId, {
           id,
           name: step.name,
           enabled: step.enabled ?? true,
@@ -611,7 +666,7 @@ async function runStep(
         log(`MCP 已注册（stdio）：${command}`);
         return;
       }
-      upsertMcpServer({
+      upsertMcpServerForVisitor(ctx.visitorId, {
         id,
         name: step.name,
         enabled: step.enabled ?? true,
@@ -634,32 +689,38 @@ async function runStep(
       const name = render(step.name, ctx.vars).trim();
       let body = step.body ?? "";
       if (step.body_file) {
+        // 相对 plugins-home 安装物；真身写到 tenant/.../skills/<name>/
         const file = within(ctx.installRoot, render(step.body_file, ctx.vars));
         if (!fs.existsSync(file)) throw new Error(`Skill 正文文件不存在：${file}`);
         body = fs.readFileSync(file, "utf8");
       }
+      if (!body.trim()) {
+        // 约定：安装物根或 skills/<name>/SKILL.md
+        const candidates = [
+          path.join(ctx.installRoot, "SKILL.md"),
+          path.join(ctx.installRoot, "skills", name, "SKILL.md"),
+          path.join(ctx.installRoot, name, "SKILL.md"),
+        ];
+        const hit = candidates.find((p) => fs.existsSync(p));
+        if (hit) body = fs.readFileSync(hit, "utf8");
+      }
       if (!body.trim()) throw new Error("Skill 正文为空");
-      const db = getDb();
-      const existing = findAgentUserSkillByName(db, ctx.visitorId, name);
-      const now = new Date().toISOString();
+      const existing = getUserSkillByName(ctx.visitorId, name);
       if (existing) {
-        updateAgentUserSkill(db, {
-          id: existing.id,
-          owner_visitor_id: ctx.visitorId,
+        updateUserSkillByName({
+          ownerVisitorId: ctx.visitorId,
+          currentName: name,
           name,
-          description: step.description ?? "",
+          description: step.description ?? existing.description,
           body,
-          updated_at: now,
         });
         log(`Skill 已更新：${name}`);
       } else {
-        insertAgentUserSkill(db, {
-          id: randomUUID(),
-          owner_visitor_id: ctx.visitorId,
+        createUserSkill({
+          ownerVisitorId: ctx.visitorId,
           name,
           description: step.description ?? "",
           body,
-          updated_at: now,
         });
         log(`Skill 已注册：${name}`);
       }
@@ -701,15 +762,22 @@ async function runStep(
       return;
     }
     case "remove_mcp": {
-      const id = mcpIdFor(ctx, step.mcp_server_id);
-      removeMcpServerById(id);
+      const id = normalizePluginName(
+        mcpIdFor(ctx, step.mcp_server_id).replace(/^plugin-/, ""),
+      );
+      if (ctx.visitorId) removeVisitorMcpServer(ctx.visitorId, id);
       log(`已移除 MCP：${id}`);
       return;
     }
     case "remove_skill": {
       if (!ctx.visitorId) throw new Error("移除 Skill 需要登录访客");
       const name = render(step.name, ctx.vars).trim();
-      deleteAgentUserSkillByName(getDb(), ctx.visitorId, name);
+      try {
+        removeUserSkillByName(ctx.visitorId, name);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg !== "skill_not_found") throw err;
+      }
       log(`已移除 Skill：${name}`);
       return;
     }
@@ -732,20 +800,21 @@ export async function runPipeline(
   opts: RunPipelineOptions,
 ): Promise<{ mcpServerId?: string }> {
   const { pipeline, action, visitorId, onEvent, signal } = opts;
+  if (!visitorId.trim()) throw new Error("visitor required");
   const dataKey = pipeline.data_key?.trim() || pipeline.id;
-  const installRoot = pluginInstallDir(pipeline.id);
-  const dataDir = pluginDataDir(dataKey);
+  const installRoot = pluginHomeDir(pipeline.id);
+  const dataDir = pluginDataDir(dataKey, visitorId);
   const plat = detectPlatform();
   const vars: Record<string, string> = {
     install_root: installRoot,
     plugins_data: dataDir,
-    plugins_data_root: pluginsDataRoot(),
+    plugins_data_root: visitorPluginsDataRoot(visitorId),
     version: pipeline.version ?? "",
     goos: plat.goos,
     goarch: plat.goarch,
     visitor_id: visitorId,
-    plugin_id: pipeline.id,
-    engram_project: "mdocs-bootstrap",
+    plugin_id: normalizePluginName(pipeline.id),
+    engram_project: engramProjectForVisitor(visitorId),
   };
   const ctx: Ctx = {
     pipeline,

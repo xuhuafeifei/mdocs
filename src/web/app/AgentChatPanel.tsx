@@ -42,6 +42,9 @@ import {
   pinAgentSessionApi,
   renameAgentSessionApi,
   streamAgentChatApi,
+  type AiPipelineDraft,
+  type PipelineJob,
+  type AgentSessionMode,
   streamAgentRunApi,
   cancelAgentRunApi,
   submitAgentChoiceApi,
@@ -1140,7 +1143,17 @@ export const AgentChatPanel = forwardRef<
     /** 贴左栏当前宽度（px） */
     dockWidth?: number;
     onDockWidthChange?: (width: number) => void;
-    mode?: "normal" | "coding";
+    mode?: AgentSessionMode;
+    /** plugin-pipeline：交卷后的流水线草稿回调（右栏节点用） */
+    onPipelineDraft?: (draft: AiPipelineDraft) => void;
+    onPipelineJob?: (payload: {
+      scope: "system" | "tenant";
+      id: string;
+      yaml?: string;
+      job: PipelineJob;
+    }) => void;
+    /** plugin-pipeline：当前右侧草稿 YAML，多轮改稿时带回 */
+    pipelineCurrentYaml?: string | null;
     workingMarkdown?: string;
     baseMarkdown?: string;
     onMarkdownSet?: (markdown: string) => void;
@@ -1192,6 +1205,9 @@ export const AgentChatPanel = forwardRef<
     dockWidth,
     onDockWidthChange,
     mode = "normal",
+    onPipelineDraft,
+    onPipelineJob,
+    pipelineCurrentYaml = null,
     workingMarkdown,
     baseMarkdown,
     onMarkdownSet,
@@ -1202,10 +1218,22 @@ export const AgentChatPanel = forwardRef<
   } = props;
   const onProvideEditorDraftRef = useRef(onProvideEditorDraft);
   onProvideEditorDraftRef.current = onProvideEditorDraft;
-  const sessionMode = mode === "coding" ? "coding" : "normal";
+  const onPipelineDraftRef = useRef(onPipelineDraft);
+  onPipelineDraftRef.current = onPipelineDraft;
+  const onPipelineJobRef = useRef(onPipelineJob);
+  onPipelineJobRef.current = onPipelineJob;
+  const pipelineCurrentYamlRef = useRef(pipelineCurrentYaml);
+  pipelineCurrentYamlRef.current = pipelineCurrentYaml;
+  const sessionMode: AgentSessionMode =
+    mode === "coding"
+      ? "coding"
+      : mode === "plugin-pipeline"
+        ? "plugin-pipeline"
+        : "normal";
   const coding = sessionMode === "coding";
+  const pipeline = sessionMode === "plugin-pipeline";
   const showClose = !embedded || docked;
-  const showDockToggle = Boolean(onToggleDock) && !coding;
+  const showDockToggle = Boolean(onToggleDock) && !coding && !pipeline;
   const userInitial = (visitorName?.trim().charAt(0) || "我").toUpperCase();
   const [historyOpen, setHistoryOpen] = useState(false);
   /** 历史列表：当前工作空间 / 全部 */
@@ -1278,7 +1306,7 @@ export const AgentChatPanel = forwardRef<
   const graphRefTitle = graphLabel?.trim() || "当前图谱";
 
   const pageRefs = useMemo((): ComposerPageRef[] => {
-    if (coding) return [];
+    if (coding || pipeline) return [];
     if (graphRefActive) {
       return [
         {
@@ -1633,7 +1661,11 @@ export const AgentChatPanel = forwardRef<
     };
   }, [open]);
 
-  const sessionScope = coding ? `coding:${documentId ?? ""}` : "normal";
+  const sessionScope = coding
+    ? `coding:${documentId ?? ""}`
+    : pipeline
+      ? "plugin-pipeline"
+      : "normal";
   const sessionScopeRef = useRef(sessionScope);
 
   useEffect(() => {
@@ -2035,6 +2067,18 @@ export const AgentChatPanel = forwardRef<
         used: event.used,
         limit: event.limit,
       });
+    } else if (event.type === "pipeline_draft") {
+      onPipelineDraftRef.current?.(event.draft);
+      if (!event.draft.valid && event.draft.error) {
+        setStreamError(event.draft.error);
+      }
+    } else if (event.type === "pipeline_job") {
+      onPipelineJobRef.current?.({
+        scope: event.scope,
+        id: event.id,
+        ...(event.yaml ? { yaml: event.yaml } : {}),
+        job: event.job,
+      });
     } else if (event.type === "error") {
       hadError = true;
       setContextCompacting(false);
@@ -2107,6 +2151,7 @@ export const AgentChatPanel = forwardRef<
   }
 
   async function uploadFiles(incoming: File[]) {
+    if (pipeline) return;
     const files = nameFilesForUpload(
       incoming,
       pendingAttachments.map((a) => a.name),
@@ -2163,9 +2208,24 @@ export const AgentChatPanel = forwardRef<
 
   async function sendMessage(raw: string) {
     const text = raw.trim();
-    const assetIds = pendingAttachments.map((a) => a.id);
+    const assetIds = pipeline ? [] : pendingAttachments.map((a) => a.id);
+    const openChoice = openInteractions.find((i) => i.kind === "choice");
+    // 选择卡打开时：主输入框自由文本当作 choice 提交，不新开一轮
+    if (openChoice && text && sending) {
+      try {
+        await submitAgentChoiceApi(openChoice.block.requestId, text);
+        resolveChoiceCard(openChoice.messageId, openChoice.block.requestId, text, "selected");
+        setInput("");
+      } catch {
+        resolveChoiceCard(openChoice.messageId, openChoice.block.requestId, text, "failed");
+      }
+      return;
+    }
     if ((!text && assetIds.length === 0) || sending || contextCompacting) return;
-    if (!status?.enabled) {
+    const allowSend =
+      Boolean(status) &&
+      (pipeline ? status?.reason !== "missing_api_key" : Boolean(status?.enabled));
+    if (!allowSend) {
       setStreamError(
         status?.reason === "missing_api_key"
           ? "请先配置 API Key"
@@ -2180,18 +2240,21 @@ export const AgentChatPanel = forwardRef<
     const ac = new AbortController();
     abortRef.current = ac;
 
-    const assetsForBubble = pendingAttachments.map((a) => ({
-      id: a.id,
-      name: a.name,
-      mime: a.mime,
-      bytes: a.bytes,
-      previewUrl: a.previewUrl,
-    }));
+    const assetsForBubble = pipeline
+      ? []
+      : pendingAttachments.map((a) => ({
+          id: a.id,
+          name: a.name,
+          mime: a.mime,
+          bytes: a.bytes,
+          previewUrl: a.previewUrl,
+        }));
     const userMsg: ChatMessage = {
       id: nextId("u"),
       role: "user",
       content: text || (assetsForBubble[0] ? `(附件 ${assetsForBubble.map((a) => a.name).join(", ")})` : ""),
-      skillNames: selectedSkillNames.length > 0 ? [...selectedSkillNames] : undefined,
+      skillNames:
+        !pipeline && selectedSkillNames.length > 0 ? [...selectedSkillNames] : undefined,
       assets: assetsForBubble.length > 0 ? assetsForBubble : undefined,
     };
     const assistantId = nextId("a");
@@ -2199,7 +2262,7 @@ export const AgentChatPanel = forwardRef<
     stickToBottomRef.current = true;
     setMessages((prev) => [...prev, userMsg, { id: assistantId, role: "assistant", content: "" }]);
     setInput("");
-    setPendingAttachments([]);
+    if (!pipeline) setPendingAttachments([]);
     setSending(true);
     setStreamError(null);
     setHistoryOpen(false);
@@ -2212,40 +2275,59 @@ export const AgentChatPanel = forwardRef<
       let hadError = false;
       await streamAgentChatApi(text, {
         mode: sessionMode,
-        skillNames: selectedSkillNames.length > 0 ? selectedSkillNames : undefined,
-        assetIds: assetIds.length > 0 ? assetIds : undefined,
+        skillNames:
+          !pipeline && selectedSkillNames.length > 0 ? selectedSkillNames : undefined,
+        assetIds: !pipeline && assetIds.length > 0 ? assetIds : undefined,
         ...(coding
           ? {
               documentId: documentId ?? null,
               workingMarkdown,
               baseMarkdown,
             }
-          : {
-              references: {
-                domainId: domainId?.trim() || undefined,
-                documentId: !graphRefActive && docRefActive ? documentId!.trim() : undefined,
-                graphFileId: graphRefActive ? graphFileId!.trim() : undefined,
-              },
-            }),
+          : pipeline
+            ? {
+                ...(pipelineCurrentYamlRef.current
+                  ? { pipelineCurrentYaml: pipelineCurrentYamlRef.current }
+                  : {}),
+              }
+            : {
+                references: {
+                  domainId: domainId?.trim() || undefined,
+                  documentId: !graphRefActive && docRefActive ? documentId!.trim() : undefined,
+                  graphFileId: graphRefActive ? graphFileId!.trim() : undefined,
+                },
+              }),
         signal: ac.signal,
         onEvent: (event) => {
           if (applyStreamEvent(assistantId, event)) hadError = true;
         },
       });
-      if (!ac.signal.aborted && !hadError) {
+      if (!ac.signal.aborted && !hadError && !pipeline) {
         setSelectedSkillNames([]);
+      }
+      if (!ac.signal.aborted && pipeline) {
+        void refreshSessions();
       }
     } catch (err) {
       if (ac.signal.aborted) return;
       setContextCompacting(false);
       const code =
         err instanceof Error ? (err as Error & { code?: string }).code : undefined;
-      setStreamError(
-        code === "SESSION_COMPACTING"
-          ? "正在压缩上下文，请稍后再试"
-          : err instanceof Error
-            ? err.message
-            : String(err),
+      const msg =
+        code === "MISSING_MODEL_CONFIG" || code === "missing_model_config"
+          ? "请先配置 API Key"
+          : code === "SESSION_COMPACTING"
+            ? "正在压缩上下文，请稍后再试"
+            : err instanceof Error
+              ? err.message
+              : String(err);
+      setStreamError(msg);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? { ...m, content: msg, blocks: [{ type: "text", text: msg }] }
+            : m,
+        ),
       );
     } finally {
       setMessages((prev) =>
@@ -2491,9 +2573,11 @@ export const AgentChatPanel = forwardRef<
   if (!open) return null;
 
   const needsApiKey = status?.reason === "missing_api_key";
+  /** 插件编排只需模型 Key，不依赖手册 skills */
+  const canUseAgent = Boolean(status) && (pipeline ? !needsApiKey : Boolean(status?.enabled));
   const unavailableHint =
     statusError ??
-    (status && !status.enabled && !needsApiKey
+    (status && !canUseAgent && !needsApiKey
       ? status.reason === "skills_missing"
         ? "skills 未就绪"
         : "助手暂不可用"
@@ -2511,7 +2595,9 @@ export const AgentChatPanel = forwardRef<
             : "")
       }
       role={embedded ? undefined : "dialog"}
-      aria-label={coding ? "mdocs 帮写助手" : "mdocs 智能助手"}
+      aria-label={
+        coding ? "mdocs 帮写助手" : pipeline ? "插件编排助手" : "mdocs 智能助手"
+      }
       aria-modal={embedded ? undefined : fullscreen ? true : undefined}
       style={
         embedded || fullscreen
@@ -2561,7 +2647,13 @@ export const AgentChatPanel = forwardRef<
       <header className="mdocs-agent-panel-header">
         <div className="mdocs-agent-panel-title">
           <img src={deepseekLogoUrl} alt="" className="mdocs-agent-panel-title-logo" />
-          <span>{coding ? "mdocs 帮写助手" : "mdocs 智能助手"}</span>
+          <span>
+            {coding
+              ? "mdocs 帮写助手"
+              : pipeline
+                ? "插件编排助手"
+                : "mdocs 智能助手"}
+          </span>
         </div>
         <div className="mdocs-agent-panel-actions">
           <button
@@ -2741,19 +2833,27 @@ export const AgentChatPanel = forwardRef<
             >
             {messages.length === 0 ? (
               <>
-                <p className="mdocs-agent-panel-hello">
-                  {coding ? "你好，我是 mdocs 帮写助手" : "你好，我是 mdocs 智能助手"}
-                </p>
-                <p className="mdocs-agent-panel-desc">
-                  {coding
-                    ? "这里专注改稿：你说怎么写，我更新右侧提案；按段接受或拒绝后，再点「完成并写回」。答疑、建目录、搜文档请用右下角「智能助手」。"
-                    : "我能答疑、搜文档、整理结构，也能帮你写全文；需要按段精细改稿，请点文档顶栏「帮写」。"}
-                </p>
+                {pipeline ? (
+                  <p className="mdocs-agent-panel-desc">
+                    用文本描述你想要安装的插件。mcp 或者 skill+cli。
+                  </p>
+                ) : (
+                  <>
+                    <p className="mdocs-agent-panel-hello">
+                      {coding ? "你好，我是 mdocs 帮写助手" : "你好，我是 mdocs 智能助手"}
+                    </p>
+                    <p className="mdocs-agent-panel-desc">
+                      {coding
+                        ? "这里专注改稿：你说怎么写，我更新右侧提案；按段接受或拒绝后，再点「完成并写回」。答疑、建目录、搜文档请用右下角「智能助手」。"
+                        : "我能答疑、搜文档、整理结构，也能帮你写全文；需要按段精细改稿，请点文档顶栏「帮写」。"}
+                    </p>
+                  </>
+                )}
                 {needsApiKey ? (
                   <AgentApiKeyInlineSetup onConfigured={refreshAgentStatus} />
                 ) : unavailableHint ? (
                   <p className="mdocs-agent-panel-status-warn">{unavailableHint}</p>
-                ) : (
+                ) : pipeline ? null : (
                   <div className="mdocs-agent-panel-chips">
                     {(coding ? CODING_SUGGESTIONS : ASK_SUGGESTIONS).map((q) => (
                       <button
@@ -2761,7 +2861,7 @@ export const AgentChatPanel = forwardRef<
                         type="button"
                         className="mdocs-agent-panel-chip"
                         onClick={() => void sendMessage(q)}
-                        disabled={sending || !status?.enabled}
+                        disabled={sending || !canUseAgent}
                       >
                         {q}
                       </button>
@@ -3148,22 +3248,24 @@ export const AgentChatPanel = forwardRef<
           {needsApiKey && messages.length > 0 ? (
             <AgentApiKeyInlineSetup onConfigured={refreshAgentStatus} />
           ) : null}
-          <div className="mdocs-agent-composer-tools">
-            <AgentSkillRefPicker
-              selectedNames={selectedSkillNames}
-              onChange={setSelectedSkillNames}
-              disabled={sending || contextCompacting || !status?.enabled}
-            />
-            <button
-              type="button"
-              className="mdocs-agent-skill-ref-toggle"
-              disabled={sending || contextCompacting || !status?.enabled}
-              title="把更早的对话压成摘要，腾出上下文空间"
-              onClick={() => void onCompactContext()}
-            >
-              {contextCompacting ? "压缩中…" : "压缩上下文"}
-            </button>
-          </div>
+          {pipeline ? null : (
+            <div className="mdocs-agent-composer-tools">
+              <AgentSkillRefPicker
+                selectedNames={selectedSkillNames}
+                onChange={setSelectedSkillNames}
+                disabled={sending || contextCompacting || !status?.enabled}
+              />
+              <button
+                type="button"
+                className="mdocs-agent-skill-ref-toggle"
+                disabled={sending || contextCompacting || !status?.enabled}
+                title="把更早的对话压成摘要，腾出上下文空间"
+                onClick={() => void onCompactContext()}
+              >
+                {contextCompacting ? "压缩中…" : "压缩上下文"}
+              </button>
+            </div>
+          )}
           <div
             className={
               "mdocs-agent-panel-input-wrap" + (composerDragOver ? " is-dragover" : "")
@@ -3228,29 +3330,37 @@ export const AgentChatPanel = forwardRef<
                 hidden
                 onChange={(e) => void onPickAttachment(e.target.files)}
               />
-              <button
-                type="button"
-                className="mdocs-agent-panel-attach"
-                disabled={sending || contextCompacting || uploadingAttachment || !status?.enabled}
-                title="上传附件，也可粘贴或拖入"
-                aria-label="上传附件"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Plus size={18} strokeWidth={2} aria-hidden />
-              </button>
+              {pipeline ? null : (
+                <button
+                  type="button"
+                  className="mdocs-agent-panel-attach"
+                  disabled={sending || contextCompacting || uploadingAttachment || !status?.enabled}
+                  title="上传附件，也可粘贴或拖入"
+                  aria-label="上传附件"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Plus size={18} strokeWidth={2} aria-hidden />
+                </button>
+              )}
               <textarea
                 ref={inputRef}
                 className="mdocs-agent-panel-input"
                 rows={1}
                 placeholder={
-                  status?.enabled
+                  canUseAgent
                     ? coding
                       ? "说说要写什么…"
-                      : "告诉 Agent 你想做什么…"
+                      : pipeline
+                        ? "描述要安装的插件…"
+                        : "告诉 Agent 你想做什么…"
                     : "请先配置 API Key"
                 }
                 value={input}
-                disabled={sending || contextCompacting || !status?.enabled}
+                disabled={
+                  contextCompacting ||
+                  !canUseAgent ||
+                  (sending && openInteractions.every((i) => i.kind !== "choice"))
+                }
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -3270,7 +3380,7 @@ export const AgentChatPanel = forwardRef<
                 <button
                   type="button"
                   className={
-                    sending
+                    sending && !(openInteractions.some((i) => i.kind === "choice") && input.trim())
                       ? "mdocs-agent-panel-send mdocs-agent-panel-send-stop"
                       : "mdocs-agent-panel-send"
                   }
@@ -3278,10 +3388,18 @@ export const AgentChatPanel = forwardRef<
                     sending
                       ? false
                       : contextCompacting ||
-                        !status?.enabled ||
+                        !canUseAgent ||
                         (!input.trim() && pendingAttachments.length === 0)
                   }
                   onClick={() => {
+                    if (
+                      sending &&
+                      openInteractions.some((i) => i.kind === "choice") &&
+                      input.trim()
+                    ) {
+                      void sendMessage(input);
+                      return;
+                    }
                     if (sending) {
                       const runId = activeRunIdRef.current;
                       abortRef.current?.abort();
@@ -3292,10 +3410,25 @@ export const AgentChatPanel = forwardRef<
                     }
                     void sendMessage(input);
                   }}
-                  title={sending ? "停止" : "发送"}
-                  aria-label={sending ? "停止" : "发送"}
+                  title={
+                    sending && openInteractions.some((i) => i.kind === "choice") && input.trim()
+                      ? "提交选择"
+                      : sending
+                        ? "停止"
+                        : "发送"
+                  }
+                  aria-label={
+                    sending && openInteractions.some((i) => i.kind === "choice") && input.trim()
+                      ? "提交选择"
+                      : sending
+                        ? "停止"
+                        : "发送"
+                  }
                 >
-                  {sending ? "■" : "↑"}
+                  {sending &&
+                  !(openInteractions.some((i) => i.kind === "choice") && input.trim())
+                    ? "■"
+                    : "↑"}
                 </button>
               </div>
             </div>

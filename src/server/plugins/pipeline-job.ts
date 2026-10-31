@@ -84,6 +84,30 @@ export function getLatestPipelineJob(
   return uninstall.startedAt > install.startedAt ? uninstall : install;
 }
 
+/** 等安装/卸载任务结束（Agent install_pipeline 用）。 */
+export async function waitForPipelineJob(params: {
+  visitorId: string;
+  pipelineId: string;
+  action: PipelineJobAction;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  pollMs?: number;
+}): Promise<PipelineJob> {
+  const timeoutMs = params.timeoutMs ?? 300_000;
+  const pollMs = params.pollMs ?? 400;
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (params.signal?.aborted) throw new Error("已取消");
+    const job = getPipelineJob(params.visitorId, params.pipelineId, params.action);
+    if (!job) throw new Error("pipeline job not found");
+    if (job.status === "done" || job.status === "error") return job;
+    if (Date.now() >= deadline) {
+      throw new Error("等待安装超时");
+    }
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+}
+
 function appendLog(job: PipelineJob, log: PipelineJobLog): void {
   job.logs.push(log);
   if (job.logs.length > 600) job.logs.splice(0, job.logs.length - 600);

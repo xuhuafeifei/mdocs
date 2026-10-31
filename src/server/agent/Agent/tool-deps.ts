@@ -14,6 +14,22 @@ export type DeepSeekWebCreds = {
   baseUrl?: string;
 };
 
+/** plugin-pipeline：临时工作区 + 交卷约束 */
+export type PipelineToolContext = {
+  workspace: string;
+  deadline: number;
+  trace: Array<{
+    tool: string;
+    summary: string;
+    ok: boolean;
+    durationMs: number;
+  }>;
+  expectedId?: string;
+  expectedKind?: string;
+  /** 右侧当前草稿，submit 时 normalize 用 */
+  currentYaml?: string;
+};
+
 /** 装配 / 单个 tool 共用的依赖，一律用 `{}` 传递 */
 export type ToolDeps = {
   visitorId: string;
@@ -28,6 +44,8 @@ export type ToolDeps = {
   deepseekWeb?: DeepSeekWebCreds;
   /** 当前 UI 打开的文档（get_editor_draft 缺省 documentId） */
   uiDocumentId?: string | null;
+  /** plugin-pipeline 探测工作区 */
+  pipeline?: PipelineToolContext;
 };
 
 export function asToolResult(payload: unknown) {

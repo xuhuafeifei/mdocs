@@ -22,8 +22,7 @@ import {
   writePipelineYaml,
 } from "../plugins/pipeline/catalog.js";
 import { listStepDefinitions } from "../plugins/pipeline/step-definitions.js";
-import { generatePipelineDraft } from "../plugins/pipeline/ai-draft.js";
-import { pluginDataDir, pluginInstallDir } from "../plugins/plugin-paths.js";
+import { pluginDataDir, pluginHomeDir } from "../plugins/plugin-paths.js";
 import {
   getLatestPipelineJob,
   getPipelineJob,
@@ -74,8 +73,11 @@ function enrichPipelineList(visitorId: string) {
       runtimeRunning: running,
       installJob: getLatestPipelineJob(visitorId, pipe.id),
       storage: {
-        installDir: pluginInstallDir(pipe.id),
-        dataDir: pipe.dataKey ? pluginDataDir(pipe.dataKey) : null,
+        installDir: pluginHomeDir(pipe.id),
+        dataDir:
+          pipe.dataKey && visitorId
+            ? pluginDataDir(pipe.dataKey, visitorId)
+            : null,
         soulFiles: pipe.soulFiles.map((file) => `soul/${file}`),
       },
     };
@@ -113,49 +115,6 @@ export function buildPluginsRouter(): ReturnType<typeof Router> {
 
   router.get("/step-definitions", (_req: Request, res: Response) => {
     res.json({ data: listStepDefinitions() });
-  });
-
-  // ---- 内嵌 AI 草稿（实验）----
-  router.post("/pipelines/ai/draft", async (req: Request, res: Response) => {
-    try {
-      const body = (req.body ?? {}) as {
-        prompt?: unknown;
-        kind?: unknown;
-        installMode?: unknown;
-        currentYaml?: unknown;
-      };
-      const visitorId = visitorIdOf(req);
-      if (!visitorId) {
-        res.status(401).json({ error: { code: "UNAUTHORIZED", message: "auth required" } });
-        return;
-      }
-      const draft = await generatePipelineDraft({
-        visitorId,
-        prompt: String(body.prompt ?? ""),
-        ...(body.kind === "skill" || body.kind === "mcp"
-          ? { kind: body.kind as "skill" | "mcp" }
-          : {}),
-        ...(typeof body.installMode === "string"
-          ? { installMode: body.installMode }
-          : {}),
-        ...(typeof body.currentYaml === "string"
-          ? { currentYaml: body.currentYaml }
-          : {}),
-      });
-      res.json({ data: draft });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message === "missing_model_config") {
-        res.status(409).json({
-          error: {
-            code: "MISSING_MODEL_CONFIG",
-            message: "请先在「智能助手 → 模型配置」里配置可用模型",
-          },
-        });
-        return;
-      }
-      errorResponse(res, err);
-    }
   });
 
   router.get("/pipelines/system/:id/default", (req: Request, res: Response) => {

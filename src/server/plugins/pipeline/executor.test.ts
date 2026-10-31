@@ -61,11 +61,11 @@ describe("pipeline executor", () => {
       onEvent: (e) => events.push(e),
     });
 
-    const servers = readJson<{ servers: Array<{ id: string; url?: string }> }>(
-      path.join(dataDir, "mcp-servers.json"),
+    const server = readJson<{ id: string; url?: string }>(
+      path.join(dataDir, "tenant", "v1", "mcp", "test-plugin.json"),
     );
-    const server = servers.servers.find((s) => s.id === "plugin-test-plugin");
-    expect(server?.url).toBe("http://127.0.0.1:9/mcp");
+    expect(server.id).toBe("test-plugin");
+    expect(server.url).toBe("http://127.0.0.1:9/mcp");
 
     const sidecar = path.join(dataDir, "soul", "test-plugin.md");
     expect(fs.readFileSync(sidecar, "utf8")).toContain("Test plugin");
@@ -75,10 +75,10 @@ describe("pipeline executor", () => {
     }>(path.join(dataDir, "plugins.json"));
     expect(plugins.pipelines.installed[0]).toMatchObject({
       id: "test-plugin",
-      mcpServerId: "plugin-test-plugin",
+      mcpServerId: "test-plugin",
     });
     expect(
-      fs.existsSync(path.join(dataDir, "plugins", "install", "test-plugin")),
+      fs.existsSync(path.join(dataDir, "plugins-home", "test-plugin")),
     ).toBe(true);
     expect(
       events.some((e) => e.type === "done"),
@@ -86,11 +86,11 @@ describe("pipeline executor", () => {
   });
 
   it("skips steps when probes already pass", async () => {
-    fs.mkdirSync(path.join(dataDir, "plugins", "install", "probe-plugin", "bin"), {
+    fs.mkdirSync(path.join(dataDir, "plugins-home", "probe-plugin", "bin"), {
       recursive: true,
     });
     fs.writeFileSync(
-      path.join(dataDir, "plugins", "install", "probe-plugin", "bin", "x"),
+      path.join(dataDir, "plugins-home", "probe-plugin", "bin", "x"),
       "ok",
     );
     const pipeline: PluginPipeline = {
@@ -184,10 +184,9 @@ describe("pipeline executor", () => {
       visitorId: "v1",
       onEvent: () => {},
     });
-    const servers = readJson<{ servers: Array<{ id: string }> }>(
-      path.join(dataDir, "mcp-servers.json"),
-    );
-    expect(servers.servers.find((s) => s.id === "my-custom-id")).toBeUndefined();
+    expect(
+      fs.existsSync(path.join(dataDir, "tenant", "v1", "mcp", "my-custom-id.json")),
+    ).toBe(false);
   });
 
   it("uninstalls sidecar + MCP and removes install dir but keeps data dir", async () => {
@@ -197,9 +196,15 @@ describe("pipeline executor", () => {
       visitorId: "v1",
       onEvent: () => {},
     });
-    fs.mkdirSync(path.join(dataDir, "plugins-data", "test-plugin"), {
-      recursive: true,
-    });
+    const tenantData = path.join(
+      dataDir,
+      "tenant",
+      "v1",
+      "plugins-data",
+      "test-plugin",
+    );
+    fs.mkdirSync(tenantData, { recursive: true });
+    fs.writeFileSync(path.join(tenantData, "keep.txt"), "x");
     await runPipeline({
       pipeline: PIPELINE,
       action: "uninstall",
@@ -208,14 +213,13 @@ describe("pipeline executor", () => {
     });
 
     expect(fs.existsSync(path.join(dataDir, "soul", "test-plugin.md"))).toBe(false);
-    const servers = readJson<{ servers: Array<{ id: string }> }>(
-      path.join(dataDir, "mcp-servers.json"),
-    );
-    expect(servers.servers.find((s) => s.id === "plugin-test-plugin")).toBeUndefined();
     expect(
-      fs.existsSync(path.join(dataDir, "plugins", "install", "test-plugin")),
+      fs.existsSync(path.join(dataDir, "tenant", "v1", "mcp", "test-plugin.json")),
     ).toBe(false);
-    expect(fs.existsSync(path.join(dataDir, "plugins-data", "test-plugin"))).toBe(true);
+    expect(
+      fs.existsSync(path.join(dataDir, "plugins-home", "test-plugin")),
+    ).toBe(false);
+    expect(fs.existsSync(path.join(tenantData, "keep.txt"))).toBe(true);
     const plugins = readJson<{ pipelines: { installed: unknown[] } }>(
       path.join(dataDir, "plugins.json"),
     );

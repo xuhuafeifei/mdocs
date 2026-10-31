@@ -39,11 +39,13 @@ import {
   setMarkdownDocumentTool,
 } from "./tools-coding.js";
 import { lexicalLinesTools } from "./tools-lexical-lines.js";
+import { pluginCliTools } from "./tools-plugin-cli.js";
 import { userSkillTools } from "./tools-user-skills.js";
 import { getNowTool } from "./tools-time.js";
 import { setThinkingLevelTool } from "./tools-thinking.js";
 import { readAttachmentTool } from "../attachments/tools-read-attachment.js";
 import { deepseekWebTools } from "./tools-web.js";
+import { pipelineTools } from "./tools-pipeline.js";
 
 /** 手册（skills 缺省时为空） */
 export function manualTools(deps: ToolDeps): AgentTool[] {
@@ -106,4 +108,14 @@ export function codingWriteTools(deps: ToolDeps): AgentTool[] {
 /** 私人用户 skill CRUD（list/create/update/delete；create/update 出表单卡） */
 export function userSkillManageTools(deps: ToolDeps): AgentTool[] {
   return userSkillTools(deps);
+}
+
+/** 插件 CLI 自测 + query_skill（相对路径，系统拼前缀） */
+export function pluginCliManageTools(deps: ToolDeps): AgentTool[] {
+  return pluginCliTools(deps);
+}
+
+/** 插件流水线编排：临时工作区探测 + submit + CLI 自测 */
+export function pluginPipelineTools(deps: ToolDeps): AgentTool[] {
+  return [...pipelineTools(deps), ...pluginCliTools(deps)];
 }

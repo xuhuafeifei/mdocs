@@ -192,6 +192,43 @@ export const PIPELINE_STEP_DEFINITIONS: PipelineStepDefinition[] = [
     ],
   },
   {
+    type: "git_clone",
+    label: "Git 克隆",
+    description:
+      "把仓库 clone 到 plugins-home/<plugin-name>/（相对 install_root）。Agent/YAML 只写相对 dest，不要写绝对路径。",
+    category: "install",
+    group: "下载与安装",
+    fields: [
+      {
+        name: "url",
+        label: "仓库 URL",
+        type: "text",
+        required: true,
+        description: "仅 https://",
+      },
+      {
+        name: "dest",
+        label: "目标目录",
+        type: "text",
+        default: ".",
+        description: "相对 {{install_root}}；默认 .（仓库根即 home 根）",
+      },
+      {
+        name: "branch",
+        label: "分支",
+        type: "text",
+        advanced: true,
+      },
+      {
+        name: "depth",
+        label: "浅克隆 depth",
+        type: "text",
+        default: "1",
+        advanced: true,
+      },
+    ],
+  },
+  {
     type: "exec",
     label: "执行命令",
     description:
@@ -321,7 +358,8 @@ export const PIPELINE_STEP_DEFINITIONS: PipelineStepDefinition[] = [
         name: "body_file",
         label: "正文文件",
         type: "text",
-        description: "相对安装目录；与正文二选一。",
+        description:
+          "相对 plugins-home/<plugin-name>/ 的路径（如 skills/foo/SKILL.md）；与正文二选一。读完写入当前访客 skills/<name>/SKILL.md，不要用 {{plugins_data}}。",
       },
       {
         name: "body",
@@ -382,7 +420,7 @@ export const PIPELINE_STEP_DEFINITIONS: PipelineStepDefinition[] = [
   {
     type: "remove_mcp",
     label: "移除 MCP",
-    description: "从 mcp-servers.json 删除对应项；留空按流水线 id 删。",
+    description: "删除当前访客 tenant/.../mcp/<plugin-name>.json；留空按流水线 id 删。",
     category: "uninstall",
     group: "清理",
     fields: [

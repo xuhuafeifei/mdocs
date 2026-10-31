@@ -98,14 +98,14 @@
   | `src/web/i18n/` | `en.ts` / `zh.ts` |
   | `src/web/app/SettingsPage.tsx` | 设置页 |
   | `src/web/app/McpServersPanel.tsx` | MCP 服务器（独立 Tab，通用配置） |
-  | `src/web/app/PluginMarketplacePanel.tsx` | 插件市场（已安装/可安装/新建 + 详情） |
-  | `src/web/app/plugins/PipelineOrchestrator.tsx` | 可视化步骤 + Probe + YAML 双视图 |
+  | `src/web/app/PluginMarketplacePanel.tsx` | 插件市场；新建 Tab AI \| 手动 |
+  | `src/web/app/plugins/AiInstallBench.tsx` | AI 安装台：左对话 / 右节点 |
+  | `src/web/app/plugins/PipelineOrchestrator.tsx` | 手动编排：步骤 + Probe + YAML |
   | `src/web/app/plugins/PipelineInstallRunner.tsx` | 按步安装执行窗 |
-  | `src/web/app/plugins/AiPipelinePanel.tsx` | 内嵌 AI 草稿 |
   | `src/web/app/plugins/pluginMeta.ts` | 展示 helper |
   | `src/web/app/plugins/plugins.css` | 插件市场/编排器样式 |
   | `src/web/app/pipeline/pipelineAst.ts` | YAML ⇄ AST（可视化/YAML 共用） |
-- **需求**：[`../requirements/agent-mcp-client/`](../requirements/agent-mcp-client/)、[`../requirements/plugin-marketplace/`](../requirements/plugin-marketplace/)、[`../requirements/plugin-pipeline/设计契约-编排器UI-v2.md`](../requirements/plugin-pipeline/设计契约-编排器UI-v2.md)
+- **需求**：[`../requirements/agent-mcp-client/`](../requirements/agent-mcp-client/)、[`../requirements/plugin-marketplace/`](../requirements/plugin-marketplace/)、[`../requirements/plugin-pipeline/设计契约-编排器UI-v2.md`](../requirements/plugin-pipeline/设计契约-编排器UI-v2.md)、[`../requirements/plugin-pipeline/设计契约-AI安装台.md`](../requirements/plugin-pipeline/设计契约-AI安装台.md)
 
 ### 知识图谱（分层展示）
 

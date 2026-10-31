@@ -16,10 +16,8 @@ import {
   type McpServerConfig,
 } from "../mcp/mcp-servers-store.js";
 import {
-  buildEngramMcpEnv,
   ENGRAM_PROJECT_NAME,
   engramBinaryPath,
-  engramWorkspaceRoot,
   installEngramRuntime,
   uninstallEngramRuntime,
   type EngramInstallPhase,
@@ -126,6 +124,8 @@ export async function installPlugin(
   hooks?.onPhase?.("saving");
 
   if (entry.id === "engram") {
+    // 旧 catalog 路径：只登记二进制；DATA_DIR 由 mcp-client 按访客注入。
+    // 新流水线安装写 tenant MCP，不走这里。
     upsertMcpServer({
       id: entry.mcpServerId,
       name: entry.mcpTemplate.name,
@@ -133,8 +133,6 @@ export async function installPlugin(
       transport: "stdio",
       command: engramBinaryPath(),
       args: ["mcp", `--project=${ENGRAM_PROJECT_NAME}`],
-      cwd: engramWorkspaceRoot(),
-      env: buildEngramMcpEnv(),
     });
   } else if (entry.id === "memorix") {
     upsertMcpServer({

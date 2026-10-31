@@ -13,7 +13,7 @@ describe("parsePipelineYaml", () => {
   it("parses Engram demo yaml", () => {
     const raw = fs.readFileSync(demoPath, "utf8");
     const p = parsePipelineYaml(raw);
-    expect(p.id).toBe("847291036512");
+    expect(p.id).toBe("engram");
     expect(p.runtime).toBe("engram");
     expect(p.data_key).toBe("engram");
     expect(p.outputs).toContain("mcp");

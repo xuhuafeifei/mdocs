@@ -12,7 +12,11 @@ import { runOnboardingChat } from "./run.js";
 import { AgentSessionManager } from "./session-manager.js";
 import { SessionCompactingError } from "./context-compact-lock.js";
 import type { AgentStreamEvent } from "./stream-events.js";
-import type { AgentMode, AgentUiReferences } from "./system-prompt.js";
+import {
+  sessionKindFromMode,
+  type AgentMode,
+  type AgentUiReferences,
+} from "./system-prompt.js";
 import {
   appendRunEvent,
   getActiveRunId,
@@ -146,14 +150,19 @@ function updateStatus(run: LiveRun, status: AgentRunStatus, reason?: string): vo
   // run_status 不是前端 AgentStreamEvent；仅用于落盘。终态额外发 done/error。
 }
 
+function resolveAgentMode(raw?: AgentMode): AgentMode {
+  if (raw === "coding") return "coding";
+  if (raw === "plugin-pipeline") return "plugin-pipeline";
+  return "normal";
+}
+
 export async function resolveSessionForChat(params: {
   visitorId: string;
   mode: AgentMode;
   documentId?: string | null;
 }): Promise<{ sessionId: string }> {
-  const mgr = new AgentSessionManager(params.visitorId, {
-    kind: params.mode === "coding" ? "coding" : "normal",
-  });
+  const kind = sessionKindFromMode(params.mode);
+  const mgr = new AgentSessionManager(params.visitorId, { kind });
   const { sessionId } = await mgr.loadLastOpenedMessages(
     params.mode === "coding" ? params.documentId ?? null : undefined,
   );
@@ -204,9 +213,11 @@ export async function startAgentRun(params: {
   workingMarkdown?: string;
   baseMarkdown?: string;
   references?: AgentUiReferences | null;
+  pipelineCurrentYaml?: string | null;
 }): Promise<{ run: AgentRunPublic }> {
   bootstrapAgentRuns();
-  const mode: AgentMode = params.mode === "coding" ? "coding" : "normal";
+  const mode = resolveAgentMode(params.mode);
+  const sessionKind = sessionKindFromMode(mode);
   const { sessionId } = await resolveSessionForChat({
     visitorId: params.visitorId,
     mode,
@@ -214,7 +225,7 @@ export async function startAgentRun(params: {
   });
 
   const sessionMgr = new AgentSessionManager(params.visitorId, {
-    kind: mode === "coding" ? "coding" : "normal",
+    kind: sessionKind,
   });
   if (sessionMgr.isCompacting?.(sessionId)) {
     throw new SessionCompactingError(sessionId);
@@ -277,6 +288,7 @@ export async function startAgentRun(params: {
         workingMarkdown: params.workingMarkdown,
         baseMarkdown: params.baseMarkdown,
         references: params.references,
+        pipelineCurrentYaml: params.pipelineCurrentYaml,
         signal: ac.signal,
         onEvent: (event) => {
           if (ac.signal.aborted && event.type !== "error") return;

@@ -103,6 +103,9 @@ export function stepTypeOf(step: Record<string, unknown>): string {
 export function defaultStep(type: string): Record<string, unknown> {
   if (type === "extract") return { type, dest: "bin" };
   if (type === "copy_file") return { type, from: "", to: "" };
+  if (type === "git_clone") {
+    return { type, url: "", dest: ".", depth: 1 };
+  }
   if (type === "upsert_mcp") {
     return {
       type,

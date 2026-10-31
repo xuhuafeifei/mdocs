@@ -1496,3 +1496,268 @@
   font-size: 11.5px;
   line-height: 1.5;
 }
+
+/* 新建插件 · AI 安装台：接近工作台的大窗 */
+.pl-modal.pl-modal--new-ai {
+  width: min(1180px, calc(100vw - 32px));
+  height: min(92vh, 960px);
+  max-height: calc(100vh - 24px);
+}
+
+.pl-new-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 20px;
+  border-bottom: 1px solid #e4ebe4;
+  flex-shrink: 0;
+}
+
+.pl-new-ai-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pl-new-ai-body .pl-ai-bench,
+.pl-new-ai-body .pl-ai-bench-body,
+.pl-new-ai-body .pl-ai-bench-left,
+.pl-new-ai-body .mdocs-agent-panel--embedded {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+.pl-new-tab {
+  border: 0;
+  background: transparent;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #6a7a6e;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.pl-new-tab.active {
+  color: #1f3d2a;
+  font-weight: 600;
+  border-bottom-color: #2f6b45;
+}
+
+.pl-ai-bench {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.pl-ai-bench.embedded {
+  flex: 1;
+  min-height: 0;
+}
+
+.pl-ai-bench-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px 8px;
+  flex-shrink: 0;
+}
+
+.pl-ai-bench-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.pl-ai-bench-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+}
+
+.pl-ai-bench-left,
+.pl-ai-bench-right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 14px;
+}
+
+.pl-ai-bench-left {
+  border-right: 1px solid #e4ebe4;
+  padding: 0;
+  overflow: hidden;
+}
+
+.pl-ai-bench-left .mdocs-agent-panel--embedded {
+  height: 100%;
+  min-height: 0;
+}
+
+.pl-ai-session-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.pl-ai-session-bar .pl-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pl-ai-msg-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.pl-ai-msg {
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #f4f7f4;
+}
+
+.pl-ai-msg.user {
+  background: #e8f1ff;
+  align-self: flex-end;
+  max-width: 92%;
+}
+
+.pl-ai-msg.assistant {
+  background: #f4f7f4;
+  align-self: stretch;
+}
+
+.pl-ai-msg-role {
+  font-size: 11px;
+  color: #6a7a6e;
+  margin-bottom: 4px;
+}
+
+.pl-ai-msg-body {
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pl-ai-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  flex-shrink: 0;
+}
+
+.pl-ai-right-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pl-ai-draft-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.pl-ai-node-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pl-ai-node-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #f7faf7;
+}
+
+.pl-ai-node-dot {
+  width: 1.2em;
+  text-align: center;
+  font-weight: 700;
+  color: #6a7a6e;
+}
+
+.pl-ai-node-dot.st-done {
+  color: #2f6b45;
+}
+.pl-ai-node-dot.st-running {
+  color: #1b6ca8;
+}
+.pl-ai-node-dot.st-error {
+  color: #c62828;
+}
+.pl-ai-node-dot.st-skipped {
+  color: #9aa89e;
+}
+
+.pl-ai-job-log {
+  margin-top: 10px;
+  max-height: 140px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.45;
+  background: #111;
+  color: #d7e0d7;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.pl-ai-right-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.pl-notice {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #eaf6ea;
+  color: #245538;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .pl-ai-bench-body {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+  .pl-ai-bench-left {
+    border-right: 0;
+    border-bottom: 1px solid #e4ebe4;
+    min-height: 240px;
+  }
+  .pl-modal.pl-modal--new-ai {
+    width: min(100vw - 16px, 100%);
+    height: min(94vh, 100%);
+    max-height: calc(100vh - 12px);
+    border-radius: 12px;
+  }
+}

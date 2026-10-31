@@ -9,8 +9,6 @@ import {
   fetchPipelineYamlApi,
   fetchPipelinesApi,
   fetchStepDefinitionsApi,
-  generatePipelineDraftApi,
-  savePipelineYamlApi,
   type PipelineInstallHistoryEntry,
   type PipelineInstallMode,
   type PipelineListItem,
@@ -18,6 +16,7 @@ import {
 import { parsePipelineAst } from "./pipeline/pipelineAst";
 import { PipelineOrchestrator, type StepDefsPayload } from "./plugins/PipelineOrchestrator";
 import { PipelineInstallRunner } from "./plugins/PipelineInstallRunner";
+import { AiInstallBench } from "./plugins/AiInstallBench";
 import {
   formatDateTime,
   historyFor,
@@ -355,16 +354,16 @@ function NewPluginWizard(props: {
     name: string;
     type: "skill" | "mcp";
     mode: PipelineInstallMode;
-    aiPrompt?: string;
   }) => void;
+  onAiInstalled?: () => void;
   busy: boolean;
   error: string | null;
 }) {
   const { t } = useI18n();
+  const [tab, setTab] = useState<"ai" | "manual">("ai");
   const [type, setType] = useState<"skill" | "mcp">("mcp");
   const [mode, setMode] = useState<PipelineInstallMode>("remote");
   const [name, setName] = useState("");
-  const [aiPrompt, setAiPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const modes = props.defs.installModes.filter((m) =>
     type === "skill" ? m.value === "skill_package" : m.value !== "skill_package",
@@ -377,106 +376,129 @@ function NewPluginWizard(props: {
 
   return (
     <div className="pl-overlay" role="dialog" aria-modal="true">
-      <div className="pl-modal">
+      <div className={tab === "ai" ? "pl-modal pl-modal--new-ai" : "pl-modal"}>
         <div className="pl-modal-head">
           <div style={{ flex: 1 }}>
             <h3>{t("plNewWizardTitle")}</h3>
-            <p className="pl-modal-sub">{t("plNewWizardHint")}</p>
+            {tab === "ai" ? null : (
+              <p className="pl-modal-sub">{t("plNewWizardHint")}</p>
+            )}
           </div>
           <button type="button" className="pl-x" onClick={props.onClose} aria-label={t("close")}>
             ×
           </button>
         </div>
-        <div className="pl-modal-body">
-          {props.error ? <p className="pl-error">{props.error}</p> : null}
-          <div className="pl-field">
-            <label>{t("plNewWizardType")}</label>
-            <div className="pl-choice-grid">
-              {(["mcp", "skill"] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  className={type === v ? "pl-choice active" : "pl-choice"}
-                  onClick={() => setType(v)}
-                >
-                  <div className="pl-choice-title">{v === "mcp" ? "MCP" : "Skill"}</div>
-                  <p className="pl-choice-desc">
-                    {v === "mcp"
-                      ? "外部工具、服务、数据源、执行能力"
-                      : "提示词、知识、工作流、可复用能力"}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="pl-field">
-            <label>{t("plNewWizardMode")}</label>
-            <div className="pl-choice-grid">
-              {modes.map((m) => (
-                <button
-                  key={m.value}
-                  type="button"
-                  className={mode === m.value ? "pl-choice active" : "pl-choice"}
-                  onClick={() => setMode(m.value)}
-                >
-                  <div className="pl-choice-title">{m.label}</div>
-                  <p className="pl-choice-desc">{m.description}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="pl-field">
-            <label>{t("plNewWizardName")}</label>
-            <input
-              className="pl-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="My Plugin"
-              autoFocus
-            />
-            {error ? <span className="pl-field-hint" style={{ color: "#c62828" }}>{error}</span> : null}
-          </div>
-
-          <div className="pl-field">
-            <label>{t("plNewWizardAi")}</label>
-            <textarea
-              className="pl-textarea"
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder={t("plNewWizardAiPlaceholder")}
-              style={{ minHeight: 76 }}
-            />
-            <span className="pl-field-hint">{t("plNewWizardAiHint")}</span>
-          </div>
-        </div>
-        <div className="pl-modal-foot">
-          <span style={{ flex: 1 }} />
-          <button type="button" className="pl-btn ghost" onClick={props.onClose}>
-            {t("cancel")}
+        <div className="pl-new-tabs">
+          <button
+            type="button"
+            className={tab === "ai" ? "pl-new-tab active" : "pl-new-tab"}
+            onClick={() => setTab("ai")}
+          >
+            {t("plNewTabAi")}
           </button>
           <button
             type="button"
-            className="pl-btn primary"
-            disabled={props.busy}
-            onClick={() => {
-              if (!name.trim()) {
-                setError(t("plNameRequired"));
-                return;
-              }
-              setError(null);
-              props.onCreate({
-                name: name.trim(),
-                type,
-                mode,
-                ...(aiPrompt.trim() ? { aiPrompt: aiPrompt.trim() } : {}),
-              });
-            }}
+            className={tab === "manual" ? "pl-new-tab active" : "pl-new-tab"}
+            onClick={() => setTab("manual")}
           >
-            {props.busy ? t("pluginBusy") : t("plNewWizardCreate")}
+            {t("plNewTabManual")}
           </button>
         </div>
+
+        {tab === "ai" ? (
+          <div className="pl-new-ai-body">
+            <AiInstallBench
+              embedded
+              onClose={props.onClose}
+              onInstalled={props.onAiInstalled}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="pl-modal-body">
+              {props.error ? <p className="pl-error">{props.error}</p> : null}
+              <div className="pl-field">
+                <label>{t("plNewWizardType")}</label>
+                <div className="pl-choice-grid">
+                  {(["mcp", "skill"] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      className={type === v ? "pl-choice active" : "pl-choice"}
+                      onClick={() => setType(v)}
+                    >
+                      <div className="pl-choice-title">{v === "mcp" ? "MCP" : "Skill"}</div>
+                      <p className="pl-choice-desc">
+                        {v === "mcp"
+                          ? "外部工具、服务、数据源、执行能力"
+                          : "提示词、知识、工作流、可复用能力"}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pl-field">
+                <label>{t("plNewWizardMode")}</label>
+                <p className="pl-field-hint">{t("plNewTemplateHint")}</p>
+                <div className="pl-choice-grid">
+                  {modes.map((m) => (
+                    <button
+                      key={m.value}
+                      type="button"
+                      className={mode === m.value ? "pl-choice active" : "pl-choice"}
+                      onClick={() => setMode(m.value)}
+                    >
+                      <div className="pl-choice-title">{m.label}</div>
+                      <p className="pl-choice-desc">{m.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pl-field">
+                <label>{t("plNewWizardName")}</label>
+                <input
+                  className="pl-input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="My Plugin"
+                  autoFocus
+                />
+                {error ? (
+                  <span className="pl-field-hint" style={{ color: "#c62828" }}>
+                    {error}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <div className="pl-modal-foot">
+              <span style={{ flex: 1 }} />
+              <button type="button" className="pl-btn ghost" onClick={props.onClose}>
+                {t("cancel")}
+              </button>
+              <button
+                type="button"
+                className="pl-btn primary"
+                disabled={props.busy}
+                onClick={() => {
+                  if (!name.trim()) {
+                    setError(t("plNameRequired"));
+                    return;
+                  }
+                  setError(null);
+                  props.onCreate({
+                    name: name.trim(),
+                    type,
+                    mode,
+                  });
+                }}
+              >
+                {props.busy ? t("pluginBusy") : t("plNewWizardCreate")}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -568,7 +590,6 @@ export function PluginMarketplacePanel() {
     name: string;
     type: "skill" | "mcp";
     mode: PipelineInstallMode;
-    aiPrompt?: string;
   }) {
     setBusyId("__create__");
     setWizardError(null);
@@ -578,31 +599,6 @@ export function PluginMarketplacePanel() {
         installMode: input.mode,
         outputs: input.type === "skill" ? ["skill"] : ["mcp"],
       });
-      if (input.aiPrompt) {
-        try {
-          const draft = await generatePipelineDraftApi({
-            prompt: input.aiPrompt,
-            kind: input.type,
-            installMode: input.mode,
-            currentYaml: created.yaml,
-          });
-          if (draft.valid) {
-            await savePipelineYamlApi("tenant", created.id, draft.yaml);
-          } else {
-            setNotice(
-              t("plAiCreateFailed", {
-                error: draft.error ?? t("plValidateFail"),
-              }),
-            );
-          }
-        } catch (err) {
-          setNotice(
-            t("plAiCreateFailed", {
-              error: err instanceof Error ? err.message : String(err),
-            }),
-          );
-        }
-      }
       await refresh();
       setWizard(false);
       setWizardError(null);
@@ -776,6 +772,9 @@ export function PluginMarketplacePanel() {
             setWizardError(null);
           }}
           onCreate={(input) => void createPlugin(input)}
+          onAiInstalled={() => {
+            void refresh().catch(() => {});
+          }}
         />
       ) : null}
 

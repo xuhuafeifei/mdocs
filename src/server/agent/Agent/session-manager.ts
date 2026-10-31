@@ -165,17 +165,27 @@ function entryDocKey(entry: SessionMetaEntry): string {
 export class AgentSessionManager {
   private readonly sessionDir: string;
   private readonly metaPath: string;
-  private readonly kind: "normal" | "coding";
+  private readonly kind: AgentSessionKind;
 
   private cachedSessionId: string | null = null;
 
   constructor(
     private readonly visitorId: string,
-    opts?: { kind?: "normal" | "coding" },
+    opts?: { kind?: AgentSessionKind },
   ) {
     const { dataDir } = getConfig();
-    this.kind = opts?.kind === "coding" ? "coding" : "normal";
-    const kindDir = this.kind === "coding" ? "coding-session" : "session";
+    this.kind =
+      opts?.kind === "coding"
+        ? "coding"
+        : opts?.kind === "plugin-pipeline"
+          ? "plugin-pipeline"
+          : "normal";
+    const kindDir =
+      this.kind === "coding"
+        ? "coding-session"
+        : this.kind === "plugin-pipeline"
+          ? "plugin-pipeline-session"
+          : "session";
     this.sessionDir = path.join(dataDir, "tenant", visitorId, "agent", kindDir);
     this.metaPath = path.join(this.sessionDir, "session.json");
   }
@@ -1011,7 +1021,7 @@ export class AgentSessionManager {
   }
 }
 
-export type AgentSessionKind = "normal" | "coding";
+export type AgentSessionKind = "normal" | "coding" | "plugin-pipeline";
 
 export async function getAgentSessionForApi(
   visitorId: string,
@@ -1110,9 +1120,11 @@ export async function repairAgentSessionsForVisitor(params: {
   const kinds: AgentSessionKind[] =
     params.kind === "coding"
       ? ["coding"]
-      : params.kind === "normal"
-        ? ["normal"]
-        : ["normal", "coding"];
+      : params.kind === "plugin-pipeline"
+        ? ["plugin-pipeline"]
+        : params.kind === "normal"
+          ? ["normal"]
+          : ["normal", "coding", "plugin-pipeline"];
   const rows: AgentSessionRepairRow[] = [];
   for (const kind of kinds) {
     const mgr = new AgentSessionManager(params.visitorId, { kind });

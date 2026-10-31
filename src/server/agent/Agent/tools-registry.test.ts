@@ -53,6 +53,12 @@ const USER_SKILL_NAMES = [
   "delete_user_skill",
 ] as const;
 
+const PLUGIN_CLI_NAMES = [
+  "query_skill",
+  "list_plugin_home",
+  "run_plugin_cli",
+] as const;
+
 const stubSkills = {
   isReady: () => true,
   list: () => [],
@@ -86,6 +92,7 @@ describe("createToolsForMode", () => {
       "batch_update_slots",
       "overwrite_all",
       ...USER_SKILL_NAMES,
+      ...PLUGIN_CLI_NAMES,
     ]);
   });
 
@@ -126,6 +133,7 @@ describe("createToolsForMode", () => {
       "batch_update_slots",
       "overwrite_all",
       ...USER_SKILL_NAMES,
+      ...PLUGIN_CLI_NAMES,
     ]);
   });
 
@@ -148,7 +156,24 @@ describe("createToolsForMode", () => {
       "get_working_document",
       "set_markdown_document",
       ...USER_SKILL_NAMES,
+      ...PLUGIN_CLI_NAMES,
     ]);
+  });
+
+  it("plugin-pipeline includes query_skill and run_plugin_cli", () => {
+    const names = createToolsForMode("plugin-pipeline", {
+      ...baseDeps,
+      pipeline: {
+        workspace: "/tmp/x",
+        deadline: Date.now() + 60_000,
+        trace: [],
+      },
+    }).map((t) => t.name);
+    expect(names).toContain("query_skill");
+    expect(names).toContain("run_plugin_cli");
+    expect(names).toContain("list_plugin_home");
+    expect(names).toContain("submit_pipeline");
+    expect(names).toContain("install_pipeline");
   });
 
   it("coding without coding ctx throws", () => {

@@ -14,6 +14,7 @@ import {
 import { getSkillLoader } from "../Skill/skill-loader.js";
 import {
   buildSystemPrompt,
+  sessionKindFromMode,
   type AgentMode,
   type AgentUiReferences,
 } from "./system-prompt.js";
@@ -41,6 +42,12 @@ import {
   getAttachmentStore,
   prepareUserTurn,
 } from "../attachments/index.js";
+import {
+  cleanupPipelineAiWorkspace,
+  createPipelineAiWorkspace,
+} from "../../plugins/pipeline/pipeline-ai-tools.js";
+import { parsePipelineExpected } from "./tools-pipeline.js";
+import type { PipelineToolContext } from "./tool-deps.js";
 
 export type { AgentContextUsage, AgentMode };
 export type { AgentDocumentTableRow, AgentStreamEvent };
@@ -69,6 +76,12 @@ export function getAgentStatus(visitorId: string) {
  * 上手 Agent 主流程：config → tools → session → Agent → pi-run。
  * 流式进度经 onEvent 上抛；context_usage / done 在跑完后由本函数发出。
  */
+function resolveAgentMode(raw?: AgentMode): AgentMode {
+  if (raw === "coding") return "coding";
+  if (raw === "plugin-pipeline") return "plugin-pipeline";
+  return "normal";
+}
+
 export async function runOnboardingChat(params: {
   visitorId: string;
   message: string;
@@ -85,33 +98,61 @@ export async function runOnboardingChat(params: {
   baseMarkdown?: string;
   /** normal：当前 UI 域/文 reference（不作权限校验） */
   references?: AgentUiReferences | null;
+  /** plugin-pipeline：右侧当前草稿 YAML */
+  pipelineCurrentYaml?: string | null;
   onEvent: (event: AgentStreamEvent) => void;
   signal?: AbortSignal;
 }): Promise<void> {
   const { visitorId, message, onEvent, signal } = params;
-  const mode: AgentMode = params.mode === "coding" ? "coding" : "normal";
-  const skillNames = normalizeSkillRefs(
-    params.skillNames?.length ? params.skillNames : params.skillIds,
-  );
-  const assetIds = Array.isArray(params.assetIds)
-    ? params.assetIds.filter((id) => typeof id === "string" && id.trim()).map((id) => id.trim())
-    : [];
+  const mode = resolveAgentMode(params.mode);
+  const sessionKind = sessionKindFromMode(mode);
+  const pipelineMode = mode === "plugin-pipeline";
+  const skillNames = pipelineMode
+    ? []
+    : normalizeSkillRefs(
+        params.skillNames?.length ? params.skillNames : params.skillIds,
+      );
+  const assetIds = pipelineMode
+    ? []
+    : Array.isArray(params.assetIds)
+      ? params.assetIds
+          .filter((id) => typeof id === "string" && id.trim())
+          .map((id) => id.trim())
+      : [];
 
   const cfg = getVisitorAgentConfig(visitorId);
   if (!cfg?.apiKey) throw new Error("missing_api_key");
 
   const skills = getSkillLoader();
-  if (!skills.isReady()) throw new Error("skills_missing");
+  if (!pipelineMode && !skills.isReady()) throw new Error("skills_missing");
+
+  const pipelineWorkspace = pipelineMode ? createPipelineAiWorkspace() : null;
+  const pipelineTrace: PipelineToolContext["trace"] = [];
+  const expected = pipelineMode
+    ? parsePipelineExpected(params.pipelineCurrentYaml)
+    : {};
+  const pipelineCtx: PipelineToolContext | undefined = pipelineWorkspace
+    ? {
+        workspace: pipelineWorkspace,
+        deadline: Date.now() + 150_000,
+        trace: pipelineTrace,
+        ...(expected.expectedId ? { expectedId: expected.expectedId } : {}),
+        ...(expected.expectedKind ? { expectedKind: expected.expectedKind } : {}),
+        ...(params.pipelineCurrentYaml?.trim()
+          ? { currentYaml: params.pipelineCurrentYaml }
+          : {}),
+      }
+    : undefined;
 
   const { models, model } = createAgentModel(cfg);
   const nativeTools = createToolsForMode(mode, {
     visitorId,
     onEvent,
     signal,
-    skills,
+    ...(pipelineMode ? {} : { skills }),
     uiDocumentId:
       mode === "normal" ? params.references?.documentId ?? null : null,
-    ...(cfg.kind === "deepseek" && cfg.apiKey
+    ...(cfg.kind === "deepseek" && cfg.apiKey && !pipelineMode
       ? {
           deepseekWeb: {
             apiKey: cfg.apiKey,
@@ -128,32 +169,40 @@ export async function runOnboardingChat(params: {
           },
         }
       : {}),
+    ...(pipelineCtx ? { pipeline: pipelineCtx } : {}),
   });
 
-  const { loadMcpAgentTools } = await import("../../mcp/mcp-client.js");
-  const mcpBundle = await loadMcpAgentTools(visitorId);
+  const mcpBundle = pipelineMode
+    ? { tools: [] as typeof nativeTools, close: async () => undefined }
+    : await (await import("../../mcp/mcp-client.js")).loadMcpAgentTools(visitorId);
   const tools = [...nativeTools, ...mcpBundle.tools];
-  const { loadSoulPromptSection } = await import("../../soul/load-for-agent.js");
-  const { buildSkillMetaSection } = await import("./skill-meta-prompt.js");
-  const systemPrompt = buildSystemPrompt(
-    mode,
-    mode === "normal" ? params.references : null,
-    {
-      hasMcpTools: mcpBundle.tools.length > 0,
-      soulSection: loadSoulPromptSection(visitorId),
-      skillMetaSection: buildSkillMetaSection(visitorId),
-    },
-  );
+  const systemPrompt = pipelineMode
+    ? buildSystemPrompt(mode, null, {
+        pipelineCurrentYaml: params.pipelineCurrentYaml,
+      })
+    : buildSystemPrompt(
+        mode,
+        mode === "normal" ? params.references : null,
+        {
+          hasMcpTools: mcpBundle.tools.length > 0,
+          soulSection: (
+            await import("../../soul/load-for-agent.js")
+          ).loadSoulPromptSection(visitorId),
+          skillMetaSection: (
+            await import("./skill-meta-prompt.js")
+          ).buildSkillMetaSection(visitorId),
+        },
+      );
 
   try {
     const sessionManager = new AgentSessionManager(visitorId, {
-      kind: mode === "coding" ? "coding" : "normal",
+      kind: sessionKind,
     });
 
     const { maybeCompactBeforeChat } = await import("./context-compact.js");
     await maybeCompactBeforeChat({
       visitorId,
-      kind: mode === "coding" ? "coding" : "normal",
+      kind: sessionKind,
       documentId: mode === "coding" ? params.documentId ?? null : undefined,
       onEvent,
     });
@@ -240,6 +289,7 @@ export async function runOnboardingChat(params: {
     onEvent({ type: "done" });
   } finally {
     await mcpBundle.close();
+    if (pipelineWorkspace) cleanupPipelineAiWorkspace(pipelineWorkspace);
   }
 }
 

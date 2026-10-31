@@ -159,9 +159,8 @@ function ensureRuntimeDirs(): void {
     path.join(cfg.agentAttachmentsDir, "objects"),
     cfg.logsDir,
     path.join(cfg.dataDir, "soul"),
-    path.join(cfg.dataDir, "plugins", "install"),
-    path.join(cfg.dataDir, "plugins", "system"),
-    path.join(cfg.dataDir, "plugins-data"),
+    path.join(cfg.dataDir, "plugins-home"),
+    path.join(cfg.dataDir, "plugins-catalog"),
   ]) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }

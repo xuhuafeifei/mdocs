@@ -1,6 +1,6 @@
 /**
- * 内嵌流水线 Agent 的工具集：exec / download / fetch / list / read / submit。
- * 独立于 mdocs 智能助手：无 session、无 Agent 框架，只在临时工作区内探测。
+ * plugin-pipeline 探测工具实现：exec / download / fetch / list / read / submit。
+ * Agent 包装见 `tools-pipeline.ts`；ask_user_choice 走主 Agent choiceTools。
  */
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
@@ -26,6 +26,7 @@ export type PipelineAiToolContext = {
   /** 当前编排中的流水线：AI 只能改它，不能偷偷换成新插件 */
   expectedId?: string;
   expectedKind?: string;
+  signal?: AbortSignal;
 };
 
 export type PipelineAiToolResult = {
@@ -35,119 +36,8 @@ export type PipelineAiToolResult = {
   submittedYaml?: string;
 };
 
-export type ToolJsonSchema = {
-  type: "object";
-  properties: Record<string, unknown>;
-  required?: string[];
-  additionalProperties?: boolean;
-};
-
-export type PipelineAiToolDef = {
-  name: string;
-  description: string;
-  parameters: ToolJsonSchema;
-};
-
 const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
 const MAX_TOOL_OUTPUT = 12_000;
-
-export const PIPELINE_AI_TOOL_DEFS: PipelineAiToolDef[] = [
-  {
-    name: "exec",
-    description:
-      "在临时工作区执行命令（不经 shell），只用于探测：验证 npx/node/tar 是否存在、查看下载包内容、运行 --version。不要执行安装命令或修改用户目录。",
-    parameters: {
-      type: "object",
-      properties: {
-        command: { type: "string", description: "可执行文件，例如 npx、tar、node" },
-        args: {
-          type: "array",
-          items: { type: "string" },
-          description: "参数数组，不拼 shell",
-        },
-        cwd: {
-          type: "string",
-          description: "相对临时工作区的目录；默认工作区根",
-        },
-        timeout_seconds: {
-          type: "number",
-          description: "1-30 秒，默认 15",
-        },
-      },
-      required: ["command"],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: "download",
-    description:
-      "下载一个公开 http(s) 文件到临时工作区（最多 50MB），返回相对路径、大小与 SHA256 前缀。用于检查安装包，不会安装。",
-    parameters: {
-      type: "object",
-      properties: {
-        url: { type: "string", description: "公开 http(s) URL" },
-        filename: { type: "string", description: "可选保存文件名" },
-      },
-      required: ["url"],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: "fetch_page",
-    description:
-      "抓取一个公开网页并转成纯文本（最多约 12k 字符）。用于阅读 README、release 说明、MCP 文档。",
-    parameters: {
-      type: "object",
-      properties: {
-        url: { type: "string", description: "公开 http(s) URL" },
-      },
-      required: ["url"],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: "list_dir",
-    description: "列出临时工作区（或其中子目录）的文件。",
-    parameters: {
-      type: "object",
-      properties: {
-        path: { type: "string", description: "相对工作区的目录；默认根" },
-      },
-      additionalProperties: false,
-    },
-  },
-  {
-    name: "read_file",
-    description:
-      "读取临时工作区内的文本文件（最多 20k 字符）。可用于查看下载包里的 README / 配置，不要读二进制。",
-    parameters: {
-      type: "object",
-      properties: {
-        path: { type: "string", description: "相对工作区的文件路径" },
-        max_chars: { type: "number", description: "最多读取字符数，默认 8000" },
-      },
-      required: ["path"],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: "submit_pipeline",
-    description:
-      "提交最终 pipeline.yaml。只有校验通过才会结束任务；校验失败会在工具结果里返回错误，请修正后再次提交。",
-    parameters: {
-      type: "object",
-      properties: {
-        yaml: { type: "string", description: "完整 YAML 文本，不要 markdown 围栏" },
-        notes: {
-          type: "string",
-          description: "可选：给用户的简短说明（安装方式 / 风险）",
-        },
-      },
-      required: ["yaml"],
-      additionalProperties: false,
-    },
-  },
-];
 
 export function createPipelineAiWorkspace(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "mdocs-pipeline-ai-"));

@@ -1,6 +1,6 @@
 # Engram — 系统自带流水线 DEMO（与 bundled 同源语义）
 
-id: "847291036512"
+id: engram
 name: Engram
 kind: system
 runtime: engram
@@ -13,16 +13,26 @@ outputs:
 
 probe:
   - type: file_exists
-    path: root/bin/engram
+    path: bin/engram
 
 steps:
   - type: download
     # url 留空：Engram 由系统按平台选镜像包
 
   - type: extract
+    dest: bin
+
+  - type: exec
+    command: bin/engram
+    args:
+      - init
+      - mdocs-bootstrap
+      - --force
+    cwd: "{{plugins_data}}/workspace"
+    when: probe_failed
 
   - type: upsert_mcp
-    mcp_server_id: plugin-engram
+    mcp_server_id: engram
     name: Engram
     enabled: true
     transport: stdio
@@ -31,16 +41,16 @@ steps:
       - mcp
 
   - type: write_soul_sidecar
-    scope: global
+    scope: tenant
     file: engram.md
     content: |
       # Engram
 
-      本机记忆已接入。空间按当前访客隔离。
+      本机记忆已接入。空间按当前访客隔离，无需也不应切换他人记忆。
 
 uninstall:
   - type: delete_soul_sidecar
-    scope: global
+    scope: tenant
     file: engram.md
   - type: remove_mcp
-    mcp_server_id: plugin-engram
+    mcp_server_id: engram
