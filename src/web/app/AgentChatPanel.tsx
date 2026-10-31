@@ -1113,10 +1113,12 @@ export const AgentChatPanel = forwardRef<
       documentId: string;
       headCommitId: string;
     }) => void | Promise<void>;
-    /** 有正文时用户选「打开帮写」→ 打开帮写全屏层 */
-    onOpenCoding?: (payload: {
+    /** 有正文时用户选「先看 Diff 再定」→ 前端确保打开目标文档并落成 Diff */
+    onDiffProposal?: (payload: {
       documentId: string;
       displayName: string;
+      fileType: string;
+      markdown: string;
     }) => void | Promise<void>;
     /**
      * get_editor_draft：收到 SSE 后静默取主栏草稿（MD/HTML），无确认卡。
@@ -1197,7 +1199,7 @@ export const AgentChatPanel = forwardRef<
     onOpenDocument,
     onTreeChanged,
     onDocumentOverwritten,
-    onOpenCoding,
+    onDiffProposal,
     onProvideEditorDraft,
     embedded = false,
     docked = false,
@@ -2047,10 +2049,12 @@ export const AgentChatPanel = forwardRef<
         documentId: event.documentId,
         headCommitId: event.headCommitId,
       });
-    } else if (event.type === "open_coding") {
-      void onOpenCoding?.({
+    } else if (event.type === "diff_proposal") {
+      void onDiffProposal?.({
         documentId: event.documentId,
         displayName: event.displayName,
+        fileType: event.fileType,
+        markdown: event.markdown,
       });
     } else if (event.type === "context_usage") {
       setContextUsage({
@@ -2845,7 +2849,7 @@ export const AgentChatPanel = forwardRef<
                     <p className="mdocs-agent-panel-desc">
                       {coding
                         ? "这里专注改稿：你说怎么写，我更新右侧提案；按段接受或拒绝后，再点「完成并写回」。答疑、建目录、搜文档请用右下角「智能助手」。"
-                        : "我能答疑、搜文档、整理结构，也能帮你写全文；需要按段精细改稿，请点文档顶栏「帮写」。"}
+                        : "我能答疑、搜文档、整理结构，也能帮你写全文；整篇大改会先给出一份 Diff，你在编辑器里确认后才会写入。"}
                     </p>
                   </>
                 )}

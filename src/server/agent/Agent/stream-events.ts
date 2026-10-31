@@ -75,10 +75,16 @@ export type AgentStreamEvent =
       expiresAt: string;
     }
   | { type: "skill_form_expired"; requestId: string }
+  /**
+   * 整篇改动先交前端审阅：前端确保打开的是目标文档，再把 markdown 落成 Diff。
+   * 服务端此刻不写正文；用户确认后走正常发布链路。
+   */
   | {
-      type: "open_coding";
+      type: "diff_proposal";
       documentId: string;
       displayName: string;
+      fileType: string;
+      markdown: string;
     }
   | { type: "context_usage"; percent: number; used: number; limit: number }
   /** 正在 LLM 压缩 session 历史 */

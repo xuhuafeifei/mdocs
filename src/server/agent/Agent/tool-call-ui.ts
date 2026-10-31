@@ -436,7 +436,7 @@ export function toolCallDetailFromResult(
     if (status === "overwritten") {
       return formatWriteToolDetail(`已覆写「${name}」`, body, "grow");
     }
-    if (status === "redirected_to_coding") return `「${name}」已打开帮写`;
+    if (status === "proposed_as_diff") return `「${name}」已生成 Diff 待确认`;
     if (status === "rejected") {
       return String(details.message ?? "已拒绝").trim() || fallback;
     }

@@ -1335,9 +1335,15 @@ export type AgentStreamEvent =
   | {
       type: "diff_slot_op";
       documentId: string;
-      op: "update_slot" | "insert_after_slot" | "remove_slot" | "overwrite_all";
+      op:
+        | "update_slot"
+        | "insert_after_slot"
+        | "remove_slot"
+        | "overwrite_all"
+        | "batch_update_slots";
       slot?: number;
       markdown?: string;
+      ranges?: Array<{ start: number; end: number; markdown: string }>;
     }
   | {
       type: "choice_card";
@@ -1366,9 +1372,11 @@ export type AgentStreamEvent =
     }
   | { type: "skill_form_expired"; requestId: string }
   | {
-      type: "open_coding";
+      type: "diff_proposal";
       documentId: string;
       displayName: string;
+      fileType: string;
+      markdown: string;
     }
   | { type: "context_usage"; percent: number; used: number; limit: number }
   | { type: "context_compacting" }

@@ -33,7 +33,7 @@ export type PipelineToolContext = {
 /** 装配 / 单个 tool 共用的依赖，一律用 `{}` 传递 */
 export type ToolDeps = {
   visitorId: string;
-  /** 交互副作用：choice_card / skill_form_card / open_coding 等 */
+  /** 交互副作用：choice_card / skill_form_card / diff_proposal 等 */
   onEvent: (event: AgentStreamEvent) => void;
   signal?: AbortSignal;
   /** 手册；缺省则 template 的 manual 集合为空 */

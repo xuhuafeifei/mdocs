@@ -1019,6 +1019,50 @@ export class AgentSessionManager {
       await this.touchLastOpenedUnlocked(sessionId);
     });
   }
+
+  /**
+   * 批量落盘 tool 行（附件一轮多个），单次 write + 单次 touch，
+   * 避免每个附件各开一次队列任务。
+   */
+  async appendToolExchanges(
+    sessionId: string,
+    exchanges: Array<{
+      toolCallId: string;
+      toolName: string;
+      arguments: Record<string, unknown>;
+      resultText: string;
+      isError?: boolean;
+    }>,
+  ): Promise<void> {
+    if (!isSessionId(sessionId)) throw new Error("invalid_session_id");
+    if (!Array.isArray(exchanges) || exchanges.length === 0) return;
+    assertNotCompacting(this.jsonlPath(sessionId), sessionId);
+    const lines: string[] = [];
+    for (const exchange of exchanges) {
+      const toolCallId = String(exchange.toolCallId ?? "").trim();
+      const toolName = String(exchange.toolName ?? "").trim();
+      if (!toolCallId || !toolName) continue;
+      const row: Record<string, unknown> = {
+        role: "tool",
+        toolCallId,
+        toolName,
+        arguments: exchange.arguments ?? {},
+        resultText: exchange.resultText ?? "",
+        ts: nowIso(),
+      };
+      if (exchange.isError) row.isError = true;
+      lines.push(JSON.stringify(row));
+    }
+    if (lines.length === 0) return;
+    await this.runSerialized(async () => {
+      await fs.promises.appendFile(
+        this.jsonlPath(sessionId),
+        lines.join("\n") + "\n",
+        "utf8",
+      );
+      await this.touchLastOpenedUnlocked(sessionId);
+    });
+  }
 }
 
 export type AgentSessionKind = "normal" | "coding" | "plugin-pipeline";

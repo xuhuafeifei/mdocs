@@ -12,22 +12,33 @@ import { FILE_TYPE } from "../../../shared/file-types.js";
 import { canOverwrite, getPolicy } from "../../../shared/file-type-policy.js";
 import { documentChangedNotice } from "./session-tool-persist.js";
 
-const OVERWRITE_OPTION = "直接覆写";
-const OPEN_CODING_OPTION = "打开帮写审阅";
+/**
+ * 已有正文时的落地方式。不再有「帮写」中转：两种方式都直接作用在当前编辑器，
+ * 区别只是改动先变成可审阅的 Diff，还是立刻生效。
+ */
+const DIFF_OPTION = "先看 Diff 再定";
+const OVERWRITE_OPTION = "直接覆盖";
 const CANCEL_OPTION = "取消";
 
-function classifyChoice(choice: string): "overwrite" | "coding" | "cancel" {
+function classifyChoice(choice: string): "diff" | "overwrite" | "cancel" {
   const t = choice.trim();
-  if (t === OVERWRITE_OPTION || t === "覆写" || t.includes("直接覆写")) {
-    return "overwrite";
+  // diff 先判：以免「先看 Diff」里含「覆盖」类字眼被误分类（历史文案兼容）
+  if (
+    t === DIFF_OPTION ||
+    t.includes("Diff") ||
+    t.includes("diff") ||
+    t.includes("差异") ||
+    t.includes("审阅") ||
+    t.includes("帮写")
+  ) {
+    return "diff";
   }
-  if (t === OPEN_CODING_OPTION || t.includes("帮写")) {
-    return "coding";
+  if (t === OVERWRITE_OPTION || t.includes("覆盖") || t.includes("覆写")) {
+    return "overwrite";
   }
   if (t === CANCEL_OPTION || t.includes("取消")) {
     return "cancel";
   }
-  if (t.includes("覆写")) return "overwrite";
   return "cancel";
 }
 
@@ -84,7 +95,8 @@ export function overwriteDocumentTool({
       "适用：.md 大改（重写大半篇/多段大面积改写/结构重排）、用户明确要求整篇重写、文档几乎为空、或目标是 html；" +
       "小改（一两处片段）仍用 replace_document_markdown / append_document。" +
       "必须先确认 fileType：md → 完整 Markdown；html → 完整 HTML（禁止传 Markdown，不做 MD↔HTML 转换）。" +
-      "几乎空则直接写入；已有实质正文时弹出选择卡：「直接覆写」「打开帮写审阅」「取消」。" +
+      "几乎空则直接写入；已有实质正文时弹出选择卡：「先看 Diff 再定」「直接覆盖」「取消」。" +
+      "用户选「先看 Diff 再定」时改动不会立刻落库，而是作为 Diff 交给前端在编辑器里审阅，确认后另行发布。" +
       "有正文不是无法覆写，只是要用户点选。必须传 message（简短发布说明）。",
     parameters: Type.Object({
       documentId: Type.String({ description: "目标文档 documentId" }),
@@ -154,8 +166,8 @@ export function overwriteDocumentTool({
         onEvent({
           type: "choice_card",
           requestId,
-          title: `「${displayName}」已有正文，请选择`,
-          options: [OVERWRITE_OPTION, OPEN_CODING_OPTION, CANCEL_OPTION],
+          title: `「${displayName}」已有正文，这次改动怎么落地？`,
+          options: [DIFF_OPTION, OVERWRITE_OPTION, CANCEL_OPTION],
           expiresAt,
         });
 
@@ -166,7 +178,7 @@ export function overwriteDocumentTool({
             status: "timeout",
             documentId,
             overwritten: false,
-            message: "用户未在时限内选择；未覆写、未打开帮写",
+            message: "用户未在时限内选择；未覆写、未进入 Diff 审阅",
           });
         }
         if (choiceResult.status === "cancelled") {
@@ -174,7 +186,7 @@ export function overwriteDocumentTool({
             status: "cancelled",
             documentId,
             overwritten: false,
-            message: "选择已取消；未覆写、未打开帮写",
+            message: "选择已取消；未覆写、未进入 Diff 审阅",
           });
         }
 
@@ -197,15 +209,24 @@ export function overwriteDocumentTool({
             message,
           });
         }
-        if (action === "coding") {
-          onEvent({ type: "open_coding", documentId, displayName });
+        if (action === "diff") {
+          // 改动以 Diff 形式交给前端：先校验/打开目标文档，再在编辑器里落地，用户确认后才发布。
+          // 服务端此刻不写正文，content 原样下发，前端落地后走正常的发布链路。
+          onEvent({
+            type: "diff_proposal",
+            documentId,
+            displayName,
+            fileType,
+            markdown: content,
+          });
           return asToolResult({
-            status: "redirected_to_coding",
+            status: "proposed_as_diff",
             documentId,
             displayName,
             choice,
             overwritten: false,
-            message: "已请前端打开帮写；Ask 未覆写服务端正文",
+            message:
+              "改动已作为 Diff 交给前端；用户审阅确认后才会写入正文。服务端暂未覆写。",
           });
         }
 
@@ -214,7 +235,7 @@ export function overwriteDocumentTool({
           documentId,
           choice,
           overwritten: false,
-          message: "用户取消；未覆写、未打开帮写",
+          message: "用户取消；未覆写、未进入 Diff 审阅",
         });
       } catch (err) {
         if (err instanceof DocumentError) {

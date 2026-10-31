@@ -240,6 +240,7 @@ export async function runOnboardingChat(params: {
       history,
       model,
       expandAt,
+      sessionKind,
     );
     const currentIndex = history.length;
     const currentRefs = skillNames.filter((ref) => expandAt.get(ref) === currentIndex);
@@ -268,6 +269,7 @@ export async function runOnboardingChat(params: {
       images: promptImages.length > 0 ? promptImages : undefined,
       skillNames,
       assets: prepared?.refs,
+      attachmentToolRows: prepared?.toolRows,
       persistContent,
       visitorId,
       sessionId,

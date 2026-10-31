@@ -7,6 +7,7 @@
 import { randomUUID } from "node:crypto";
 import type { Model } from "@earendil-works/pi-ai";
 import type {
+  AgentSessionKind,
   AgentSessionMessage,
   AgentSessionToolMessage,
 } from "./session-manager.js";
@@ -15,8 +16,14 @@ import {
   formatSkillExpandBlock,
   resolveSkillExpandBlocks,
 } from "./user-skills.js";
+import { ATTACHMENT_READ_TOOL } from "../attachments/session-rows.js";
 
 export const LOAD_USER_SKILL_TOOL = "load_user_skill";
+
+/** read_attachment 只在 normal / coding 模式注册（utilityTools）；pipeline 模式没有 */
+function attachmentToolAvailable(kind?: AgentSessionKind): boolean {
+  return kind !== "plugin-pipeline";
+}
 
 const EMPTY_USAGE = {
   input: 0,
@@ -192,14 +199,18 @@ export function hydrateSessionMessagesToPi(
   history: AgentSessionMessage[],
   model: Model<any>,
   expandAt = markSkillExpandPoints(history),
+  sessionKind?: AgentSessionKind,
 ): { messages: PiHydratedMessage[]; expandedSkillIds: Set<string> } {
   const ts = Date.now();
   const expandedSkillIds = new Set<string>();
   const out: PiHydratedMessage[] = [];
+  const attachmentsUsable = attachmentToolAvailable(sessionKind);
 
   for (let i = 0; i < history.length; i++) {
     const m = history[i]!;
     if (m.role === "tool") {
+      // pipeline 模式没有 read_attachment：跳过，避免留下指向不存在工具的 toolCall
+      if (!attachmentsUsable && m.toolName === ATTACHMENT_READ_TOOL) continue;
       const [a, r] = buildPersistedToolPair(model, m, ts);
       out.push(a, r);
       continue;
@@ -233,10 +244,31 @@ export function hydrateSessionMessagesToPi(
         }
       }
     }
-    out.push({ role: "user", content: m.content, timestamp: ts });
+    const attachmentNote = userAttachmentNote(m, attachmentsUsable);
+    out.push({
+      role: "user",
+      content: attachmentNote ? `${m.content}\n\n${attachmentNote}` : m.content,
+      timestamp: ts,
+    });
   }
 
   return { messages: out, expandedSkillIds };
+}
+
+/**
+ * user 正文末尾补一句「有附件、怎么取」。
+ * 只有在工具不可用时才需要——正常模式由落盘的 tool 行承载正文。
+ */
+function userAttachmentNote(
+  m: { assets?: Array<{ id: string; name: string }> },
+  toolAvailable: boolean,
+): string {
+  if (toolAvailable) return "";
+  const assets = m.assets ?? [];
+  if (assets.length === 0) return "";
+  return `[附件未随历史重放] ${assets
+    .map((a) => `${a.name} (id=${a.id})`)
+    .join(", ")}（当前模式不支持 ${ATTACHMENT_READ_TOOL}）`;
 }
 
 /** @deprecated 测试兼容：无 skill 时退化为单条 user */

@@ -1,6 +1,10 @@
 /**
  * 哪些 tool 结果写入 session jsonl，供下一轮 hydrate 复用。
  * 读类：全文可落盘；写类：只落短「请重读」提示，避免增肥。
+ *
+ * read_attachment：附件内容由 prepareUserTurn 在首轮就已经落好 tool 行（见
+ * attachments/session-rows.ts），模型中途主动调用时**不再**重复落盘，避免同一份表格
+ * 在历史里出现两遍。
  */
 
 export const SESSION_PERSIST_TOOL_NAMES = [

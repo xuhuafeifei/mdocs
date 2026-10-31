@@ -2,6 +2,7 @@
  * Session 上下文 LLM 压缩：≥85% 自动或主动触发。
  */
 import type { Context, TextContent } from "@earendil-works/pi-ai";
+import { ATTACHMENT_READ_TOOL } from "../attachments/session-rows.js";
 import { getVisitorAgentConfig } from "../Config/config.js";
 import {
   AgentSessionManager,
@@ -34,8 +35,10 @@ const COMPACT_SYSTEM = `你是会话压缩助手。将用户提供的对话历�
 function messageToPlain(m: AgentSessionMessage): string {
   if (m.role === "tool") {
     const args = JSON.stringify(m.arguments ?? {});
-    const body = m.resultText.length > 2000
-      ? `${m.resultText.slice(0, 2000)}…`
+    // 附件 tool 行正文往往就是表格 JSON，截断太狠摘要会完全丢掉附件信息
+    const cap = m.toolName === ATTACHMENT_READ_TOOL ? 4000 : 2000;
+    const body = m.resultText.length > cap
+      ? `${m.resultText.slice(0, cap)}…`
       : m.resultText;
     return `[tool ${m.toolName}] args=${args}\n${body}`;
   }

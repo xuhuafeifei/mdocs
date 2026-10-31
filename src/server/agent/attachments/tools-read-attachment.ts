@@ -4,7 +4,13 @@ import type { ToolDeps } from "../Agent/tool-deps.js";
 import { asToolResult } from "../Agent/tool-deps.js";
 import { resolveParseStrategy } from "./capabilities.js";
 import { getAttachmentStore } from "./store.js";
-import { DEFAULT_PARSE_LIMITS } from "./types.js";
+import { DEFAULT_PARSE_LIMITS, TOOL_IMAGE_MAX_BYTES } from "./types.js";
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)}KB`;
+  return `${bytes}B`;
+}
 
 /** 按需读取已 persist 的附件；大文本可 offset/limit */
 export function readAttachmentTool(deps: ToolDeps): AgentTool {
@@ -57,14 +63,40 @@ export function readAttachmentTool(deps: ToolDeps): AgentTool {
           },
         });
         if (result.kind === "image") {
-          return asToolResult({
-            ok: true,
-            kind: "image",
-            name: meta.name,
-            mime: result.mime,
-            bytes: result.data.byteLength,
-            note: "图片已可由多模态直接查看；如需描述请结合用户问题回答，无需再转文字。",
-          });
+          // 图片本身就是「结果」：必须作为 ImageContent 返回，否则模型只拿到元数据，看不到图。
+          // 超上限时不硬塞，避免单条 tool result 撑爆上下文。
+          if (result.data.byteLength > TOOL_IMAGE_MAX_BYTES) {
+            return asToolResult({
+              ok: false,
+              kind: "image",
+              name: meta.name,
+              mime: result.mime,
+              bytes: result.data.byteLength,
+              error: "image_too_large_for_tool",
+              note: `图片 ${formatBytes(result.data.byteLength)} 超过单次工具返回上限 ` +
+                `${formatBytes(TOOL_IMAGE_MAX_BYTES)}，未返回图像。请提示用户压缩或裁剪后重新上传。`,
+            });
+          }
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `[附件 ${meta.name}] ${result.mime}，${formatBytes(result.data.byteLength)}`,
+              },
+              {
+                type: "image" as const,
+                data: Buffer.from(result.data).toString("base64"),
+                mimeType: result.mime,
+              },
+            ],
+            details: {
+              ok: true,
+              kind: "image",
+              name: meta.name,
+              mime: result.mime,
+              bytes: result.data.byteLength,
+            },
+          };
         }
         if (result.kind === "text") {
           const slice = result.text.slice(offset, offset + limit);

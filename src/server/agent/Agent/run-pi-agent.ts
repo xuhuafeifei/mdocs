@@ -78,6 +78,14 @@ export type RunPiAgentParams = {
   skillNames?: string[];
   /** 本轮附件 Ref；落盘到 user 行 */
   assets?: Array<{ id: string; name: string; mime: string; bytes: number }>;
+  /** 本轮附件的 session 工具行；跟在 user 行后落盘，供下一轮 hydrate 重建 */
+  attachmentToolRows?: Array<{
+    toolCallId: string;
+    toolName: string;
+    arguments: Record<string, unknown>;
+    resultText: string;
+    isError?: boolean;
+  }>;
   /** 落盘用的 user 可见文本（可与 prompt 文本不同） */
   persistContent?: string;
   visitorId: string;
@@ -94,6 +102,7 @@ export async function runPiAgent(params: RunPiAgentParams): Promise<PiRunTrack> 
     images,
     skillNames,
     assets,
+    attachmentToolRows,
     persistContent,
     visitorId,
     sessionId,
@@ -109,6 +118,7 @@ export async function runPiAgent(params: RunPiAgentParams): Promise<PiRunTrack> 
       sessionManager,
       skillNames,
       assets,
+      attachmentToolRows,
       persistContent: persistContent ?? message,
       onEvent,
       track,
@@ -179,6 +189,13 @@ function bindAgentEvents(opts: {
   sessionManager: AgentSessionManager;
   skillNames?: string[];
   assets?: Array<{ id: string; name: string; mime: string; bytes: number }>;
+  attachmentToolRows?: Array<{
+    toolCallId: string;
+    toolName: string;
+    arguments: Record<string, unknown>;
+    resultText: string;
+    isError?: boolean;
+  }>;
   persistContent: string;
   onEvent: (event: AgentStreamEvent) => void;
   track: PiRunTrack;
@@ -188,6 +205,7 @@ function bindAgentEvents(opts: {
     sessionManager,
     skillNames,
     assets,
+    attachmentToolRows,
     persistContent,
     onEvent,
     track,
@@ -231,6 +249,10 @@ function bindAgentEvents(opts: {
               skillNames,
               assets,
             );
+            // 附件「读取结果」紧跟 user 行落盘：下一轮 hydrate 才能把表格内容/图片引用带回来
+            if (attachmentToolRows && attachmentToolRows.length > 0) {
+              await sessionManager.appendToolExchanges(sessionId, attachmentToolRows);
+            }
           }
         }
         return;
