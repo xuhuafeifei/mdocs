@@ -90,11 +90,11 @@ import {
 } from "./draftPublishFailure";
 import { useAutoPublish } from "./hooks/useAutoPublish";
 import { useDocumentVersion } from "./hooks/useDocumentVersion";
-import { aiWriteResultToHtml, htmlToAiWriteSeed } from "./ai-write/htmlAiWrite";
 import { installAssetLinkDownloads } from "./assetLinkDownload";
 import { FILE_TYPE } from "../../shared/file-types";
 import { EditorPaneHost } from "./EditorPaneHost";
 import type { ApplyAgentDiffFn } from "./lexical-lines/agentDiff";
+import { batchRangesToProposedMarkdown } from "./lexical-lines/batchSlotRangesApply";
 import type { RecentDocTabsProps } from "./RecentDocTabs";
 import {
   clearSecondaryRecentDocTabs,
@@ -135,9 +135,7 @@ const AgentChatPanel = lazy(() =>
   import("./AgentChatPanel").then((m) => ({ default: m.AgentChatPanel })),
 );
 type AgentChatPanelHandle = import("./AgentChatPanel").AgentChatPanelHandle;
-const AiWriteWorkbench = lazy(() =>
-  import("./ai-write/AiWriteWorkbench").then((m) => ({ default: m.AiWriteWorkbench })),
-);
+
 const MergeView = lazy(() => import("./MergeView").then((m) => ({ default: m.MergeView })));
 const GraphPage = lazy(() => import("./GraphPage").then((m) => ({ default: m.GraphPage })));
 type Phase = "loading" | "needsRegister" | "ready";
@@ -485,37 +483,113 @@ export function App() {
     saveAgentTreeRailOpen(open);
   }
 
-  // ---- 帮写全屏层 ----
-  const [aiWriteOpen, setAiWriteOpen] = useState(false);
-  const [aiWriteBoot, setAiWriteBoot] = useState<{
-    markdown: string;
-    documentId: string | null;
-    displayName: string;
-    /** 写回目标：html → contentKind=html；否则 Lexical */
-    fileType: string;
-  } | null>(null);
+  /** 跳转到目标文档后，等编辑器就绪的上限 */
+  const DIFF_TARGET_LOAD_TIMEOUT_MS = 8000;
+  /** 待落地的 slot Diff 队列：保证跨文档跳转时按序应用，不丢提案 */
+  const pendingDiffRunsRef = useRef<
+    Array<{ documentId: string; run: (documentId: string) => boolean | Promise<boolean> }>
+  >([]);
+
+  /** 目标文档已打开且编辑器有内容才可直接落 Diff */
+  function sameLiveDiffTarget(requestedDocumentId: string): boolean {
+    const live = editorContentRef.current;
+    if (!live?.content?.trim()) return false;
+    return !requestedDocumentId || live.documentId === requestedDocumentId;
+  }
 
   /**
-   * Diff 只能作用在当前 live Editor。助手若带了别的 documentId（常见于会话里旧文残留），
-   * 仍对当前打开文档落 Diff，不整单丢弃。
+   * 把一次 slot Diff 落到目标文档。
+   * 若目标不是当前打开且有内容的文档：先保存当前稿、跳转过去，等编辑器加载到目标文档后再应用。
+   * 队列保证连续多次提案按序落地，不会互相覆盖。
    */
-  function guardAgentDiffTarget(requestedDocumentId: string): boolean {
-    const live = editorContentRef.current;
-    if (!live?.content?.trim()) {
-      setAlertMessage("请先打开一篇文档再接收 Diff 提案（Diff 只能写进当前编辑器）");
-      return false;
+  async function runDiffOnOpenDocument(
+    documentId: string,
+    run: (documentId: string) => boolean | Promise<boolean>,
+  ): Promise<void> {
+    if (!documentId) return;
+    pendingDiffRunsRef.current.push({ documentId, run });
+    if (pendingDiffRunsRef.current.length > 1) return; // 已有串行在跑
+    await drainPendingDiffRuns();
+  }
+
+  async function drainPendingDiffRuns(): Promise<void> {
+    while (pendingDiffRunsRef.current.length > 0) {
+      const job = pendingDiffRunsRef.current[0]!;
+      if (!sameLiveDiffTarget(job.documentId)) {
+        if (editorContentRef.current?.documentId !== job.documentId) {
+          // 目标没打开：先存稿再跳过去
+          try {
+            await saveBeforeNavRef.current?.();
+            setView("docs");
+            await guardNavigate(() => navigate(`/doc/${job.documentId}`));
+          } catch {
+            pendingDiffRunsRef.current.shift();
+            setAlertMessage("打开目标文档失败，Diff 未写入");
+            continue;
+          }
+        }
+        if (await waitForDiffTarget(job.documentId, DIFF_TARGET_LOAD_TIMEOUT_MS)) {
+          continue; // 就绪后回到循环顶部，走应用分支
+        }
+        pendingDiffRunsRef.current.shift();
+        setAlertMessage("目标文档加载超时，Diff 未写入；请重试");
+        continue;
+      }
+      pendingDiffRunsRef.current.shift();
+      if (!(await job.run(job.documentId))) return;
     }
-    if (
-      requestedDocumentId &&
-      live.documentId !== requestedDocumentId
-    ) {
-      const openName = live.displayName?.trim() || "当前文档";
-      setMessage(
-        `助手指定了另一篇文档，已改为对当前打开的「${openName}」写入 Diff`,
-      );
-      window.setTimeout(() => setMessage(null), 2800);
+  }
+
+  /** 轮询等待目标文档成为当前 live Editor（编辑器挂载 + 内容就绪） */
+  function waitForDiffTarget(
+    documentId: string,
+    timeoutMs: number,
+  ): Promise<boolean> {
+    return new Promise((resolve) => {
+      const deadline = Date.now() + timeoutMs;
+      const tick = (): void => {
+        if (sameLiveDiffTarget(documentId)) {
+          resolve(true);
+          return;
+        }
+        if (Date.now() > deadline) {
+          resolve(false);
+          return;
+        }
+        window.setTimeout(tick, 60);
+      };
+      tick();
+    });
+  }
+
+  /**
+   * 「先看 Diff 再定」：整篇改动以 Diff 形式落进目标文档。
+   * 目标不是当前文档时先跳过去；HTML 文档不做 slot Diff，改为提示走直接覆盖。
+   */
+  async function applyDiffProposal(payload: {
+    documentId: string;
+    displayName: string;
+    fileType: string;
+    markdown: string;
+  }): Promise<void> {
+    const documentId = payload.documentId.trim();
+    if (!documentId) return;
+    if (!payload.markdown.trim()) {
+      setAlertMessage("助手给出的正文为空，已忽略这次 Diff");
+      return;
     }
-    return true;
+    if (payload.fileType === FILE_TYPE.HTML) {
+      setAlertMessage("HTML 文档不支持 Diff 审阅，请让助手改用「直接覆盖」");
+      return;
+    }
+    if (payload.fileType === FILE_TYPE.SHEET) {
+      setAlertMessage("表格文档不支持 Diff 审阅");
+      return;
+    }
+    await runDiffOnOpenDocument(documentId, () => {
+      applyAgentDiffWithToast({ op: "overwrite_all", markdown: payload.markdown });
+      return true;
+    });
   }
 
   function applyAgentDiffWithToast(
@@ -542,25 +616,32 @@ export function App() {
     lines: Record<string, string>;
     markdown?: string;
   }): void {
-    if (!guardAgentDiffTarget(payload.documentId)) return;
-    const baseLexicalJson = editorContentRef.current!.content;
-    void (async () => {
+    void runDiffOnOpenDocument(payload.documentId, async (liveDocumentId) => {
+      const base = editorContentRef.current;
+      if (!base) {
+        setAlertMessage("编辑器未就绪，Diff 未写入");
+        return false;
+      }
       try {
         // Dynamic import keeps @lobehub/editor off the first-paint graph.
         const { proposalToMarkdown } = await import("./lexical-lines/proposalToMarkdown");
         const md = proposalToMarkdown(
-          baseLexicalJson,
+          base.content,
           payload.mode,
           payload.lines,
           payload.markdown,
         );
         applyAgentDiffWithToast({ op: "overwrite_all", markdown: md });
+        return true;
       } catch (err) {
         setAlertMessage(
-          err instanceof Error ? err.message : "提案 Markdown 合成失败",
+          err instanceof Error
+            ? `${err.message}（目标文档 ${liveDocumentId}）`
+            : "提案 Markdown 合成失败",
         );
+        return false;
       }
-    })();
+    });
   }
 
   /** 智能助手 slot Diff：直接调 Lobe updateSlot / insertAfter / remove / overwriteAll / batch */
@@ -576,7 +657,10 @@ export function App() {
     markdown?: string;
     ranges?: Array<{ start: number; end: number; markdown: string }>;
   }): void {
-    if (!guardAgentDiffTarget(payload.documentId)) return;
+    if (!payload.documentId) {
+      setAlertMessage("Diff 提案缺少目标文档，已忽略");
+      return;
+    }
     if (payload.op === "batch_update_slots") {
       const ranges = payload.ranges;
       if (!Array.isArray(ranges) || ranges.length === 0) {
@@ -584,53 +668,33 @@ export function App() {
         window.setTimeout(() => setMessage(null), 2000);
         return;
       }
-      const baseSnap = editorContentRef.current;
-      const baseLexicalJson = baseSnap!.content;
-      let baseRootChildren: number | null = null;
-      try {
-        const doc = JSON.parse(baseLexicalJson) as { root?: { children?: unknown[] } };
-        baseRootChildren = Array.isArray(doc?.root?.children)
-          ? doc.root.children.length
-          : null;
-      } catch {
-        baseRootChildren = null;
-      }
-      console.warn("[batch_update_slots] apply base", {
-        requestedDocumentId: payload.documentId,
-        editorContentDocumentId: baseSnap?.documentId,
-        editorContentDisplayName: baseSnap?.displayName,
-        baseRootChildren,
-        ranges,
-        contentIsJson: baseRootChildren != null,
-        contentPreview: baseLexicalJson.slice(0, 160),
-      });
-      void (async () => {
+      void runDiffOnOpenDocument(payload.documentId, (liveDocumentId) => {
+        const baseSnap = editorContentRef.current;
+        if (!baseSnap) {
+          setAlertMessage("编辑器未就绪，Diff 未写入");
+          return false;
+        }
+        const baseLexicalJson = baseSnap.content;
         try {
-          const { batchRangesToProposedMarkdown } = await import(
-            "./lexical-lines/batchSlotRangesApply"
-          );
           const built = batchRangesToProposedMarkdown(baseLexicalJson, ranges);
           if (!built.ok) {
-            console.error("[batch_update_slots] failed", {
-              error: built.error,
-              requestedDocumentId: payload.documentId,
-              editorContentDocumentId: baseSnap?.documentId,
-              baseRootChildren,
-              ranges,
-            });
             setAlertMessage(built.error);
-            return;
+            return false;
           }
           applyAgentDiffWithToast({
             op: "overwrite_all",
             markdown: built.markdown,
           });
+          return true;
         } catch (err) {
           setAlertMessage(
-            err instanceof Error ? err.message : "批量 slot 提案合成失败",
+            err instanceof Error
+              ? `${err.message}（目标文档 ${liveDocumentId}）`
+              : "批量 slot 提案合成失败",
           );
+          return false;
         }
-      })();
+      });
       return;
     }
     if (payload.op === "overwrite_all") {
@@ -639,9 +703,10 @@ export function App() {
         window.setTimeout(() => setMessage(null), 2000);
         return;
       }
-      applyAgentDiffWithToast({
-        op: "overwrite_all",
-        markdown: payload.markdown,
+      const markdown = payload.markdown;
+      void runDiffOnOpenDocument(payload.documentId, () => {
+        applyAgentDiffWithToast({ op: "overwrite_all", markdown });
+        return true;
       });
       return;
     }
@@ -651,7 +716,11 @@ export function App() {
         window.setTimeout(() => setMessage(null), 2000);
         return;
       }
-      applyAgentDiffWithToast({ op: "remove_slot", slot: payload.slot });
+      const slot = payload.slot;
+      void runDiffOnOpenDocument(payload.documentId, () => {
+        applyAgentDiffWithToast({ op: "remove_slot", slot });
+        return true;
+      });
       return;
     }
     if (typeof payload.slot !== "number" || typeof payload.markdown !== "string") {
@@ -659,10 +728,10 @@ export function App() {
       window.setTimeout(() => setMessage(null), 2000);
       return;
     }
-    applyAgentDiffWithToast({
-      op: payload.op,
-      slot: payload.slot,
-      markdown: payload.markdown,
+    const { op, slot, markdown } = payload;
+    void runDiffOnOpenDocument(payload.documentId, () => {
+      applyAgentDiffWithToast({ op, slot, markdown });
+      return true;
     });
   }
 
@@ -839,91 +908,6 @@ export function App() {
     }
   }
 
-  async function openAiWriteForCurrentDoc(): Promise<void> {
-    if (!activeDocMeta || !editorContent) return;
-    if (activeDocMeta.fileType === FILE_TYPE.SHEET) return;
-    await saveBeforeNavRef.current?.();
-    const isHtml = activeDocMeta.fileType === FILE_TYPE.HTML;
-    let markdown = "";
-    if (isHtml) {
-      markdown = htmlToAiWriteSeed(editorContent.content);
-    } else {
-      // 必须用 lobe 官方 markdown 导出；convert lexical→md 只是纯文本近似，会丢掉 MD 结构
-      markdown = exportMarkdownRef.current?.() ?? "";
-      if (!markdown.trim()) {
-        try {
-          const converted = await convertContentApi({
-            content: editorContent.content,
-            from: "lexical",
-            to: "markdown",
-          });
-          markdown = converted.content;
-        } catch {
-          markdown = "";
-        }
-      }
-    }
-    setAiWriteBoot({
-      markdown,
-      documentId: activeDocMeta.documentId,
-      displayName: editorContent.displayName || activeDocMeta.displayName || "未命名",
-      fileType: isHtml ? FILE_TYPE.HTML : FILE_TYPE.DOCUMENT,
-    });
-    setAiWriteOpen(true);
-    setAgentPanelOpen(false);
-  }
-
-  function openAiWriteBlank(): void {
-    setAiWriteBoot({
-      markdown: "",
-      documentId: null,
-      displayName: "未命名",
-      fileType: FILE_TYPE.DOCUMENT,
-    });
-    setAiWriteOpen(true);
-    setAgentPanelOpen(false);
-  }
-
-  /** Ask：用户选「打开帮写审阅」后按 documentId 打开工作台 */
-  async function openAiWriteForDocument(payload: {
-    documentId: string;
-    displayName: string;
-  }): Promise<void> {
-    const documentId = payload.documentId.trim();
-    if (!documentId) return;
-    await saveBeforeNavRef.current?.();
-    let markdown = "";
-    let displayName = payload.displayName.trim() || "未命名";
-    let fileType: string = FILE_TYPE.DOCUMENT;
-    try {
-      const doc = await getDocumentApi(documentId);
-      displayName = doc.displayName?.trim() || displayName;
-      if (doc.fileType === FILE_TYPE.SHEET) return;
-      fileType = doc.fileType === FILE_TYPE.HTML ? FILE_TYPE.HTML : FILE_TYPE.DOCUMENT;
-      if (fileType === FILE_TYPE.HTML) {
-        markdown = htmlToAiWriteSeed(doc.content);
-      } else {
-        try {
-          const converted = await convertContentApi({
-            content: doc.content,
-            from: "lexical",
-            to: "markdown",
-          });
-          markdown = converted.content;
-        } catch {
-          markdown = "";
-        }
-      }
-    } catch {
-      /* 读失败仍打开空稿 */
-    }
-    setAiWriteBoot({ markdown, documentId, displayName, fileType });
-    setAiWriteOpen(true);
-    setAgentPanelOpen(false);
-    setView("docs");
-    void guardNavigate(() => navigate(`/doc/${documentId}`));
-  }
-
   /** AI 覆写文档成功：直接触发拉取更新逻辑 */
   /**
    * 助手已在服务端发布成功：若当前正打开该文，清本地草稿并拉远端（等同「拉取更新」且不被草稿挡住）。
@@ -966,76 +950,6 @@ export function App() {
       setAlertMessage(translateError(t, err));
     }
   }
-
-  async function completeAiWrite(result: {
-    markdown: string;
-    documentId: string | null;
-    displayName: string;
-  }): Promise<{ documentId: string }> {
-    const targetFileType =
-      result.documentId && aiWriteBoot?.documentId === result.documentId
-        ? aiWriteBoot.fileType
-        : activeDocMeta?.documentId === result.documentId
-          ? activeDocMeta.fileType
-          : FILE_TYPE.DOCUMENT;
-    const isHtml = targetFileType === FILE_TYPE.HTML;
-
-    if (result.documentId) {
-      const meta = activeDocMeta?.documentId === result.documentId ? activeDocMeta : null;
-      let draftContent: string;
-      if (isHtml) {
-        draftContent = aiWriteResultToHtml(result.markdown);
-      } else {
-        const converted = await convertContentApi({
-          content: result.markdown,
-          from: "markdown",
-          to: "lexical",
-        });
-        draftContent = converted.content;
-      }
-      await upsertContentDraft({
-        documentId: result.documentId,
-        content: draftContent,
-        displayName: result.displayName,
-        localBaseCommitIdAtEditStart: meta?.headCommitId ?? null,
-        contentKind: isHtml ? "html" : "lexical",
-        snapshotMeta: meta
-          ? {
-              permission: meta.permission,
-              ownerVisitorId: meta.ownerVisitorId,
-              domainId: meta.domainId,
-            }
-          : undefined,
-      });
-      if (activeDocMeta?.documentId === result.documentId) {
-        setEditorContent({
-          documentId: result.documentId,
-          content: draftContent,
-          displayName: result.displayName,
-        });
-        setContentRevision((r) => r + 1);
-        setEditorDraftExists(true);
-      } else {
-        await openDocument(result.documentId);
-      }
-      setMessage("帮写已写入草稿，可在编辑器中继续修改后发布");
-      return { documentId: result.documentId };
-    }
-
-    const created = await createDocumentApi({
-      fileName: fileNameFromTitle(result.displayName),
-      displayName: result.displayName,
-      content: result.markdown,
-      contentFormat: "markdown",
-      domainId: currentDomainId || undefined,
-      parentId: undefined,
-    });
-    await refreshTree();
-    await openDocument(created.documentId);
-    setMessage("已创建文档");
-    return { documentId: created.documentId };
-  }
-
   /**
    * 组件挂载后执行应用启动引导。
    */
@@ -2404,9 +2318,7 @@ export function App() {
                   }}
                   onTreeChanged={() => void refreshTree()}
                   onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
-                  onOpenCoding={
-                    isNarrow ? undefined : (payload) => void openAiWriteForDocument(payload)
-                  }
+                  onDiffProposal={(payload) => void applyDiffProposal(payload)}
                   onProvideEditorDraft={provideEditorDraft}
                   onLexicalLinesSet={handleLexicalLinesSet}
                   onDiffSlotOp={handleDiffSlotOp}
@@ -2594,7 +2506,6 @@ export function App() {
                     onToggleComments={() => setCommentPanelOpen(!commentPanelOpen)}
                     commentPanelOpen={commentPanelOpen && focusedPane === "primary"}
                     commentCount={commentCount}
-                    onAiWrite={isNarrow ? undefined : () => void openAiWriteForCurrentDoc()}
                     readerChrome={isNarrow}
                     onOpenMobileNav={() => setMobileNavOpen(true)}
                     onFocusPane={() => {
@@ -2696,17 +2607,6 @@ export function App() {
                         }}
                         commentPanelOpen={commentPanelOpen && focusedPane === "secondary"}
                         commentCount={commentCount}
-                        onAiWrite={
-                          isNarrow
-                            ? undefined
-                            : () => {
-                                setFocusedPane("secondary");
-                                void openAiWriteForDocument({
-                                  documentId: secondaryMeta.documentId,
-                                  displayName: secondaryContent.displayName,
-                                });
-                              }
-                        }
                         readerChrome={false}
                         onFocusPane={() => {
                           setFocusedPane("secondary");
@@ -2764,12 +2664,7 @@ export function App() {
                     <File size={16} strokeWidth={1.5} />
                     {t("startWriting")}
                   </button>
-                  {!isDemoMode() && !isNarrow ? (
-                    <button type="button" className="secondary" onClick={() => openAiWriteBlank()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <img src={deepseekLogoUrl} alt="" width={16} height={16} style={{ display: "block" }} />
-                      AI 帮写
-                    </button>
-                  ) : null}
+
                 </div>
                 <div className="mdocs-welcome-domain">
                   <label className="muted mdocs-welcome-domain-label">
@@ -3318,9 +3213,7 @@ export function App() {
                 }}
                 onTreeChanged={() => void refreshTree()}
                 onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
-                onOpenCoding={
-                  isNarrow ? undefined : (payload) => void openAiWriteForDocument(payload)
-                }
+                onDiffProposal={(payload) => void applyDiffProposal(payload)}
                 onProvideEditorDraft={provideEditorDraft}
                 onLexicalLinesSet={handleLexicalLinesSet}
                 onDiffSlotOp={handleDiffSlotOp}
@@ -3330,21 +3223,6 @@ export function App() {
         </>
       )}
 
-      {!isDemoMode() && aiWriteBoot ? (
-        <Suspense fallback={null}>
-          <AiWriteWorkbench
-            open={aiWriteOpen}
-            initialMarkdown={aiWriteBoot.markdown}
-            documentId={aiWriteBoot.documentId}
-            displayName={aiWriteBoot.displayName}
-            onClose={() => {
-              setAiWriteOpen(false);
-              setAiWriteBoot(null);
-            }}
-            onComplete={completeAiWrite}
-          />
-        </Suspense>
-      ) : null}
 
       <DocSearchOverlay
         open={docSearchOpen}

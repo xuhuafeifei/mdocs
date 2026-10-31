@@ -67,7 +67,6 @@ interface HtmlEditorProps {
   onToggleComments?: () => void;
   commentPanelOpen?: boolean;
   commentCount?: number;
-  onAiWrite?: () => void;
   onShowToast?: (message: string) => void;
   onVersionRestored?: (doc: DocumentDetail) => void;
   readerChrome?: boolean;
@@ -522,7 +521,6 @@ export function HtmlEditor(props: HtmlEditorProps) {
           canEdit={props.canEdit}
           editing={editing}
           // 分段控制器已提供编辑/预览切换，不传 onEnterEdit 避免顶栏右侧出现重复的编辑按钮
-          onAiWrite={props.onAiWrite}
           syncBehind={props.syncBehind}
           onSyncClick={props.onSyncClick}
           busy={busy}

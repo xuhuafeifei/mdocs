@@ -1,7 +1,7 @@
 /**
  * DocChrome — 文档顶栏（桌面 + 窄屏 reader），与正文编辑器无关。
  *
- * 帮写 / 评论显隐读 file-type-policy（aiWrite / comments）。
+ * 评论显隐读 file-type-policy（comments）。
  */
 import {
   useEffect,
@@ -17,7 +17,6 @@ import { createPortal } from "react-dom";
 import { ChevronUp, EllipsisVertical, MessageSquare, PanelLeftOpen, RefreshCw, Star, TextAlignJustify } from "lucide-react";
 import { useI18n } from "../i18n";
 import { localizeDomainName } from "./utils";
-import deepseekLogoUrl from "../assets/deepseek.svg";
 import { DomainSelect } from "./DomainSelect";
 import { FALLBACK_DOMAIN_SUMMARY } from "../services/domainsBootstrap";
 import type { DomainSummary } from "../../shared/types/domain";
@@ -158,7 +157,6 @@ export interface DocChromeProps {
    * md 保持「先进入编辑才出现发布/删除」。
    */
   actionsAlwaysVisible?: boolean;
-  onAiWrite?: () => void;
   syncBehind?: boolean;
   onSyncClick?: () => void;
   busy?: boolean;
@@ -200,7 +198,6 @@ export interface DocChromeProps {
 export function DocChrome(props: DocChromeProps) {
   const { t, lang } = useI18n();
   const policy = getPolicy((props.fileType || "md") as FileType);
-  const showAiWrite = Boolean(policy?.aiWrite && props.onAiWrite);
   const showComments = Boolean(policy?.comments && props.onToggleComments);
   const showDocActions =
     props.canEdit && (props.editing || Boolean(props.actionsAlwaysVisible));
@@ -425,23 +422,6 @@ export function DocChrome(props: DocChromeProps) {
             ariaLabel={t("currentDomainAria")}
             localizeName={(name: string) => localizeDomainName(name, lang, t)}
           />
-          {showAiWrite ? (
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => props.onAiWrite?.()}
-              style={{
-                padding: "4px 10px",
-                whiteSpace: "nowrap",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <img src={deepseekLogoUrl} alt="" width={16} height={16} style={{ display: "block" }} />
-              帮写
-            </button>
-          ) : null}
           {props.leadingExtra}
         </div>
         <span className="mdocs-editor-toolbar-spacer" aria-hidden />

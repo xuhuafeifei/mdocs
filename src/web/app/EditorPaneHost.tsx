@@ -61,7 +61,6 @@ export function EditorPaneHost(props: {
   onToggleComments?: () => void;
   commentPanelOpen?: boolean;
   commentCount?: number;
-  onAiWrite?: () => void;
   readerChrome?: boolean;
   onOpenMobileNav?: () => void;
   onFocusPane?: () => void;
@@ -147,7 +146,6 @@ export function EditorPaneHost(props: {
         onToggleComments={props.onToggleComments}
         commentPanelOpen={props.commentPanelOpen}
         commentCount={props.commentCount}
-        onAiWrite={props.onAiWrite}
         onShowToast={props.onShowToast}
         onVersionRestored={props.onVersionRestored}
         readerChrome={props.readerChrome}
@@ -191,7 +189,6 @@ export function EditorPaneHost(props: {
         onToggleComments={toggleComments}
         commentPanelOpen={Boolean(props.commentPanelOpen)}
         commentCount={props.commentCount ?? 0}
-        onAiWrite={props.onAiWrite}
         readerChrome={props.readerChrome}
         onOpenMobileNav={props.onOpenMobileNav}
         recentTabsProps={props.recentTabsProps}

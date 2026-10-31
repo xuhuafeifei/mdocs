@@ -246,8 +246,6 @@ interface DocumentEditorProps {
   /** 域下拉刷新后回写 App 的 domains 状态 */
   onDomainsChange?: (domains: DomainSummary[]) => void;
   onPublish: (content: string, displayName: string, documentId: string, permission?: number) => Promise<void>;
-  /** 打开帮写全屏层 */
-  onAiWrite?: () => void;
   syncBehind?: boolean;
   onSyncClick?: () => void;
   onDraftExistsChange?: (exists: boolean) => void;
@@ -1367,7 +1365,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
         canEdit={props.canEdit}
         editing={editing}
         onEnterEdit={() => setIsEditing(true)}
-        onAiWrite={props.onAiWrite}
         syncBehind={props.syncBehind}
         onSyncClick={props.onSyncClick}
         busy={busy}
