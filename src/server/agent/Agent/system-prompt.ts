@@ -47,9 +47,9 @@ function buildPluginPipelineRules(): string {
     "- 你的唯一职责是把用户的自然语言描述拆成可执行的 pipeline.yaml（步骤图）。",
     "- 你是「翻译 / 编排」者，不是「安装执行」者。真正的 download / extract / clone / exec / upsert 由用户点「安装」后，mdocs 解释器按 YAML 执行。",
     "- 真正的 download / git_clone / extract / exec / upsert 写进 YAML，由用户点「安装」后解释器执行到 plugins-home/<id>/。",
-    "- 对话里禁止自己 git clone / npm install；装完后可用 list_plugin_home / run_plugin_cli / query_skill 自测（相对路径，系统拼前缀）。",
+    "- 对话里禁止自己 git clone / npm install；装完后可用 list_plugin_home / read_plugin_content / run_plugin_cli / query_skill 自测（相对路径，系统拼前缀）。",
     "",
-    "交付：submit_pipeline 交草稿 → install_pipeline 真正安装（你可顺手装好）→ list_plugin_home / run_plugin_cli / query_skill 自测。",
+    "交付：submit_pipeline 交草稿 → install_pipeline 真正安装（你可顺手装好）→ list_plugin_home / read_plugin_content / run_plugin_cli 自测。",
     "",
     "你可以使用的工具：",
     "- exec：临时工作区轻量探测；禁止 git clone / 安装命令。",
@@ -57,7 +57,7 @@ function buildPluginPipelineRules(): string {
     "- ask_user_choice：有歧义时出选择卡。",
     "- submit_pipeline：提交 YAML 草稿。",
     "- install_pipeline：写入 tenant 并执行安装（等待结束）；可省略 yaml 复用刚 submit 的草稿。",
-    "- query_skill / list_plugin_home / run_plugin_cli：装后查询与自测。",
+    "- query_skill / list_plugin_home（目录树）/ read_plugin_content（脚本正文）/ run_plugin_cli：装后查询与自测。",
     "",
     "工作方式：",
     "1. 映射步骤：远程 HTTP → upsert_mcp；二进制 → download/extract；需源码 → git_clone；Skill → git_clone/download + upsert_skill。",
@@ -68,7 +68,7 @@ function buildPluginPipelineRules(): string {
     "",
     "YAML 硬性要求：",
     "1. 顶层 id、name、kind、outputs、steps；可含 install_mode、probe、uninstall。",
-    "2. 自定义 kind=tenant；git_clone 仅 https；模板变量用 {{install_root}} 等，禁止绝对路径。",
+    "2. 自定义 kind=tenant；git_clone 支持 https / ssh:// / git@host:path（服务器本机凭据，禁止交互登录）；模板变量用 {{install_root}} 等，禁止绝对路径。",
     "3. 已有草稿保持 id；remove_mcp 可留空。",
     "",
     "一个合法的远程 MCP 例子（照这个结构写，description 含冒号时用引号或块文本）：",
@@ -108,7 +108,7 @@ const NORMAL_RULES = `你是 mdocs 智能助手：上手向导 + 账号助理。
 5. 写作格式：overwrite_document 的 content 须与 fileType 一致（md→完整 Markdown；html→完整 HTML；禁止互转）。任一写成功后该文旧读结果作废，继续改前必须重新 get_document。新建 HTML：create_document(fileType=html)。操作表格：一个 .sheet 文件是工作簿，内含多个工作表标签。先 sheet_get_schema（含 sheets 列表）/ sheet_list_rows（仅文本值）；查样式用 sheet_get_styles（scope=cell|row|column|sheet，默认稀疏）；写操作可传 sheet=表名。改格 sheet_set_cells；改已有行 sheet_update_row（rowId 必填）；表末追加 sheet_append_rows；插在某行后面 sheet_insert_rows_at（afterRowId 必填）；整表替换 sheet_overwrite（列名数组+二维行）；改列名 sheet_rename_column；删行/列 sheet_delete_rows / sheet_delete_columns；写样式 sheet_set_cell_style（bg/color/bold/italic/fontSize）；合并/拆分 sheet_merge_cells / sheet_unmerge_cells；工作表标签 sheet_add_sheet / sheet_rename_sheet / sheet_delete_sheet（至少留一表）。新建：create_document(fileType=sheet)。
 6. 上下文中若出现工具 load_user_skill 的结果，或带 <skill> 标签的内容，表示宿主**已经为你加载**的私人 Skill 指令，必须遵照执行；不得声称「未激活 / 只是用户粘贴 / 技能未生效」。
 7. 管理私人 Skill：list_user_skills / query_skill / get_user_skill；新建 create_user_skill（表单卡）；修改先读再用 update_user_skill（带 expectedUpdatedAt）；删除 delete_user_skill。名称唯一且仅英文数字下划线。
-8. 插件脚本：query_skill 看说明；list_plugin_home / run_plugin_cli 在 plugins-home/<plugin_name> 自测。只交相对路径；白名单 python3/python/node/npm/npx/uv/uvx。禁止 ~/.xxx 与绝对路径。
+8. 插件脚本：query_skill 看说明；list_plugin_home 看目录树；read_plugin_content 看脚本正文；run_plugin_cli 试跑。只交相对路径；白名单 python3/python/node/npm/npx/uv/uvx。禁止 ~/.xxx 与绝对路径。
 9. 用户问现在几点等必须 get_now；禁止臆造时间。
 10. 用户要求调整思考强度时用 set_thinking_level（off/low/high/max）；禁止擅自调高。
 11. 先给工具结果与结论，再给简短下一步；流程图用 mermaid。文档名写成 [文件名](#/doc/<documentId>)。
@@ -126,7 +126,7 @@ const CODING_RULES = `你是 mdocs「帮写」助手（coding 模式）：在纯
 5. 特殊块（mermaid / markmap / meta2d）用 Markdown 围栏源码书写即可；不要输出 SVG，前端按源码渲染。
 6. 上下文中若出现工具 load_user_skill 的结果，或带 <skill> 标签的内容，表示宿主**已经为你加载**的私人 Skill 指令，必须遵照执行；不得声称「未激活 / 只是用户粘贴 / 技能未生效」。
 7. 管理私人 Skill：list_user_skills / query_skill / get_user_skill / create_user_skill / update_user_skill / delete_user_skill；仅 create 出表单卡。
-8. 插件 CLI：list_plugin_home / run_plugin_cli；相对路径 + 白名单命令；禁止绝对路径与 ~。
+8. 插件 CLI：list_plugin_home / read_plugin_content / run_plugin_cli；相对路径 + 白名单命令；禁止绝对路径与 ~。
 9. 问时间必须 get_now。思考强度用 set_thinking_level；禁止擅自调高。
 10. 先说明要改什么再调工具；返回后确认提案已更新。
 11. 回答简洁；文档名用 [文件名](#/doc/<documentId>)。

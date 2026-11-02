@@ -7,6 +7,7 @@ import {
   assertPluginCliArgs,
   listPluginHomeFiles,
   normalizePluginCliCommand,
+  readPluginContentFile,
   resolvePluginCliCwd,
   runPluginCli,
 } from "./plugin-cli.js";
@@ -65,11 +66,24 @@ describe("plugin-cli", () => {
     expect(result.stdout).toContain("ok");
   });
 
-  it("lists plugin home files", () => {
+  it("lists plugin home files with tree", () => {
     const home = pluginHomeDir("pack");
     fs.mkdirSync(path.join(home, "scripts"), { recursive: true });
-    fs.writeFileSync(path.join(home, "scripts", "a.py"), "x");
+    fs.writeFileSync(path.join(home, "scripts", "a.py"), "print(1)\n");
     const listed = listPluginHomeFiles("pack");
+    expect(listed.exists).toBe(true);
     expect(listed.entries.some((e) => e.includes("a.py"))).toBe(true);
+    expect(listed.tree).toContain("scripts/");
+    expect(listed.tree).toContain("a.py");
+  });
+
+  it("reads plugin home text file", () => {
+    const home = pluginHomeDir("pack");
+    fs.mkdirSync(path.join(home, "scripts"), { recursive: true });
+    fs.writeFileSync(path.join(home, "scripts", "a.py"), "print(1)\n");
+    const file = readPluginContentFile("pack", "scripts/a.py");
+    expect(file.content).toContain("print(1)");
+    expect(file.truncated).toBe(false);
+    expect(() => readPluginContentFile("pack", "../x")).toThrow();
   });
 });

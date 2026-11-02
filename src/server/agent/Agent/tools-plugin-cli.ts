@@ -6,6 +6,7 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import {
   listPluginHomeFiles,
   PLUGIN_CLI_COMMANDS,
+  readPluginContentFile,
   runPluginCli,
 } from "../../plugins/plugin-cli.js";
 import { pluginHomeDir } from "../../plugins/plugin-paths.js";
@@ -48,7 +49,7 @@ export function listPluginHomeTool(_deps: ToolDeps): AgentTool {
     name: "list_plugin_home",
     label: "列出插件安装目录",
     description:
-      "列出 plugins-home/<plugin_name>/ 下文件（相对路径）。装完或 clone 后可用此工具确认脚本是否在，再 run_plugin_cli 试跑。",
+      "列出 plugins-home/<plugin_name>/ 目录树（entries + tree）。只看结构不看正文；读脚本/说明用 read_plugin_content，再 run_plugin_cli 试跑。",
     parameters: Type.Object({
       plugin_name: Type.String({
         description: "插件名（与流水线 id / plugins-home 目录名一致）",
@@ -69,8 +70,54 @@ export function listPluginHomeTool(_deps: ToolDeps): AgentTool {
           ok: true,
           plugin_name: pluginName,
           home: listed.root,
-          exists: listed.entries.length > 0 || listed.root.length > 0,
+          exists: listed.exists,
           entries: listed.entries,
+          tree: listed.tree,
+          hint: listed.exists
+            ? "看正文请用 read_plugin_content(path=相对路径)"
+            : "目录不存在：先 install_pipeline / git_clone",
+        });
+      } catch (err) {
+        return asToolResult({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+  };
+}
+
+export function readPluginContentTool(_deps: ToolDeps): AgentTool {
+  return {
+    name: "read_plugin_content",
+    label: "读取插件文本",
+    description:
+      "直接读取插件安装目录里某个文本文件的内容（scripts/*.py、SKILL.md、README 等）。path 为相对 plugins-home/<plugin_name>/ 的路径；先 list_plugin_home 找文件名。二进制拒绝。",
+    parameters: Type.Object({
+      plugin_name: Type.String({ description: "插件名" }),
+      path: Type.String({
+        description: "相对路径，如 scripts/ddwiki.py 或 README.md",
+      }),
+    }),
+    execute: async (_id, params) => {
+      const p = params as { plugin_name?: string; path?: string };
+      const pluginName = String(p.plugin_name ?? "").trim();
+      const rel = String(p.path ?? "").trim();
+      if (!pluginName) {
+        return asToolResult({ ok: false, error: "plugin_name required" });
+      }
+      if (!rel) {
+        return asToolResult({ ok: false, error: "path required" });
+      }
+      try {
+        const file = readPluginContentFile(pluginName, rel);
+        return asToolResult({
+          ok: true,
+          plugin_name: pluginName,
+          path: file.path,
+          bytes: file.bytes,
+          truncated: file.truncated,
+          content: file.content,
         });
       } catch (err) {
         return asToolResult({
@@ -160,5 +207,10 @@ export function runPluginCliTool(deps: ToolDeps): AgentTool {
 }
 
 export function pluginCliTools(deps: ToolDeps): AgentTool[] {
-  return [querySkillTool(deps), listPluginHomeTool(deps), runPluginCliTool(deps)];
+  return [
+    querySkillTool(deps),
+    listPluginHomeTool(deps),
+    readPluginContentTool(deps),
+    runPluginCliTool(deps),
+  ];
 }

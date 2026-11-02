@@ -56,6 +56,7 @@ const USER_SKILL_NAMES = [
 const PLUGIN_CLI_NAMES = [
   "query_skill",
   "list_plugin_home",
+  "read_plugin_content",
   "run_plugin_cli",
 ] as const;
 
@@ -172,6 +173,7 @@ describe("createToolsForMode", () => {
     expect(names).toContain("query_skill");
     expect(names).toContain("run_plugin_cli");
     expect(names).toContain("list_plugin_home");
+    expect(names).toContain("read_plugin_content");
     expect(names).toContain("submit_pipeline");
     expect(names).toContain("install_pipeline");
   });

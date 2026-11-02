@@ -189,27 +189,44 @@ export function runPluginCli(input: RunPluginCliInput): Promise<RunPluginCliResu
   });
 }
 
-/** 列出 plugins-home/<name> 下相对路径（浅层，供 Agent 自测）。 */
+function formatPluginHomeTree(entries: string[]): string {
+  if (entries.length === 0) return "(空)";
+  return entries
+    .map((e) => {
+      const isDir = e.endsWith("/");
+      const parts = (isDir ? e.slice(0, -1) : e).split("/").filter(Boolean);
+      const depth = Math.max(0, parts.length - 1);
+      const name = (parts[parts.length - 1] ?? e) + (isDir ? "/" : "");
+      return `${"  ".repeat(depth)}${name}`;
+    })
+    .join("\n");
+}
+
+/** 列出 plugins-home/<name> 下相对路径 + 缩进树（浅层，供 Agent / UI）。 */
 export function listPluginHomeFiles(
   pluginName: string,
   relDir = ".",
-  maxEntries = 80,
-): { root: string; entries: string[] } {
-  const root = pluginHomeDir(pluginName);
+  maxEntries = 120,
+): { root: string; exists: boolean; entries: string[]; tree: string } {
+  const root = pluginHomeDir(normalizePluginName(pluginName));
   const rel = assertRelativeSegment(relDir, "path");
   const dir = rel ? path.join(root, rel) : root;
   if (!fs.existsSync(dir)) {
-    return { root, entries: [] };
+    return { root, exists: false, entries: [], tree: "(目录不存在)" };
   }
   const entries: string[] = [];
   const walk = (base: string, prefix: string, depth: number) => {
-    if (entries.length >= maxEntries || depth > 3) return;
+    if (entries.length >= maxEntries || depth > 4) return;
     let list: fs.Dirent[];
     try {
       list = fs.readdirSync(base, { withFileTypes: true });
     } catch {
       return;
     }
+    list.sort((a, b) => {
+      if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
     for (const ent of list) {
       if (entries.length >= maxEntries) break;
       if (ent.name === ".git" || ent.name === "node_modules") continue;
@@ -223,5 +240,48 @@ export function listPluginHomeFiles(
     }
   };
   walk(dir, rel || "", 0);
-  return { root, entries };
+  return {
+    root,
+    exists: true,
+    entries,
+    tree: formatPluginHomeTree(entries),
+  };
+}
+
+const READ_PLUGIN_HOME_MAX = 64_000;
+
+/** 读插件安装目录下文本文件正文（相对 plugins-home/<name>/）；过大截断。 */
+export function readPluginContentFile(
+  pluginName: string,
+  relPath: string,
+  maxBytes = READ_PLUGIN_HOME_MAX,
+): {
+  path: string;
+  content: string;
+  truncated: boolean;
+  bytes: number;
+} {
+  const root = path.resolve(pluginHomeDir(normalizePluginName(pluginName)));
+  const rel = assertRelativeSegment(relPath, "path");
+  if (!rel) throw new Error("path 必填（相对 plugins-home 的文件路径）");
+  const resolved = path.resolve(path.join(root, rel));
+  const rootPrefix = root.endsWith(path.sep) ? root : root + path.sep;
+  if (resolved !== root && !resolved.startsWith(rootPrefix)) {
+    throw new Error("path 越界");
+  }
+  if (!fs.existsSync(resolved)) throw new Error(`文件不存在：${rel}`);
+  const st = fs.statSync(resolved);
+  if (!st.isFile()) throw new Error(`不是文件：${rel}`);
+  const buf = fs.readFileSync(resolved);
+  if (buf.includes(0)) {
+    throw new Error(`疑似二进制，拒绝读取：${rel}`);
+  }
+  const truncated = buf.length > maxBytes;
+  const slice = truncated ? buf.subarray(0, maxBytes) : buf;
+  return {
+    path: rel.replace(/\\/g, "/"),
+    content: slice.toString("utf8"),
+    truncated,
+    bytes: buf.length,
+  };
 }

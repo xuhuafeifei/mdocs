@@ -49,6 +49,17 @@ const TOOL_LABELS: Record<string, string> = {
   sheet_set_cell_style: "设置单元格样式",
   sheet_merge_cells: "合并单元格",
   sheet_unmerge_cells: "取消合并",
+  exec: "探测执行命令",
+  download: "临时下载",
+  fetch_page: "抓取说明页",
+  list_dir: "列临时目录",
+  read_file: "读临时文件",
+  submit_pipeline: "提交流水线草稿",
+  install_pipeline: "安装流水线",
+  run_plugin_cli: "运行插件 CLI",
+  list_plugin_home: "列出插件目录",
+  read_plugin_content: "读取插件文本",
+  query_skill: "查询私人 Skill",
 };
 
 /** 会写入实质内容、卡片里要给可滚动预览的工具 */
@@ -345,7 +356,86 @@ export function toolCallDetailFromArgs(
     return name ? clip(name) : undefined;
   }
 
+  if (toolName === "run_plugin_cli") {
+    return formatCliInvocationDetail(a, "运行中");
+  }
+  if (toolName === "exec") {
+    return formatCliInvocationDetail(a, "探测中");
+  }
+  if (toolName === "list_plugin_home") {
+    const name = String(a.plugin_name ?? "").trim();
+    const sub = String(a.path ?? "").trim();
+    if (!name) return "列出插件目录…";
+    return sub ? `列出 ${name}/${sub}` : `列出 ${name}/`;
+  }
+  if (toolName === "read_plugin_content") {
+    const name = String(a.plugin_name ?? "").trim();
+    const file = String(a.path ?? "").trim();
+    if (name && file) return `读取文本 ${name}/${file}`;
+    return file ? `读取文本 ${file}` : "读取插件文本…";
+  }
+  if (toolName === "install_pipeline") {
+    const id = String(a.id ?? a.plugin_id ?? "").trim();
+    return id ? `安装 ${id}…` : "安装流水线…";
+  }
+  if (toolName === "download" || toolName === "fetch_page") {
+    return clip(String(a.url ?? "").trim()) || undefined;
+  }
+
   return undefined;
+}
+
+function formatCliInvocationDetail(
+  a: Record<string, unknown>,
+  phase: string,
+): string {
+  const plugin = String(a.plugin_name ?? "").trim();
+  const cmd = String(a.command ?? "").trim();
+  const args = Array.isArray(a.args)
+    ? a.args.map((x) => String(x)).filter(Boolean)
+    : [];
+  const cwd = String(a.cwd ?? "").trim();
+  const cwdRoot = String(a.cwd_root ?? "").trim();
+  const line = [cmd, ...args].filter(Boolean).join(" ");
+  const parts = [
+    phase,
+    plugin ? `插件 ${plugin}` : "",
+    line ? `$ ${clip(line, 120)}` : "",
+    cwd ? `cwd=${cwdRoot === "data" ? "data/" : ""}${cwd}` : "",
+  ].filter(Boolean);
+  return parts.join(" · ") || phase;
+}
+
+function formatCliResultDetail(
+  details: Record<string, unknown>,
+  fallback?: string,
+): string {
+  const ok = details.ok !== false && details.exitCode !== undefined
+    ? Number(details.exitCode) === 0
+    : details.ok !== false;
+  const code =
+    typeof details.exitCode === "number" ? details.exitCode : null;
+  const cmd = String(details.command ?? "").trim();
+  const args = Array.isArray(details.args)
+    ? details.args.map((x) => String(x)).filter(Boolean)
+    : [];
+  const cwd = String(details.cwd ?? "").trim();
+  const stdout = String(details.stdout ?? "").trim();
+  const stderr = String(details.stderr ?? "").trim();
+  const line = [cmd, ...args].filter(Boolean).join(" ");
+  const meta = [
+    ok ? "完成" : "失败",
+    code != null ? `exit ${code}` : "",
+    line ? `$ ${clip(line, 100)}` : "",
+    cwd ? clip(cwd, 64) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const body = [stdout && `── stdout ──\n${stdout}`, stderr && `── stderr ──\n${stderr}`]
+    .filter(Boolean)
+    .join("\n\n");
+  if (body) return formatWriteToolDetail(meta || "已执行", body, "head");
+  return meta || fallback || (ok ? "已执行" : "执行失败");
 }
 
 function previewFromFallback(fallback?: string): string {
@@ -492,6 +582,54 @@ export function toolCallDetailFromResult(
     const status = String(details.status ?? "");
     const name = String(details.displayName ?? "").trim() || "表格";
     if (status === "updated") return `已更新「${name}」`;
+  }
+
+  if (toolName === "run_plugin_cli" || toolName === "exec") {
+    return formatCliResultDetail(details, fallback);
+  }
+
+  if (toolName === "list_plugin_home") {
+    const name = String(details.plugin_name ?? "").trim();
+    const tree = String(details.tree ?? "").trim();
+    const entries = Array.isArray(details.entries) ? details.entries : [];
+    const body =
+      tree ||
+      entries
+        .slice(0, 80)
+        .map((e) => (typeof e === "string" ? e : String(e)))
+        .join("\n");
+    const meta = name
+      ? `插件目录 ${name} · ${entries.length} 项`
+      : `插件目录 · ${entries.length} 项`;
+    return formatWriteToolDetail(meta, body, "head");
+  }
+
+  if (toolName === "read_plugin_content") {
+    const pathLabel = String(details.path ?? "").trim() || "文件";
+    const content = String(details.content ?? "");
+    const truncated = details.truncated === true;
+    const bytes =
+      typeof details.bytes === "number" ? details.bytes : content.length;
+    const meta = [
+      `已读 ${pathLabel}`,
+      `${bytes} bytes`,
+      truncated ? "已截断" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return formatWriteToolDetail(meta, content, "head");
+  }
+
+  if (toolName === "install_pipeline") {
+    const id = String(details.id ?? details.plugin_id ?? "").trim();
+    const status = String(details.status ?? details.jobStatus ?? "").trim();
+    if (details.ok === false || details.error) {
+      return (
+        String(details.error ?? details.message ?? "安装失败").trim() ||
+        fallback
+      );
+    }
+    return [status || "已触发安装", id ? id : ""].filter(Boolean).join(" · ");
   }
 
   return fallback;

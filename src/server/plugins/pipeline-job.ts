@@ -218,11 +218,8 @@ export function startPipelineJob(params: {
             return;
           }
           if (event.type === "error") {
-            appendLog(job, {
-              ts: now,
-              level: "error",
-              line: event.error,
-            });
+            // 最终文案只落 job.error（catch）；避免 logs + job.error 同句双显
+            return;
           }
         },
       });

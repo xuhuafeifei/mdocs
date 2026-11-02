@@ -195,7 +195,7 @@ export const PIPELINE_STEP_DEFINITIONS: PipelineStepDefinition[] = [
     type: "git_clone",
     label: "Git 克隆",
     description:
-      "把仓库 clone 到 plugins-home/<plugin-name>/（相对 install_root）。Agent/YAML 只写相对 dest，不要写绝对路径。",
+      "clone 到 plugins-home/<plugin-name>/。用服务器本机凭据；禁止 tty 交互。https 可带 token；SSH（git@ / ssh://）用跑 mdocs 用户的 ~/.ssh。",
     category: "install",
     group: "下载与安装",
     fields: [
@@ -204,7 +204,8 @@ export const PIPELINE_STEP_DEFINITIONS: PipelineStepDefinition[] = [
         label: "仓库 URL",
         type: "text",
         required: true,
-        description: "仅 https://",
+        description:
+          "https://… 或 git@host:group/repo.git / ssh://…；凭据=服务器，不要指望网页登录",
       },
       {
         name: "dest",

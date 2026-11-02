@@ -267,9 +267,10 @@ export function AiInstallBench(props: Props) {
                 </pre>
               ) : null}
               {installNotice ? <p className="pl-notice">{installNotice}</p> : null}
-              {error ? <p className="pl-error">{error}</p> : null}
-              {job?.status === "error" ? (
-                <p className="pl-error">{job.error || t("plRunnerFailed")}</p>
+              {error || job?.error ? (
+                <p className="pl-error">
+                  {error || job?.error || t("plRunnerFailed")}
+                </p>
               ) : null}
               <div className="pl-ai-right-actions">
                 <button

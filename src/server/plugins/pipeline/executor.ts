@@ -184,6 +184,49 @@ function chmodExec(p: string): void {
   }
 }
 
+function killProcessTree(child: ReturnType<typeof spawn>): void {
+  if (!child.pid) return;
+  if (process.platform !== "win32") {
+    try {
+      process.kill(-child.pid, "SIGKILL");
+      return;
+    } catch {
+      /* 非进程组组长时退回单进程 */
+    }
+  }
+  try {
+    child.kill("SIGKILL");
+  } catch {
+    /* ignore */
+  }
+}
+
+/** https / ssh:// / git@host:path；装插件用服务器本机凭据（含 ~/.ssh）。 */
+export function isAllowedGitCloneUrl(url: string): boolean {
+  const u = url.trim();
+  if (/^https:\/\//i.test(u)) return true;
+  if (/^ssh:\/\/[^/\s]+\/\S+/i.test(u)) return true;
+  if (/^git@[^:\s]+:\S+$/i.test(u)) return true;
+  return false;
+}
+
+/** 禁止 git/ssh 走 tty 要密码或 host 确认；仍继承 process.env（含已有 GIT_SSH_COMMAND / 钥匙）。 */
+function gitNonInteractiveEnv(
+  base: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const sshBase = (base.GIT_SSH_COMMAND ?? "").trim() || "ssh";
+  return {
+    ...base,
+    GIT_TERMINAL_PROMPT: "0",
+    GCM_INTERACTIVE: "never",
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: "credential.helper",
+    GIT_CONFIG_VALUE_0: "",
+    // BatchMode：无 key 立刻失败；accept-new：首次入库 known_hosts，避免卡在 yes/no
+    GIT_SSH_COMMAND: `${sshBase} -o BatchMode=yes -o StrictHostKeyChecking=accept-new`,
+  };
+}
+
 function runProcess(params: {
   command: string;
   args: string[];
@@ -201,9 +244,12 @@ function runProcess(params: {
       cwd: params.cwd,
       env: params.env ?? process.env,
       shell: false,
+      // 新进程组，超时可 SIGKILL 整棵树（含 git-remote-https）
+      detached: process.platform !== "win32",
     });
     let stdout = "";
     let stderr = "";
+    let settled = false;
     const emitLine = (line: string, level: "info" | "warn") => {
       const text = line.trim();
       if (!text) return;
@@ -233,20 +279,33 @@ function runProcess(params: {
       stderr = (stderr + chunk.toString("utf8")).slice(-20_000);
       errReader(chunk);
     });
+    const finishReject = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      killProcessTree(child);
+      reject(err);
+    };
     const timer = setTimeout(() => {
-      child.kill();
-      reject(new Error(`命令超时：${params.command} ${params.args.join(" ")}`));
+      finishReject(
+        new Error(`命令超时：${params.command} ${params.args.join(" ")}`),
+      );
     }, params.timeoutMs);
-    const onAbort = () => child.kill();
+    const onAbort = () => {
+      finishReject(new Error("已取消"));
+    };
     params.signal?.addEventListener("abort", onAbort, { once: true });
     child.on("error", (err) => {
       clearTimeout(timer);
       params.signal?.removeEventListener("abort", onAbort);
+      if (settled) return;
+      settled = true;
       reject(err);
     });
     child.on("close", (code) => {
       clearTimeout(timer);
       params.signal?.removeEventListener("abort", onAbort);
+      if (settled) return;
+      settled = true;
       if (code === 0) {
         resolve({ stdout, stderr });
         return;
@@ -266,6 +325,7 @@ async function downloadFile(
   destAbs: string,
   stepIndex: number,
   expectedSha?: string,
+  timeoutMs = 300_000,
 ): Promise<void> {
   ensureDir(path.dirname(destAbs));
   let lastError: Error | null = null;
@@ -278,9 +338,11 @@ async function downloadFile(
       stepIndex,
     });
     try {
+      // 同一 deadline 覆盖响应头 + 正文，避免连上后 body 卡住永不结束
+      const signal = AbortSignal.timeout(timeoutMs);
       const res = await fetch(url, {
         redirect: "follow",
-        signal: AbortSignal.timeout(300_000),
+        signal,
       });
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
       const tmp = `${destAbs}.part`;
@@ -288,6 +350,7 @@ async function downloadFile(
       await streamPipeline(
         Readable.fromWeb(res.body as import("node:stream/web").ReadableStream),
         createWriteStream(tmp),
+        { signal },
       );
       const size = fs.statSync(tmp).size;
       if (size < 16) {
@@ -563,8 +626,10 @@ async function runStep(
     case "git_clone": {
       const url = render(step.url, ctx.vars).trim();
       if (!url) throw new Error("git_clone.url 为空");
-      if (!/^https:\/\//i.test(url)) {
-        throw new Error("git_clone 仅支持 https:// 仓库地址");
+      if (!isAllowedGitCloneUrl(url)) {
+        throw new Error(
+          "git_clone 仅支持 https://、ssh:// 或 git@host:path（用服务器本机凭据；禁止交互登录）",
+        );
       }
       const destRel = (render(step.dest ?? ".", ctx.vars).trim() || ".").replace(
         /\\/g,
@@ -574,7 +639,8 @@ async function runStep(
         throw new Error("git_clone.dest 必须是相对 install_root 的路径");
       }
       within(ctx.installRoot, destRel === "." ? "." : destRel);
-      const args = ["clone"];
+      // -c credential.helper=：https 不走钥匙串弹窗；SSH 靠 GIT_SSH_COMMAND BatchMode
+      const args = ["-c", "credential.helper=", "clone"];
       const depth = Number(step.depth);
       if (Number.isFinite(depth) && depth > 0) {
         args.push("--depth", String(Math.floor(depth)));
@@ -583,16 +649,30 @@ async function runStep(
       if (branch) args.push("--branch", branch);
       args.push(url, destRel);
       log(`$ git ${args.join(" ")}`);
-      await runProcess({
-        command: "git",
-        args,
-        cwd: ctx.installRoot,
-        env: process.env,
-        timeoutMs: 300_000,
-        stepIndex: index,
-        emit,
-        signal,
-      });
+      try {
+        await runProcess({
+          command: "git",
+          args,
+          cwd: ctx.installRoot,
+          env: gitNonInteractiveEnv(process.env),
+          timeoutMs: 300_000,
+          stepIndex: index,
+          emit,
+          signal,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (
+          /authentication|authorized|could not read username|terminal prompts disabled|Permission denied \(publickey\)|401|403/i.test(
+            msg,
+          )
+        ) {
+          throw new Error(
+            `${msg.slice(0, 800)}（git_clone 禁止交互登录；https 私仓用 token URL；SSH 用跑 mdocs 用户的 ~/.ssh，需已能非交互 git clone）`,
+          );
+        }
+        throw err;
+      }
       return;
     }
     case "exec": {

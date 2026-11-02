@@ -126,6 +126,22 @@ describe("toolCallDetailFromArgs", () => {
       toolCallDetailFromArgs("search_documents", { query: "权限模型" }),
     ).toBe("权限模型");
   });
+
+  it("summarizes run_plugin_cli and exec args", () => {
+    expect(
+      toolCallDetailFromArgs("run_plugin_cli", {
+        plugin_name: "cfl-search",
+        command: "python3",
+        args: ["scripts/ddwiki.py", "--help"],
+      }),
+    ).toContain("$ python3 scripts/ddwiki.py --help");
+    expect(
+      toolCallDetailFromArgs("exec", {
+        command: "tar",
+        args: ["-tzf", "pkg.tgz"],
+      }),
+    ).toContain("$ tar -tzf pkg.tgz");
+  });
 });
 
 describe("toolCallErrorDetail", () => {
@@ -167,5 +183,62 @@ describe("toolCallDetailFromResult", () => {
     expect(
       toolCallDetailFromResult("list_tree", { details: {} }, "目录预览"),
     ).toBe("目录预览");
+  });
+
+  it("shows run_plugin_cli stdout/stderr", () => {
+    const detail = toolCallDetailFromResult(
+      "run_plugin_cli",
+      {
+        details: {
+          ok: true,
+          exitCode: 0,
+          command: "python3",
+          args: ["x.py"],
+          cwd: "/tmp/home",
+          stdout: "hello\nworld",
+          stderr: "",
+        },
+      },
+      "fallback",
+    );
+    expect(detail).toContain("exit 0");
+    expect(detail).toContain("hello");
+    expect(detail).toContain("── stdout ──");
+  });
+
+  it("lists plugin home entries", () => {
+    const detail = toolCallDetailFromResult(
+      "list_plugin_home",
+      {
+        details: {
+          ok: true,
+          plugin_name: "cfl",
+          entries: ["scripts/", "scripts/run.py"],
+          tree: "scripts/\n  run.py",
+        },
+      },
+      undefined,
+    );
+    expect(detail).toContain("cfl");
+    expect(detail).toContain("scripts/");
+    expect(detail).toContain("run.py");
+  });
+
+  it("shows read_plugin_content content", () => {
+    const detail = toolCallDetailFromResult(
+      "read_plugin_content",
+      {
+        details: {
+          ok: true,
+          path: "scripts/a.py",
+          bytes: 10,
+          truncated: false,
+          content: "print(1)\n",
+        },
+      },
+      undefined,
+    );
+    expect(detail).toContain("scripts/a.py");
+    expect(detail).toContain("print(1)");
   });
 });

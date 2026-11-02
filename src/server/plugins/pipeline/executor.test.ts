@@ -3,7 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetConfigCacheForTests } from "../../config/index.js";
-import { resolveUninstallSteps, runPipeline } from "./executor.js";
+import {
+  isAllowedGitCloneUrl,
+  resolveUninstallSteps,
+  runPipeline,
+} from "./executor.js";
 import type { PluginPipeline } from "./types.js";
 import type { PipelineRunEvent } from "./executor.js";
 
@@ -188,6 +192,46 @@ describe("pipeline executor", () => {
       fs.existsSync(path.join(dataDir, "tenant", "v1", "mcp", "my-custom-id.json")),
     ).toBe(false);
   });
+
+  it("accepts https and ssh clone URLs", () => {
+    expect(isAllowedGitCloneUrl("https://git.example/a/b.git")).toBe(true);
+    expect(
+      isAllowedGitCloneUrl("git@git.ddxq.mobi:xuhuafei/cfl-search-mcp.git"),
+    ).toBe(true);
+    expect(isAllowedGitCloneUrl("ssh://git@git.ddxq.mobi/xuhuafei/cfl-search-mcp.git")).toBe(
+      true,
+    );
+    expect(isAllowedGitCloneUrl("file:///tmp/repo.git")).toBe(false);
+    expect(isAllowedGitCloneUrl("git@host")).toBe(false);
+  });
+
+  it("git_clone fails without hanging on interactive auth", async () => {
+    const pipeline: PluginPipeline = {
+      id: "clone-auth",
+      name: "Clone Auth",
+      kind: "tenant",
+      outputs: ["mcp"],
+      steps: [
+        {
+          type: "git_clone",
+          // 需认证的地址：禁止 tty 后应快速失败，而不是 Username for … 卡死
+          url: "https://127.0.0.1:9/private/repo.git",
+          dest: "src",
+          depth: 1,
+        },
+      ],
+    };
+    const started = Date.now();
+    await expect(
+      runPipeline({
+        pipeline,
+        action: "install",
+        visitorId: "v1",
+        onEvent: () => {},
+      }),
+    ).rejects.toThrow(/git_clone|失败|Authentication|could not read|Connection|refused|timed out|超时|禁止交互/i);
+    expect(Date.now() - started).toBeLessThan(30_000);
+  }, 35_000);
 
   it("uninstalls sidecar + MCP and removes install dir but keeps data dir", async () => {
     await runPipeline({
