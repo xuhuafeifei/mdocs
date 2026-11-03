@@ -1375,15 +1375,16 @@
 }
 
 /* 表情包：[meme:<id>] 在渲染层换成图，点开看大图 */
+/* 独占一行：不跟正文拼在同一行流里 */
 .mdocs-agent-meme {
-  display: inline-block;
-  margin: 4px 2px;
+  display: block;
+  width: fit-content;
+  margin: 8px 0 4px;
   padding: 0;
   border: none;
   background: transparent;
   line-height: 0;
   cursor: zoom-in;
-  vertical-align: middle;
 }
 
 .mdocs-agent-meme img {
@@ -8392,21 +8393,25 @@ strong.label {
 }
 
 .mdocs-meme-tabs {
-  display: inline-flex;
-  align-self: flex-start;
+  display: flex;
+  align-self: stretch;
   gap: 4px;
   padding: 4px;
   border-radius: 10px;
   background: var(--mdocs-surface-muted, #f0f1ec);
+  max-width: 420px;
 }
 
 .mdocs-meme-tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
   border: none;
   background: transparent;
-  padding: 6px 14px;
+  padding: 8px 12px;
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.4;
@@ -8494,7 +8499,7 @@ strong.label {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 8px;
+  gap: 10px;
   margin-top: 10px;
 }
 
@@ -8511,7 +8516,9 @@ strong.label {
 .mdocs-meme-meta {
   margin: 8px 0 0;
   font-size: 12px;
+  line-height: 1.5;
   color: var(--mdocs-text-secondary, #6b7280);
+  word-break: break-word;
 }
 
 .mdocs-meme-toolbar {
@@ -8522,25 +8529,31 @@ strong.label {
 
 .mdocs-meme-toolbar .mdocs-meme-input {
   max-width: 320px;
+  width: 100%;
 }
 
 .mdocs-meme-upload {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   margin-top: 10px;
 }
 
-.mdocs-meme-upload .mdocs-meme-input {
-  flex: 1 1 220px;
-  max-width: 360px;
+.mdocs-meme-upload .mdocs-meme-field {
+  flex: none;
+}
+
+.mdocs-meme-upload-submit {
+  align-self: flex-start;
+  min-height: 36px;
 }
 
 .mdocs-meme-file {
-  flex: 1 1 220px;
+  width: 100%;
   min-width: 0;
-  font-size: 12px;
+  padding: 8px 0;
+  font-size: 13px;
   color: var(--mdocs-text-secondary, #6b7280);
 }
 
@@ -8587,6 +8600,7 @@ strong.label {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  min-width: 0;
 }
 
 .mdocs-meme-id {
@@ -8599,22 +8613,26 @@ strong.label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 90px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .mdocs-meme-card-actions {
   display: inline-flex;
-  gap: 6px;
+  gap: 2px;
   flex: none;
 }
 
 .mdocs-meme-link {
   border: none;
   background: transparent;
-  padding: 0;
-  font-size: 11px;
+  padding: 4px 6px;
+  margin: -4px -2px;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--mdocs-accent, #2f6fed);
   cursor: pointer;
+  border-radius: 6px;
 }
 
 .mdocs-meme-link:hover {
@@ -8658,6 +8676,93 @@ strong.label {
 
 .mdocs-meme-notice {
   color: var(--mdocs-success, #12805c);
+}
+
+@media (max-width: 768px) {
+  .mdocs-memes {
+    gap: 12px;
+  }
+
+  .mdocs-meme-tabs {
+    max-width: none;
+    width: 100%;
+  }
+
+  .mdocs-meme-tab {
+    padding: 10px 8px;
+    font-size: 13px;
+  }
+
+  .mdocs-meme-tab-count {
+    white-space: nowrap;
+  }
+
+  .mdocs-meme-sync {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mdocs-meme-sync .mdocs-meme-btn {
+    width: 100%;
+    min-height: 40px;
+  }
+
+  .mdocs-meme-toolbar .mdocs-meme-input {
+    max-width: none;
+  }
+
+  .mdocs-meme-upload-submit {
+    align-self: stretch;
+    width: 100%;
+    min-height: 40px;
+  }
+
+  .mdocs-meme-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .mdocs-meme-card {
+    border-radius: 12px;
+  }
+
+  .mdocs-meme-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .mdocs-meme-card img {
+    height: 112px;
+  }
+
+  .mdocs-meme-card figcaption {
+    padding: 8px;
+    min-height: 0;
+  }
+
+  .mdocs-meme-card-head {
+    flex-wrap: wrap;
+  }
+
+  .mdocs-meme-id {
+    max-width: 100%;
+  }
+
+  .mdocs-meme-link {
+    padding: 6px 8px;
+    margin: -4px -4px;
+    min-height: 32px;
+  }
+
+  .mdocs-meme-edit-actions {
+    flex-wrap: wrap;
+  }
+
+  .mdocs-meme-edit-actions .mdocs-meme-btn {
+    flex: 1 1 auto;
+    min-height: 36px;
+    padding: 6px 10px;
+  }
 }
 
 /* ===== 目录树 hover 操作按钮（右侧占位 + 悬停显现） ===== */

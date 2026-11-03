@@ -24,7 +24,7 @@ export function buildMemeCatalogSection(visitorId: string): string {
     "",
     "使用规则：",
     "1. 只在闲聊、收尾、情绪到位（开心/吐槽/安慰/打招呼）时用；写步骤、解释报错、给方案时不要用。",
-    "2. 一条消息最多 1 张，放在句末，不要连发。",
+    "2. 一条消息最多 5 张；分散在合适位置即可，不要无意义刷屏。",
     "3. id 必须来自上面的列表；宁可不发，也不要编造。",
   );
   return lines.join("\n");

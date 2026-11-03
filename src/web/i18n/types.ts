@@ -818,6 +818,8 @@ export type TranslationKey =
   | "memesNoMatch"
   | "memesUploadTitle"
   | "memesTenantHint"
+  | "memesPickFile"
+  | "memesDescLabel"
   | "memesDescPlaceholder"
   | "memesUpload"
   | "memesUploading"

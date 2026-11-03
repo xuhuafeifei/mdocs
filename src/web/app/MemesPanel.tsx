@@ -365,24 +365,30 @@ export function MemesPanel() {
               <span className="mdocs-settings-item-desc">{t("memesTenantHint")}</span>
             </div>
             <div className="mdocs-meme-upload">
-              <input
-                ref={fileInputRef}
-                className="mdocs-meme-file"
-                type="file"
-                accept="image/png,image/jpeg,image/gif,image/webp"
-                disabled={uploading}
-              />
-              <input
-                className="mdocs-meme-input"
-                placeholder={t("memesDescPlaceholder")}
-                value={uploadDesc}
-                onChange={(e) => setUploadDesc(e.target.value)}
-                maxLength={200}
-                disabled={uploading}
-              />
+              <label className="mdocs-meme-field">
+                <span>{t("memesPickFile")}</span>
+                <input
+                  ref={fileInputRef}
+                  className="mdocs-meme-file"
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  disabled={uploading}
+                />
+              </label>
+              <label className="mdocs-meme-field">
+                <span>{t("memesDescLabel")}</span>
+                <input
+                  className="mdocs-meme-input"
+                  placeholder={t("memesDescPlaceholder")}
+                  value={uploadDesc}
+                  onChange={(e) => setUploadDesc(e.target.value)}
+                  maxLength={200}
+                  disabled={uploading}
+                />
+              </label>
               <button
                 type="button"
-                className="mdocs-meme-btn mdocs-meme-btn--primary"
+                className="mdocs-meme-btn mdocs-meme-btn--primary mdocs-meme-upload-submit"
                 onClick={() => void handleUpload()}
                 disabled={uploading}
               >
