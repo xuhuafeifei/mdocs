@@ -2007,3 +2007,85 @@ export interface GraphTaskStatus {
   startedAt?: string;
   finishedAt?: string;
 }
+
+// ---------------------------------------------------------------------------
+// 表情包（系统库 + 租户库）
+// ---------------------------------------------------------------------------
+
+export type MemeSource = "system" | "tenant";
+
+export type MemeItem = {
+  id: string;
+  desc: string;
+  meme_name: string;
+  source: MemeSource;
+};
+
+export type MemeSyncMeta = {
+  spec: string;
+  version: string;
+  syncedAt: string;
+  count: number;
+};
+
+export type MemeSyncResult = {
+  version: string;
+  written: number;
+  bytes: number;
+};
+
+/** 图片地址；id 在系统库/租户库内唯一，前端直接用它换图 */
+export function memeImageUrl(id: string): string {
+  return `/api/memes/image/${encodeURIComponent(id)}`;
+}
+
+/**
+ * 列表。不传 scope 得到合并列表（系统优先），管理页按层分别取。
+ */
+export function fetchMemesApi(scope?: MemeSource): Promise<{ memes: MemeItem[] }> {
+  const qs = scope ? `?scope=${scope}` : "";
+  return api<{ memes: MemeItem[] }>(`/api/memes${qs}`);
+}
+
+export function fetchMemeSyncMetaApi(): Promise<{ meta: MemeSyncMeta | null }> {
+  return api<{ meta: MemeSyncMeta | null }>("/api/memes/system/meta");
+}
+
+/** 系统库同步：整包 npm 安装后原子覆盖，只是「拉取」，不改单张 */
+export function syncSystemMemesApi(spec: string): Promise<MemeSyncResult> {
+  return api<MemeSyncResult>("/api/memes/system/sync", {
+    method: "POST",
+    body: JSON.stringify({ spec }),
+  });
+}
+
+/**
+ * 上传租户表情包（multipart）。
+ * 走原生 fetch：api() 会给有 body 的请求塞 application/json，FormData 必须让浏览器自己带 boundary。
+ */
+export async function uploadMemeApi(file: File, desc: string): Promise<MemeItem> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("desc", desc);
+  const res = await fetch("/api/memes", { method: "POST", body: form });
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    const err = (body as { error?: { code?: string; message?: string } } | null)?.error;
+    throw new ApiRequestError(res.status, err?.code ?? "MEME_UPLOAD_FAILED", err?.message ?? "上传失败");
+  }
+  return (body as { data: { meme: MemeItem } }).data.meme;
+}
+
+export function updateMemeDescApi(id: string, desc: string): Promise<{ meme: MemeItem }> {
+  return api<{ meme: MemeItem }>(`/api/memes/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ desc }),
+  });
+}
+
+export function deleteMemeApi(id: string): Promise<{ deleted: boolean }> {
+  return api<{ deleted: boolean }>(`/api/memes/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+

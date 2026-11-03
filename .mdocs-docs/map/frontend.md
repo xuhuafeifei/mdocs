@@ -303,3 +303,16 @@
   | `src/web/app/App.css` | `.mdocs-agent-meme` `.mdocs-agent-meme-missing` |
 - **需求**：[`../requirements/agent-memes/`](../requirements/agent-memes/)
 
+
+### 表情包管理面板
+
+- **关键词**：`表情包` `memes panel` `系统图库` `我的表情包` `dsh-meme-meta`
+- **结论**：设置页新增「表情包」Tab，分段切换系统图库（只读，整包同步）与我的表情包（上传 / 改描述 / 删除）。
+  图片走 `/api/memes/image/:id`；同步元信息由 `GET /api/memes/system/meta` 回显。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/web/app/MemesPanel.tsx` | `MemesPanel` |
+  | `src/web/services/endpoints.ts` | `fetchMemesApi` `uploadMemeApi` `updateMemeDescApi` `deleteMemeApi` `syncSystemMemesApi` `fetchMemeSyncMetaApi` `memeImageUrl` |
+  | `src/web/app/App.css` | `.mdocs-meme-tabs` `.mdocs-meme-grid` `.mdocs-meme-card` |
+- **需求**：[`../requirements/agent-memes/`](../requirements/agent-memes/)

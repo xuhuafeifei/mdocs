@@ -19,6 +19,7 @@ import {
   ScanSearch,
   Search,
   Settings2,
+  Smile,
   Sparkles,
   Star,
   Trash2,
@@ -36,6 +37,7 @@ import { AgentConfigPanel } from "./AgentConfigPanel";
 import { AgentUserSkillsPanel } from "./AgentUserSkillsPanel";
 import { McpServersPanel } from "./McpServersPanel";
 import { PluginMarketplacePanel } from "./PluginMarketplacePanel";
+import { MemesPanel } from "./MemesPanel";
 import { EmbeddingIndexPanel } from "./EmbeddingIndexPanel";
 import { TrashPanel } from "./TrashPanel";
 import { VisitorPickerModal } from "./VisitorPickerModal";
@@ -106,6 +108,7 @@ type SettingsTab =
   | "savePublish"
   | "agentConfig"
   | "mcpServers"
+  | "memes"
   | "pluginMarket";
 
 const SETTINGS_NAV: Array<{
@@ -124,6 +127,7 @@ const SETTINGS_NAV: Array<{
   { id: "memberTemplates", labelKey: "memberTemplates", keywords: ["成员", "模板", "members", "template", "邀请"], Icon: Users },
   { id: "agentConfig", labelKey: "agentConfig", keywords: ["ai", "助手", "模型", "agent", "llm", "deepseek"], Icon: Sparkles },
   { id: "mcpServers", labelKey: "mcpServersTitle", keywords: ["mcp", "服务器", "server"], Icon: Cable },
+  { id: "memes", labelKey: "memesTitle", keywords: ["表情包", "表情", "meme", "sticker", "emoji"], Icon: Smile },
   { id: "pluginMarket", labelKey: "pluginMarketTitle", keywords: ["插件", "市场", "plugin", "engram", "memorix"], Icon: Puzzle },
   { id: "savePublish", labelKey: "saveAndPublish", keywords: ["草稿", "发布", "同步", "draft", "publish", "sync"], Icon: CloudUpload },
 ];
@@ -213,9 +217,11 @@ export function SettingsPage(props: {
                     ? t("agentConfig")
                     : tab === "mcpServers"
                       ? t("mcpServersTitle")
-                      : tab === "pluginMarket"
-                        ? t("pluginMarketTitle")
-                        : t("saveAndPublish");
+                      : tab === "memes"
+                        ? t("memesTitle")
+                        : tab === "pluginMarket"
+                          ? t("pluginMarketTitle")
+                          : t("saveAndPublish");
 
   // ---- CLI Token 相关状态 ----
   // CLI Token 列表
@@ -1350,6 +1356,8 @@ export function SettingsPage(props: {
           </div>
         ) : tab === "mcpServers" ? (
           <McpServersPanel />
+        ) : tab === "memes" ? (
+          <MemesPanel />
         ) : tab === "pluginMarket" ? (
           <div className="mdocs-settings">
             <PluginMarketplacePanel />

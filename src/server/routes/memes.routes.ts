@@ -12,6 +12,9 @@ import {
   deleteTenantMeme,
   isValidMemeId,
   listMemes,
+  listSystemMemes,
+  listTenantMemes,
+  readMemeSyncMeta,
   resolveMeme,
   syncSystemMemesFrom,
   updateTenantMeme,
@@ -30,11 +33,24 @@ function fail(res: Response, status: number, message: string) {
 export function buildMemesRouter(): ReturnType<typeof Router> {
   const router = Router();
 
-  /** GET / — 系统库 + 租户库合并列表 */
+  /**
+   * GET /?scope=system|tenant — 默认合并列表（系统优先）
+   * 管理页把两层分开取：系统库只读、租户库归当前访客。
+   */
   router.get("/", (req: Request, res: Response) => {
     const visitorId = visitorIdOf(req);
     if (!visitorId) return fail(res, 401, "login required");
+    const scope = String(req.query.scope ?? "").trim();
+    if (scope === "system") return res.json({ data: { memes: listSystemMemes() } });
+    if (scope === "tenant") return res.json({ data: { memes: listTenantMemes(visitorId) } });
     res.json({ data: { memes: listMemes(visitorId) } });
+  });
+
+  /** GET /system/meta — 最近一次系统库同步的版本/时间/张数（没同步过返回 null） */
+  router.get("/system/meta", (req: Request, res: Response) => {
+    const visitorId = visitorIdOf(req);
+    if (!visitorId) return fail(res, 401, "login required");
+    res.json({ data: { meta: readMemeSyncMeta() } });
   });
 
   /** GET /image/:id — 取图；<img> 同源请求自带 cookie */

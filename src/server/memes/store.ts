@@ -138,22 +138,68 @@ function writeMemeIndex(dir: string, index: MemeIndex): void {
   fs.renameSync(tmp, file);
 }
 
+/** 系统库列表（管理页用） */
+export function listSystemMemes(): ListedMeme[] {
+  return readMemeIndex(systemMemesDir()).memes.map((entry) => ({ ...entry, source: "system" as const }));
+}
+
+/** 租户库列表（「我的表情包」用；不合并系统库，避免被系统的同 id 挡住） */
+export function listTenantMemes(visitorId: string): ListedMeme[] {
+  if (!visitorId) return [];
+  return readMemeIndex(tenantMemesDir(visitorId)).memes.map((entry) => ({
+    ...entry,
+    source: "tenant" as const,
+  }));
+}
+
 /** 系统库 + 租户库合并列表（系统优先，同 id 不重复） */
 export function listMemes(visitorId: string): ListedMeme[] {
   const out: ListedMeme[] = [];
   const seen = new Set<string>();
-  for (const [source, dir] of [
-    ["system", systemMemesDir()],
-    ["tenant", visitorId ? tenantMemesDir(visitorId) : ""],
-  ] as const) {
-    if (!dir) continue;
-    for (const entry of readMemeIndex(dir).memes) {
-      if (seen.has(entry.id)) continue;
-      seen.add(entry.id);
-      out.push({ ...entry, source });
-    }
+  for (const entry of [...listSystemMemes(), ...listTenantMemes(visitorId)]) {
+    if (seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    out.push(entry);
   }
   return out;
+}
+
+/** 最近一次系统库同步的元信息（落盘在 dataDir 根，不随系统库目录一起被覆盖） */
+export type MemeSyncMeta = {
+  spec: string;
+  version: string;
+  /** ISO 时间 */
+  syncedAt: string;
+  count: number;
+};
+
+function memeSyncMetaPath(): string {
+  return path.join(getConfig().dataDir, "dsh-meme-meta.json");
+}
+
+export function readMemeSyncMeta(): MemeSyncMeta | null {
+  try {
+    const raw = JSON.parse(fs.readFileSync(memeSyncMetaPath(), "utf8")) as unknown;
+    const rec = (raw ?? {}) as Record<string, unknown>;
+    if (typeof rec.syncedAt !== "string" || typeof rec.spec !== "string") return null;
+    return {
+      spec: rec.spec,
+      version: typeof rec.version === "string" ? rec.version : "",
+      syncedAt: rec.syncedAt,
+      count: typeof rec.count === "number" ? rec.count : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeMemeSyncMeta(meta: MemeSyncMeta): void {
+  try {
+    fs.writeFileSync(memeSyncMetaPath(), `${JSON.stringify(meta, null, 2)}\n`, "utf8");
+  } catch (err) {
+    // 元信息只服务管理页展示，写失败不能影响同步结果
+    log.warn("表情包同步元信息写入失败", { err: String(err) });
+  }
 }
 
 export type ResolvedMeme = {
@@ -328,6 +374,12 @@ export async function syncSystemMemesFrom(spec: string): Promise<SyncResult> {
         throw err;
       }
       fs.rmSync(backup, { recursive: true, force: true });
+      writeMemeSyncMeta({
+        spec: pack.spec,
+        version: pack.version,
+        syncedAt: new Date().toISOString(),
+        count: index.memes.length,
+      });
 
       log.info("系统表情包已更新", {
         spec: pack.spec,

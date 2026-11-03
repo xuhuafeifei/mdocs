@@ -14,7 +14,15 @@ vi.mock("./npm-source.js", () => ({
 }));
 
 const { resetConfigCacheForTests } = await import("../config/index.js");
-const { readMemeIndex, syncSystemMemesFrom, systemMemesDir } = await import("./store.js");
+const {
+  addTenantMeme,
+  listSystemMemes,
+  listTenantMemes,
+  readMemeIndex,
+  readMemeSyncMeta,
+  syncSystemMemesFrom,
+  systemMemesDir,
+} = await import("./store.js");
 
 type Pack = { spec: string; version: string; dir: string; root: string };
 
@@ -94,6 +102,40 @@ describe("syncSystemMemesFrom", () => {
     await expect(syncSystemMemesFrom("mdocs-memes@2")).rejects.toThrow(/缺图片/);
     expect(fs.readdirSync(systemMemesDir()).sort()).toEqual(["k1.webp", "meme.json"]);
     expect(fs.existsSync(path.join(systemMemesDir(), "k1.webp"))).toBe(true);
+  });
+
+  it("同步成功后写入元信息（版本 / 张数 / 时间）", async () => {
+    const pack = makePack([
+      { id: "m1", desc: "一", name: "m1.webp" },
+      { id: "m2", desc: "二", name: "m2.webp" },
+    ]);
+    installMemePack.mockResolvedValue(pack);
+    await syncSystemMemesFrom("mdocs-memes@latest");
+
+    const meta = readMemeSyncMeta();
+    expect(meta).not.toBeNull();
+    expect(meta?.version).toBe("9.9.9");
+    expect(meta?.count).toBe(2);
+    expect(Number.isNaN(Date.parse(meta?.syncedAt ?? ""))).toBe(false);
+  });
+
+  it("系统库 / 租户库分开取，互不串台", async () => {
+    const pack = makePack([{ id: "s1", desc: "系统图", name: "s1.webp" }]);
+    installMemePack.mockResolvedValue(pack);
+    await syncSystemMemesFrom("mdocs-memes@latest");
+
+    addTenantMeme("visitor-1", {
+      buffer: Buffer.from([1, 2, 3]),
+      originalName: "mine.webp",
+      desc: "我的图",
+    });
+
+    expect(listSystemMemes().map((m) => m.id)).toEqual(["s1"]);
+    const mine = listTenantMemes("visitor-1");
+    expect(mine).toHaveLength(1);
+    expect(mine[0]?.desc).toBe("我的图");
+    expect(mine[0]?.source).toBe("tenant");
+    expect(listTenantMemes("someone-else")).toEqual([]);
   });
 
   it("meme.json 里有非法条目时失败，不静默丢图", async () => {
