@@ -26,6 +26,8 @@ export interface AppConfig {
   defaultDomainId: string;
   /** 单文件上传上限（字节）：资源附件 + Agent 附件 + link-to-img；环境变量 MDOCS_MAX_UPLOAD_BYTES，默认 100MiB */
   maxUploadBytes: number;
+  /** 系统表情包 npm 源：环境变量 MDOCS_MEME_REGISTRY，默认淘宝镜像 */
+  memeRegistry: string;
 }
 
 /** 日志配置子对象，控制输出级别、样式与文件保留策略。 */
@@ -90,6 +92,8 @@ export function getConfig(): AppConfig {
     defaultDomainId: "default",
     /** 初始值；运行时请用 getMaxUploadBytes()（设置页可热更新） */
     maxUploadBytes: 100 * 1024 * 1024,
+    // 表情包整包安装走 registry 的 tarball 接口，淘宝镜像同步 npmjs，国内快且不受 unpkg 白名单限制
+    memeRegistry: process.env.MDOCS_MEME_REGISTRY?.trim() || "https://registry.npmmirror.com",
   };
   return cached;
 }

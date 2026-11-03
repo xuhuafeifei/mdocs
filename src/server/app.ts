@@ -21,6 +21,7 @@ import { buildGraphRouter } from "./routes/graph.routes.js";
 import { buildServerSettingsRouter } from "./routes/server-settings.routes.js";
 import { buildMcpServersRouter } from "./routes/mcp-servers.routes.js";
 import { buildPluginsRouter } from "./routes/plugins.routes.js";
+import { buildMemesRouter } from "./routes/memes.routes.js";
 import { bootstrapAgentRuns } from "./agent/Agent/run-manager.js";
 import { startIndexTimer } from "./search/document-index-manager.js";
 import { ensureLocalEmbeddingModel } from "./search/embedding-model.js";
@@ -96,6 +97,7 @@ export function buildApp(): Application {
   app.use("/api/server-settings", buildServerSettingsRouter());
   app.use("/api/mcp-servers", buildMcpServersRouter());
   app.use("/api/plugins", buildPluginsRouter());
+  app.use("/api/memes", buildMemesRouter());
   // 发表/删除评论：需要认证
   app.use("/api/documents", documentCommentsRouter);
 

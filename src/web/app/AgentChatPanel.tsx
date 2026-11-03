@@ -30,6 +30,7 @@ import {
 } from "./agent-composer-files";
 import { documentIdFromAgentHref } from "./agent-doc-link";
 import { fileMarkKind, fileMarkLabel } from "./agent-file-mark";
+import { memeIdFromSrc, memeImageSrc, renderMemePlaceholders } from "./meme-placeholder";
 import {
   type AgentDocumentTableRow,
   compactAgentSessionApi,
@@ -193,6 +194,39 @@ function ImagePreviewDialog(props: { src: string; name: string; onClose: () => v
   );
 }
 
+/** 表情包：只用 id 换图，查不到就说明资源没了 */
+function AgentMemeImage(props: { id: string }) {
+  const [broken, setBroken] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const src = memeImageSrc(props.id);
+  if (broken) {
+    return (
+      <span className="mdocs-agent-meme-missing" title={`[meme:${props.id}]`}>
+        未找到表情包资源
+      </span>
+    );
+  }
+  return (
+    <>
+      <button
+        type="button"
+        className="mdocs-agent-meme"
+        title="点击查看大图"
+        onClick={() => setPreviewOpen(true)}
+      >
+        <img src={src} alt="" onError={() => setBroken(true)} />
+      </button>
+      {previewOpen ? (
+        <ImagePreviewDialog
+          src={src}
+          name={props.id}
+          onClose={() => setPreviewOpen(false)}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function AgentAssetChip(props: {
   id: string;
   name: string;
@@ -279,13 +313,19 @@ function AgentMarkdownLink(props: { href?: string; children?: ReactNode }) {
 const agentMarkdownComponents = {
   pre: ({ children }: { children?: ReactNode }) => <MarkdownPre>{children}</MarkdownPre>,
   a: AgentMarkdownLink,
+  // [meme:id] → 图片；自定义协议会被 urlTransform 砍掉，所以用站内路径
+  img: ({ src, alt }: { src?: string; alt?: string }) => {
+    const memeId = memeIdFromSrc(src);
+    if (memeId) return <AgentMemeImage id={memeId} />;
+    return <img src={src} alt={alt ?? ""} />;
+  },
 };
 
 const AgentMarkdown = memo(function AgentMarkdown(props: { children: string }) {
   return (
     <div className="mdocs-agent-panel-md">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={agentMarkdownComponents}>
-        {props.children}
+        {renderMemePlaceholders(props.children)}
       </ReactMarkdown>
     </div>
   );

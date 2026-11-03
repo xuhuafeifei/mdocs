@@ -191,6 +191,9 @@ export async function runOnboardingChat(params: {
           skillMetaSection: (
             await import("./skill-meta-prompt.js")
           ).buildSkillMetaSection(visitorId),
+          memeCatalogSection: (await import("../../memes/prompt.js")).buildMemeCatalogSection(
+            visitorId,
+          ),
         },
       );
 

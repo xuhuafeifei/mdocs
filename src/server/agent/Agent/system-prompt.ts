@@ -138,6 +138,8 @@ export type PromptBuilderOptions = {
   soulSection?: string;
   /** 私人 skill 目录摘要（无正文） */
   skillMetaSection?: string;
+  /** 表情包目录（id + desc），空串表示没有图库、不注入 */
+  memeCatalogSection?: string;
   /** plugin-pipeline：右侧当前草稿 YAML */
   pipelineCurrentYaml?: string | null;
 };
@@ -147,6 +149,7 @@ export type PromptSectionId =
   | "ui-context"
   | "soul"
   | "skill-meta"
+  | "memes"
   | "mcp"
   | "pipeline"
   | "pipeline-yaml";
@@ -223,6 +226,9 @@ export function assembleSystemPrompt(
       label: "私人 Skill 目录",
       text: opts.skillMetaSection.trim(),
     });
+  }
+  if (opts?.memeCatalogSection?.trim()) {
+    sections.push({ id: "memes", label: "表情包目录", text: opts.memeCatalogSection.trim() });
   }
   if (opts?.hasMcpTools) {
     sections.push({

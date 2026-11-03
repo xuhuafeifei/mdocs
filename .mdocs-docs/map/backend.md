@@ -199,3 +199,19 @@
   | `src/server/cli/self-update.ts` | `runSelfUpdate`（npmmirror 原地升级，保留 node_modules） |
   | `src/server/cli/asset-upload.ts` | `uploadAssetFiles`（`mdocs asset upload`，uuid+ext 落 assets，输出 `/api/assets/<id>`） |
   | `src/server/migrations/visitor-migration.service.ts` | 访客迁移 |
+
+### 表情包图库（agent-memes）
+
+- **关键词**：`meme` `dsh-meme` `meme.json` `[meme:id]` `表情包` `desc` `tenant memes`
+- **结论**：两套同构图库（系统 `<dataDir>/dsh-meme/` 只读可覆盖；租户 `tenant/<vid>/dsh-meme/` 可增删改），
+  索引就是 `meme.json`（`id` / `desc` 必填 / `meme_name`）；检索系统优先。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/server/memes/store.ts` | `readMemeIndex` `listMemes` `resolveMeme` `addTenantMeme` `updateTenantMeme` `deleteTenantMeme` `syncSystemMemesFrom` |
+  | `src/server/memes/prompt.ts` | `buildMemeCatalogSection`（最多 60 条，空库返回空串） |
+  | `src/server/routes/memes.routes.ts` | `buildMemesRouter`（`/api/memes`） |
+  | `src/server/agent/Agent/system-prompt.ts` | 段落 id `memes`；`PromptBuilderOptions.memeCatalogSection` |
+  | `src/server/agent/Agent/run.ts` | 每轮 run 注入 |
+- **需求**：[`../requirements/agent-memes/`](../requirements/agent-memes/) · **决策**：[`../decisions/019-agent-memes-builtin-placeholder.md`](../decisions/019-agent-memes-builtin-placeholder.md)
+

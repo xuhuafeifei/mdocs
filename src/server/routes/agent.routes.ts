@@ -17,6 +17,7 @@ import { assembleSystemPrompt } from "../agent/Agent/system-prompt.js";
 import { summarizePrompt } from "../agent/Agent/prompt-stats.js";
 import { loadSoulPromptSection } from "../soul/load-for-agent.js";
 import { buildSkillMetaSection } from "../agent/Agent/skill-meta-prompt.js";
+import { buildMemeCatalogSection } from "../memes/prompt.js";
 import { SessionCompactingError } from "../agent/Agent/context-compact-lock.js";
 import { compactAgentSession } from "../agent/Agent/context-compact.js";
 import {
@@ -454,6 +455,7 @@ export function buildAgentRouter(): Router {
       hasMcpTools: false,
       soulSection: loadSoulPromptSection(req.visitor.visitor_id),
       skillMetaSection: buildSkillMetaSection(req.visitor.visitor_id),
+      memeCatalogSection: buildMemeCatalogSection(req.visitor.visitor_id),
     });
     // 占比基数是该访客真实生效的上下文窗口，不是提示词自身长度
     const contextWindow =

@@ -289,3 +289,17 @@
   | `desktop/src-tauri/src/lib.rs` | `run` |
 - **需求**：[`../requirements/desktop-webview-shell/`](../requirements/desktop-webview-shell/)
 
+
+### 表情包占位符渲染
+
+- **关键词**：`meme` `[meme:id]` `renderMemePlaceholders` `AgentMemeImage` `未找到表情包资源`
+- **结论**：渲染层把 `[meme:<id>]` 换成 `![表情](/api/memes/image/<id>)`，`img` 组件认领成表情气泡；
+  代码块/行内代码内不替换；404 降级成灰色胶囊。正文只存占位符，不落库图片。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/web/app/meme-placeholder.ts` | `renderMemePlaceholders` `memeIdFromSrc` `memeImageSrc` |
+  | `src/web/app/AgentChatPanel.tsx` | `AgentMemeImage` `agentMarkdownComponents.img` |
+  | `src/web/app/App.css` | `.mdocs-agent-meme` `.mdocs-agent-meme-missing` |
+- **需求**：[`../requirements/agent-memes/`](../requirements/agent-memes/)
+

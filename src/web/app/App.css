@@ -1374,6 +1374,47 @@
   color: #1f2329;
 }
 
+/* 表情包：[meme:<id>] 在渲染层换成图，点开看大图 */
+.mdocs-agent-meme {
+  display: inline-block;
+  margin: 4px 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  line-height: 0;
+  cursor: zoom-in;
+  vertical-align: middle;
+}
+
+.mdocs-agent-meme img {
+  max-width: 168px;
+  max-height: 168px;
+  border-radius: 10px;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  background: #fff;
+  object-fit: contain;
+}
+
+.mdocs-agent-meme-missing {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px dashed var(--mdocs-border, #d8d8d8);
+  background: var(--mdocs-surface-muted, #f0f1ec);
+  color: var(--mdocs-text-secondary, #6b7280);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 720px) {
+  .mdocs-agent-meme img {
+    max-width: 132px;
+    max-height: 132px;
+  }
+}
+
 .mdocs-agent-panel-timeline {
   display: flex;
   flex-direction: column;
