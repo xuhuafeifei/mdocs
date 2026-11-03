@@ -171,6 +171,30 @@
 - **决策 / 修复**：[`../decisions/015-overwrite-all-diff-equality.md`](../decisions/015-overwrite-all-diff-equality.md) · [`../bug-fixes/overwrite-all-false-diff-hunks-2026-10-28.md`](../bug-fixes/overwrite-all-false-diff-hunks-2026-10-28.md)
 - **需求**：[`../requirements/agent-lexical-lines-diff/`](../requirements/agent-lexical-lines-diff/)
 
+### 智能助手 · 系统提示词诊断
+
+- **关键词**：`系统提示词` `提示词诊断` `assembleSystemPrompt` `prompt-stats` `SystemPromptDialog` `ContextUsageRing` `onShowPromptDetail`
+- **结论**：点输入框旁的**上下文占比圆环**打开弹框（浮球角标方案已废弃）；数据来自 `GET /api/agent/system-prompt`，与真实 run 同一套 `assembleSystemPrompt`；按段显示字符/粗估 token/占比条；弹框 portal 到 body；预览不含 MCP 提示与多模态附件。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/web/app/SystemPromptDialog.tsx` | `SystemPromptDialog` |
+  | `src/web/app/AgentChatPanel.tsx` | `ContextUsageRing` `onShowPromptDetail` |
+  | `src/web/app/App.tsx` | `systemPromptOpen` |
+- **需求**：[`../requirements/agent-prompt-inspector/`](../requirements/agent-prompt-inspector/)
+
+### 工作空间成员选择器（弹窗）
+
+- **关键词**：`VisitorPickerModal` `VisitorPickerContent` `成员` `访客目录` `mdocs-visitor-picker` `portal`
+- **结论**：弹窗 **portal 到 body**（设置页手机端用 transform 推屏，fixed 会跟着跑）；内容区 `.mdocs-visitor-picker-body` 必须可收缩（flex 列 + min-height:0）；两栏用 `minmax(0,1fr)` + 各自 `overflow:auto`；手机 ≤720px 切**上下分栏**，表格 `min-width:460px` 让两栏各自横向滚动，footer 固定可见。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/web/app/VisitorPickerModal.tsx` | `VisitorPickerModal`（createPortal） |
+  | `src/web/app/VisitorPickerContent.tsx` | 双栏表格 |
+  | `src/web/app/domain.css` | `.mdocs-visitor-picker-*` |
+- **修复记录**：[`../bug-fixes/member-picker-scroll-mobile-2026-11-03.md`](../bug-fixes/member-picker-scroll-mobile-2026-11-03.md)
+
 ### Agent 选择卡吸底
 
 - **关键词**：`choice_card` `skill_form_card` `interaction-dock` `等待你选择`

@@ -132,33 +132,73 @@ const CODING_RULES = `你是 mdocs「帮写」助手（coding 模式）：在纯
 11. 回答简洁；文档名用 [文件名](#/doc/<documentId>)。
 12. 附件用 read_attachment；小图可能已多模态输入。`;
 
-export function buildSystemPrompt(
+export type PromptBuilderOptions = {
+  hasMcpTools?: boolean;
+  /** 灵魂目录拼好的 Markdown 段 */
+  soulSection?: string;
+  /** 私人 skill 目录摘要（无正文） */
+  skillMetaSection?: string;
+  /** plugin-pipeline：右侧当前草稿 YAML */
+  pipelineCurrentYaml?: string | null;
+};
+
+export type PromptSectionId =
+  | "base"
+  | "ui-context"
+  | "soul"
+  | "skill-meta"
+  | "mcp"
+  | "pipeline"
+  | "pipeline-yaml";
+
+export type PromptSection = {
+  id: PromptSectionId;
+  /** 给人看的段落名（诊断弹框里显示） */
+  label: string;
+  text: string;
+};
+
+export type AssembledSystemPrompt = {
+  sections: PromptSection[];
+  prompt: string;
+};
+
+/**
+ * 按段落组装 system prompt。
+ * 段落切分是给「提示词诊断」用的：同一份内容既拼成字符串，也保留每段来源与体积。
+ */
+export function assembleSystemPrompt(
   mode: AgentMode = "normal",
   refs?: AgentUiReferences | null,
-  opts?: {
-    hasMcpTools?: boolean;
-    /** 灵魂目录拼好的 Markdown 段 */
-    soulSection?: string;
-    /** 私人 skill 目录摘要（无正文） */
-    skillMetaSection?: string;
-    /** plugin-pipeline：右侧当前草稿 YAML */
-    pipelineCurrentYaml?: string | null;
-  },
-): string {
+  opts?: PromptBuilderOptions,
+): AssembledSystemPrompt {
   if (mode === "plugin-pipeline") {
-    const parts: string[] = [buildPluginPipelineRules()];
+    const sections: PromptSection[] = [
+      { id: "pipeline", label: "流水线编排规则", text: buildPluginPipelineRules() },
+    ];
     const yaml = opts?.pipelineCurrentYaml?.trim();
     if (yaml) {
-      parts.push(
-        "当前流水线草稿（请在此基础上修改，保持 id/kind）：\n" +
-          yaml.slice(0, 12_000),
-      );
+      sections.push({
+        id: "pipeline-yaml",
+        label: "当前流水线草稿",
+        text: "当前流水线草稿（请在此基础上修改，保持 id/kind）：\n" + yaml.slice(0, 12_000),
+      });
     }
-    return parts.join("\n\n");
+    return { sections, prompt: sections.map((s) => s.text).join("\n\n") };
   }
 
   const base = mode === "coding" ? CODING_RULES : NORMAL_RULES;
-  const parts: string[] = [base];
+  const sections: PromptSection[] = [
+    {
+      id: "base",
+      // 这一段就是系统提示词本体（硬编码角色规则），不是另一类提示词
+      label:
+        mode === "coding"
+          ? "系统提示词（角色规则 · 帮写）"
+          : "系统提示词（角色规则）",
+      text: base,
+    },
+  ];
   if (mode === "normal" && (refs?.domainId || refs?.documentId || refs?.graphFileId)) {
     const lines = ["当前 UI 上下文（仅 id，无正文）："];
     if (refs.domainId) lines.push(`- domainId: ${refs.domainId}`);
@@ -172,20 +212,36 @@ export function buildSystemPrompt(
           : "- documentId: （未打开文档）",
       );
     }
-    parts.push(lines.join("\n"));
+    sections.push({ id: "ui-context", label: "当前 UI 上下文", text: lines.join("\n") });
   }
   if (opts?.soulSection?.trim()) {
-    parts.push(opts.soulSection.trim());
+    sections.push({ id: "soul", label: "灵魂约定（soul）", text: opts.soulSection.trim() });
   }
   if (opts?.skillMetaSection?.trim()) {
-    parts.push(opts.skillMetaSection.trim());
+    sections.push({
+      id: "skill-meta",
+      label: "私人 Skill 目录",
+      text: opts.skillMetaSection.trim(),
+    });
   }
   if (opts?.hasMcpTools) {
-    parts.push(
-      "本轮已挂载外部 MCP 工具（名称形如 mcp__…）。若含记忆类工具（Engram mem_* 等），" +
+    sections.push({
+      id: "mcp",
+      label: "MCP 工具提示",
+      text:
+        "本轮已挂载外部 MCP 工具（名称形如 mcp__…）。若含记忆类工具（Engram mem_* 等），" +
         "在需要跨会话回忆项目结论、决策或 gotcha 时先搜索记忆，重要新结论可写入；勿在无关闲聊时滥调。" +
         "记忆空间已由宿主按当前访客隔离，勿尝试切换他人空间。",
-    );
+    });
   }
-  return parts.join("\n\n");
+  return { sections, prompt: sections.map((s) => s.text).join("\n\n") };
+}
+
+/** 兼容旧调用：只要拼好的字符串。 */
+export function buildSystemPrompt(
+  mode: AgentMode = "normal",
+  refs?: AgentUiReferences | null,
+  opts?: PromptBuilderOptions,
+): string {
+  return assembleSystemPrompt(mode, refs, opts).prompt;
 }

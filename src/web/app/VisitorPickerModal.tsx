@@ -9,6 +9,7 @@
  * 创建者等 lockedIds 不可取消勾选。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useI18n } from "../i18n";
 import type { DomainMemberListEntry } from "../../shared/types/domain";
 import type { DomainMemberTemplate } from "../../shared/types/domainMemberTemplate";
@@ -321,12 +322,23 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
     }
   }
 
+  /** Esc 关闭（弹窗该有的基本行为）。 */
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   /**
    * 弹窗未打开时直接返回 null，不渲染任何 DOM。
    */
   if (!open) return null;
 
-  return (
+  // 设置页在手机端用 transform 做「左栏推屏」，fixed 会跟着 transform 走 → 挂到 body。
+  return createPortal(
     <div
       className="mdocs-visitor-picker-overlay"
       role="presentation"
@@ -422,8 +434,8 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
           </div>
         )}
 
-        {/* 访客选择器内容：搜索栏 + 左右双栏表格 */}
-        <div style={{ padding: "8px 18px 12px" }}>
+        {/* 访客选择器内容：搜索栏 + 左右双栏表格（flex 子项，允许内部滚动） */}
+        <div className="mdocs-visitor-picker-body">
           <VisitorPickerContent
             visitors={allVisitors}
             loadState={loadState}
@@ -461,6 +473,7 @@ export function VisitorPickerModal(props: VisitorPickerModalProps) {
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

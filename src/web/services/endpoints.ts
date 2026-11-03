@@ -1435,6 +1435,39 @@ export function fetchAgentContextUsageApi(): Promise<AgentContextUsage> {
   return api<AgentContextUsage>("/api/agent/context-usage");
 }
 
+export interface AgentPromptSectionStat {
+  id: string;
+  label: string;
+  chars: number;
+  tokens: number;
+  /** 占系统提示词自身的比例（段间构成） */
+  sharePercent: number;
+  /** 占模型上下文窗口的比例 */
+  windowPercent: number;
+}
+
+export interface AgentSystemPromptPayload {
+  mode: "normal" | "coding";
+  sections: AgentPromptSectionStat[];
+  total: {
+    chars: number;
+    tokens: number;
+    sections: number;
+    windowPercent: number;
+  };
+  /** 上下文窗口 token 上限；0 表示未知 */
+  window: number;
+  prompt: string;
+  notes: string[];
+}
+
+/** 提示词诊断：拿本轮会发给模型的 system prompt（按段拆分）。 */
+export function fetchAgentSystemPromptApi(
+  mode: "normal" | "coding" = "normal",
+): Promise<AgentSystemPromptPayload> {
+  return api<AgentSystemPromptPayload>(`/api/agent/system-prompt?mode=${mode}`);
+}
+
 export interface AgentSessionMessage {
   role: "user" | "assistant";
   content: string;

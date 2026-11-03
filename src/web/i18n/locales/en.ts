@@ -552,6 +552,23 @@ export const en: Record<TranslationKey, string> = {
   agentConfigHideKey: "Hide API Key",
   agentFabOpen: "Open mdocs 智能助手",
   agentFabReset: "Reset position",
+  agentPromptOpen: "System prompt",
+  agentPromptTitle: "System prompt inspector",
+  agentPromptSubtitle:
+    "Section-by-section size of this turn's system prompt; percentages are of the model context window",
+  agentPromptWindow: "Window",
+  agentPromptOfWindow: "of window",
+  agentPromptWindowUnknown: "Window unknown",
+  agentPromptBarHint:
+    "Bars are scaled within the prompt; the percentage is of the context window (shared with tools, history and output)",
+  agentPromptLoading: "Loading…",
+  agentPromptError: "Failed to load",
+  agentPromptChars: "chars",
+  agentPromptTokens: "tokens",
+  agentPromptSections: "sections",
+  agentPromptFull: "Full prompt",
+  agentPromptCopy: "Copy",
+  agentPromptCopied: "Copied",
   mcpServersTitle: "MCP servers",
   mcpServersDesc:
     "Configure HTTP (Streamable) or local stdio MCP servers. When enabled, the assistant can call their tools. Stored in dataDir for the whole instance.",

@@ -941,7 +941,13 @@ function ChoiceCardBlock(props: {
   );
 }
 
-function ContextUsageRing(props: { percent: number; used: number; limit: number }) {
+function ContextUsageRing(props: {
+  percent: number;
+  used: number;
+  limit: number;
+  /** 点击圆环 → 打开系统提示词诊断 */
+  onOpen?: () => void;
+}) {
   const size = 20;
   const stroke = 2.5;
   const r = (size - stroke) / 2;
@@ -950,13 +956,14 @@ function ContextUsageRing(props: { percent: number; used: number; limit: number 
   const offset = c * (1 - pct / 100);
   const level = pct >= 90 ? "danger" : pct >= 70 ? "warn" : "ok";
   const tip = `上下文 ${pct}% · 已用 ${formatTokenCount(props.used)} / ${formatTokenCount(props.limit)} tokens`;
+  const label = `${tip} · 点击查看提示词占比`;
   return (
-    <span
+    <button
+      type="button"
       className={"mdocs-agent-panel-context mdocs-agent-panel-context-" + level}
-      data-tooltip={tip}
-      aria-label={tip}
-      role="img"
-      tabIndex={0}
+      data-tooltip={label}
+      aria-label={label}
+      onClick={props.onOpen}
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
         <circle
@@ -980,7 +987,7 @@ function ContextUsageRing(props: { percent: number; used: number; limit: number 
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </svg>
-    </span>
+    </button>
   );
 }
 
@@ -1087,6 +1094,8 @@ export const AgentChatPanel = forwardRef<
   {
     open: boolean;
     onClose: () => void;
+    /** 点击上下文占比圆环：查看系统提示词分段占比 */
+    onShowPromptDetail?: () => void;
     visitorName?: string;
     /** 跟随 FAB 的定位（left / bottom）；全屏时忽略 */
     anchorStyle?: React.CSSProperties;
@@ -3379,6 +3388,7 @@ export const AgentChatPanel = forwardRef<
                     percent={contextUsage.percent}
                     used={contextUsage.used}
                     limit={contextUsage.limit}
+                    onOpen={props.onShowPromptDetail}
                   />
                 ) : null}
                 <button

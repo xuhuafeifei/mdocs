@@ -804,7 +804,12 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  cursor: help;
+  /* 按钮化：点它看系统提示词分段占比 */
+  border: none;
+  background: transparent;
+  padding: 0;
+  appearance: none;
+  cursor: pointer;
   z-index: 1;
   outline: none;
   flex-shrink: 0;
@@ -8779,3 +8784,204 @@ strong.label {
     max-height: min(52vh, 400px);
   }
 }
+
+/* 系统提示词诊断弹框 */
+.mdocs-prompt-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 18, 0.42);
+}
+
+.mdocs-prompt-dialog {
+  width: min(880px, 100%);
+  max-height: min(86vh, 900px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  background: var(--mdocs-surface, #fff);
+  box-shadow: 0 24px 64px rgba(15, 23, 18, 0.24);
+  overflow: hidden;
+}
+
+.mdocs-prompt-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mdocs-prompt-dialog-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.mdocs-prompt-dialog-subtitle {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: var(--mdocs-text-secondary, #6b7280);
+}
+
+.mdocs-prompt-dialog-close {
+  border: none;
+  background: transparent;
+  color: var(--mdocs-text-secondary, #6b7280);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.mdocs-prompt-dialog-close:hover {
+  background: var(--mdocs-hover, rgba(0, 0, 0, 0.05));
+}
+
+.mdocs-prompt-dialog-hint,
+.mdocs-prompt-dialog-error {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.mdocs-prompt-dialog-error {
+  color: #b42318;
+}
+
+.mdocs-prompt-total {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  font-size: 0.8rem;
+  color: var(--mdocs-text-secondary, #6b7280);
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--mdocs-surface-muted, #f7f8f5);
+  flex: 0 0 auto;
+}
+
+.mdocs-prompt-total-strong {
+  font-weight: 600;
+  color: var(--mdocs-text, #1b4332);
+  font-variant-numeric: tabular-nums;
+}
+
+.mdocs-prompt-legend {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--mdocs-text-secondary, #6b7280);
+  flex: 0 0 auto;
+}
+
+.mdocs-prompt-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 2px;
+  /* 只占自身高度，别被下面的全文区挤没 */
+  flex: 0 0 auto;
+  max-height: 34%;
+}
+
+.mdocs-prompt-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.mdocs-prompt-row-label {
+  font-weight: 600;
+  color: var(--mdocs-text, #1b4332);
+  /* 窄屏只让段落名换行，数字列不许被挤断 */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mdocs-prompt-row-num {
+  margin-left: auto;
+  color: var(--mdocs-text-secondary, #6b7280);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.mdocs-prompt-row-pct {
+  min-width: 46px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--mdocs-text, #1b4332);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.mdocs-prompt-bar {
+  margin-top: 4px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--mdocs-surface-muted, #f0f1ec);
+  overflow: hidden;
+}
+
+.mdocs-prompt-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.mdocs-prompt-notes {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.75rem;
+  color: var(--mdocs-text-secondary, #6b7280);
+}
+
+.mdocs-prompt-full-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.mdocs-prompt-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  background: transparent;
+  color: var(--mdocs-text-secondary, #6b7280);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.mdocs-prompt-copy:hover {
+  border-color: var(--mdocs-accent, #4d6bfe);
+  color: var(--mdocs-accent, #4d6bfe);
+}
+
+.mdocs-prompt-full {
+  margin: 0;
+  flex: 1 1 auto;
+  min-height: 140px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  background: var(--mdocs-surface-muted, #fbfbf9);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+

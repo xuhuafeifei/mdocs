@@ -61,6 +61,7 @@ import {
   saveAgentTreeRailOpen,
   useAgentFabPosition,
 } from "./AgentFab";
+import { SystemPromptDialog } from "./SystemPromptDialog";
 import { MessageDialog } from "./MessageDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DocSearchOverlay } from "./DocSearchOverlay";
@@ -463,6 +464,7 @@ export function App() {
   const [agentDockWidth, setAgentDockWidth] = useState(() => loadAgentDockWidth());
   const [agentTreeRailOpen, setAgentTreeRailOpen] = useState(() => loadAgentTreeRailOpen());
   const [agentFabPos, setAgentFabPos] = useAgentFabPosition();
+  const [systemPromptOpen, setSystemPromptOpen] = useState(false);
   const agentPanelRef = useRef<AgentChatPanelHandle | null>(null);
   /** PC 且偏好贴左且面板打开 → 左列替换文档树 */
   const agentDockLayout = agentDocked && agentPanelOpen && !isNarrow;
@@ -2294,6 +2296,7 @@ export function App() {
                 <AgentChatPanel
                   ref={agentPanelRef}
                   open={agentPanelOpen}
+                  onShowPromptDetail={() => setSystemPromptOpen(true)}
                   onClose={() => {
                     setAgentPanelOpen(false);
                     setAgentPanelFullscreen(false);
@@ -3170,11 +3173,16 @@ export function App() {
               onPositionChange={setAgentFabPos}
             />
           ) : null}
+          <SystemPromptDialog
+            open={systemPromptOpen}
+            onClose={() => setSystemPromptOpen(false)}
+          />
           {agentPanelOpen && !agentDockLayout ? (
             <Suspense fallback={null}>
               <AgentChatPanel
                 ref={agentPanelRef}
                 open={agentPanelOpen}
+                onShowPromptDetail={() => setSystemPromptOpen(true)}
                 onClose={() => {
                   setAgentPanelOpen(false);
                   setAgentPanelFullscreen(false);
