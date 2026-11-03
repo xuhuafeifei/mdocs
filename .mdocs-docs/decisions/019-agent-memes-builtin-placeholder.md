@@ -2,7 +2,7 @@
 
 - **状态**：accepted（2026-11-03，人审）
 - **上下文**：mdocs 已有通用 MCP 客户端（`src/server/mcp/mcp-client.ts`，stdio + Streamable HTTP，按访客隔离租户 MCP），
-  也能通过插件流水线装第三方 MCP。看上去「把 dsh-meme 包成 MCP server」是现成路径。
+  也能通过插件流水线装第三方 MCP。看上去「把表情包能力包成 MCP server」是现成路径。
 - **备选**
   1. MCP 插件：把表情包能力做成 MCP server，用户安装后工具名 `mcp__meme__send_meme`。
   2. 内置工具 + 占位符：模型输出占位符，前端换图。占位符里放 **资源 id**（不是分类）：
