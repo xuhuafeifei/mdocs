@@ -18,7 +18,8 @@ export const USER_SKILL_REF_MAX = 5;
 const NAME_MAX = 64;
 const DESC_MAX = 200;
 
-export const USER_SKILL_NAME_RE = /^[A-Za-z0-9_]+$/;
+/** 字母数字下划线，连字符只能出现在中间或末尾，不能是单独的 `-`。 */
+export const USER_SKILL_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/;
 
 export type UserSkillPublic = {
   id: string;

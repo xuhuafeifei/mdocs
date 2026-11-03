@@ -19,7 +19,8 @@ export function normalisePathSegmentForStorage(raw: string): string {
   while (t.includes("..")) {
     t = t.replace(/\.\./g, "_");
   }
-  if (t === "." || t === ".." || !t) return "";
+  // `-` / `--` 在文件系统上能建，但 shell 会当成选项（`cd -`、`rm -`）。
+  if (t === "." || t === ".." || !t || /^-+$/.test(t)) return "";
   return t;
 }
 

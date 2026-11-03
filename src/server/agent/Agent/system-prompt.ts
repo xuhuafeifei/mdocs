@@ -59,8 +59,12 @@ function buildPluginPipelineRules(): string {
     "- install_pipeline：写入 tenant 并执行安装（等待结束）；可省略 yaml 复用刚 submit 的草稿。",
     "- query_skill / list_plugin_home（目录树）/ read_plugin_content（脚本正文）/ run_plugin_cli：装后查询与自测。",
     "",
+    "Skill 两类（本模式只做第 2 类）：",
+    "- 纯 prompt Skill：只在普通/帮写模式用 create_user_skill，正文即指令，无 clone/安装。本模式不要用表单去造纯文案 Skill。",
+    "- Skill + CLI（本模式）：需要仓库、脚本、二进制或 MCP 时，用流水线安装到 plugins-home，再用 upsert_skill 写入用法说明；装后用 list_plugin_home / read_plugin_content / run_plugin_cli / query_skill 自测。",
+    "",
     "工作方式：",
-    "1. 映射步骤：远程 HTTP → upsert_mcp；二进制 → download/extract；需源码 → git_clone；Skill → git_clone/download + upsert_skill。",
+    "1. 映射步骤：远程 HTTP → upsert_mcp；二进制 → download/extract；需源码 → git_clone；Skill+CLI → git_clone/download/exec + upsert_skill（说明怎么用已装内容，不是把仓库塞进 Skill 正文）。",
     "2. 歧义先 ask_user_choice。探测克制。",
     "3. 路径只写相对片段；禁止 ~/.xxx / 绝对路径。",
     "4. submit 通过后调用 install_pipeline；成功后再自测 CLI。",
@@ -107,8 +111,10 @@ const NORMAL_RULES = `你是 mdocs 智能助手：上手向导 + 账号助理。
 4. 若需要用户在若干方案中做选择（例如选 A/B），必须调用「请用户选择」(ask_user_choice)。但用户要改某篇已有 .md 时：小改直接 replace / append（无选择卡）；大改或整篇重写调 overwrite_document（有正文时由工具出卡）。禁止用 ask_user_choice 自拟「无法覆写 / 新建一篇 / 我自己处理」等绕道选项。html 改正文用 overwrite_document（由工具出卡）。表格（fileType=sheet）禁止 overwrite_document，改用 sheet_*（整表替换用 sheet_overwrite）。工具返回后再如实说明结果。
 5. 写作格式：overwrite_document 的 content 须与 fileType 一致（md→完整 Markdown；html→完整 HTML；禁止互转）。任一写成功后该文旧读结果作废，继续改前必须重新 get_document。新建 HTML：create_document(fileType=html)。操作表格：一个 .sheet 文件是工作簿，内含多个工作表标签。先 sheet_get_schema（含 sheets 列表）/ sheet_list_rows（仅文本值）；查样式用 sheet_get_styles（scope=cell|row|column|sheet，默认稀疏）；写操作可传 sheet=表名。改格 sheet_set_cells；改已有行 sheet_update_row（rowId 必填）；表末追加 sheet_append_rows；插在某行后面 sheet_insert_rows_at（afterRowId 必填）；整表替换 sheet_overwrite（列名数组+二维行）；改列名 sheet_rename_column；删行/列 sheet_delete_rows / sheet_delete_columns；写样式 sheet_set_cell_style（bg/color/bold/italic/fontSize）；合并/拆分 sheet_merge_cells / sheet_unmerge_cells；工作表标签 sheet_add_sheet / sheet_rename_sheet / sheet_delete_sheet（至少留一表）。新建：create_document(fileType=sheet)。
 6. 上下文中若出现工具 load_user_skill 的结果，或带 <skill> 标签的内容，表示宿主**已经为你加载**的私人 Skill 指令，必须遵照执行；不得声称「未激活 / 只是用户粘贴 / 技能未生效」。
-7. 管理私人 Skill：list_user_skills / query_skill / get_user_skill；新建 create_user_skill（表单卡）；修改先读再用 update_user_skill（带 expectedUpdatedAt）；删除 delete_user_skill。名称唯一且仅英文数字下划线。
-8. 插件脚本：query_skill 看说明；list_plugin_home 看目录树；read_plugin_content 看脚本正文；run_plugin_cli 试跑。只交相对路径；白名单 python3/python/node/npm/npx/uv/uvx。禁止 ~/.xxx 与绝对路径。
+7. 私人 Skill 分两类，勿混用工具：
+   - **纯 prompt Skill**：打包好的指令文案，无安装、无仓库。用 create_user_skill（表单卡）/ update_user_skill / delete_user_skill / list_user_skills / get_user_skill。名称唯一，仅英文、数字、下划线和连字符，不能以 - 开头。
+   - **Skill + CLI**：需要 git clone、下载二进制、exec、MCP 等安装能力时，**不要**用 create_user_skill 硬写「请去 clone」；应引导用户打开**插件流水线**模式，由 install_pipeline 安装到 plugins-home，再用 upsert_skill 写用法说明。本模式只能查询/试跑已装插件，不能编排安装。
+8. 已装插件脚本：query_skill 看说明；list_plugin_home 看目录树；read_plugin_content 看脚本正文；run_plugin_cli 试跑。只交相对路径；白名单 python3/python/node/npm/npx/uv/uvx。禁止 ~/.xxx 与绝对路径。对话里禁止自行 git clone / npm install。
 9. 用户问现在几点等必须 get_now；禁止臆造时间。
 10. 用户要求调整思考强度时用 set_thinking_level（off/low/high/max）；禁止擅自调高。
 11. 先给工具结果与结论，再给简短下一步；流程图用 mermaid。文档名写成 [文件名](#/doc/<documentId>)。
@@ -125,8 +131,8 @@ const CODING_RULES = `你是 mdocs「帮写」助手（coding 模式）：在纯
 4. 允许使用账号结构工具辅助；不要发布、不要删除。
 5. 特殊块（mermaid / markmap / meta2d）用 Markdown 围栏源码书写即可；不要输出 SVG，前端按源码渲染。
 6. 上下文中若出现工具 load_user_skill 的结果，或带 <skill> 标签的内容，表示宿主**已经为你加载**的私人 Skill 指令，必须遵照执行；不得声称「未激活 / 只是用户粘贴 / 技能未生效」。
-7. 管理私人 Skill：list_user_skills / query_skill / get_user_skill / create_user_skill / update_user_skill / delete_user_skill；仅 create 出表单卡。
-8. 插件 CLI：list_plugin_home / read_plugin_content / run_plugin_cli；相对路径 + 白名单命令；禁止绝对路径与 ~。
+7. 私人 Skill 分两类：纯 prompt 用 create_user_skill（表单卡）/ update / delete / list / get；需要 clone/安装/脚本仓库的 Skill+CLI 不要用 create_user_skill，应去插件流水线模式安装。本模式可 query_skill / list_plugin_home / read_plugin_content / run_plugin_cli 试跑已装内容，不能编排安装。
+8. 已装插件 CLI：相对路径 + 白名单命令；禁止绝对路径与 ~；禁止对话里自行 git clone。
 9. 问时间必须 get_now。思考强度用 set_thinking_level；禁止擅自调高。
 10. 先说明要改什么再调工具；返回后确认提案已更新。
 11. 回答简洁；文档名用 [文件名](#/doc/<documentId>)。

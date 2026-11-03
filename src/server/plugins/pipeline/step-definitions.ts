@@ -349,7 +349,8 @@ export const PIPELINE_STEP_DEFINITIONS: PipelineStepDefinition[] = [
   {
     type: "upsert_skill",
     label: "注册 Skill",
-    description: "写入当前访客的 agent_user_skills。",
+    description:
+      "写入当前访客 skills/<name>/SKILL.md（Skill+CLI 的用法说明）。通常配合 git_clone/download/exec；纯 prompt 文案请用智能助手 create_user_skill，不必走流水线。",
     category: "configure",
     group: "注册能力",
     fields: [
@@ -436,7 +437,7 @@ export const PIPELINE_STEP_DEFINITIONS: PipelineStepDefinition[] = [
   {
     type: "remove_skill",
     label: "移除 Skill",
-    description: "从当前访客的 agent_user_skills 删除同名项。",
+    description: "删除当前访客 skills/<name>/（与 upsert_skill 对应）。",
     category: "uninstall",
     group: "清理",
     fields: [{ name: "name", label: "Skill 名称", type: "text", required: true }],

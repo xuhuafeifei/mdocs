@@ -25,7 +25,7 @@ export function listUserSkillsTool({ visitorId }: ToolDeps): AgentTool {
     name: "list_user_skills",
     label: "列出私人 Skill",
     description:
-      "列出当前访客已保存的私人 Agent Skill。返回 name / description / updatedAt，不含正文；需要正文时调用 get_user_skill。名称对本访客唯一，交互请用 name。",
+      "列出当前访客已保存的私人 Skill（含纯 prompt 与流水线 upsert 的用法说明）。返回 name / description / updatedAt，不含正文；需要正文时调用 get_user_skill。名称对本访客唯一。",
     parameters: Type.Object({}),
     execute: async () => {
       const skills = listUserSkills(visitorId).map((s) => ({
@@ -65,7 +65,7 @@ export function deleteUserSkillTool({ visitorId }: ToolDeps): AgentTool {
     name: "delete_user_skill",
     label: "删除私人 Skill",
     description:
-      "按 name 删除私人 Skill。name 须为已存在的英文数字下划线名称。删除前可用 list_user_skills 确认。无额外确认卡。",
+      "按 name 删除私人 Skill。name 须为已存在的英文、数字、下划线或连字符名称。删除前可用 list_user_skills 确认。无额外确认卡。",
     parameters: Type.Object({
       name: Type.String({ description: "要删除的 skill 名称" }),
     }),
@@ -136,7 +136,7 @@ export function createUserSkillTool({
     name: "create_user_skill",
     label: "新建私人 Skill",
     description:
-      "打开表单让用户填写新的私人 Skill（名称 / 简介 / 正文），带倒计时。名称须全英文数字下划线且对本访客唯一；简介可用中英文。用户提交后写入；超时/取消则不创建。",
+      "新建**纯 prompt Skill**：打包指令文案（无 clone/安装）。打开表单填名称/简介/正文，带倒计时。若需要 git 仓库、二进制、MCP 或可执行脚本，不要用本工具，应引导用户去插件流水线（git_clone/download/exec + upsert_skill）。名称须英文、数字、下划线或连字符（不能以 - 开头）且对本访客唯一。",
     parameters: Type.Object({
       title: Type.Optional(Type.String({ description: "表单标题" })),
       suggestedName: Type.Optional(
@@ -177,7 +177,7 @@ export function updateUserSkillTool({ visitorId }: ToolDeps): AgentTool {
     name: "update_user_skill",
     label: "修改私人 Skill",
     description:
-      "直接修改已有私人 Skill。先调用 get_user_skill 取得完整正文和 updatedAt，再提交完整 description/body；expectedUpdatedAt 不一致时拒绝覆盖。newName 可选，仍须英文数字下划线且唯一。",
+      "直接修改已有私人 Skill 正文（纯 prompt 或流水线写入的用法说明）。先 get_user_skill 取完整正文和 updatedAt，再提交；expectedUpdatedAt 不一致时拒绝覆盖。改安装物请走流水线重装，不要只改 Skill 文案冒充安装。newName 可选，仍须英文、数字、下划线或连字符（不能以 - 开头）且唯一。",
     parameters: Type.Object({
       name: Type.String({ description: "要修改的 skill 当前名称" }),
       newName: Type.Optional(Type.String({ description: "可选的新名称" })),

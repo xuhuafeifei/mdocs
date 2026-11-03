@@ -7,7 +7,7 @@ import {
   type AgentUserSkill,
 } from "../services/endpoints";
 
-const NAME_RE = /^[A-Za-z0-9_]+$/;
+const NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/;
 
 function isValidSkillName(name: string): boolean {
   return NAME_RE.test(name.trim());
@@ -83,7 +83,7 @@ export function AgentUserSkillsPanel() {
   async function onSave() {
     const trimmed = name.trim();
     if (!isValidSkillName(trimmed)) {
-      setError("名称仅允许英文、数字、下划线");
+      setError("名称仅允许英文、数字、下划线和连字符");
       return;
     }
     if (!body.trim()) {
@@ -149,7 +149,7 @@ export function AgentUserSkillsPanel() {
       <div className="mdocs-settings-cards">
         <div className="mdocs-settings-card">
           <p className="mdocs-settings-item-desc mdocs-agent-skills-lead">
-            私人提示词宏。名称对本账号唯一，仅英文、数字、下划线；智能助手 / 帮写里按名称引用。
+            私人提示词宏。名称对本账号唯一，仅英文、数字、下划线和连字符；智能助手 / 帮写里按名称引用。
           </p>
 
           {error ? <p className="mdocs-agent-skills-error">{error}</p> : null}
@@ -173,7 +173,7 @@ export function AgentUserSkillsPanel() {
                 />
                 {!nameOk ? (
                   <span className="mdocs-agent-skills-hint-bad">
-                    仅允许 A–Z、a–z、0–9、_
+                    仅允许 A–Z、a–z、0–9、_、-，且不能以 - 开头
                   </span>
                 ) : (
                   <span className="mdocs-agent-skills-hint">引用与索引键，保存后按此名称使用</span>
@@ -248,7 +248,7 @@ export function AgentUserSkillsPanel() {
                         {!valid ? (
                           <span
                             className="mdocs-agent-skills-badge-warn"
-                            title="名称含非法字符，请编辑改为英文数字下划线"
+                            title="名称含非法字符，请编辑改为英文、数字、下划线或连字符"
                           >
                             需改名
                           </span>

@@ -18,7 +18,7 @@ export function querySkillTool({ visitorId }: ToolDeps): AgentTool {
     name: "query_skill",
     label: "查询私人 Skill",
     description:
-      "按 name 查询当前访客私人 Skill（description / body / updatedAt）。与 upsert_skill 写入的目录对应。不传 name 则列出摘要（无正文）。需要跑插件脚本时再用 run_plugin_cli（相对 plugins-home）。",
+      "按 name 查询私人 Skill 正文（纯 prompt 或流水线 upsert_skill 的用法说明）。不传 name 则列摘要。Skill+CLI：先看说明，再 list_plugin_home / read_plugin_content / run_plugin_cli 跑 plugins-home 里已装脚本；本工具不负责安装。",
     parameters: Type.Object({
       name: Type.Optional(
         Type.String({ description: "Skill 名称；省略则列出全部摘要" }),

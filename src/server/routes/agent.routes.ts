@@ -317,7 +317,7 @@ export function buildAgentRouter(): Router {
               msg === "skill_body_too_long"
                 ? `body must be <= ${USER_SKILL_BODY_MAX_CHARS} chars`
                 : msg === "skill_name_invalid"
-                  ? "name must be English letters, digits, and underscore only"
+                  ? "name must be English letters, digits, underscore, or hyphen"
                   : msg,
           },
         });
@@ -369,7 +369,7 @@ export function buildAgentRouter(): Router {
             code: "BAD_REQUEST",
             message:
               msg === "skill_name_invalid"
-                ? "name must be English letters, digits, and underscore only"
+                ? "name must be English letters, digits, underscore, or hyphen"
                 : msg,
           },
         });

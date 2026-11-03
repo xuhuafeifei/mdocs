@@ -25,13 +25,15 @@ describe("normalizeSkillRefs", () => {
 });
 
 describe("normalizeName", () => {
-  it("accepts english digits underscore", () => {
+  it("accepts english digits underscore and hyphen", () => {
     expect(normalizeName(" My_Skill1 ")).toBe("My_Skill1");
+    expect(normalizeName("weekly-report")).toBe("weekly-report");
   });
 
-  it("rejects non-ascii or symbols", () => {
+  it("rejects non-ascii, spaces, or a hyphen-only name", () => {
     expect(() => normalizeName("周报")).toThrow("skill_name_invalid");
-    expect(() => normalizeName("bad-name")).toThrow("skill_name_invalid");
+    expect(() => normalizeName("-")).toThrow("skill_name_invalid");
+    expect(() => normalizeName("-bad")).toThrow("skill_name_invalid");
     expect(() => normalizeName("a b")).toThrow("skill_name_invalid");
   });
 });

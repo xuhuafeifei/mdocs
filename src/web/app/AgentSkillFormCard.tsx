@@ -5,7 +5,7 @@ import {
   submitAgentSkillFormApi,
 } from "../services/endpoints";
 
-const NAME_RE = /^[A-Za-z0-9_]+$/;
+const NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/;
 
 export type SkillFormCardStatus =
   | "open"
@@ -87,7 +87,7 @@ export function SkillFormCardBlock(props: {
       return;
     }
     if (!NAME_RE.test(n)) {
-      setLocalError("名称仅允许英文、数字、下划线");
+      setLocalError("名称仅允许英文、数字、下划线和连字符");
       return;
     }
     if (!body.trim()) {
@@ -173,7 +173,7 @@ export function SkillFormCardBlock(props: {
       {open ? (
         <div className="mdocs-agent-skill-form-fields">
           <label className="mdocs-agent-skill-form-field">
-            <span>名称（英文数字下划线）</span>
+            <span>名称（英文、数字、下划线、连字符）</span>
             <input
               type="text"
               value={name}
