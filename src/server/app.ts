@@ -23,6 +23,7 @@ import { buildMcpServersRouter } from "./routes/mcp-servers.routes.js";
 import { buildPluginsRouter } from "./routes/plugins.routes.js";
 import { buildMemesRouter } from "./routes/memes.routes.js";
 import { bootstrapAgentRuns } from "./agent/Agent/run-manager.js";
+import { bootstrapJobs } from "./jobs/index.js";
 import { startIndexTimer } from "./search/document-index-manager.js";
 import { ensureLocalEmbeddingModel } from "./search/embedding-model.js";
 import { ensureSystemMemesBackground } from "./memes/store.js";
@@ -48,6 +49,8 @@ export function buildApp(): Application {
   ensureSystemMemesBackground();
   // 进程重启后：未完成的 Agent run 标为 interrupted
   bootstrapAgentRuns();
+  // Job 调度：秒级 tick 总线（scanner / executor 后续挂接）
+  bootstrapJobs();
 
   const app = express();
   app.disable("x-powered-by");
