@@ -11,3 +11,9 @@ export function bootstrapJobs(): void {
 
 export { jobBus, JOBS_TICK, type JobsTickPayload } from "./events.js";
 export { startJobWatchdog, stopJobWatchdog, isJobWatchdogStarted } from "./watchdog.js";
+export { runJobAgent } from "./agent/run-job-agent.js";
+export type {
+  JobAgentContext,
+  JobAgentRunParams,
+  JobAgentRunResult,
+} from "./agent/types.js";
