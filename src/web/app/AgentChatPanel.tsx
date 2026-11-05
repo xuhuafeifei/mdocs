@@ -996,7 +996,7 @@ function ContextUsageRing(props: {
   const offset = c * (1 - pct / 100);
   const level = pct >= 90 ? "danger" : pct >= 70 ? "warn" : "ok";
   const tip = `上下文 ${pct}% · 已用 ${formatTokenCount(props.used)} / ${formatTokenCount(props.limit)} tokens`;
-  const label = `${tip} · 点击查看提示词占比`;
+  const label = `${tip} · 点击查看上下文构成`;
   return (
     <button
       type="button"
@@ -1134,8 +1134,13 @@ export const AgentChatPanel = forwardRef<
   {
     open: boolean;
     onClose: () => void;
-    /** 点击上下文占比圆环：查看系统提示词分段占比 */
-    onShowPromptDetail?: () => void;
+    /** 点击上下文占比圆环：打开上下文诊断（系统提示词 + 工具 + 历史） */
+    onShowPromptDetail?: (query: {
+      mode: "normal" | "coding";
+      sessionId: string | null;
+      domainId?: string | null;
+      documentId?: string | null;
+    }) => void;
     visitorName?: string;
     /** 跟随 FAB 的定位（left / bottom）；全屏时忽略 */
     anchorStyle?: React.CSSProperties;
@@ -3428,7 +3433,14 @@ export const AgentChatPanel = forwardRef<
                     percent={contextUsage.percent}
                     used={contextUsage.used}
                     limit={contextUsage.limit}
-                    onOpen={props.onShowPromptDetail}
+                    onOpen={() =>
+                      props.onShowPromptDetail?.({
+                        mode: coding ? "coding" : "normal",
+                        sessionId,
+                        domainId: domainId ?? null,
+                        documentId: documentId ?? null,
+                      })
+                    }
                   />
                 ) : null}
                 <button

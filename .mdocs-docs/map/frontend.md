@@ -171,14 +171,15 @@
 - **决策 / 修复**：[`../decisions/015-overwrite-all-diff-equality.md`](../decisions/015-overwrite-all-diff-equality.md) · [`../bug-fixes/overwrite-all-false-diff-hunks-2026-10-28.md`](../bug-fixes/overwrite-all-false-diff-hunks-2026-10-28.md)
 - **需求**：[`../requirements/agent-lexical-lines-diff/`](../requirements/agent-lexical-lines-diff/)
 
-### 智能助手 · 系统提示词诊断
+### 智能助手 · 上下文诊断
 
-- **关键词**：`系统提示词` `提示词诊断` `assembleSystemPrompt` `prompt-stats` `SystemPromptDialog` `ContextUsageRing` `onShowPromptDetail`
-- **结论**：点输入框旁的**上下文占比圆环**打开弹框（浮球角标方案已废弃）；数据来自 `GET /api/agent/system-prompt`，与真实 run 同一套 `assembleSystemPrompt`；按段显示字符/粗估 token/占比条；弹框 portal 到 body；预览不含 MCP 提示与多模态附件。
+- **关键词**：`系统提示词` `提示词诊断` `上下文诊断` `assembleSystemPrompt` `context-inspector` `SystemPromptDialog` `ContextUsageRing` `onShowPromptDetail` `buckets` `history`
+- **结论**：点输入框旁的**上下文占比圆环**打开弹框；`GET /api/agent/system-prompt` 返回与圆环同源三桶（system / tools / history）及可展开正文 `items`；传 `sessionId`/`domainId`/`documentId`；弹框 portal 到 body；预览不含 MCP 提示与多模态附件二进制。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `src/web/app/SystemPromptDialog.tsx` | `SystemPromptDialog` |
+  | `src/server/agent/Agent/context-inspector.ts` | `buildContextInspector` |
   | `src/web/app/AgentChatPanel.tsx` | `ContextUsageRing` `onShowPromptDetail` |
   | `src/web/app/App.tsx` | `systemPromptOpen` |
 - **需求**：[`../requirements/agent-prompt-inspector/`](../requirements/agent-prompt-inspector/)
@@ -216,7 +217,8 @@
 
 ### 冲突 Merge（inline）
 
-- **关键词**：`MergeView` `MergeInlinePane` `接收` `拒绝` `全部用我的` `三路 diff` `AI 合并` `合并说明`
+- **关键词**：`MergeView` `MergeInlinePane` `接收` `拒绝` `全部用我的` `三路 diff` `AI 合并` `合并说明` `diff-hunk` `LexicalMarkdownBridge` `mdocs 加载中`
+- **注意**：进合并前须 `stripDiffHunksFromLexicalJson`（桥无 DiffPlugin）；拉前先 `saveBeforeNavRef`。炸了靠 `MergeErrorBoundary`，勿让 `#root:empty`。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
@@ -224,8 +226,12 @@
   | `src/web/app/merge/MergeInlinePane.tsx` | `MergeInlinePane` |
   | `src/web/app/merge/merge-plan.ts` | `buildThreeWayMergePlan` |
   | `src/web/app/merge/merge-marked-text.ts` | `serializeMergeMarkedText` |
+  | `src/web/app/merge/stripDiffHunksFromLexicalJson.ts` | `stripDiffHunksFromLexicalJson` |
+  | `src/web/app/LexicalMarkdownBridge.tsx` | 灌入前 strip |
+  | `src/web/app/MergeErrorBoundary.tsx` | 合并页容错 |
   | `src/shared/file-type-policy.ts` | `canAiMerge` |
 - **需求**：[`../requirements/merge-inline-ui/`](../requirements/merge-inline-ui/) · [`../requirements/ai-merge/`](../requirements/ai-merge/) · merge-message 见 [`../requirements/publish-commit-message/`](../requirements/publish-commit-message/)
+- **修复**：[`../bug-fixes/pull-merge-diff-hunk-blank-screen-2026-11-04.md`](../bug-fixes/pull-merge-diff-hunk-blank-screen-2026-11-04.md)
 
 ### UI 视觉体系（选中态 / 层级 / 控件声量）
 

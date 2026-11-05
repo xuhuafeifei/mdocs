@@ -16,6 +16,8 @@ vi.mock("./npm-source.js", () => ({
 const { resetConfigCacheForTests } = await import("../config/index.js");
 const {
   addTenantMeme,
+  ensureSystemMemesBackground,
+  isSystemMemeLibraryReady,
   listSystemMemes,
   listTenantMemes,
   readMemeIndex,
@@ -148,5 +150,31 @@ describe("syncSystemMemesFrom", () => {
     installMemePack.mockResolvedValue(pack);
 
     await expect(syncSystemMemesFrom("mdocs-memes@latest")).rejects.toThrow(/非法条目/);
+  });
+});
+
+describe("ensureSystemMemesBackground", () => {
+  it("空库时后台触发同步，完成后就绪", async () => {
+    expect(isSystemMemeLibraryReady()).toBe(false);
+    const pack = makePack([{ id: "boot", desc: "启动", name: "boot.webp" }]);
+    installMemePack.mockResolvedValue(pack);
+
+    ensureSystemMemesBackground("mdocs-memes@latest");
+    await vi.waitFor(() => {
+      expect(isSystemMemeLibraryReady()).toBe(true);
+    });
+    expect(installMemePack).toHaveBeenCalledTimes(1);
+    expect(listSystemMemes().map((m) => m.id)).toEqual(["boot"]);
+  });
+
+  it("已有图时不再触发同步", async () => {
+    const pack = makePack([{ id: "keep", desc: "已有", name: "keep.webp" }]);
+    installMemePack.mockResolvedValue(pack);
+    await syncSystemMemesFrom("mdocs-memes@latest");
+    installMemePack.mockClear();
+
+    ensureSystemMemesBackground("mdocs-memes@latest");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(installMemePack).not.toHaveBeenCalled();
   });
 });

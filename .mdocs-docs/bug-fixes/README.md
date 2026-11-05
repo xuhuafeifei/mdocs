@@ -35,3 +35,4 @@
 | [overwrite-all-false-diff-hunks-2026-10-28](./overwrite-all-false-diff-hunks-2026-10-28.md) | overwrite_all 假 Diff + 红绿贴紧；比较放宽不强制同源 JSON（fork.35） |
 | [git-clone-tty-auth-hang-2026-11-02](./git-clone-tty-auth-hang-2026-11-02.md) | git_clone 向 tty 要 Username 卡死；禁交互 + 进程组 SIGKILL |
 | [member-picker-scroll-mobile-2026-11-03](./member-picker-scroll-mobile-2026-11-03.md) | 成员弹窗不滚动 + 手机被 transform 带偏；portal + minmax(0,1fr) + 上下分 |
+| [pull-merge-diff-hunk-blank-screen-2026-11-04](./pull-merge-diff-hunk-blank-screen-2026-11-04.md) | Diff/Keep All 后拉取进合并，桥遇 diff-hunk 抛错→整页「mdocs 加载中」 |

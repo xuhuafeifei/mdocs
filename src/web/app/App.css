@@ -9205,48 +9205,45 @@ strong.label {
   }
 }
 
-/* 系统提示词诊断弹框 */
+/* 上下文诊断弹框：固定尺寸，不随内容瘪掉 */
 .mdocs-prompt-dialog-backdrop {
   position: fixed;
   inset: 0;
   z-index: 3000;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 16px;
   background: rgba(15, 23, 18, 0.42);
 }
 
 .mdocs-prompt-dialog {
   width: min(880px, 100%);
-  max-height: min(86vh, 900px);
+  height: min(86vh, 720px);
+  max-height: min(86vh, 720px);
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 18px 20px 16px;
+  gap: 10px;
+  padding: 16px 18px 14px;
   border-radius: 14px;
   border: 1px solid var(--mdocs-border, #e5e5e5);
   background: var(--mdocs-surface, #fff);
   box-shadow: 0 24px 64px rgba(15, 23, 18, 0.24);
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .mdocs-prompt-dialog-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex: 0 0 auto;
 }
 
 .mdocs-prompt-dialog-title {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-}
-
-.mdocs-prompt-dialog-subtitle {
-  margin: 4px 0 0;
-  font-size: 0.78rem;
-  color: var(--mdocs-text-secondary, #6b7280);
 }
 
 .mdocs-prompt-dialog-close {
@@ -9291,23 +9288,131 @@ strong.label {
   font-variant-numeric: tabular-nums;
 }
 
-.mdocs-prompt-legend {
-  margin: 0;
-  font-size: 0.72rem;
-  line-height: 1.5;
-  color: var(--mdocs-text-secondary, #6b7280);
+.mdocs-prompt-buckets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   flex: 0 0 auto;
+}
+
+.mdocs-prompt-bucket {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  background: var(--mdocs-surface-muted, #f7f8f5);
+  cursor: pointer;
+  color: inherit;
+}
+
+.mdocs-prompt-bucket.is-active {
+  border-color: var(--mdocs-accent, #4caf50);
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(76, 175, 80, 0.25);
+}
+
+.mdocs-prompt-bucket-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.mdocs-prompt-bucket-meta {
+  font-size: 0.7rem;
+  color: var(--mdocs-text-secondary, #6b7280);
+  font-variant-numeric: tabular-nums;
+}
+
+.mdocs-prompt-bucket-bar {
+  margin-top: 2px;
+}
+
+.mdocs-prompt-split {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.9fr) minmax(0, 1.4fr);
+  gap: 10px;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .mdocs-prompt-rows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   overflow-y: auto;
   padding-right: 2px;
-  /* 只占自身高度，别被下面的全文区挤没 */
-  flex: 0 0 auto;
-  max-height: 34%;
+  min-height: 0;
+  border: 1px solid var(--mdocs-border, #e5e5e5);
+  border-radius: 10px;
+  padding: 6px;
+}
+
+.mdocs-prompt-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  color: inherit;
+}
+
+.mdocs-prompt-item:hover {
+  background: var(--mdocs-hover, rgba(0, 0, 0, 0.04));
+}
+
+.mdocs-prompt-item.is-active {
+  background: rgba(76, 175, 80, 0.1);
+}
+
+.mdocs-prompt-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .mdocs-prompt-dialog-backdrop {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .mdocs-prompt-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    padding: 12px 12px 10px;
+  }
+
+  .mdocs-prompt-bucket {
+    padding: 6px 8px;
+  }
+
+  .mdocs-prompt-bucket-label {
+    font-size: 0.72rem;
+  }
+
+  .mdocs-prompt-bucket-meta {
+    font-size: 0.65rem;
+  }
+
+  .mdocs-prompt-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(100px, 26%) minmax(0, 1fr);
+  }
+
+  .mdocs-prompt-total {
+    gap: 10px;
+    font-size: 0.74rem;
+  }
 }
 
 .mdocs-prompt-row-head {
@@ -9354,13 +9459,6 @@ strong.label {
   display: block;
   height: 100%;
   border-radius: 999px;
-}
-
-.mdocs-prompt-notes {
-  margin: 0;
-  padding-left: 18px;
-  font-size: 0.75rem;
-  color: var(--mdocs-text-secondary, #6b7280);
 }
 
 .mdocs-prompt-full-head {

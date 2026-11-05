@@ -16,6 +16,7 @@ import {
   listTenantMemes,
   readMemeSyncMeta,
   resolveMeme,
+  DEFAULT_SYSTEM_MEME_SPEC,
   syncSystemMemesFrom,
   updateTenantMeme,
 } from "../memes/store.js";
@@ -129,13 +130,13 @@ export function buildMemesRouter(): ReturnType<typeof Router> {
   /**
    * POST /system/sync — 从 npm 整包覆盖系统库
    *
-   * body: { spec?: string }  默认 "mdocs-memes@latest"
+   * body: { spec?: string }  默认 DEFAULT_SYSTEM_MEME_SPEC
    * 一次 npm install 完成下载 + 解包，随后原子替换 <dataDir>/dsh-meme/。
    */
   router.post("/system/sync", async (req: Request, res: Response) => {
     const visitorId = visitorIdOf(req);
     if (!visitorId) return fail(res, 401, "login required");
-    const spec = String(req.body?.spec ?? "").trim() || "mdocs-memes@latest";
+    const spec = String(req.body?.spec ?? "").trim() || DEFAULT_SYSTEM_MEME_SPEC;
     if (spec.length > 214) return fail(res, 400, "spec 过长");
     try {
       const result = await syncSystemMemesFrom(spec);

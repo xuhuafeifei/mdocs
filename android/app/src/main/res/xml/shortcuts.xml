@@ -3,6 +3,17 @@
     <shortcut
         android:enabled="true"
         android:icon="@drawable/ic_launcher"
+        android:shortcutId="refresh"
+        android:shortcutLongLabel="@string/menu_refresh"
+        android:shortcutShortLabel="@string/menu_refresh">
+        <intent
+            android:action="com.fgbg.mdocs.shell.REFRESH"
+            android:targetClass="com.fgbg.mdocs.shell.MainActivity"
+            android:targetPackage="com.fgbg.mdocs.shell" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher"
         android:shortcutId="change_server"
         android:shortcutLongLabel="@string/menu_change_server"
         android:shortcutShortLabel="@string/menu_change_server">

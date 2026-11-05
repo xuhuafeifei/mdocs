@@ -14,6 +14,7 @@ import {
 import {
   Bold,
   Columns3,
+  Copy,
   History,
   Italic,
   Merge,
@@ -723,6 +724,23 @@ export function SheetEditor(props: SheetEditorProps) {
             <span>{isBookmarked ? t("bookmarkRemove") : t("bookmarkAdd")}</span>
           </button>
         ) : null}
+        <button
+          type="button"
+          style={{
+            ...menuItemStyle,
+            opacity: 0.45,
+            cursor: "not-allowed",
+          }}
+          aria-disabled="true"
+          title={t("docCopyContentSheetDisabled")}
+          onClick={() => {
+            props.onShowToast?.(t("docCopyContentSheetDisabled"));
+            onClose();
+          }}
+        >
+          <Copy size={14} />
+          <span>{t("docCopyContent")}</span>
+        </button>
         {props.canManageInvites ? (
           <button
             type="button"

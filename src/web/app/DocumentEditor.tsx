@@ -52,7 +52,8 @@ import type { ApplyAgentDiffFn } from "./lexical-lines/agentDiff";
 import { MdocsDiffPlugin } from "./lexical-lines/MdocsDiffPlugin";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
-import { Heading1Icon, Heading2Icon, Heading3Icon, History, MinusIcon, Network, SigmaIcon, Table2Icon, ShieldUser, Users, Star, Workflow } from "lucide-react";
+import { Copy, Heading1Icon, Heading2Icon, Heading3Icon, History, MinusIcon, Network, SigmaIcon, Table2Icon, ShieldUser, Users, Star, Workflow } from "lucide-react";
+import { copyTextToClipboard } from "./copyText";
 
 import type { ActiveDocumentMeta, DocumentDetail } from "../../shared/types/document";
 import { getDocumentTaskQueue } from "./documentTaskQueue";
@@ -1288,6 +1289,30 @@ export function DocumentEditor(props: DocumentEditorProps) {
             <span>{isBookmarked ? t("bookmarkRemove") : t("bookmarkAdd")}</span>
           </button>
         ) : null}
+        <button
+          type="button"
+          style={menuItemStyle}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+          onClick={() => {
+            // 须在点击同步路径里拿正文并复制，避免丢掉用户手势
+            let text = "";
+            try {
+              const md = editor?.getDocument("markdown");
+              text = typeof md === "string" ? md : "";
+            } catch {
+              text = "";
+            }
+            if (!text.trim()) text = props.initialContent || "";
+            void copyTextToClipboard(text).then((ok) => {
+              props.onShowToast?.(ok ? t("docCopySuccess") : t("docCopyFailed"));
+            });
+            onClose();
+          }}
+        >
+          <Copy size={14} />
+          <span>{t("docCopyContentMd")}</span>
+        </button>
         {props.canManageInvites ? (
           <button
             type="button"

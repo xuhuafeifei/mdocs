@@ -13,11 +13,7 @@ import {
   startAgentRun,
   subscribeAgentRun,
 } from "../agent/Agent/run-manager.js";
-import { assembleSystemPrompt } from "../agent/Agent/system-prompt.js";
-import { summarizePrompt } from "../agent/Agent/prompt-stats.js";
-import { loadSoulPromptSection } from "../soul/load-for-agent.js";
-import { buildSkillMetaSection } from "../agent/Agent/skill-meta-prompt.js";
-import { buildMemeCatalogSection } from "../memes/prompt.js";
+import { buildContextInspector } from "../agent/Agent/context-inspector.js";
 import { SessionCompactingError } from "../agent/Agent/context-compact-lock.js";
 import { compactAgentSession } from "../agent/Agent/context-compact.js";
 import {
@@ -42,7 +38,6 @@ import {
   cancelSkillForm,
 } from "../agent/Agent/skill-form-pending.js";
 import {
-  DEFAULT_AGENT_CONTEXT_WINDOW,
   getVisitorAgentConfig,
   listVisitorAgentConfigs,
   toPublicAgentConfig,
@@ -434,8 +429,8 @@ export function buildAgentRouter(): Router {
   });
 
   /**
-   * 提示词诊断：把「本轮实际会发给模型的 system prompt」按段拆开返回。
-   * 不含 MCP 工具提示（要连 MCP 才知道）与多模态附件。
+   * 上下文诊断：系统提示词分段 + 工具定义 + 会话历史（与圆环同源），条目带正文。
+   * 不含 MCP 工具提示（要连 MCP 才知道）与多模态附件二进制。
    */
   router.get("/system-prompt", async (req, res) => {
     if (!req.visitor) {
@@ -447,28 +442,16 @@ export function buildAgentRouter(): Router {
       typeof req.query?.domainId === "string" ? req.query.domainId : undefined;
     const documentId =
       typeof req.query?.documentId === "string" ? req.query.documentId : undefined;
-    const refs =
-      mode === "normal" && (domainId || documentId)
-        ? { ...(domainId ? { domainId } : {}), ...(documentId ? { documentId } : {}) }
-        : null;
-    const assembled = assembleSystemPrompt(mode, refs, {
-      hasMcpTools: false,
-      soulSection: loadSoulPromptSection(req.visitor.visitor_id),
-      skillMetaSection: buildSkillMetaSection(req.visitor.visitor_id),
-      memeCatalogSection: buildMemeCatalogSection(req.visitor.visitor_id),
+    const sessionId =
+      typeof req.query?.sessionId === "string" ? req.query.sessionId : undefined;
+    const data = await buildContextInspector({
+      visitorId: req.visitor.visitor_id,
+      mode,
+      sessionId,
+      domainId,
+      documentId,
     });
-    // 占比基数是该访客真实生效的上下文窗口，不是提示词自身长度
-    const contextWindow =
-      getVisitorAgentConfig(req.visitor.visitor_id)?.contextWindow ??
-      DEFAULT_AGENT_CONTEXT_WINDOW;
-    res.json({
-      data: {
-        mode,
-        ...summarizePrompt(assembled, contextWindow),
-        prompt: assembled.prompt,
-        notes: ["预览不含本轮 MCP 工具提示与多模态附件内容"],
-      },
-    });
+    res.json({ data });
   });
 
   router.get("/sessions", async (req, res) => {

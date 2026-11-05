@@ -25,6 +25,7 @@ import { buildMemesRouter } from "./routes/memes.routes.js";
 import { bootstrapAgentRuns } from "./agent/Agent/run-manager.js";
 import { startIndexTimer } from "./search/document-index-manager.js";
 import { ensureLocalEmbeddingModel } from "./search/embedding-model.js";
+import { ensureSystemMemesBackground } from "./memes/store.js";
 import { ensureSystemPipelinesSeeded } from "./plugins/pipeline/catalog.js";
 import { ensureGlobalSoulShell } from "./soul/ensure-shells.js";
 import { useLogger } from "./logger/logger.js";
@@ -43,6 +44,8 @@ export function buildApp(): Application {
   startIndexTimer();
   // 本地 embedding 模型：后台确保文件并 load，不阻塞 listen
   ensureLocalEmbeddingModel();
+  // 系统表情包：空库则后台 npm 同步，不阻塞 listen
+  ensureSystemMemesBackground();
   // 进程重启后：未完成的 Agent run 标为 interrupted
   bootstrapAgentRuns();
 

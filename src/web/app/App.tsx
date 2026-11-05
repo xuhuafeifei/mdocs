@@ -61,7 +61,7 @@ import {
   saveAgentTreeRailOpen,
   useAgentFabPosition,
 } from "./AgentFab";
-import { SystemPromptDialog } from "./SystemPromptDialog";
+import { SystemPromptDialog, type SystemPromptDialogQuery } from "./SystemPromptDialog";
 import { MessageDialog } from "./MessageDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DocSearchOverlay } from "./DocSearchOverlay";
@@ -71,6 +71,8 @@ import { useEdgeSwipeOpen } from "./hooks/useEdgeSwipeOpen";
 import { ConflictModal } from "./ConflictModal";
 import { CommentsPanel } from "./CommentsPanel";
 import { PublishMessageDialog } from "./PublishMessageDialog";
+import { MergeErrorBoundary } from "./MergeErrorBoundary";
+import { stripDiffHunksFromLexicalJson } from "./merge/stripDiffHunksFromLexicalJson";
 import {
   getDraft,
   saveDraft as saveDraftRecord,
@@ -374,7 +376,13 @@ export function App() {
     void (async () => {
       const draft = await getDraft(activeDocMeta.documentId);
       if (draft?.conflict) {
-        setMergeConflict(draft.conflict);
+        setMergeConflict({
+          ...draft.conflict,
+          localSnapshotContent: stripDiffHunksFromLexicalJson(
+            draft.conflict.localSnapshotContent,
+            "keep",
+          ),
+        });
         return;
       }
       if (draft && editBaseCommitId && remoteCommitId) {
@@ -383,7 +391,7 @@ export function App() {
         const built: DraftConflictRecord = {
           localBaseCommitId: editBase,
           remoteCommitId,
-          localSnapshotContent: draft.content,
+          localSnapshotContent: stripDiffHunksFromLexicalJson(draft.content, "keep"),
         };
         await saveDraftConflict(activeDocMeta.documentId, {
           localBaseCommitId: built.localBaseCommitId,
@@ -465,6 +473,7 @@ export function App() {
   const [agentTreeRailOpen, setAgentTreeRailOpen] = useState(() => loadAgentTreeRailOpen());
   const [agentFabPos, setAgentFabPos] = useAgentFabPosition();
   const [systemPromptOpen, setSystemPromptOpen] = useState(false);
+  const [systemPromptQuery, setSystemPromptQuery] = useState<SystemPromptDialogQuery>({});
   const agentPanelRef = useRef<AgentChatPanelHandle | null>(null);
   /** PC 且偏好贴左且面板打开 → 左列替换文档树 */
   const agentDockLayout = agentDocked && agentPanelOpen && !isNarrow;
@@ -1823,6 +1832,8 @@ export function App() {
 
   async function handleSyncClick(): Promise<void> {
     if (!activeDocMeta) return;
+    // Keep All 后编辑器已无 hunk，但防抖草稿可能仍是旧的带 diff-hunk JSON；先刷盘再读
+    await saveBeforeNavRef.current?.();
     const draft = await getDraft(activeDocMeta.documentId);
     const hasUnpublishedDraft = Boolean(draft && !draft.published);
     const conflictPending =
@@ -1844,7 +1855,8 @@ export function App() {
           const built: DraftConflictRecord = {
             localBaseCommitId: editBase,
             remoteCommitId,
-            localSnapshotContent: draft.content,
+            // 再压一遍：刷盘前写下的 conflict 快照 / 竞态仍可能带 hunk
+            localSnapshotContent: stripDiffHunksFromLexicalJson(draft.content, "keep"),
           };
           await saveDraftConflict(activeDocMeta.documentId, {
             localBaseCommitId: editBase,
@@ -2296,7 +2308,10 @@ export function App() {
                 <AgentChatPanel
                   ref={agentPanelRef}
                   open={agentPanelOpen}
-                  onShowPromptDetail={() => setSystemPromptOpen(true)}
+                  onShowPromptDetail={(query) => {
+                    setSystemPromptQuery(query);
+                    setSystemPromptOpen(true);
+                  }}
                   onClose={() => {
                     setAgentPanelOpen(false);
                     setAgentPanelFullscreen(false);
@@ -2711,25 +2726,37 @@ export function App() {
               forceBusy={forceOverwriteBusy}
             />
             {mergeViewOpen && activeDocMeta && mergeConflict && (
-              <Suspense fallback={<div className="merge-view-loading">{t("mergeLoadingRemote")}</div>}>
-                <MergeView
-                  documentId={activeDocMeta.documentId}
-                  displayName={activeDocMeta.displayName}
-                  conflict={mergeConflict}
-                  fileType={activeDocMeta.fileType}
-                  onClose={() => setMergeViewOpen(false)}
-                  onSuccess={handleMergeSuccess}
-                  onError={(msg) => setAlertMessage(msg)}
-                  updateDocument={updateDocumentWithPublishMessage}
-                  requestMergePublishMessage={requestMergePublishMessage}
-                  onForceOverwrite={
-                    visitor && activeDocMeta && visitor.visitorId === activeDocMeta.ownerVisitorId
-                      ? () => void handleForceOverwrite()
-                      : undefined
-                  }
-                  forceBusy={forceOverwriteBusy}
-                />
-              </Suspense>
+              <MergeErrorBoundary
+                fallbackTitle={t("mergeTitle")}
+                onError={(msg) => setAlertMessage(msg)}
+                onClose={() => setMergeViewOpen(false)}
+              >
+                <Suspense fallback={<div className="merge-view-loading">{t("mergeLoadingRemote")}</div>}>
+                  <MergeView
+                    documentId={activeDocMeta.documentId}
+                    displayName={activeDocMeta.displayName}
+                    conflict={{
+                      ...mergeConflict,
+                      localSnapshotContent: stripDiffHunksFromLexicalJson(
+                        mergeConflict.localSnapshotContent,
+                        "keep",
+                      ),
+                    }}
+                    fileType={activeDocMeta.fileType}
+                    onClose={() => setMergeViewOpen(false)}
+                    onSuccess={handleMergeSuccess}
+                    onError={(msg) => setAlertMessage(msg)}
+                    updateDocument={updateDocumentWithPublishMessage}
+                    requestMergePublishMessage={requestMergePublishMessage}
+                    onForceOverwrite={
+                      visitor && activeDocMeta && visitor.visitorId === activeDocMeta.ownerVisitorId
+                        ? () => void handleForceOverwrite()
+                        : undefined
+                    }
+                    forceBusy={forceOverwriteBusy}
+                  />
+                </Suspense>
+              </MergeErrorBoundary>
             )}
 
             {/* 全局 Toast 消息 */}
@@ -3176,13 +3203,17 @@ export function App() {
           <SystemPromptDialog
             open={systemPromptOpen}
             onClose={() => setSystemPromptOpen(false)}
+            query={systemPromptQuery}
           />
           {agentPanelOpen && !agentDockLayout ? (
             <Suspense fallback={null}>
               <AgentChatPanel
                 ref={agentPanelRef}
                 open={agentPanelOpen}
-                onShowPromptDetail={() => setSystemPromptOpen(true)}
+                onShowPromptDetail={(query) => {
+                  setSystemPromptQuery(query);
+                  setSystemPromptOpen(true);
+                }}
                 onClose={() => {
                   setAgentPanelOpen(false);
                   setAgentPanelFullscreen(false);

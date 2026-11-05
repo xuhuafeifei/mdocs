@@ -1,57 +1,70 @@
 /**
- * 系统提示词诊断弹框：按段展示 system prompt 的体量与占比，并可查看/复制全文。
- * 数据来自 GET /api/agent/system-prompt（与真实 run 同一套 buildSystemPrompt）。
- *
- * 两个基准别混：
- * - 条形长度 = 该段在系统提示词内部的构成占比（看完知道哪段最胖）
- * - 右侧百分比 = 该段占模型上下文窗口的比例（看完知道真实体量）
+ * 上下文诊断弹框：系统提示词 + 工具定义 + 会话历史（与圆环同源），可点开看正文。
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Copy, X } from "lucide-react";
 
 import { useI18n } from "../i18n";
 import {
   fetchAgentSystemPromptApi,
+  type AgentContextBucketId,
   type AgentSystemPromptPayload,
 } from "../services/endpoints";
 
-const SECTION_COLORS: Record<string, string> = {
-  base: "#2f6f4e",
-  "ui-context": "#4f7fb8",
-  soul: "#b8802a",
-  "skill-meta": "#7a5fb0",
-  mcp: "#3f8f7d",
-  pipeline: "#b05555",
-  "pipeline-yaml": "#8a6b3f",
+const BUCKET_COLORS: Record<AgentContextBucketId, string> = {
+  system: "#2f6f4e",
+  tools: "#4f7fb8",
+  history: "#b8802a",
 };
 
-function colorFor(id: string): string {
-  return SECTION_COLORS[id] ?? "#6b7280";
-}
-
-/** 0.002% 显示成 "<0.01%"，避免一堆 0.00% 看着像没数据 */
 function formatPercent(value: number): string {
   if (value <= 0) return "0%";
   if (value < 0.01) return "<0.01%";
   return `${value}%`;
 }
 
-export function SystemPromptDialog(props: { open: boolean; onClose: () => void }) {
+export type SystemPromptDialogQuery = {
+  mode?: "normal" | "coding";
+  sessionId?: string | null;
+  domainId?: string | null;
+  documentId?: string | null;
+};
+
+export function SystemPromptDialog(props: {
+  open: boolean;
+  onClose: () => void;
+  query?: SystemPromptDialogQuery;
+}) {
   const { t } = useI18n();
   const [data, setData] = useState<AgentSystemPromptPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [bucket, setBucket] = useState<AgentContextBucketId>("history");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!props.open) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
-    void fetchAgentSystemPromptApi("normal")
+    void fetchAgentSystemPromptApi({
+      mode: props.query?.mode ?? "normal",
+      sessionId: props.query?.sessionId,
+      domainId: props.query?.domainId,
+      documentId: props.query?.documentId,
+    })
       .then((payload) => {
-        if (!cancelled) setData(payload);
+        if (cancelled) return;
+        setData(payload);
+        const preferred: AgentContextBucketId =
+          payload.buckets.find((b) => b.id === "history" && b.tokens > 0)?.id ??
+          payload.buckets.find((b) => b.tokens > 0)?.id ??
+          "system";
+        setBucket(preferred);
+        const first = payload.items.find((it) => it.bucket === preferred);
+        setSelectedId(first?.id ?? payload.items[0]?.id ?? null);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -62,7 +75,13 @@ export function SystemPromptDialog(props: { open: boolean; onClose: () => void }
     return () => {
       cancelled = true;
     };
-  }, [props.open]);
+  }, [
+    props.open,
+    props.query?.mode,
+    props.query?.sessionId,
+    props.query?.domainId,
+    props.query?.documentId,
+  ]);
 
   useEffect(() => {
     if (!props.open) return;
@@ -73,23 +92,39 @@ export function SystemPromptDialog(props: { open: boolean; onClose: () => void }
     return () => window.removeEventListener("keydown", onKey);
   }, [props.open, props.onClose]);
 
-  const copyPrompt = useCallback(async () => {
-    if (!data?.prompt) return;
+  const bucketItems = useMemo(
+    () => (data?.items ?? []).filter((it) => it.bucket === bucket),
+    [data?.items, bucket],
+  );
+
+  const selected = useMemo(
+    () => (data?.items ?? []).find((it) => it.id === selectedId) ?? null,
+    [data?.items, selectedId],
+  );
+
+  useEffect(() => {
+    if (!data) return;
+    if (selected && selected.bucket === bucket) return;
+    setSelectedId(bucketItems[0]?.id ?? null);
+  }, [bucket, bucketItems, data, selected]);
+
+  const copySelected = useCallback(async () => {
+    const text = selected?.content ?? data?.prompt;
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(data.prompt);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
-      // 剪贴板不可用时静默失败，全文仍可手动选中复制
+      // 剪贴板不可用时静默失败
     }
-  }, [data?.prompt]);
+  }, [selected?.content, data?.prompt]);
 
   if (!props.open) return null;
 
   const windowSize = data?.window ?? 0;
   const knownWindow = windowSize > 0;
 
-  // 挂在 body：shell / 阅读模式可能带 transform，fixed 会因此错位。
   return createPortal(
     <div
       className="mdocs-prompt-dialog-backdrop"
@@ -105,10 +140,7 @@ export function SystemPromptDialog(props: { open: boolean; onClose: () => void }
         aria-label={t("agentPromptTitle")}
       >
         <header className="mdocs-prompt-dialog-head">
-          <div>
-            <h2 className="mdocs-prompt-dialog-title">{t("agentPromptTitle")}</h2>
-            <p className="mdocs-prompt-dialog-subtitle">{t("agentPromptSubtitle")}</p>
-          </div>
+          <h2 className="mdocs-prompt-dialog-title">{t("agentPromptTitle")}</h2>
           <button
             type="button"
             className="mdocs-prompt-dialog-close"
@@ -130,71 +162,110 @@ export function SystemPromptDialog(props: { open: boolean; onClose: () => void }
           <>
             <div className="mdocs-prompt-total">
               <span className="mdocs-prompt-total-strong">
-                ~{data.total.tokens.toLocaleString()} {t("agentPromptTokens")}
+                ~{(data.used ?? data.total.tokens).toLocaleString()} /{" "}
+                {(data.limit ?? data.window).toLocaleString()} {t("agentPromptTokens")}
               </span>
               <span className="mdocs-prompt-total-strong">
                 {knownWindow
-                  ? `${t("agentPromptOfWindow")} ${formatPercent(data.total.windowPercent)}`
+                  ? `${t("agentPromptOfWindow")} ${formatPercent(
+                      pctOf(data.used ?? data.total.tokens, data.limit || data.window),
+                    )}`
                   : t("agentPromptWindowUnknown")}
               </span>
-              <span>
-                {t("agentPromptWindow")}{" "}
-                {knownWindow ? windowSize.toLocaleString() : "—"} {t("agentPromptTokens")}
-              </span>
-              <span>
-                {data.total.chars.toLocaleString()} {t("agentPromptChars")}
-              </span>
-              <span>
-                {data.total.sections} {t("agentPromptSections")}
-              </span>
+              {data.sessionId ? (
+                <span>
+                  {t("agentPromptSession")} {data.sessionId.slice(0, 8)}…
+                </span>
+              ) : null}
             </div>
 
-            <div className="mdocs-prompt-rows">
-              {data.sections.map((section) => (
-                <div key={section.id} className="mdocs-prompt-row">
-                  <div className="mdocs-prompt-row-head">
-                    <span className="mdocs-prompt-row-label">{section.label}</span>
-                    <span className="mdocs-prompt-row-num">
-                      ~{section.tokens.toLocaleString()} {t("agentPromptTokens")}
-                    </span>
-                    <span className="mdocs-prompt-row-pct">
-                      {knownWindow ? formatPercent(section.windowPercent) : formatPercent(section.sharePercent)}
-                    </span>
-                  </div>
-                  <div className="mdocs-prompt-bar">
+            <div className="mdocs-prompt-buckets" role="tablist" aria-label={t("agentPromptBuckets")}>
+              {data.buckets.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={bucket === b.id}
+                  className={
+                    "mdocs-prompt-bucket" + (bucket === b.id ? " is-active" : "")
+                  }
+                  onClick={() => setBucket(b.id)}
+                >
+                  <span className="mdocs-prompt-bucket-label">{b.label}</span>
+                  <span className="mdocs-prompt-bucket-meta">
+                    ~{b.tokens.toLocaleString()} · {formatPercent(b.shareOfUsedPercent)}
+                  </span>
+                  <span className="mdocs-prompt-bar mdocs-prompt-bucket-bar">
                     <span
                       style={{
-                        width: `${Math.max(section.sharePercent, 0.5)}%`,
-                        background: colorFor(section.id),
+                        width: `${Math.max(b.shareOfUsedPercent, b.tokens > 0 ? 0.5 : 0)}%`,
+                        background: BUCKET_COLORS[b.id],
                       }}
                     />
-                  </div>
-                </div>
+                  </span>
+                </button>
               ))}
             </div>
 
-            <p className="mdocs-prompt-legend">{t("agentPromptBarHint")}</p>
+            <div className="mdocs-prompt-split">
+              <div className="mdocs-prompt-rows" role="listbox" aria-label={t("agentPromptItems")}>
+                {bucketItems.length === 0 ? (
+                  <p className="mdocs-prompt-dialog-hint">{t("agentPromptEmptyBucket")}</p>
+                ) : (
+                  bucketItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="option"
+                      aria-selected={selectedId === item.id}
+                      className={
+                        "mdocs-prompt-item" + (selectedId === item.id ? " is-active" : "")
+                      }
+                      onClick={() => setSelectedId(item.id)}
+                    >
+                      <div className="mdocs-prompt-row-head">
+                        <span className="mdocs-prompt-row-label">{item.label}</span>
+                        <span className="mdocs-prompt-row-num">
+                          ~{item.tokens.toLocaleString()}
+                        </span>
+                        <span className="mdocs-prompt-row-pct">
+                          {knownWindow
+                            ? formatPercent(item.windowPercent)
+                            : ""}
+                        </span>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
 
-            {data.notes.length > 0 ? (
-              <ul className="mdocs-prompt-notes">
-                {data.notes.map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
-            ) : null}
-
-            <div className="mdocs-prompt-full-head">
-              <span>{t("agentPromptFull")}</span>
-              <button type="button" className="mdocs-prompt-copy" onClick={() => void copyPrompt()}>
-                <Copy size={13} />
-                {copied ? t("agentPromptCopied") : t("agentPromptCopy")}
-              </button>
+              <div className="mdocs-prompt-detail">
+                <div className="mdocs-prompt-full-head">
+                  <span>{selected?.label ?? t("agentPromptFull")}</span>
+                  <button
+                    type="button"
+                    className="mdocs-prompt-copy"
+                    onClick={() => void copySelected()}
+                    disabled={!selected?.content && !data.prompt}
+                  >
+                    <Copy size={13} />
+                    {copied ? t("agentPromptCopied") : t("agentPromptCopy")}
+                  </button>
+                </div>
+                <pre className="mdocs-prompt-full">
+                  {selected?.content || data.prompt || ""}
+                </pre>
+              </div>
             </div>
-            <pre className="mdocs-prompt-full">{data.prompt}</pre>
           </>
         ) : null}
       </div>
     </div>,
     document.body,
   );
+}
+
+function pctOf(part: number, whole: number): number {
+  if (whole <= 0) return 0;
+  return Math.round((part / whole) * 10000) / 100;
 }

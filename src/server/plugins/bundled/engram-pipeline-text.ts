@@ -2,6 +2,8 @@
  * Engram 系统流水线正文（与 engram.pipeline.yaml 同步）。
  * 打包进 dist，避免 yaml 未拷贝时 seed 落成空壳。
  */
+import { engramSoulYamlIndented } from "../engram-soul.md.js";
+
 export const BUNDLED_ENGRAM_PIPELINE_YAML = `# Engram — 系统流水线母版（plugins-catalog/engram；启用后 copy 到 tenant）
 #
 # 下载：不填 url，runtime=engram 时由系统按平台选国内镜像（不直连 GitHub）。
@@ -53,9 +55,7 @@ steps:
     scope: tenant
     file: engram.md
     content: |
-      # Engram
-
-      本机记忆已接入。空间按当前访客隔离，无需也不应切换他人记忆。
+${engramSoulYamlIndented("      ")}
 
 uninstall:
   - type: delete_soul_sidecar

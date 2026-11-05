@@ -95,6 +95,9 @@ class MainActivity : AppCompatActivity() {
             updateSystemGestureExclusion()
         }
         webView.loadUrl(url)
+        if (isRefreshIntent(intent)) {
+            hardReloadFromServer()
+        }
 
         onBackPressedDispatcher.addCallback(
             this,
@@ -109,6 +112,36 @@ class MainActivity : AppCompatActivity() {
                 }
             },
         )
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (isRefreshIntent(intent) && ::webView.isInitialized) {
+            hardReloadFromServer()
+        }
+    }
+
+    private fun isRefreshIntent(intent: Intent?): Boolean {
+        return intent?.action == ACTION_REFRESH
+    }
+
+    /** 清 WebView 磁盘/内存缓存后重载配置的服务器首页（杀进程不会清缓存）。 */
+    private fun hardReloadFromServer() {
+        val url = Prefs.getUrl(this)?.takeIf { it.isNotBlank() } ?: return
+        configuredServer = url
+        allowedHost = Uri.parse(url).host
+        webView.stopLoading()
+        webView.clearCache(true)
+        webView.clearHistory()
+        webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
+        webView.loadUrl(url)
+        webView.settings.cacheMode = WebSettings.LOAD_DEFAULT
+        Toast.makeText(this, R.string.refresh_done, Toast.LENGTH_SHORT).show()
+    }
+
+    companion object {
+        const val ACTION_REFRESH = "com.fgbg.mdocs.shell.REFRESH"
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

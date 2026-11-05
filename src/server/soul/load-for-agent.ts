@@ -11,6 +11,7 @@ import {
   visitorSoulMdocsPath,
   SOUL_FILENAME,
 } from "./paths.js";
+import { ensureEngramSoulSidecar } from "../plugins/engram-soul.md.js";
 
 const SINGLE_FILE_MAX = 32 * 1024;
 const TOTAL_MAX = 64 * 1024;
@@ -48,6 +49,8 @@ function listSidecars(dir: string): string[] {
 export function loadSoulPromptSection(visitorId: string): string {
   ensureGlobalSoulShell();
   ensureVisitorSoulShell(visitorId);
+  // 已装 Engram 但旁路仍是旧 stub 时，原地换成完整用法指南
+  ensureEngramSoulSidecar(visitorId);
 
   const parts: string[] = [];
   let remaining = TOTAL_MAX;

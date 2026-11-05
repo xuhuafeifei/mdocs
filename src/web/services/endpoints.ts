@@ -1446,6 +1446,29 @@ export interface AgentPromptSectionStat {
   windowPercent: number;
 }
 
+export type AgentContextBucketId = "system" | "tools" | "history";
+
+export interface AgentContextBucketStat {
+  id: AgentContextBucketId;
+  label: string;
+  chars: number;
+  tokens: number;
+  windowPercent: number;
+  /** 占已用三桶之和（对齐圆环构成） */
+  shareOfUsedPercent: number;
+}
+
+export interface AgentContextInspectorItem {
+  id: string;
+  bucket: AgentContextBucketId;
+  label: string;
+  role?: string;
+  chars: number;
+  tokens: number;
+  windowPercent: number;
+  content: string;
+}
+
 export interface AgentSystemPromptPayload {
   mode: "normal" | "coding";
   sections: AgentPromptSectionStat[];
@@ -1459,13 +1482,30 @@ export interface AgentSystemPromptPayload {
   window: number;
   prompt: string;
   notes: string[];
+  /** 与圆环同源的三桶 */
+  buckets: AgentContextBucketStat[];
+  /** 可展开正文：系统段 / 工具 / 历史消息 */
+  items: AgentContextInspectorItem[];
+  sessionId: string | null;
+  used: number;
+  limit: number;
 }
 
-/** 提示词诊断：拿本轮会发给模型的 system prompt（按段拆分）。 */
+/** 上下文诊断：系统提示词 + 工具定义 + 会话历史（带正文）。 */
 export function fetchAgentSystemPromptApi(
-  mode: "normal" | "coding" = "normal",
+  opts: {
+    mode?: "normal" | "coding";
+    sessionId?: string | null;
+    domainId?: string | null;
+    documentId?: string | null;
+  } = {},
 ): Promise<AgentSystemPromptPayload> {
-  return api<AgentSystemPromptPayload>(`/api/agent/system-prompt?mode=${mode}`);
+  const q = new URLSearchParams();
+  q.set("mode", opts.mode ?? "normal");
+  if (opts.sessionId) q.set("sessionId", opts.sessionId);
+  if (opts.domainId) q.set("domainId", opts.domainId);
+  if (opts.documentId) q.set("documentId", opts.documentId);
+  return api<AgentSystemPromptPayload>(`/api/agent/system-prompt?${q.toString()}`);
 }
 
 export interface AgentSessionMessage {

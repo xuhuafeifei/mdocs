@@ -5,7 +5,8 @@
  * 帮写 / 评论由政策 aiWrite、comments 开放（落盘管道在 App）。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { History, ShieldUser, Star, Users } from "lucide-react";
+import { Copy, History, ShieldUser, Star, Users } from "lucide-react";
+import { copyTextToClipboard } from "./copyText";
 import type { ActiveDocumentMeta, DocumentDetail } from "../../shared/types/document";
 import type { DomainSummary } from "../../shared/types/domain";
 import {
@@ -438,6 +439,20 @@ export function HtmlEditor(props: HtmlEditorProps) {
             <span>{isBookmarked ? t("bookmarkRemove") : t("bookmarkAdd")}</span>
           </button>
         ) : null}
+        <button
+          type="button"
+          style={menuItemStyle}
+          onClick={() => {
+            const text = contentRef.current || props.initialContent || "";
+            void copyTextToClipboard(text).then((ok) => {
+              props.onShowToast?.(ok ? t("docCopySuccess") : t("docCopyFailed"));
+            });
+            onClose();
+          }}
+        >
+          <Copy size={14} />
+          <span>{t("docCopyContentHtml")}</span>
+        </button>
         {props.canManageInvites ? (
           <button
             type="button"

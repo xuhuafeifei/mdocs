@@ -106,13 +106,14 @@
 
 ### 系统提示词组装 / 诊断
 
-- **关键词**：`assembleSystemPrompt` `buildSystemPrompt` `PromptSection` `estimateTokens` `summarizePrompt` `system-prompt`
-- **结论**：`assembleSystemPrompt` 返回「分段 + 拼好字符串」，段落 id：base / ui-context / soul / skill-meta / mcp / pipeline / pipeline-yaml；`buildSystemPrompt` 只是兼容包装。`GET /api/agent/system-prompt` 复用同一函数做诊断，token 为粗估（CJK 1 字≈1 token）。
+- **关键词**：`assembleSystemPrompt` `buildSystemPrompt` `PromptSection` `estimateTokens` `summarizePrompt` `system-prompt` `context-inspector` `buckets`
+- **结论**：`assembleSystemPrompt` 返回「分段 + 拼好字符串」，段落 id：base / ui-context / soul / skill-meta / memes / mcp / pipeline / pipeline-yaml；`buildSystemPrompt` 只是兼容包装。`GET /api/agent/system-prompt` 走 `buildContextInspector`：三桶（system/tools/history）+ 可展开正文，与圆环同源。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
   | `src/server/agent/Agent/system-prompt.ts` | `assembleSystemPrompt` `buildSystemPrompt` |
   | `src/server/agent/Agent/prompt-stats.ts` | `estimateTokens` `summarizePrompt` |
+  | `src/server/agent/Agent/context-inspector.ts` | `buildContextInspector` |
   | `src/server/routes/agent.routes.ts` | `GET /system-prompt` |
 - **需求**：[`../requirements/agent-prompt-inspector/`](../requirements/agent-prompt-inspector/)
 

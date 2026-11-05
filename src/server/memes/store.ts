@@ -318,6 +318,49 @@ export type SyncResult = {
 /** 同一时刻只允许一次整包同步：整目录替换期间并发会互相踩 */
 let syncInFlight = false;
 
+/** 启动后台同步与设置页默认用的 npm 包 */
+export const DEFAULT_SYSTEM_MEME_SPEC = "mdocs-memes@latest";
+
+/** 系统库是否至少有一张可读图片（空目录 / 空索引 / 索引有但文件全缺 → false） */
+export function isSystemMemeLibraryReady(): boolean {
+  const memes = listSystemMemes();
+  if (memes.length === 0) return false;
+  const dir = systemMemesDir();
+  return memes.some((m) => {
+    try {
+      const st = fs.statSync(path.join(dir, m.meme_name));
+      return st.isFile() && st.size > 0;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * 启动旁挂：系统库为空则后台 `syncSystemMemesFrom`，不阻塞 listen。
+ * 已有图则直接返回；失败只打日志，可稍后在设置页手动同步。
+ */
+export function ensureSystemMemesBackground(
+  spec: string = DEFAULT_SYSTEM_MEME_SPEC,
+): void {
+  if (isSystemMemeLibraryReady()) return;
+  const target = (spec.trim() || DEFAULT_SYSTEM_MEME_SPEC);
+  log.info("系统表情包为空，后台同步中…", { spec: target });
+  void syncSystemMemesFrom(target)
+    .then((result) => {
+      log.info("系统表情包后台同步完成", {
+        version: result.version,
+        written: result.written,
+        bytes: result.bytes,
+      });
+    })
+    .catch((err) => {
+      log.warn("系统表情包后台同步失败（可稍后在设置页手动同步）", {
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+}
+
 /**
  * 从 npm 覆盖系统库：整包安装到临时目录 → 只挑 meme.json 与清单里的图片 →
  * 校验 → 原子覆盖系统库目录。

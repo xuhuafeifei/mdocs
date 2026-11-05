@@ -19,6 +19,7 @@ import {
   type IEditor,
 } from "@lobehub/editor";
 import { Editor } from "@lobehub/editor/react";
+import { stripDiffHunksFromLexicalJson } from "./merge/stripDiffHunksFromLexicalJson";
 
 interface LexicalMarkdownBridgeProps {
   lexicalJson: string;
@@ -57,18 +58,20 @@ export function LexicalMarkdownBridge({
 }: LexicalMarkdownBridgeProps) {
   const [editor, setEditor] = useState<IEditor | null>(null);
   const exportedRef = useRef(false);
-  const contentType = detectContentType(lexicalJson);
+  // 草稿可能仍含 AI Diff 的 diff-hunk；桥未挂 DiffPlugin，必须先压成正文节点
+  const bridgeJson = stripDiffHunksFromLexicalJson(lexicalJson, "keep");
+  const contentType = detectContentType(bridgeJson);
 
   useEffect(() => {
     exportedRef.current = false;
-  }, [lexicalJson]);
+  }, [bridgeJson]);
 
   // 已是 markdown（极少见）：无需进编辑器
   useEffect(() => {
     if (contentType !== "markdown" || exportedRef.current) return;
     exportedRef.current = true;
-    onMarkdown(lexicalJson);
-  }, [contentType, lexicalJson, onMarkdown]);
+    onMarkdown(bridgeJson);
+  }, [contentType, bridgeJson, onMarkdown]);
 
   useEffect(() => {
     if (contentType !== "json" || !editor || exportedRef.current) return;
@@ -77,7 +80,7 @@ export function LexicalMarkdownBridge({
     const runExport = (): void => {
       if (cancelled || exportedRef.current) return;
       try {
-        editor.setDocument("json", lexicalJson);
+        editor.setDocument("json", bridgeJson);
         const md = editor.getDocument("markdown");
         if (typeof md === "string") {
           exportedRef.current = true;
@@ -105,7 +108,7 @@ export function LexicalMarkdownBridge({
     return () => {
       cancelled = true;
     };
-  }, [editor, lexicalJson, contentType, onMarkdown, onError]);
+  }, [editor, bridgeJson, contentType, onMarkdown, onError]);
 
   if (contentType === "markdown") {
     return null;
@@ -114,7 +117,7 @@ export function LexicalMarkdownBridge({
   return (
     <div className="mdocs-lexical-md-bridge" aria-hidden>
       <Editor
-        content={lexicalJson}
+        content={bridgeJson}
         type="json"
         editable={false}
         onInit={setEditor}

@@ -240,10 +240,17 @@ export function assembleSystemPrompt(
     sections.push({
       id: "mcp",
       label: "MCP 工具提示",
-      text:
-        "本轮已挂载外部 MCP 工具（名称形如 mcp__…）。若含记忆类工具（Engram mem_* 等），" +
-        "在需要跨会话回忆项目结论、决策或 gotcha 时先搜索记忆，重要新结论可写入；勿在无关闲聊时滥调。" +
-        "记忆空间已由宿主按当前访客隔离，勿尝试切换他人空间。",
+      text: [
+        "本轮已挂载外部 MCP 工具（名称形如 mcp__{server}__{tool}）。",
+        "",
+        "若含 Engram 记忆类工具（mem_*）：",
+        "- 用途：跨会话记住决策 / gotcha / 约定；不是文档仓库，也不是聊天记录备份。",
+        "- 用法：先搜再答；有稳定新结论再写入；寒暄与一次性操作不要写。",
+        "- 隔离：记忆空间已按当前访客绑定，宿主会代开会话；勿调用或编造切换他人 project 的操作（mem_session_start 不对你开放）。",
+        "- 细则见灵魂旁路 engram.md（若已安装）。",
+        "",
+        "其它 MCP：按工具 description 使用；失败时说明原因，不要假装已执行。",
+      ].join("\n"),
     });
   }
   return { sections, prompt: sections.map((s) => s.text).join("\n\n") };
