@@ -1,10 +1,21 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { SerializedEditorState } from "lexical";
 import { Expand, Minimize2 } from "lucide-react";
 import { useI18n } from "../i18n";
 import { buildHtmlPreviewDocument, htmlPreviewSandbox } from "./html-preview";
+import { sanitizeLexicalForRendererCompare } from "./merge/sanitizeLexicalForRendererCompare";
 import { ApiRequestError } from "../services/client";
 import type { DocumentDetail } from "../../shared/types/document";
 import {
@@ -15,6 +26,43 @@ import {
   type DocumentCommitDetail,
   type DocumentCommitSummary,
 } from "../services/endpoints";
+
+/** LexicalDiff 渲染抛错时不要拖垮整棵 App（会卸成「mdocs 加载中…」）。 */
+class CompareDiffErrorBoundary extends Component<
+  { children: ReactNode; resetKey: string; fallback: string },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error): { error: Error } {
+    return { error };
+  }
+
+  componentDidUpdate(prevProps: Readonly<{ resetKey: string }>): void {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error("[CompareDiffErrorBoundary]", error, info.componentStack);
+  }
+
+  render(): ReactNode {
+    if (this.state.error) {
+      return (
+        <p className="mdocs-dialog-error" style={{ margin: 16 }} role="alert">
+          {this.props.fallback}
+          <br />
+          <span className="muted" style={{ fontSize: 12 }}>
+            {this.state.error.message}
+          </span>
+        </p>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /** Local chunk + one retry against Vite 504 Outdated Optimize Dep. */
 const LexicalDiff = lazy(async () => {
@@ -84,23 +132,26 @@ function emptyEditorState(): SerializedEditorState {
   } as unknown as SerializedEditorState;
 }
 
-/** commit blob → LexicalDiff 所需 SerializedEditorState */
+/** commit blob → LexicalDiff 所需 SerializedEditorState（已按 renderer 节点集消毒） */
 async function contentToEditorState(content: string): Promise<SerializedEditorState> {
   const raw = content ?? "";
   if (!raw.trim()) return emptyEditorState();
+  let state: SerializedEditorState;
   if (detectContentType(raw) === "json") {
-    return JSON.parse(raw) as SerializedEditorState;
+    state = JSON.parse(raw) as SerializedEditorState;
+  } else {
+    const converted = await convertContentApi({
+      content: raw,
+      from: "markdown",
+      to: "lexical",
+    });
+    if (!converted.content?.trim()) return emptyEditorState();
+    if (detectContentType(converted.content) !== "json") {
+      throw new Error("markdown→lexical 结果无效");
+    }
+    state = JSON.parse(converted.content) as SerializedEditorState;
   }
-  const converted = await convertContentApi({
-    content: raw,
-    from: "markdown",
-    to: "lexical",
-  });
-  if (!converted.content?.trim()) return emptyEditorState();
-  if (detectContentType(converted.content) === "json") {
-    return JSON.parse(converted.content) as SerializedEditorState;
-  }
-  throw new Error("markdown→lexical 结果无效");
+  return sanitizeLexicalForRendererCompare(state);
 }
 
 function VersionMdPreview(props: { commitId: string; content: string }) {
@@ -629,22 +680,27 @@ export function VersionHistoryPanel(props: {
                 </p>
               ) : (
                 <div className="mdocs-version-history-diff">
-                  <Suspense
-                    fallback={
-                      <p className="muted" style={{ padding: 16 }}>
-                        {t("loading")}
-                      </p>
-                    }
+                  <CompareDiffErrorBoundary
+                    resetKey={`${oldCommitId}:${newCommitId}`}
+                    fallback={t("versionHistoryCompareCrash")}
                   >
-                    <LexicalDiff
-                      oldValue={oldState}
-                      newValue={newState}
-                      labels={{
-                        old: formatCommitLabel(oldCommit),
-                        new: formatCommitLabel(newCommit),
-                      }}
-                    />
-                  </Suspense>
+                    <Suspense
+                      fallback={
+                        <p className="muted" style={{ padding: 16 }}>
+                          {t("loading")}
+                        </p>
+                      }
+                    >
+                      <LexicalDiff
+                        oldValue={oldState}
+                        newValue={newState}
+                        labels={{
+                          old: formatCommitLabel(oldCommit),
+                          new: formatCommitLabel(newCommit),
+                        }}
+                      />
+                    </Suspense>
+                  </CompareDiffErrorBoundary>
                 </div>
               )}
             </div>

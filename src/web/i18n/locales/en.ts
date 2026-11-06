@@ -411,6 +411,8 @@ export const en: Record<TranslationKey, string> = {
   versionHistoryComparePickNew: "Pick the new version",
   versionHistoryCompareSame: "Choose two different versions",
   versionHistoryCompareMdOnly: "Block compare is only available for Markdown documents",
+  versionHistoryCompareCrash:
+    "Block compare failed to render (special blocks like diagrams may be present). Use Preview, or pick versions without those blocks.",
   versionHistoryCompareHint: "Tap Old/New to pick; tap again to clear, or pick another row to replace",
   versionHistoryFullscreen: "Fullscreen",
   versionHistoryExitFullscreen: "Exit fullscreen",

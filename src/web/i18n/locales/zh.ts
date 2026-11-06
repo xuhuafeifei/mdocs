@@ -407,6 +407,7 @@ export const zh: Record<TranslationKey, string> = {
   versionHistoryComparePickNew: "请选择新版本",
   versionHistoryCompareSame: "请选择两个不同的版本",
   versionHistoryCompareMdOnly: "块级对比仅支持 Markdown 文档",
+  versionHistoryCompareCrash: "块级对比渲染失败（可能含图示等特殊块）。可改用预览查看各版本，或换一组不含特殊块的版本。",
   versionHistoryCompareHint: "点「旧」「新」选定；再点可取消，点另一行可重选",
   versionHistoryFullscreen: "全屏",
   versionHistoryExitFullscreen: "退出全屏",

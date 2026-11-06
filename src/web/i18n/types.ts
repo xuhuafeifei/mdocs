@@ -403,6 +403,7 @@ export type TranslationKey =
   | "versionHistoryComparePickNew"
   | "versionHistoryCompareSame"
   | "versionHistoryCompareMdOnly"
+  | "versionHistoryCompareCrash"
   | "versionHistoryCompareHint"
   | "versionHistoryFullscreen"
   | "versionHistoryExitFullscreen"
