@@ -14,7 +14,8 @@ export function webSearchTool(deps: ToolDeps): AgentTool {
     name: "web_search",
     label: "网页搜索",
     description:
-      "用 DeepSeek 搜索引擎检索公开网页（非本库文档）。适合时事、官方文档、外站资料。" +
+      "用 DeepSeek 搜索引擎检索公开网页（非本库文档）。适合时事、官方文档、外站资料、核实出处/「谁说的」。" +
+      "公开事实应优先调用本工具，不要反问用户确认。" +
       "返回标题、链接、摘要；needContent=true 时可带正文（更贵/更慢，默认 false）。" +
       "库内文章请用 search_documents。可用 site: / after: 等搜索语法。",
     parameters: Type.Object({
@@ -84,7 +85,8 @@ export function webFetchTool(deps: ToolDeps): AgentTool {
     label: "抓取网页",
     description:
       "抓取单个公开网页，返回标题与 Markdown 正文（DeepSeek Fetch）。" +
-      "用于在 web_search 选中链接后精读；勿抓需登录或内网地址。",
+      "用于在 web_search 选中链接后精读核实；勿抓需登录或内网地址。" +
+      "能自己抓到的内容不要改问用户。",
     parameters: Type.Object({
       url: Type.String({ description: "http(s) URL，不含用户名密码" }),
     }),

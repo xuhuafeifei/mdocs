@@ -149,8 +149,10 @@ export async function buildContextInspector(opts: {
         }
       : null;
 
+  const cfg = getVisitorAgentConfig(opts.visitorId);
   const assembled = assembleSystemPrompt(mode, refs, {
     hasMcpTools: false,
+    hasWebTools: cfg?.kind === "deepseek" && Boolean(cfg.apiKey),
     soulSection: loadSoulPromptSection(opts.visitorId),
     skillMetaSection: buildSkillMetaSection(opts.visitorId),
     memeCatalogSection: buildMemeCatalogSection(opts.visitorId),

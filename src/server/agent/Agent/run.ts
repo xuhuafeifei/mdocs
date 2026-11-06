@@ -185,6 +185,7 @@ export async function runOnboardingChat(params: {
         mode === "normal" ? params.references : null,
         {
           hasMcpTools: mcpBundle.tools.length > 0,
+          hasWebTools: cfg.kind === "deepseek" && Boolean(cfg.apiKey),
           soulSection: (
             await import("../../soul/load-for-agent.js")
           ).loadSoulPromptSection(visitorId),
