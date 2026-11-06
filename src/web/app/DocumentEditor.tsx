@@ -45,6 +45,7 @@ import {
   assertCanPublish,
   insertAfterSlot,
   overwriteAll,
+  overwriteAllFromState,
   removeSlot,
   updateSlot,
 } from "@lobehub/editor";
@@ -679,7 +680,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
       try {
         let result: { ok: true } | { ok: false; error: string };
         if (op.op === "overwrite_all") result = overwriteAll(lexical, op.markdown);
-        else if (op.op === "update_slot") {
+        else if (op.op === "overwrite_all_state") {
+          result = overwriteAllFromState(lexical, op.state);
+        } else if (op.op === "update_slot") {
           result = updateSlot(lexical, op.slot, op.markdown);
         } else if (op.op === "insert_after_slot") {
           result = insertAfterSlot(lexical, op.slot, op.markdown);
@@ -1537,9 +1540,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
               minHeight: 0,
             }}
           >
-            {/* Lobe 格式栏：默认关，由标签栏扳手开关；大纲改走标签栏 */}
-            {editing && editor && !readerChrome && props.recentTabsProps?.lobeToolbarVisible ? (
-              <Toolbar editor={editor} />
+            {/* Lobe 格式栏：PC 由标签栏扳手开关；手机端编辑态常显并可横向滑（无标签栏开关） */}
+            {editing &&
+            editor &&
+            (readerChrome || Boolean(props.recentTabsProps?.lobeToolbarVisible)) ? (
+              <Toolbar editor={editor} scrollable={readerChrome} />
             ) : null}
             <div className="mdocs-editor-content-area" style={{ flex: 1, display: "flex", minHeight: 0 }}>
               <Block

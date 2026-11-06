@@ -1,10 +1,10 @@
 import path from "node:path";
+import { getMaxAgentImageBytes } from "../../config/server-settings.js";
 import { parseImage } from "./parse/image.js";
 import { parsePlainText } from "./parse/plain-text.js";
 import { parsePdfText } from "./parse/pdf.js";
 import { parseXlsx } from "./parse/xlsx.js";
 import {
-  DEFAULT_PARSE_LIMITS,
   type AssetMeta,
   type ParseLimits,
   type ParseResult,
@@ -39,12 +39,15 @@ const pdfStrategy: ParseStrategy = async ({ data, limits }) =>
 const xlsxStrategy: ParseStrategy = async ({ data, limits }) =>
   parseXlsx({ data, limits });
 
+const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
+
 export const assetCapabilities: readonly AssetCapability[] = [
-  { ext: ".png", parse: imageStrategy, maxBytes: DEFAULT_PARSE_LIMITS.maxImageBytes },
-  { ext: ".jpg", parse: imageStrategy, maxBytes: DEFAULT_PARSE_LIMITS.maxImageBytes },
-  { ext: ".jpeg", parse: imageStrategy, maxBytes: DEFAULT_PARSE_LIMITS.maxImageBytes },
-  { ext: ".webp", parse: imageStrategy, maxBytes: DEFAULT_PARSE_LIMITS.maxImageBytes },
-  { ext: ".gif", parse: imageStrategy, maxBytes: DEFAULT_PARSE_LIMITS.maxImageBytes },
+  // 图片字节上限运行时取 getMaxAgentImageBytes()（上传上限 ∩ 6MiB），不在此写死
+  { ext: ".png", parse: imageStrategy },
+  { ext: ".jpg", parse: imageStrategy },
+  { ext: ".jpeg", parse: imageStrategy },
+  { ext: ".webp", parse: imageStrategy },
+  { ext: ".gif", parse: imageStrategy },
   { ext: ".txt", parse: plainStrategy, maxBytes: 2 * 1024 * 1024 },
   { ext: ".md", parse: plainStrategy, maxBytes: 2 * 1024 * 1024 },
   { ext: ".csv", parse: plainStrategy, maxBytes: 2 * 1024 * 1024 },
@@ -65,7 +68,9 @@ export function assertUploadAllowed(filename: string, byteLength: number): void 
   if (!cap) {
     throw new Error("unsupported_type");
   }
-  const max = cap.maxBytes ?? 20 * 1024 * 1024;
+  const max = IMAGE_EXTS.has(cap.ext)
+    ? getMaxAgentImageBytes()
+    : (cap.maxBytes ?? 20 * 1024 * 1024);
   if (byteLength > max) {
     throw new Error("file_too_large");
   }

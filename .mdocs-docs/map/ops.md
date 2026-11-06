@@ -37,11 +37,11 @@
 ### 上传大小
 
 - **关键词**：`MDOCS_MAX_UPLOAD_BYTES` `maxUploadBytes` `server-settings` `File too large` `multer`
-- **结论**：默认 **100MiB**；设置页「通用」可改，落盘 `~/.mdocs/server-settings.json`，热更新；覆盖 `/api/assets/upload`、`link-to-img`、Agent 附件。优先级：UI 落盘 > 环境变量 > 默认。
+- **结论**：默认 **100MiB**；设置页「通用」可改，落盘 `~/.mdocs/server-settings.json`，热更新；覆盖 `/api/assets/upload`、`link-to-img`、Agent 附件上传。助手嵌图 / `read_attachment` 另取 `min(上传上限, 6MiB)`。优先级：UI 落盘 > 环境变量 > 默认。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/server/config/server-settings.ts` | `getMaxUploadBytes` `setMaxUploadBytes` |
+  | `src/server/config/server-settings.ts` | `getMaxUploadBytes` `getMaxAgentImageBytes` `setMaxUploadBytes` |
   | `src/server/routes/server-settings.routes.ts` | `GET/PUT /api/server-settings` |
   | `src/web/app/SettingsPage.tsx` | 通用 Tab 上传上限 |
   | `src/server/routes/assets.routes.ts` | `createUploader` |

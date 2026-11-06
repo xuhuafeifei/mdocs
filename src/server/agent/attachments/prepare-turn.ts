@@ -1,3 +1,4 @@
+import { getMaxAgentImageBytes } from "../../config/server-settings.js";
 import { resolveParseStrategy } from "./capabilities.js";
 import { buildUserContentParts, partsToPiPrompt } from "./inject.js";
 import type { AttachmentStore } from "./store.js";
@@ -28,7 +29,12 @@ export async function prepareUserTurn(input: {
   /** 本轮附件对应的 session 工具行（供历史重放；图片只放提示） */
   toolRows: AgentSessionToolMessage[];
 }> {
-  const limits = input.limits ?? DEFAULT_PARSE_LIMITS;
+  const limits =
+    input.limits ??
+    ({
+      ...DEFAULT_PARSE_LIMITS,
+      maxImageBytes: getMaxAgentImageBytes(),
+    } satisfies ParseLimits);
   const metas =
     input.assetIds.length === 0
       ? []

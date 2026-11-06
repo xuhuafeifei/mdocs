@@ -37,14 +37,12 @@ export type LlmContentPart =
   | { type: "image_url"; image_url: { url: string } };
 
 export const DEFAULT_PARSE_LIMITS: ParseLimits = {
+  /** 仅作测试/回退；运行时图片上限走 getMaxAgentImageBytes()（上传上限 ∩ 6MiB） */
   maxImageBytes: 4 * 1024 * 1024,
   maxEmbedTextChars: 12_000,
 };
 
 export const STAGING_TTL_MS = 24 * 60 * 60 * 1000;
-
-/** tool 通道一次返回的图片上限；超过让模型提示用户压缩重传，避免单条 tool result 撑爆上下文 */
-export const TOOL_IMAGE_MAX_BYTES = 1 * 1024 * 1024;
 
 /**
  * 落盘 tool 行的解析后字符上限。

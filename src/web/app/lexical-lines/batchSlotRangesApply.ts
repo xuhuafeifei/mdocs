@@ -67,16 +67,12 @@ export function batchRangesToProposedMarkdown(
   baseLexicalJson: string,
   ranges: BatchSlotRange[],
 ): { ok: true; markdown: string } | { ok: false; error: string } {
-  const applied = applyBatchSlotRangesToBlocks(
-    parseChildren(baseLexicalJson),
-    ranges,
-    mdToChildren,
-  );
-  if (!applied.ok) return applied;
+  const state = batchRangesToProposedState(baseLexicalJson, ranges);
+  if (!state.ok) return state;
 
   const editor = createHeadlessEditor();
   try {
-    editor.hydrateEditorData(wrapRoot(applied.blocks));
+    editor.hydrateEditorData(state.state);
     return { ok: true, markdown: editor.export().markdown ?? "" };
   } catch (err) {
     return {
@@ -86,4 +82,20 @@ export function batchRangesToProposedMarkdown(
   } finally {
     editor.destroy();
   }
+}
+
+/**
+ * 批量 slot → 提案 Lexical 状态（未改块保留 base JSON，避免整篇 MD 往返假 Diff）。
+ */
+export function batchRangesToProposedState(
+  baseLexicalJson: string,
+  ranges: BatchSlotRange[],
+): { ok: true; state: SerializedEditorState } | { ok: false; error: string } {
+  const applied = applyBatchSlotRangesToBlocks(
+    parseChildren(baseLexicalJson),
+    ranges,
+    mdToChildren,
+  );
+  if (!applied.ok) return applied;
+  return { ok: true, state: wrapRoot(applied.blocks) };
 }

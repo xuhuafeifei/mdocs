@@ -1,6 +1,6 @@
 /**
  * 可持久化的服务端设置（设置页可改，落盘到 dataDir）。
- * 当前：单文件上传上限。
+ * 当前：单文件上传上限（编辑器 / Agent 附件）；助手读图另有 6MiB 硬顶。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -9,6 +9,8 @@ import { getConfig } from "./index.js";
 export const DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 export const MIN_MAX_UPLOAD_BYTES = 1 * 1024 * 1024;
 export const MAX_MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
+/** 助手嵌图 / read_attachment 图片硬顶（且不超过当前上传上限） */
+export const MAX_AGENT_IMAGE_BYTES = 6 * 1024 * 1024;
 
 type ServerSettingsFile = {
   maxUploadBytes?: number;
@@ -48,6 +50,11 @@ export function getMaxUploadBytes(): number {
     return clampUploadBytes(file.maxUploadBytes);
   }
   return parsePositiveInt(process.env.MDOCS_MAX_UPLOAD_BYTES, DEFAULT_MAX_UPLOAD_BYTES);
+}
+
+/** 助手图片：min(上传上限, 6MiB)，随设置页热更新 */
+export function getMaxAgentImageBytes(): number {
+  return Math.min(getMaxUploadBytes(), MAX_AGENT_IMAGE_BYTES);
 }
 
 export function getServerSettingsPublic(): {

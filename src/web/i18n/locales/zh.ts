@@ -344,7 +344,7 @@ export const zh: Record<TranslationKey, string> = {
   autoEdit: "自动编辑",
   autoEditDesc: "打开文档时自动进入编辑模式",
   maxUploadSize: "单文件上传上限",
-  maxUploadSizeDesc: "编辑器附件与助手附件共用；保存后立即生效，无需重启（单位 MB）",
+  maxUploadSizeDesc: "编辑器与助手附件共用；助手读图另有 6MB 硬顶（且不超过本上限）。保存后立即生效（单位 MB）",
   maxUploadSizeSave: "保存",
   maxUploadSizeSaved: "已保存",
   maxUploadSizeInvalid: "请输入 1～2048 之间的整数（MB）",

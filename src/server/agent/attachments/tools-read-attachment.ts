@@ -1,10 +1,11 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { getMaxAgentImageBytes } from "../../config/server-settings.js";
 import type { ToolDeps } from "../Agent/tool-deps.js";
 import { asToolResult } from "../Agent/tool-deps.js";
 import { resolveParseStrategy } from "./capabilities.js";
 import { getAttachmentStore } from "./store.js";
-import { DEFAULT_PARSE_LIMITS, TOOL_IMAGE_MAX_BYTES } from "./types.js";
+import { DEFAULT_PARSE_LIMITS } from "./types.js";
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
@@ -52,6 +53,8 @@ export function readAttachmentTool(deps: ToolDeps): AgentTool {
           id: assetId,
         });
         const parse = resolveParseStrategy(meta.name);
+        // 图片上限 = min(上传上限, 6MiB)，随设置页热更新
+        const maxImageBytes = getMaxAgentImageBytes();
         const result = await parse({
           meta,
           data,
@@ -59,13 +62,13 @@ export function readAttachmentTool(deps: ToolDeps): AgentTool {
             ...DEFAULT_PARSE_LIMITS,
             // tool 路径允许更大文本，再由 offset/limit 切片
             maxEmbedTextChars: 5_000_000,
-            maxImageBytes: 20 * 1024 * 1024,
+            maxImageBytes,
           },
         });
         if (result.kind === "image") {
           // 图片本身就是「结果」：必须作为 ImageContent 返回，否则模型只拿到元数据，看不到图。
           // 超上限时不硬塞，避免单条 tool result 撑爆上下文。
-          if (result.data.byteLength > TOOL_IMAGE_MAX_BYTES) {
+          if (result.data.byteLength > maxImageBytes) {
             return asToolResult({
               ok: false,
               kind: "image",
@@ -73,8 +76,8 @@ export function readAttachmentTool(deps: ToolDeps): AgentTool {
               mime: result.mime,
               bytes: result.data.byteLength,
               error: "image_too_large_for_tool",
-              note: `图片 ${formatBytes(result.data.byteLength)} 超过单次工具返回上限 ` +
-                `${formatBytes(TOOL_IMAGE_MAX_BYTES)}，未返回图像。请提示用户压缩或裁剪后重新上传。`,
+              note: `图片 ${formatBytes(result.data.byteLength)} 超过助手读图上限 ` +
+                `${formatBytes(maxImageBytes)}（最高 6MB，且不超过上传上限），未返回图像。请压缩后重新上传。`,
             });
           }
           return {

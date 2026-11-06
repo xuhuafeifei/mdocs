@@ -7145,6 +7145,15 @@ strong.label {
   border-bottom: 1px solid var(--mdocs-border);
 }
 
+/* 手机：格式栏横向滑动，露出图片/文件等被挤掉的按钮 */
+.mdocs-toolbar--scrollable {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
 /* === Icon button hover effects === */
 .mdocs-sidebar-bookmark,
 .mdocs-sidebar-logout {

@@ -97,7 +97,7 @@ import { installAssetLinkDownloads } from "./assetLinkDownload";
 import { FILE_TYPE } from "../../shared/file-types";
 import { EditorPaneHost } from "./EditorPaneHost";
 import type { ApplyAgentDiffFn } from "./lexical-lines/agentDiff";
-import { batchRangesToProposedMarkdown } from "./lexical-lines/batchSlotRangesApply";
+import { batchRangesToProposedState } from "./lexical-lines/batchSlotRangesApply";
 import type { RecentDocTabsProps } from "./RecentDocTabs";
 import {
   clearSecondaryRecentDocTabs,
@@ -687,14 +687,15 @@ export function App() {
         }
         const baseLexicalJson = baseSnap.content;
         try {
-          const built = batchRangesToProposedMarkdown(baseLexicalJson, ranges);
+          // 直接交 Lexical 提案态：未改块与 live toJSON 同源，避免整篇 MD 往返「全文红绿」
+          const built = batchRangesToProposedState(baseLexicalJson, ranges);
           if (!built.ok) {
             setAlertMessage(built.error);
             return false;
           }
           applyAgentDiffWithToast({
-            op: "overwrite_all",
-            markdown: built.markdown,
+            op: "overwrite_all_state",
+            state: built.state,
           });
           return true;
         } catch (err) {

@@ -105,6 +105,40 @@ export function DocumentTree(props: {
   const [dropHighlight, setDropHighlight] = useState<DropHighlight>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
+  // 拖到列表顶/底边缘时自动滚动，方便跨长树移动文档
+  useEffect(() => {
+    if (!draggingId) return;
+    const EDGE_PX = 48;
+    const MAX_STEP = 18;
+    let lastY = 0;
+    let hasY = false;
+    let raf = 0;
+    const onDragOver = (e: DragEvent) => {
+      lastY = e.clientY;
+      hasY = true;
+    };
+    const tick = () => {
+      const el = listRef.current;
+      if (el && hasY) {
+        const rect = el.getBoundingClientRect();
+        if (lastY < rect.top + EDGE_PX) {
+          const t = Math.min(1, (rect.top + EDGE_PX - lastY) / EDGE_PX);
+          el.scrollTop -= Math.max(2, MAX_STEP * t);
+        } else if (lastY > rect.bottom - EDGE_PX) {
+          const t = Math.min(1, (lastY - (rect.bottom - EDGE_PX)) / EDGE_PX);
+          el.scrollTop += Math.max(2, MAX_STEP * t);
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    document.addEventListener("dragover", onDragOver);
+    raf = requestAnimationFrame(tick);
+    return () => {
+      document.removeEventListener("dragover", onDragOver);
+      cancelAnimationFrame(raf);
+    };
+  }, [draggingId]);
+
   const reveal = useMemo(() => {
     // 图谱焦点时用 anchor 展开定位；文档焦点时用 activeDocumentId
     const id =

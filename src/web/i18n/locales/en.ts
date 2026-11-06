@@ -347,7 +347,7 @@ export const en: Record<TranslationKey, string> = {
   autoEdit: "Auto Edit",
   autoEditDesc: "Automatically enter edit mode when opening a document",
   maxUploadSize: "Max upload size",
-  maxUploadSizeDesc: "Shared by editor and agent attachments; applies immediately (MB)",
+  maxUploadSizeDesc: "Shared by editor and agent attachments; agent image reads are capped at 6MB and this limit. Applies immediately (MB)",
   maxUploadSizeSave: "Save",
   maxUploadSizeSaved: "Saved",
   maxUploadSizeInvalid: "Enter an integer between 1 and 2048 (MB)",

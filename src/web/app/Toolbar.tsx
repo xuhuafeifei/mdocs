@@ -81,6 +81,8 @@ export interface ToolbarProps {
   outlineCollapseTitle?: string;
   outlineExpandTitle?: string;
   outlineToggle?: boolean;
+  /** 窄屏：关掉折叠，整条横向滑动，避免图片等按钮被藏进 ⋯ */
+  scrollable?: boolean;
   style?: CSSProperties;
 }
 
@@ -152,6 +154,7 @@ const Toolbar: FC<ToolbarProps> = ({
   outlineCollapseTitle,
   outlineExpandTitle,
   outlineToggle,
+  scrollable,
   style,
   className,
 }) => {
@@ -324,8 +327,21 @@ const Toolbar: FC<ToolbarProps> = ({
   if (floating) return <FloatActions items={floatingItems} />;
 
   return (
-    <div className={["mdocs-toolbar", className].filter(Boolean).join(" ")} style={style}>
-      <ChatInputActions items={items} />
+    <div
+      className={["mdocs-toolbar", scrollable ? "mdocs-toolbar--scrollable" : "", className]
+        .filter(Boolean)
+        .join(" ")}
+      style={style}
+    >
+      <ChatInputActions
+        items={items}
+        autoCollapse={!scrollable}
+        style={
+          scrollable
+            ? { overflow: "visible", width: "max-content", minWidth: "100%" }
+            : undefined
+        }
+      />
     </div>
   );
 };

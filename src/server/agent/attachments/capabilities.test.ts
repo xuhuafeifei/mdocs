@@ -24,6 +24,18 @@ describe("asset capabilities", () => {
     );
   });
 
+  it("image upload follows getMaxAgentImageBytes (≤6MiB)", async () => {
+    const { getMaxAgentImageBytes, MAX_AGENT_IMAGE_BYTES } = await import(
+      "../../config/server-settings.js"
+    );
+    const max = getMaxAgentImageBytes();
+    expect(max).toBeLessThanOrEqual(MAX_AGENT_IMAGE_BYTES);
+    expect(() => assertUploadAllowed("shot.png", max)).not.toThrow();
+    expect(() => assertUploadAllowed("shot.png", max + 1)).toThrow(
+      "file_too_large",
+    );
+  });
+
   it("plain text strategy returns text", async () => {
     const parse = resolveParseStrategy("a.txt");
     const meta: AssetMeta = {
