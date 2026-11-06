@@ -48,9 +48,10 @@ export default defineConfig({
           if (id.includes("@meta2d") || id.includes("canvas2svg")) {
             return "meta2d";
           }
-          if (id.includes("mermaid") || id.includes("cytoscape") || id.includes("@braintree")) {
-            return "diagram";
-          }
+          // Do NOT force mermaid/cytoscape/@braintree into a shared "diagram" chunk:
+          // that sucked d3 (also used by GraphPage) into the same file and made the
+          // entry statically import the whole ~3MB mermaid bundle on first paint.
+          // Mermaid is loaded via import("mermaid") only when a diagram renders.
           if (id.includes("motion") || id.includes("framer-motion")) {
             return "motion";
           }

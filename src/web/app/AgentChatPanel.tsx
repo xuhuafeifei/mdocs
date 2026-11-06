@@ -74,6 +74,32 @@ import { copyTextToClipboard } from "./copyText";
 import type { DomainSummary } from "../../shared/types/domain";
 import { DEFAULT_DOMAIN_ID } from "../../shared/domainUi";
 
+/** 关闭面板会卸载浮动助手；输入草稿落 localStorage，重开可恢复。 */
+const COMPOSER_DRAFT_KEY = "mdocs.agentComposerDraft";
+
+function composerDraftKey(mode: AgentSessionMode, documentId?: string | null): string {
+  if (mode === "coding") return `${COMPOSER_DRAFT_KEY}:coding:${documentId ?? ""}`;
+  if (mode === "plugin-pipeline") return `${COMPOSER_DRAFT_KEY}:pipeline`;
+  return `${COMPOSER_DRAFT_KEY}:normal`;
+}
+
+function loadComposerDraft(key: string): string {
+  try {
+    return localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function saveComposerDraft(key: string, text: string): void {
+  try {
+    if (!text) localStorage.removeItem(key);
+    else localStorage.setItem(key, text);
+  } catch {
+    /* quota / private mode */
+  }
+}
+
 function nodeText(node: ReactNode): string {
   if (node == null || typeof node === "boolean") return "";
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -1304,12 +1330,28 @@ export const AgentChatPanel = forwardRef<
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AgentSessionSummary[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [input, setInput] = useState("");
+  const composerKey = useMemo(
+    () => composerDraftKey(sessionMode, coding ? documentId : null),
+    [sessionMode, coding, documentId],
+  );
+  const [input, setInput] = useState(() => loadComposerDraft(composerKey));
+  const skipComposerSaveRef = useRef(false);
   const [selectedSkillNames, setSelectedSkillNames] = useState<string[]>([]);
   const [pendingAttachments, setPendingAttachments] = useState<
     Array<AgentAttachmentUpload & { previewUrl?: string }>
   >([]);
   const previewUrlsRef = useRef<string[]>([]);
+  useEffect(() => {
+    skipComposerSaveRef.current = true;
+    setInput(loadComposerDraft(composerKey));
+  }, [composerKey]);
+  useEffect(() => {
+    if (skipComposerSaveRef.current) {
+      skipComposerSaveRef.current = false;
+      return;
+    }
+    saveComposerDraft(composerKey, input);
+  }, [composerKey, input]);
   useEffect(() => {
     const urls = previewUrlsRef.current;
     return () => {
@@ -2192,6 +2234,55 @@ export const AgentChatPanel = forwardRef<
       if (!activeRunIdRef.current) setSending(false);
     }
   }
+
+  const streamErrorRef = useRef(streamError);
+  streamErrorRef.current = streamError;
+  const sendingRef = useRef(sending);
+  sendingRef.current = sending;
+
+  // 息屏 / 切后台导致 SSE 断了：回来后若仍有后台 run 且当前没在订流，则重连
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    let reconnecting = false;
+    const reconnectIfNeeded = () => {
+      if (cancelled || reconnecting) return;
+      if (abortRef.current) return;
+      if (!streamErrorRef.current && !sendingRef.current) return;
+      reconnecting = true;
+      void (async () => {
+        try {
+          const s = await fetchAgentSessionApi(
+            sessionMode,
+            coding ? documentId : undefined,
+          );
+          if (cancelled) return;
+          if (
+            s.activeRun &&
+            (s.activeRun.status === "running" || s.activeRun.status === "waiting_user")
+          ) {
+            setStreamError(null);
+            void resumeActiveRun(s.activeRun);
+          }
+        } catch {
+          /* ignore */
+        } finally {
+          reconnecting = false;
+        }
+      })();
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") reconnectIfNeeded();
+    };
+    const onOnline = () => reconnectIfNeeded();
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("online", onOnline);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [open, sessionMode, coding, documentId]);
 
   async function ensureSessionIdForUpload(): Promise<string | null> {
     if (sessionId) return sessionId;
