@@ -38,6 +38,11 @@ import { FILE_TYPE } from "../../shared/file-types.js";
 import { treeIncludeTypes } from "../../shared/file-type-policy.js";
 import { useLogger } from "../logger/logger.js";
 import { buildFolderSubtree } from "../documents/tree.service.js";
+import {
+  getJobFile,
+  saveJobConfig,
+  saveMonitorConfig,
+} from "../jobs/job-config.service.js";
 
 const log = useLogger("documents-route");
 
@@ -165,14 +170,16 @@ export function buildDocumentsRouter(): Router {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "fileName and content are required" } });
       return;
     }
-    // 校验 fileType：仅允许用户创建 md / html / sheet
+    // 校验 fileType：仅允许用户创建 md / html / sheet / job
     const rawFileType = body.fileType;
     const fileType =
       rawFileType === FILE_TYPE.HTML
         ? FILE_TYPE.HTML
         : rawFileType === FILE_TYPE.SHEET
           ? FILE_TYPE.SHEET
-          : FILE_TYPE.DOCUMENT;
+          : rawFileType === FILE_TYPE.JOB
+            ? FILE_TYPE.JOB
+            : FILE_TYPE.DOCUMENT;
     try {
       // 调用服务层创建文档，把请求参数映射为服务参数
       const doc = createDocument({
@@ -380,6 +387,107 @@ export function buildDocumentsRouter(): Router {
    * 前置校验：requireDocumentAccess("read") 中间件会先查文档和域信息，
    * 判断当前访客是否有权读取；无权则直接返回 404/403。
    */
+  /**
+   * GET /:documentId/job-config — 读 Job 配置 + 监控规则（.job JSON）
+   */
+  router.get(
+    "/:documentId/job-config",
+    requireDocumentAccess("read"),
+    async (req: Request, res: Response) => {
+      try {
+        const doc = await getJobFile(req.params.documentId!);
+        res.json({ data: doc });
+      } catch (err) {
+        respondError(res, err, "documents-route.job-config.get");
+      }
+    },
+  );
+
+  /**
+   * PUT /:documentId/job-config — 保存 JobConfig（读改写加锁；与 update 合并为 upsert 语义）
+   */
+  router.put(
+    "/:documentId/job-config",
+    requireDocumentAccess("edit"),
+    async (req: Request, res: Response) => {
+      if (!req.visitor) {
+        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+        return;
+      }
+      const body = (req.body ?? {}) as {
+        cron?: unknown;
+        prompt?: unknown;
+        jobType?: unknown;
+        tableSchema?: { x?: unknown; y?: unknown };
+      };
+      try {
+        const JobConfig = await saveJobConfig({
+          actorVisitorId: req.visitor.visitor_id,
+          documentId: req.params.documentId!,
+          cron: typeof body.cron === "string" ? body.cron : undefined,
+          prompt: typeof body.prompt === "string" ? body.prompt : undefined,
+          jobType: typeof body.jobType === "string" ? body.jobType : undefined,
+          tableSchema:
+            body.tableSchema && typeof body.tableSchema === "object"
+              ? {
+                  x:
+                    typeof body.tableSchema.x === "string"
+                      ? body.tableSchema.x
+                      : undefined,
+                  y:
+                    typeof body.tableSchema.y === "string"
+                      ? body.tableSchema.y
+                      : undefined,
+                }
+              : undefined,
+        });
+        res.json({ data: { JobConfig } });
+      } catch (err) {
+        respondError(res, err, "documents-route.job-config.put");
+      }
+    },
+  );
+
+  /**
+   * PUT /:documentId/monitor-config — 整表替换 MonitorConfig（同文件锁）
+   */
+  router.put(
+    "/:documentId/monitor-config",
+    requireDocumentAccess("edit"),
+    async (req: Request, res: Response) => {
+      if (!req.visitor) {
+        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
+        return;
+      }
+      const body = (req.body ?? {}) as { rules?: unknown; MonitorConfig?: unknown };
+      const rawRules = Array.isArray(body.rules)
+        ? body.rules
+        : Array.isArray(body.MonitorConfig)
+          ? body.MonitorConfig
+          : null;
+      if (!rawRules) {
+        res.status(400).json({
+          error: { code: "BAD_REQUEST", message: "rules (or MonitorConfig) array is required" },
+        });
+        return;
+      }
+      try {
+        const MonitorConfig = await saveMonitorConfig({
+          actorVisitorId: req.visitor.visitor_id,
+          documentId: req.params.documentId!,
+          rules: rawRules as Array<{
+            monitorId?: string;
+            rule?: string;
+            threshold?: number;
+          }>,
+        });
+        res.json({ data: { MonitorConfig } });
+      } catch (err) {
+        respondError(res, err, "documents-route.monitor-config.put");
+      }
+    },
+  );
+
   router.get("/:documentId", requireDocumentAccess("read"), (req: Request, res: Response) => {
     // 中间件已通过校验，这里直接从路由参数取文档ID
     const documentId = req.params.documentId!;

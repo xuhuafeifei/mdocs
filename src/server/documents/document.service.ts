@@ -88,6 +88,7 @@ import { extractPlainTextFromLexical } from "./lexical-text.js";
 import { FILE_TYPE, isGraphFileType } from "../../shared/file-types.js";
 import { isFolderDescPath } from "../../shared/folderDesc.js";
 import { getPolicy } from "../../shared/file-type-policy.js";
+import { ensureJobFileContent } from "../jobs/job-file.js";
 import {
   onArticleDeleted,
   onArticleMoved,
@@ -266,7 +267,7 @@ export function createDocument(params: {
   }
 
   // html 等 raw 类型：内容原样存；md：可 markdown→Lexical
-  const content =
+  let content =
     policy.writeNormalize === "raw"
       ? params.content
       : params.contentFormat === "markdown"
@@ -322,6 +323,10 @@ export function createDocument(params: {
   const displayName = deriveDisplayName(params.displayName, relativePath);
   const documentId = randomUUID();
   const now = new Date().toISOString();
+
+  if (fileType === FILE_TYPE.JOB) {
+    content = ensureJobFileContent(content, documentId);
+  }
 
   const defaultPermission =
     domainId === params.actorVisitorId

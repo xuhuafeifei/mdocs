@@ -16,6 +16,11 @@ export { startJobWatchdog, stopJobWatchdog, isJobWatchdogStarted } from "./watch
 export { startJobScanner, stopJobScanner, scanDueJobs } from "./scanner.js";
 export { enqueueJobExecution, cancelJobRun, JOB_RUN_TIMEOUT_MS } from "./executor.js";
 export { runJobAgent } from "./agent/run-job-agent.js";
+export {
+  getJobFile,
+  saveJobConfig,
+  saveMonitorConfig,
+} from "./job-config.service.js";
 export type {
   JobAgentContext,
   JobAgentRunParams,
