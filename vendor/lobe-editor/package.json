@@ -1,0 +1,147 @@
+{
+  "name": "@fgbg/lobe-editor",
+  "version": "1.0.0-fork.39",
+  "description": "A powerful and extensible rich text editor built on Meta's Lexical framework, providing a modern editing experience with React integration.",
+  "keywords": [
+    "lobehub",
+    "editor",
+    "lexical"
+  ],
+  "homepage": "https://github.com/lobehub/lobe-editor",
+  "bugs": {
+    "url": "https://github.com/lobehub/lobe-editor/issues/new/choose"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lobehub/lobe-editor.git"
+  },
+  "license": "MIT",
+  "author": "LobeHub <i@lobehub.com>",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./es/index.d.ts",
+      "import": "./es/index.js",
+      "default": "./es/index.js"
+    },
+    "./headless": {
+      "types": "./es/headless.d.ts",
+      "import": "./es/headless.js",
+      "default": "./es/headless.js"
+    },
+    "./react": {
+      "types": "./es/react.d.ts",
+      "import": "./es/react.js",
+      "default": "./es/react.js"
+    },
+    "./renderer": {
+      "types": "./es/renderer.d.ts",
+      "import": "./es/renderer.js",
+      "default": "./es/renderer.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./es/index.js",
+  "module": "./es/index.js",
+  "types": "./es/index.d.ts",
+  "files": [
+    "es",
+    "patches",
+    "scripts/postinstall-lexical-patch.cjs"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "build:clean": "tsx ./scripts/clean.ts",
+    "build:watch": "tsdown --watch",
+    "ci": "npm run lint:circular && npm run lint && npm run type-check",
+    "clean": "rm -r es lib dist coverage .dumi/tmp .eslintcache node_modules/.cache",
+    "dev": "dumi dev",
+    "docs:build": "dumi build",
+    "docs:build-analyze": "ANALYZE=1 dumi build",
+    "docs:dev": "dumi dev",
+    "postinstall": "node ./scripts/postinstall-lexical-patch.cjs",
+    "lint": "eslint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --fix",
+    "lint:circular": "dpdm src/**/*.{ts,tsx}  --warning false  --tree false  --exit-code circular:1  -T true",
+    "lint:md": "remark . --quiet --frail --output",
+    "lint:style": "stylelint \"{src,tests}/**/*.{js,jsx,ts,tsx,less}\" --fix",
+    "prepack": "clean-package",
+    "postpack": "clean-package restore",
+    "prepare": "husky && npm run setup",
+    "prettier": "prettier -c --write --no-error-on-unmatched-pattern \"**/**\"",
+    "release": "semantic-release",
+    "setup": "dumi setup",
+    "start": "npm run docs:dev",
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage  --passWithNoTests",
+    "test:watch": "vitest --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@floating-ui/dom": "^1.7.4",
+    "@floating-ui/react": "^0.27.16",
+    "@lexical/clipboard": "0.42.0",
+    "@lexical/code-core": "0.42.0",
+    "@lexical/dragon": "0.42.0",
+    "@lexical/headless": "0.42.0",
+    "@lexical/history": "0.42.0",
+    "@lexical/link": "0.42.0",
+    "@lexical/list": "0.42.0",
+    "@lexical/rich-text": "0.42.0",
+    "@lexical/selection": "0.42.0",
+    "@lexical/table": "0.42.0",
+    "@lexical/utils": "0.42.0",
+    "@meta2d/activity-diagram": "^1.0.1",
+    "@meta2d/chart-diagram": "^1.0.21",
+    "@meta2d/class-diagram": "^1.0.2",
+    "@meta2d/core": "^1.1.19",
+    "@meta2d/flow-diagram": "^1.0.2",
+    "@meta2d/form-diagram": "^1.0.30",
+    "@meta2d/fta-diagram": "^1.0.1",
+    "@meta2d/le5le-charts": "^1.0.5",
+    "@meta2d/sequence-diagram": "^1.0.1",
+    "@shikijs/core": "^3.20.0",
+    "@shikijs/engine-javascript": "^3.20.0",
+    "@shikijs/langs": "3.23.0",
+    "ahooks": "^3.9.6",
+    "antd-style": "^4.1.0",
+    "canvas2svg": "^1.0.16",
+    "debug": "^4.4.3",
+    "es-toolkit": "^1.43.0",
+    "eventemitter3": "^5.0.1",
+    "fuse.js": "^7.1.0",
+    "katex": "^0.16.27",
+    "lexical": "0.42.0",
+    "lucide-react": "^0.562.0",
+    "markmap-lib": "^0.18.12",
+    "markmap-view": "^0.18.12",
+    "mermaid": "^11.13.0",
+    "polished": "^4.3.1",
+    "re-resizable": "^6.11.2",
+    "react-error-boundary": "^6.0.2",
+    "react-merge-refs": "^3.0.2",
+    "remark-cjk-friendly": "^1.2.3",
+    "remark-supersub": "^1.0.0",
+    "shiki": "^3.20.0",
+    "ts-key-enum": "^3.0.13",
+    "use-merge-value": "^1.2.0"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^5.0.0",
+    "antd": "^6.1.1",
+    "motion": "^12.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "packageManager": "pnpm@10.20.0",
+  "pnpm": {
+    "overrides": {
+      "chalk": "^4.1.2"
+    },
+    "patchedDependencies": {
+      "lexical@0.42.0": "patches/lexical@0.42.0.patch"
+    }
+  }
+}
