@@ -17,6 +17,8 @@ export const FILE_TYPE = {
   HTML: 'html',
   /** 表格文档 `.sheet`（JSON 行存储，文档树中可见） */
   SHEET: 'sheet',
+  /** 定时任务 `.job`（JSON 配置；产出在 SQLite） */
+  JOB: 'job',
   /** 普通目录（文档树中可见） */
   FOLDER: 'dir',
   /** 目录描述文件 ___desc___.md（文档树中不可见，用于展示目录介绍） */

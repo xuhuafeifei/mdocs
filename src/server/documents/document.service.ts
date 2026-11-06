@@ -213,17 +213,29 @@ function normalizeFileName(fileName: string, fileType?: string): string {
       ? ".html"
       : fileType === FILE_TYPE.SHEET
         ? ".sheet"
-        : ".md";
+        : fileType === FILE_TYPE.JOB
+          ? ".job"
+          : ".md";
 
   // 确保以正确后缀结尾
   const lower = normalized.toLowerCase();
-  if (!lower.endsWith(".md") && !lower.endsWith(".html") && !lower.endsWith(".sheet")) {
+  if (
+    !lower.endsWith(".md") &&
+    !lower.endsWith(".html") &&
+    !lower.endsWith(".sheet") &&
+    !lower.endsWith(".job")
+  ) {
     normalized += ext;
   }
 
   // 避免空文件名
   const checkLower = normalized.toLowerCase();
-  if (checkLower === ".md" || checkLower === ".html" || checkLower === ".sheet") {
+  if (
+    checkLower === ".md" ||
+    checkLower === ".html" ||
+    checkLower === ".sheet" ||
+    checkLower === ".job"
+  ) {
     normalized = "untitled" + ext;
   }
 

@@ -31,9 +31,10 @@ export function normaliseDocRelativePath(input: string): string {
     !lower.endsWith(".md") &&
     !lower.endsWith(".html") &&
     !lower.endsWith(".json") &&
-    !lower.endsWith(".sheet")
+    !lower.endsWith(".sheet") &&
+    !lower.endsWith(".job")
   ) {
-    throw new DocPathError("document path must end with .md, .html, .json, or .sheet");
+    throw new DocPathError("document path must end with .md, .html, .json, .sheet, or .job");
   }
   if (!RELATIVE_PATH_RX.test(raw)) {
     throw new DocPathError("path contains unsupported characters");

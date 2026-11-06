@@ -45,6 +45,7 @@ describe("file-type-policy", () => {
       FILE_TYPE.DOCUMENT,
       FILE_TYPE.HTML,
       FILE_TYPE.SHEET,
+      FILE_TYPE.JOB,
     ]);
   });
 

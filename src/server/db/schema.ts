@@ -237,6 +237,34 @@ const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_agent_att_staging_created ON agent_attachments (status, created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_agent_att_sha ON agent_attachments (sha256)`,
   `CREATE INDEX IF NOT EXISTS idx_agent_att_owner ON agent_attachments (owner_visitor_id)`,
+  `CREATE TABLE IF NOT EXISTS job_running_detail (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id TEXT NOT NULL,
+    status INTEGER NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT,
+    failed_reason TEXT,
+    trigger TEXT NOT NULL DEFAULT 'cron',
+    FOREIGN KEY (job_id) REFERENCES documents(document_id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_job_running_detail_job_start
+    ON job_running_detail (job_id, start_time DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_running_detail_job_status
+    ON job_running_detail (job_id, status)`,
+  `CREATE TABLE IF NOT EXISTS job_running_data (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id TEXT NOT NULL,
+    job_running_id INTEGER NOT NULL,
+    x TEXT NOT NULL,
+    y REAL NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (job_id) REFERENCES documents(document_id) ON DELETE CASCADE,
+    FOREIGN KEY (job_running_id) REFERENCES job_running_detail(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_job_running_data_run
+    ON job_running_data (job_running_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_running_data_job
+    ON job_running_data (job_id)`,
 ];
 
 
