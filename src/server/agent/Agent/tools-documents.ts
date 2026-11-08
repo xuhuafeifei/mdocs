@@ -2,12 +2,18 @@ import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { TreeNode } from "../../../shared/types/tree.js";
 import { getDb } from "../../db/connection.js";
-import { listDocumentsByVisitor } from "../../db/repositories/document.repo.js";
+import {
+  findDocumentById,
+  listDocumentsByVisitor,
+} from "../../db/repositories/document.repo.js";
 import { assertDocumentAccess, DocumentError } from "../../access/access-control.js";
 import {
   createDocument,
   addDocumentInvite,
+  formatDocumentBodyContent,
   getDocument,
+  getDocumentCommit,
+  listDocumentCommits,
   moveDocument,
   renameDocument,
 } from "../../documents/document.service.js";
@@ -276,6 +282,123 @@ export function getDocumentTool({ visitorId }: ToolDeps): AgentTool {
           relativePath: doc.relativePath,
           fileType: doc.fileType,
           permission: doc.permission,
+          format,
+          contentTruncated,
+          ...(contentTruncated ? { contentMaxChars: GET_DOCUMENT_MAX_CHARS } : {}),
+          content,
+        });
+      } catch (err) {
+        if (err instanceof DocumentError) {
+          throw new Error(`${err.code}: ${err.message}`);
+        }
+        throw err;
+      }
+    },
+  };
+}
+
+export function listDocumentCommitsTool({ visitorId }: ToolDeps): AgentTool {
+  return {
+    name: "list_document_commits",
+    label: "列出文档历史版本",
+    description:
+      "列出某篇文档的发布历史（类 git log）：commitId、时间、作者、message、source、是否 head。" +
+      "只读元数据，不含正文。读某一版正文用 get_document_commit。" +
+      "与 HTTP 版本列表同一套读权限。",
+    parameters: Type.Object({
+      documentId: Type.String({ description: "文档 documentId" }),
+      limit: Type.Optional(
+        Type.Number({ description: "最多返回条数，默认 30，最大 100" }),
+      ),
+    }),
+    execute: async (_id, params) => {
+      const { documentId: rawId, limit: rawLimit } = params as {
+        documentId: string;
+        limit?: number;
+      };
+      const documentId = rawId?.trim();
+      if (!documentId) throw new Error("documentId is required");
+      const limit = Math.min(Math.max(Math.floor(rawLimit ?? 30), 1), 100);
+      try {
+        assertDocumentAccess(documentId, visitorId, "read");
+        const all = listDocumentCommits(documentId);
+        return asToolResult({
+          documentId,
+          total: all.length,
+          commits: all.slice(0, limit),
+        });
+      } catch (err) {
+        if (err instanceof DocumentError) {
+          throw new Error(`${err.code}: ${err.message}`);
+        }
+        throw err;
+      }
+    },
+  };
+}
+
+export function getDocumentCommitTool({ visitorId }: ToolDeps): AgentTool {
+  return {
+    name: "get_document_commit",
+    label: "读取历史版本内容",
+    description:
+      "按 documentId + commitId 读取某一历史发布版正文（类 git show）。" +
+      "format 语义与 get_document 完全一致：默认 md（Lexical→Markdown）；text 纯文本；json 存盘原文；html 始终原文。" +
+      "先 list_document_commits 取 commitId。与当前稿无关；改稿仍应对 head 用 get_document / 写工具。",
+    parameters: Type.Object({
+      documentId: Type.String({ description: "文档 documentId" }),
+      commitId: Type.String({ description: "历史版本 commitId" }),
+      format: Type.Optional(
+        Type.Union(
+          [Type.Literal("md"), Type.Literal("text"), Type.Literal("json")],
+          {
+            description: "md（默认）| text | json；与 get_document 相同",
+          },
+        ),
+      ),
+    }),
+    execute: async (_id, params) => {
+      const {
+        documentId: rawId,
+        commitId: rawCommitId,
+        format: rawFormat,
+      } = params as {
+        documentId: string;
+        commitId: string;
+        format?: "md" | "text" | "json";
+      };
+      const documentId = rawId?.trim();
+      const commitId = rawCommitId?.trim();
+      if (!documentId) throw new Error("documentId is required");
+      if (!commitId) throw new Error("commitId is required");
+      const format =
+        rawFormat === "json" ? "json" : rawFormat === "text" ? "text" : "md";
+      try {
+        assertDocumentAccess(documentId, visitorId, "read");
+        const row = findDocumentById(getDb(), documentId);
+        if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+        const detail = getDocumentCommit(documentId, commitId);
+        let content = formatDocumentBodyContent(
+          detail.content ?? "",
+          row.file_type,
+          format,
+        );
+        let contentTruncated = false;
+        if (content.length > GET_DOCUMENT_MAX_CHARS) {
+          content = content.slice(0, GET_DOCUMENT_MAX_CHARS);
+          contentTruncated = true;
+        }
+        return asToolResult({
+          documentId,
+          commitId: detail.commitId,
+          createdAt: detail.createdAt,
+          authorVisitorId: detail.authorVisitorId,
+          authorVisitorName: detail.authorVisitorName,
+          message: detail.message,
+          source: detail.source,
+          isHead: detail.isHead,
+          contentHash: detail.contentHash,
+          fileType: row.file_type,
           format,
           contentTruncated,
           ...(contentTruncated ? { contentMaxChars: GET_DOCUMENT_MAX_CHARS } : {}),

@@ -17,6 +17,8 @@ const STRUCTURE_NAMES = [
   "rebuild_semantic_index",
   "invite_document_user",
   "get_document",
+  "list_document_commits",
+  "get_document_commit",
   "create_document",
   "create_folder",
   "move_document",

@@ -10,6 +10,8 @@ const TOOL_LABELS: Record<string, string> = {
   query_my_documents: "查询我的文档",
   list_tree: "浏览目录",
   get_document: "读取文档",
+  list_document_commits: "列出文档历史",
+  get_document_commit: "读取历史版本",
   get_document_lexical_lines: "按块读取文档",
   create_document: "创建文档",
   create_folder: "创建文件夹",
@@ -333,11 +335,19 @@ export function toolCallDetailFromArgs(
 
   if (
     toolName === "get_document" ||
+    toolName === "list_document_commits" ||
+    toolName === "get_document_commit" ||
     toolName === "move_document" ||
     toolName === "rename_document"
   ) {
     const id = String(a.documentId ?? "").trim();
     const name = String(a.displayName ?? a.newName ?? a.name ?? "").trim();
+    const commit = String(a.commitId ?? "").trim();
+    if (toolName === "get_document_commit" && commit) {
+      return name
+        ? `${name} @ ${commit.slice(0, 8)}…`
+        : `版本 ${commit.slice(0, 8)}…`;
+    }
     return name || (id ? `文档 ${id.slice(0, 8)}…` : undefined);
   }
 
@@ -548,6 +558,23 @@ export function toolCallDetailFromResult(
   if (toolName === "get_document") {
     const name = String(details.displayName ?? "").trim();
     return name ? `已读「${name}」` : fallback;
+  }
+
+  if (toolName === "list_document_commits") {
+    const n =
+      typeof details.total === "number"
+        ? details.total
+        : Array.isArray(details.commits)
+          ? details.commits.length
+          : undefined;
+    return typeof n === "number" ? `历史 ${n} 版` : fallback;
+  }
+
+  if (toolName === "get_document_commit") {
+    const msg = String(details.message ?? "").trim();
+    const id = String(details.commitId ?? "").trim();
+    if (msg) return `已读历史「${clip(msg, 32)}」`;
+    return id ? `已读历史 ${id.slice(0, 8)}…` : fallback;
   }
 
   if (toolName === "create_document") {

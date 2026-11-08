@@ -72,7 +72,7 @@
   | `src/server/documents/ai-merge.service.ts` | `suggestDocumentMerge`（CLI/Agent 编排） |
   | `src/server/agent/Agent/almost-empty.ts` | `isAlmostEmptyDocumentText` |
   | `src/server/agent/Agent/choice-pending.ts` | `waitForUserChoice` `resolveUserChoice` |
-  | `src/server/agent/Agent/tools-documents.ts` | `searchDocumentsTool` `getDocumentTool` 等单个 tool |
+  | `src/server/agent/Agent/tools-documents.ts` | `searchDocumentsTool` `getDocumentTool` `listDocumentCommitsTool` `getDocumentCommitTool` 等 |
   | `src/server/agent/Agent/tools-sheet.ts` | 工作簿多表：`sheet_*`（`append_rows` / `update_row` / `insert_rows_at` / `overwrite` / `get_styles` 等）+ tab CRUD |
   | `src/shared/sheetDocument.ts` | `.sheet` v2：`sheets[]` + `activeSheetId`；`insertSheetRows` / `overwriteSheetTab` / `collectSheetCellStyles` |
   | `src/server/agent/Agent/tools-documents.ts` | `renameDocumentTool`（同目录改 basename） |

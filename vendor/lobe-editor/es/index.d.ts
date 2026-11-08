@@ -574,8 +574,8 @@ declare function rejectDiffHunkByKey(editor: LexicalEditor, key: string): void;
 type DiffApiResult = {
   ok: true;
 } | {
-  ok: false;
   error: string;
+  ok: false;
 };
 type FlattenMode = 'keep' | 'reject';
 /** Pure: strip DiffHunk from serialized state (does not mutate the live editor). */

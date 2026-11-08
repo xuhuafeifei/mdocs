@@ -416,6 +416,31 @@ export function createDocument(params: {
 //  读单篇文档（调用方需先鉴权）
 // ============================================================
 
+/**
+ * 存盘正文 → Agent/HTTP 读出口格式。get_document 与历史版本读共用，
+ * 避免 commit blob 与当前稿两套转换逻辑漂移。
+ */
+export function formatDocumentBodyContent(
+  content: string,
+  fileType: string,
+  format?: "json" | "text" | "md",
+): string {
+  const policy = getPolicy(fileType as any);
+  if (policy.textExtract === "none") {
+    return content;
+  }
+  if (policy.textExtract === "raw") {
+    return content;
+  }
+  if (format === "text") {
+    return extractPlainTextFromLexical(content);
+  }
+  if (format === "md") {
+    return lexicalJsonToMarkdown(content);
+  }
+  return content;
+}
+
 export function getDocument(
   documentId: string,
   visitorId?: string | null,
@@ -433,23 +458,7 @@ export function getDocument(
   const domainMemberWrite = visitorId
     ? resolveDomainMemberWriteFlag(getDb(), row, visitorId)
     : false;
-  // 根据政策表的 textExtract 决定 format 行为
-  const policy = getPolicy(row.file_type as any);
-  let finalContent: string;
-  if (policy.textExtract === 'none') {
-    // 图谱等：忽略 format，始终返回原始内容
-    finalContent = content;
-  } else if (policy.textExtract === 'raw') {
-    // html 等：返回原始内容（可选剥标签）
-    finalContent = content;
-  } else if (format === "text") {
-    finalContent = extractPlainTextFromLexical(content);
-  } else if (format === "md") {
-    finalContent = lexicalJsonToMarkdown(content);
-  } else {
-    // 默认 json：Lexical 原文
-    finalContent = content;
-  }
+  const finalContent = formatDocumentBodyContent(content, row.file_type, format);
   return {
     ...rowToSummary(row),
     content: finalContent,

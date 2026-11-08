@@ -1,8 +1,8 @@
 import { A as __toCommonJS, C as noop, E as unregisterEditorKernel, S as moment, T as registerEditorKernel, _ as getNodeKeyFromDOMNode, a as DOM_DOCUMENT_FRAGMENT_TYPE, b as isDOMNode, c as DOM_TEXT_TYPE, d as compareNodeOrder, f as createEmptyEditorState, g as getKernelFromEditorConfig, h as getKernelFromEditor, i as $getNodeFromDOMNode, l as EDITOR_THEME_KEY, m as generateEditorId, n as $closestNodeType, o as DOM_DOCUMENT_TYPE, p as genServiceId, r as $getNearestNodeFromDOMNode, s as DOM_ELEMENT_TYPE, t as $closest, u as assert, v as getParentElement, w as reconcileDecorator, x as isDocumentFragment, y as init_utils } from "./utils-DR6xvOCh.js";
 import { $ as HOVER_COMMAND, B as $isCursorNode, C as formatUrl, Ct as INodeHelper, D as supportedLanguagesInfo, Dt as zhCN, E as resolveSupportedLanguageId, Et as init_locale, F as $createCodeMirrorNode, G as Editor, I as $isCodeMirrorNode, J as Kernel, K as resetRandomKey, L as CodeMirrorNode, O as $createCodeNode$1, Q as init_plugin, R as $createCursorNode, S as TOGGLE_LINK_COMMAND, St as init_utils$1, Tt as enUS, U as cursorNodeSerialized, V as CardLikeElementNode, X as kernel_exports, Y as init_kernel, Z as KernelPlugin, _ as AutoLinkNode, a as $createMathBlockNode, at as HotkeyScopeEnum, b as HOVER_OUT_LINK_COMMAND, c as MathBlockNode, ct as browserDebug, dt as debugLoggers, et as getHotkeyById, f as LinkHighlightNode, ft as debug_exports, g as $toggleLink, h as $isLinkNode, ht as prodSafeLogger, it as HotkeyEnum, j as CodeNode$1, l as MathInlineNode, lt as createDebugLogger, m as $createLinkNode, mt as init_debug, nt as CONTROL_OR_META, o as $createMathInlineNode, ot as KeyEnum, pt as devConsole, q as DataSource, rt as init_sys, s as $isMathNode, st as init_hotkey, tt as init_registerHotkey, u as $createLinkHighlightNode, ut as debugLogger, v as EDIT_LINK_COMMAND, w as SUPPORTED_SHIKI_LANGUAGE_IDS, wt as init_helper, x as LinkNode, xt as exportNodeToJSON, y as HOVER_LINK_COMMAND, z as $isCardLikeElementNode } from "./style-B85viVq4.js";
-import { A as INodePlugin, B as MARKDOWN_READER_LEVEL_HIGH, C as registerCheckList, D as $isSelectionInCodeContext, E as ReactPlainText, F as CommonPlugin, G as INSERT_HEADING_COMMAND, H as MARKDOWN_WRITER_LEVEL_MAX, I as isPasteTargetCodeEditor, J as ReactEditor, K as INSERT_QUOTE_COMMAND, L as isPasteTargetNativeFormControl, M as GET_MARKDOWN_SELECTION_COMMAND, N as INSERT_MARKDOWN_COMMAND, O as MarkdownPlugin, P as ReactEditorContent, R as scrollIntoView, S as INSERT_CHECK_LIST_COMMAND, T as registerCodeInlineCommand, U as isPunctuationChar, V as MARKDOWN_READER_LEVEL_NORMAL, W as parseMarkdownToLexical, Y as LexicalErrorBoundary, _ as registerCodeCommand, a as ReactMentionPlugin, b as ReactMarkdownPlugin, c as INSERT_LINK_HIGHLIGHT_COMMAND, d as getSelectedNode, f as sanitizeUrl, g as UPDATE_CODEBLOCK_LANG, h as CustomShikiTokenizer, i as SlashPlugin, j as INodeService, k as looksLikeMermaidDiagramSyntax, l as registerLinkHighlightCommand, m as useLexicalNodeSelection, n as ReactSlashOption, o as MentionPlugin, q as useLexicalEditor, r as SlashMenu, s as INSERT_MENTION_COMMAND, t as ReactSlashPlugin, u as extractUrlFromText, v as registerCodeHighlighting, w as INSERT_CODEINLINE_COMMAND, x as useTranslation, y as toCodeTheme, z as IMarkdownShortCutService } from "./ReactSlashPlugin-BuplsRwn.js";
+import { A as INodePlugin, B as MARKDOWN_READER_LEVEL_HIGH, C as registerCheckList, D as $isSelectionInCodeContext, E as ReactPlainText, F as CommonPlugin, G as INSERT_HEADING_COMMAND, H as MARKDOWN_WRITER_LEVEL_MAX, I as isPasteTargetCodeEditor, J as ReactEditor, K as INSERT_QUOTE_COMMAND, L as isPasteTargetNativeFormControl, M as GET_MARKDOWN_SELECTION_COMMAND, N as INSERT_MARKDOWN_COMMAND, O as MarkdownPlugin, P as ReactEditorContent, R as scrollIntoView, S as INSERT_CHECK_LIST_COMMAND, T as registerCodeInlineCommand, U as isPunctuationChar, V as MARKDOWN_READER_LEVEL_NORMAL, W as parseMarkdownToLexical, Y as LexicalErrorBoundary, _ as registerCodeCommand, a as ReactMentionPlugin, b as ReactMarkdownPlugin, c as INSERT_LINK_HIGHLIGHT_COMMAND, d as getSelectedNode, f as sanitizeUrl, g as UPDATE_CODEBLOCK_LANG, h as CustomShikiTokenizer, i as SlashPlugin, j as INodeService, k as looksLikeMermaidDiagramSyntax, l as registerLinkHighlightCommand, m as useLexicalNodeSelection, n as ReactSlashOption, o as MentionPlugin, q as useLexicalEditor, r as SlashMenu, s as INSERT_MENTION_COMMAND, t as ReactSlashPlugin, u as extractUrlFromText, v as registerCodeHighlighting, w as INSERT_CODEINLINE_COMMAND, x as useTranslation, y as toCodeTheme, z as IMarkdownShortCutService } from "./ReactSlashPlugin-Dz3bYDG1.js";
 import { r as useLexicalComposerContext } from "./react-context-DwwzSNVm.js";
-import { S as MermaidWithErrorBoundary, _ as PlaceholderBlockNode, a as styles$15, b as $isHorizontalRuleNode, c as ImageNode, d as BlockImageNode, f as styles$14, g as computeLexicalDiffRows, h as FileNode, i as imageBroken, l as $createBlockImageNode, m as $isFileNode, n as styles$17, o as $createImageNode, p as $createFileNode, r as styles$16, s as $isImageNode, t as styles$18, u as $isBlockImageNode, v as PlaceholderNode, x as HorizontalRuleNode, y as $createHorizontalRuleNode } from "./style-BUXXDG2e.js";
+import { S as MermaidWithErrorBoundary, _ as PlaceholderBlockNode, a as styles$15, b as $isHorizontalRuleNode, c as ImageNode, d as BlockImageNode, f as styles$14, g as computeLexicalDiffRows, h as FileNode, i as imageBroken, l as $createBlockImageNode, m as $isFileNode, n as styles$17, o as $createImageNode, p as $createFileNode, r as styles$16, s as $isImageNode, t as styles$18, u as $isBlockImageNode, v as PlaceholderNode, x as HorizontalRuleNode, y as $createHorizontalRuleNode } from "./style-Dl9d1VsS.js";
 import { a as initialSvgForDiagram, n as EMPTY_META2D_DIAGRAM_JSON, r as EMPTY_META2D_PLACEHOLDER_SVG } from "./meta2dLight-JnDieCPZ.js";
 import { $computeTableMapSkipCellCheck, $createTableNodeWithDimensions, $createTableSelection, $deleteTableColumnAtSelection, $deleteTableRowAtSelection, $findTableNode, $getElementForTableNode, $getNodeTriplet, $getTableAndElementByKey, $getTableCellNodeFromLexicalNode, $getTableColumnIndexFromTableCellNode, $getTableNodeFromLexicalNodeOrThrow, $getTableRowIndexFromTableCellNode, $insertTableColumnAtSelection, $insertTableRowAtSelection, $isTableCellNode, $isTableNode, $isTableRowNode, $isTableSelection, $mergeCells, $unmergeCell, TableCellHeaderStates, TableCellNode, TableNode, TableNode as TableNode$1, TableRowNode, getDOMCellFromTarget, getTableElement, getTableObserverFromTableElement, registerTableCellUnmergeTransform, registerTablePlugin, registerTableSelectionObserver, setScrollableTablesActive } from "@lexical/table";
 import { debounce } from "es-toolkit/compat";
@@ -4156,8 +4156,8 @@ function updateSlot(editor, slot, md) {
 	discardPendingDiffs(editor);
 	const blocks = mdToBlocks(editor, md);
 	if (blocks.length !== 1) return {
-		ok: false,
-		error: "update_slot expects exactly one top-level markdown block"
+		error: "update_slot expects exactly one top-level markdown block",
+		ok: false
 	};
 	let ok = false;
 	let error = "update_slot failed";
@@ -4173,16 +4173,16 @@ function updateSlot(editor, slot, md) {
 		ok = true;
 	}, { discrete: true });
 	return ok ? { ok: true } : {
-		ok: false,
-		error
+		error,
+		ok: false
 	};
 }
 function insertAfterSlot(editor, slot, md) {
 	discardPendingDiffs(editor);
 	const blocks = mdToBlocks(editor, md);
 	if (blocks.length === 0) return {
-		ok: false,
-		error: "insert_after got empty markdown"
+		error: "insert_after got empty markdown",
+		ok: false
 	};
 	let ok = false;
 	let error = "insert_after failed";
@@ -4207,8 +4207,8 @@ function insertAfterSlot(editor, slot, md) {
 		ok = true;
 	}, { discrete: true });
 	return ok ? { ok: true } : {
-		ok: false,
-		error
+		error,
+		ok: false
 	};
 }
 function removeSlot(editor, slot) {
@@ -4228,8 +4228,8 @@ function removeSlot(editor, slot) {
 		ok = true;
 	}, { discrete: true });
 	return ok ? { ok: true } : {
-		ok: false,
-		error
+		error,
+		ok: false
 	};
 }
 function buildOverwritePlan(oldState, newState) {
@@ -4297,8 +4297,8 @@ function applyOverwritePlan(editor, newState) {
 		applied = true;
 	}, { discrete: true });
 	return applied ? { ok: true } : {
-		ok: false,
-		error: "overwrite_all failed"
+		error: "overwrite_all failed",
+		ok: false
 	};
 }
 /**

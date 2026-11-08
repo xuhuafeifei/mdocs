@@ -13,8 +13,8 @@ function loadMermaid() {
 	if (!mermaidLoader) mermaidLoader = import("mermaid").then((mod) => {
 		const mermaid = mod.default;
 		mermaid.initialize({
-			startOnLoad: false,
-			securityLevel: "strict"
+			securityLevel: "strict",
+			startOnLoad: false
 		});
 		return mermaid;
 	});

@@ -20020,7 +20020,13 @@ const CommonPlugin = class extends KernelPlugin {
 			ctx.wrap("", breakMark);
 		});
 		if (formats.quote) markdownService.registerMarkdownWriter("quote", (ctx, node) => {
-			if ($isQuoteNode(node)) ctx.wrap("> ", breakMark);
+			if (!$isQuoteNode(node)) return;
+			ctx.wrap("", breakMark);
+			ctx.addProcessor((_before, content, after) => {
+				const trimmed = content.replace(/(?:\r?\n)+$/u, "");
+				if (trimmed.length === 0) return `>${after}`;
+				return `${trimmed.split(/\r?\n/u).map((line) => line.length > 0 ? `> ${line}` : ">").join("\n")}${after}`;
+			});
 		});
 		if (formats.header) markdownService.registerMarkdownWriter("heading", (ctx, node) => {
 			if ($isHeadingNode(node)) switch (node.getTag()) {

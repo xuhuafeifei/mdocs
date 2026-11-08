@@ -9,6 +9,7 @@
 
 export const SESSION_PERSIST_TOOL_NAMES = [
   "get_document",
+  "get_document_commit",
   "web_search",
   "web_fetch",
   "overwrite_document",
