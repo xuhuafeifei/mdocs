@@ -24,6 +24,8 @@ export {
 export {
   getJobRuns,
   getJobData,
+  getJobRuntimeSnapshot,
+  wrapJobContentWithRuntime,
   manualRunJob,
   cancelJobRunForDocument,
   JOB_STATUS,

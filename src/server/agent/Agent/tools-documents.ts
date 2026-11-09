@@ -29,6 +29,7 @@ import {
   createEmptySheetDocument,
   serializeSheetDocument,
 } from "../../../shared/sheetDocument.js";
+import { wrapJobContentWithRuntime } from "../../jobs/job-run.service.js";
 
 /** Agent 上下文体积上限；超长正文截断并标注 */
 const GET_DOCUMENT_MAX_CHARS = 50_000;
@@ -245,7 +246,9 @@ export function getDocumentTool({ visitorId }: ToolDeps): AgentTool {
       "按 documentId 读取当前访客有权阅读的文档正文。响应含 fileType。" +
       "默认 format=md：.md 从 Lexical 转为 Markdown（改稿/replace 请用此格式抄 find）；" +
       "format=text 抽纯文本；format=json 返回存盘原文（Lexical）。" +
-      "html 无论 format 均返回 HTML 原文。与 HTTP GET 同一套读权限。",
+      "html 无论 format 均返回 HTML 原文。" +
+      "fileType=job 时 content 会包装 JobConfig/MonitorConfig，并附带只读 JobRunningData（产出点）与 JobRuns（运行流水）；勿把 JobRunningData 写回文档。" +
+      "与 HTTP GET 同一套读权限。",
     parameters: Type.Object({
       documentId: Type.String({ description: "文档 documentId" }),
       format: Type.Optional(
@@ -270,6 +273,10 @@ export function getDocumentTool({ visitorId }: ToolDeps): AgentTool {
         assertDocumentAccess(documentId, visitorId, "read");
         const doc = getDocument(documentId, visitorId, format);
         let content = doc.content ?? "";
+        // Job：把 SQLite 产出打进 content，方便 Agent 一次读全
+        if (doc.fileType === FILE_TYPE.JOB) {
+          content = wrapJobContentWithRuntime(documentId, content);
+        }
         let contentTruncated = false;
         if (content.length > GET_DOCUMENT_MAX_CHARS) {
           content = content.slice(0, GET_DOCUMENT_MAX_CHARS);
@@ -286,6 +293,7 @@ export function getDocumentTool({ visitorId }: ToolDeps): AgentTool {
           contentTruncated,
           ...(contentTruncated ? { contentMaxChars: GET_DOCUMENT_MAX_CHARS } : {}),
           content,
+          ...(doc.jobRuntime ? { jobRuntime: doc.jobRuntime } : {}),
         });
       } catch (err) {
         if (err instanceof DocumentError) {

@@ -89,6 +89,7 @@ import { FILE_TYPE, isGraphFileType } from "../../shared/file-types.js";
 import { isFolderDescPath } from "../../shared/folderDesc.js";
 import { getPolicy } from "../../shared/file-type-policy.js";
 import { ensureJobFileContent } from "../jobs/job-file.js";
+import { getJobRuntimeSnapshot } from "../jobs/job-run.service.js";
 import { deleteJobRuntimeByJobId } from "../jobs/running-repo.js";
 import {
   onArticleDeleted,
@@ -460,7 +461,7 @@ export function getDocument(
     ? resolveDomainMemberWriteFlag(getDb(), row, visitorId)
     : false;
   const finalContent = formatDocumentBodyContent(content, row.file_type, format);
-  return {
+  const base = {
     ...rowToSummary(row),
     content: finalContent,
     contentHash,
@@ -468,6 +469,20 @@ export function getDocument(
     ...(invitedEdit ? { invitedEdit: true } : {}),
     ...(domainMemberWrite ? { domainMemberWrite: true } : {}),
   };
+  // Job：content 仍是 .job 配置；运行时产出另挂 jobRuntime，避免写回污染文件。
+  if (row.file_type === FILE_TYPE.JOB) {
+    const runtime = getJobRuntimeSnapshot(row.document_id);
+    return {
+      ...base,
+      jobRuntime: {
+        points: runtime.points,
+        runs: runtime.runs,
+        ...(runtime.pointsTruncated ? { pointsTruncated: true } : {}),
+        ...(runtime.runsTruncated ? { runsTruncated: true } : {}),
+      },
+    };
+  }
+  return base;
 }
 
 // ============================================================

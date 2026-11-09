@@ -40,6 +40,98 @@ export function getJobData(documentId: string, limit?: number): JobRunningDataRo
   return listJobRunningData(documentId, limit);
 }
 
+const JOB_READ_POINTS_LIMIT = 500;
+const JOB_READ_RUNS_LIMIT = 30;
+
+/** 读 Job 时附带运行时快照（不写回 .job）。 */
+export function getJobRuntimeSnapshot(documentId: string): {
+  points: Array<{
+    id: number;
+    x: string;
+    y: number;
+    jobRunningId: number;
+    createdAt: string;
+  }>;
+  runs: Array<{
+    id: number;
+    status: number;
+    trigger: string;
+    startTime: string;
+    endTime: string | null;
+    failedReason: string | null;
+  }>;
+  pointsTruncated: boolean;
+  runsTruncated: boolean;
+} {
+  loadJobRow(documentId);
+  const pointRows = listJobRunningData(documentId, JOB_READ_POINTS_LIMIT + 1);
+  const runRows = listJobRuns(documentId, JOB_READ_RUNS_LIMIT + 1);
+  const pointsTruncated = pointRows.length > JOB_READ_POINTS_LIMIT;
+  const runsTruncated = runRows.length > JOB_READ_RUNS_LIMIT;
+  const points = (pointsTruncated
+    ? pointRows.slice(-JOB_READ_POINTS_LIMIT)
+    : pointRows
+  ).map((p) => ({
+    id: p.id,
+    x: p.x,
+    y: p.y,
+    jobRunningId: p.job_running_id,
+    createdAt: p.created_at,
+  }));
+  const runs = (runsTruncated ? runRows.slice(0, JOB_READ_RUNS_LIMIT) : runRows).map(
+    (r) => ({
+      id: r.id,
+      status: r.status,
+      trigger: r.trigger,
+      startTime: r.start_time,
+      endTime: r.end_time,
+      failedReason: r.failed_reason,
+    }),
+  );
+  return { points, runs, pointsTruncated, runsTruncated };
+}
+
+/**
+ * 把 Job 配置 JSON + 运行时数据打成一份只读 content（给 get_document / Agent）。
+ * 写回仍应只用 JobConfig / MonitorConfig；本函数产物勿当磁盘真源。
+ */
+export function wrapJobContentWithRuntime(
+  documentId: string,
+  fileContent: string,
+): string {
+  let base: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(fileContent) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      base = parsed as Record<string, unknown>;
+    } else {
+      base = { JobFileRaw: fileContent };
+    }
+  } catch {
+    base = { JobFileRaw: fileContent };
+  }
+  const runtime = getJobRuntimeSnapshot(documentId);
+  return `${JSON.stringify(
+    {
+      ...base,
+      JobRunningData: runtime.points,
+      JobRuns: runtime.runs,
+      ...(runtime.pointsTruncated || runtime.runsTruncated
+        ? {
+            JobRuntimeMeta: {
+              pointsTruncated: runtime.pointsTruncated,
+              runsTruncated: runtime.runsTruncated,
+              pointsLimit: JOB_READ_POINTS_LIMIT,
+              runsLimit: JOB_READ_RUNS_LIMIT,
+            },
+          }
+        : {}),
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 /** 人工删除产出点：传 ids，或 all=true 清空。不开放给 Agent。 */
 export function deleteJobData(params: {
   documentId: string;

@@ -14,6 +14,27 @@ export interface DocumentSummary {
   headCommitId?: string;
 }
 
+/** Job 文档只读附带：SQLite 产出点 + 近期运行流水（不进 .job 文件）。 */
+export type JobDocumentRuntime = {
+  points: Array<{
+    id: number;
+    x: string;
+    y: number;
+    jobRunningId: number;
+    createdAt: string;
+  }>;
+  runs: Array<{
+    id: number;
+    status: number;
+    trigger: string;
+    startTime: string;
+    endTime: string | null;
+    failedReason: string | null;
+  }>;
+  pointsTruncated?: boolean;
+  runsTruncated?: boolean;
+};
+
 export interface DocumentDetail extends DocumentSummary {
   content: string;
   contentHash: string;
@@ -21,10 +42,15 @@ export interface DocumentDetail extends DocumentSummary {
   invitedEdit?: boolean;
   /** 当前访客是域成员且 role=write（仍需文档 domain_write 才能编） */
   domainMemberWrite?: boolean;
+  /** fileType=job 时附带；配置仍在 content，产出在此 */
+  jobRuntime?: JobDocumentRuntime;
 }
 
 /** 当前打开文档的服务端 meta（不含正文），供 UI 壳共享。见 .mdocs-docs/archive/active-doc-meta-and-draft-model.md */
-export type ActiveDocumentMeta = Omit<DocumentDetail, "content" | "contentHash">;
+export type ActiveDocumentMeta = Omit<
+  DocumentDetail,
+  "content" | "contentHash" | "jobRuntime"
+>;
 
 export interface CreateDocumentRequest {
   domainId?: string;
