@@ -408,16 +408,21 @@ export function App() {
   }, [mergeViewOpen, activeDocMeta, editBaseCommitId, remoteCommitId]);
 
   useEffect(() => {
-    if (!activeDocMeta || !syncBehind || !editorDraftExists) return;
+    if (!activeDocMeta || activeDocMeta.fileType === FILE_TYPE.JOB) return;
+    if (!syncBehind || !editorDraftExists) return;
     void getDraft(activeDocMeta.documentId).then(async (draft) => {
       if (!draft || draft.conflict || draft.conflictStatus === "publish_conflict") return;
       if (draft.conflictStatus === "diverged") return;
       await saveDraftRecord({ ...draft, conflictStatus: "diverged" });
     });
-  }, [activeDocMeta?.documentId, syncBehind, editorDraftExists]);
+  }, [activeDocMeta?.documentId, activeDocMeta?.fileType, syncBehind, editorDraftExists]);
 
   useEffect(() => {
     if (!activeDocMeta) {
+      setEditBaseCommitId(null);
+      return;
+    }
+    if (activeDocMeta.fileType === FILE_TYPE.JOB) {
       setEditBaseCommitId(null);
       return;
     }
@@ -433,7 +438,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeDocMeta?.documentId, activeDocMeta?.headCommitId, editorDraftExists]);
+  }, [activeDocMeta?.documentId, activeDocMeta?.headCommitId, activeDocMeta?.fileType, editorDraftExists]);
 
   // ---- 全局 Toast 消息（如「已发布」） ----
   const [message, setMessage] = useState<string | null>(null);
