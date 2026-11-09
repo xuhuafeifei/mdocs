@@ -49,46 +49,61 @@ export function JobPanel(props: Props) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  /** 配置：只从服务端拉一次（或保存后再拉）；不以本地草稿为准。 */
+  const loadConfigFromServer = useCallback(async () => {
+    const cfg = await getJobConfigApi(documentId);
+    setCron(cfg.JobConfig.cron);
+    setPrompt(cfg.JobConfig.prompt);
+    setAxisX(cfg.JobConfig.tableSchema.x);
+    setAxisY(cfg.JobConfig.tableSchema.y);
+    setMonitors(cfg.MonitorConfig ?? []);
+  }, [documentId]);
+
+  /** 运行时：流水 + 产出点，一律读服务端。 */
+  const loadRuntimeFromServer = useCallback(async () => {
+    const [runRes, dataRes] = await Promise.all([
+      getJobRunsApi(documentId),
+      getJobDataApi(documentId),
+    ]);
+    setRuns(runRes.runs);
+    setPoints(dataRes.points);
+  }, [documentId]);
+
+  const refreshAllFromServer = useCallback(async () => {
     setError(null);
     try {
-      const [cfg, runRes, dataRes] = await Promise.all([
-        getJobConfigApi(documentId),
-        getJobRunsApi(documentId),
-        getJobDataApi(documentId),
-      ]);
-      setCron(cfg.JobConfig.cron);
-      setPrompt(cfg.JobConfig.prompt);
-      setAxisX(cfg.JobConfig.tableSchema.x);
-      setAxisY(cfg.JobConfig.tableSchema.y);
-      setMonitors(cfg.MonitorConfig ?? []);
-      setRuns(runRes.runs);
-      setPoints(dataRes.points);
+      await Promise.all([loadConfigFromServer(), loadRuntimeFromServer()]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [documentId]);
+  }, [loadConfigFromServer, loadRuntimeFromServer]);
 
   useEffect(() => {
     setLoading(true);
-    void refresh();
-    const timer = window.setInterval(() => {
-      void refresh();
-    }, 4000);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
+    void refreshAllFromServer();
+  }, [refreshAllFromServer]);
 
   const activeRun = useMemo(
     () => runs.find((r) => r.status === 0 || r.status === 10) ?? null,
     [runs],
   );
 
+  // 仅在有运行中任务时轮询运行时数据；不轮询配置，避免盖住正在编辑的表单
+  useEffect(() => {
+    if (!activeRun) return;
+    const timer = window.setInterval(() => {
+      void loadRuntimeFromServer().catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [activeRun, loadRuntimeFromServer]);
+
   async function saveConfig(): Promise<void> {
     if (!props.canEdit) return;
     setBusy(true);
     setMessage(null);
+    setError(null);
     try {
       await saveJobConfigApi(documentId, {
         cron,
@@ -96,8 +111,8 @@ export function JobPanel(props: Props) {
         tableSchema: { x: axisX, y: axisY },
       });
       await saveJobMonitorConfigApi(documentId, monitors);
-      setMessage("已保存");
-      await refresh();
+      await loadConfigFromServer();
+      setMessage("已保存到服务端");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -109,10 +124,11 @@ export function JobPanel(props: Props) {
     if (!props.canEdit) return;
     setBusy(true);
     setMessage(null);
+    setError(null);
     try {
       await manualJobRunApi(documentId);
       setMessage("已开始执行");
-      await refresh();
+      await loadRuntimeFromServer();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -123,10 +139,11 @@ export function JobPanel(props: Props) {
   async function cancelActive(): Promise<void> {
     if (!props.canEdit || !activeRun) return;
     setBusy(true);
+    setError(null);
     try {
       await cancelJobRunApi(documentId, activeRun.id);
       setMessage("已请求终止");
-      await refresh();
+      await loadRuntimeFromServer();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -162,7 +179,13 @@ export function JobPanel(props: Props) {
           <span className="muted">定时任务</span>
         </div>
         <div className="mdocs-job-panel-actions">
-          <button type="button" className="ghost" onClick={() => void refresh()} disabled={busy}>
+          <button
+            type="button"
+            className="ghost"
+            title="从服务端刷新"
+            onClick={() => void refreshAllFromServer()}
+            disabled={busy}
+          >
             <RefreshCw size={14} />
           </button>
           {props.canEdit ? (

@@ -1320,10 +1320,12 @@ export function App() {
     setFocus({ kind: "document", documentId: docId });
     setFocusedPane("primary");
     try {
-      const draft = await getDraft(docId);
+      const doc = await getDocumentApi(docId);
       if (expectedDocIdRef.current !== docId) return;
 
-      const doc = await getDocumentApi(docId);
+      // Job：一切以服务端为准，不走本地草稿 / 发布双轨
+      const isJob = doc.fileType === FILE_TYPE.JOB;
+      const draft = isJob ? null : await getDraft(docId);
       if (expectedDocIdRef.current !== docId) return;
 
       if (doc.domainId !== currentDomainId) {
@@ -1372,7 +1374,9 @@ export function App() {
         }),
       );
 
-      if (draft && !draft.published) {
+      if (isJob) {
+        loadEditorFromServer(doc);
+      } else if (draft && !draft.published) {
         loadEditorFromDraft(docId, draft);
       } else {
         loadEditorFromServer(doc);
