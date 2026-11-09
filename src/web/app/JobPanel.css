@@ -207,6 +207,11 @@
   box-shadow: var(--mdocs-shadow);
 }
 
+.mdocs-job-card--chart {
+  gap: 18px;
+  overflow: visible;
+}
+
 .mdocs-job-card-head {
   display: flex;
   align-items: center;
@@ -351,6 +356,7 @@
 }
 
 .mdocs-job-chart-frame {
+  position: relative;
   border: 1px solid var(--mdocs-border);
   border-radius: var(--mdocs-radius);
   background:
@@ -359,13 +365,15 @@
       color-mix(in srgb, var(--mdocs-accent-soft) 35%, #fff) 0%,
       var(--mdocs-surface) 48%
     );
-  overflow: hidden;
+  overflow: visible;
+  margin-bottom: 4px;
 }
 
 .mdocs-job-chart {
   width: 100%;
-  height: 220px;
+  height: 260px;
   display: block;
+  cursor: crosshair;
 }
 
 .mdocs-job-chart.empty {
@@ -392,13 +400,23 @@
   stroke-dasharray: 3 4;
 }
 
+.mdocs-job-chart-grid-x {
+  opacity: 0.55;
+}
+
 .mdocs-job-chart-tick {
   fill: var(--mdocs-text-muted);
   font-size: 11px;
 }
 
+.mdocs-job-chart-axis-name {
+  fill: var(--mdocs-text-muted);
+  font-size: 10px;
+}
+
 .mdocs-job-chart-area {
   fill: color-mix(in srgb, var(--mdocs-accent) 14%, transparent);
+  pointer-events: none;
 }
 
 .mdocs-job-chart-line {
@@ -406,12 +424,127 @@
   stroke-width: 2.25;
   stroke-linejoin: round;
   stroke-linecap: round;
+  pointer-events: none;
 }
 
 .mdocs-job-chart-dot {
   fill: var(--mdocs-accent);
   stroke: #fff;
   stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.mdocs-job-chart-dot.is-active {
+  fill: var(--mdocs-accent-dark);
+}
+
+.mdocs-job-chart-cross {
+  stroke: color-mix(in srgb, var(--mdocs-accent) 55%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  pointer-events: none;
+}
+
+.mdocs-job-chart-tooltip {
+  position: absolute;
+  z-index: 3;
+  min-width: 120px;
+  max-width: min(240px, calc(100% - 16px));
+  padding: 8px 10px;
+  border-radius: var(--mdocs-radius);
+  background: var(--mdocs-surface);
+  border: 1px solid var(--mdocs-border);
+  box-shadow: var(--mdocs-shadow-md);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--mdocs-text);
+  pointer-events: none;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.mdocs-job-chart-tooltip.is-above.is-align-center {
+  transform: translate(-50%, calc(-100% - 12px));
+}
+
+.mdocs-job-chart-tooltip.is-below.is-align-center {
+  transform: translate(-50%, 14px);
+}
+
+.mdocs-job-chart-tooltip.is-above.is-align-start {
+  transform: translate(0, calc(-100% - 12px));
+}
+
+.mdocs-job-chart-tooltip.is-below.is-align-start {
+  transform: translate(0, 14px);
+}
+
+.mdocs-job-chart-tooltip.is-above.is-align-end {
+  transform: translate(-100%, calc(-100% - 12px));
+}
+
+.mdocs-job-chart-tooltip.is-below.is-align-end {
+  transform: translate(-100%, 14px);
+}
+
+.mdocs-job-data-table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.mdocs-job-table-toolbar,
+.mdocs-job-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mdocs-job-table-toolbar-left,
+.mdocs-job-table-toolbar-right,
+.mdocs-job-pager-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mdocs-job-page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--mdocs-text-muted);
+}
+
+.mdocs-job-page-size .mdocs-mini-select-trigger {
+  min-width: 56px;
+  height: 28px;
+}
+
+.mdocs-job-th-sort {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mdocs-job-th-sort:hover {
+  color: var(--mdocs-text);
+}
+
+.mdocs-job-col-check {
+  width: 36px;
+  text-align: center;
+}
+
+.mdocs-job-table tbody tr.is-selected td {
+  background: color-mix(in srgb, var(--mdocs-accent-soft) 70%, transparent);
 }
 
 .mdocs-job-table-wrap {
@@ -471,9 +604,12 @@
 }
 
 .mdocs-job-reason {
-  max-width: 280px;
+  max-width: 220px;
   color: var(--mdocs-text-muted);
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
 }
 
 .mdocs-job-status-pill {
@@ -543,10 +679,46 @@
 @media (max-width: 640px) {
   .mdocs-job-body {
     padding: 12px;
+    gap: 12px;
   }
 
   .mdocs-job-toolbar {
     padding: 10px 12px;
+    align-items: flex-start;
+  }
+
+  .mdocs-job-toolbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .mdocs-job-toolbar-actions button:not(.mdocs-job-icon-btn) {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .mdocs-job-title {
+    max-width: 72vw;
+    white-space: normal;
+  }
+
+  .mdocs-job-subtitle {
+    white-space: normal;
+  }
+
+  .mdocs-job-card {
+    padding: 12px;
+  }
+
+  .mdocs-job-card-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .mdocs-job-card-head-right {
+    width: 100%;
+    flex-wrap: wrap;
   }
 
   .mdocs-job-monitor-row {
@@ -557,7 +729,33 @@
     grid-column: 1 / -1;
   }
 
-  .mdocs-job-title {
-    max-width: 60vw;
+  .mdocs-job-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .mdocs-job-stat {
+    padding: 10px 12px;
+  }
+
+  .mdocs-job-stat-value {
+    font-size: 18px;
+  }
+
+  .mdocs-job-table-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .mdocs-job-table-wrap {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mdocs-job-reason {
+    max-width: 140px;
+  }
+
+  .mdocs-job-chart {
+    height: 220px;
   }
 }
