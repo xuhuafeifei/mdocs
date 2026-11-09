@@ -17,6 +17,7 @@ import {
 import type { ActiveDocumentMeta } from "../../shared/types/document";
 import {
   cancelJobRunApi,
+  deleteJobDataApi,
   getJobConfigApi,
   getJobDataApi,
   getJobRunsApi,
@@ -203,6 +204,39 @@ export function JobPanel(props: Props) {
     }
   }
 
+  async function deletePoints(ids: number[]): Promise<void> {
+    if (!props.canEdit || ids.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await deleteJobDataApi(documentId, { ids });
+      setMessage(`已删除 ${res.deleted} 个数据点`);
+      await loadRuntimeFromServer();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearAllPoints(): Promise<void> {
+    if (!props.canEdit || points.length === 0) return;
+    if (!window.confirm(`确认清空全部 ${points.length} 个数据点？运行流水会保留。`)) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await deleteJobDataApi(documentId, { all: true });
+      setMessage(`已清空 ${res.deleted} 个数据点`);
+      await loadRuntimeFromServer();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function addMonitor(): void {
     setMonitors((prev) => [
       ...prev,
@@ -329,9 +363,21 @@ export function JobPanel(props: Props) {
                 {axisY} <span className="mdocs-job-card-title-muted">/ {axisX}</span>
               </h2>
             </div>
-            {points.length > 0 ? (
-              <span className="mdocs-job-card-meta">最近 {Math.min(points.length, 60)} 点</span>
-            ) : null}
+            <div className="mdocs-job-card-head-right">
+              {points.length > 0 ? (
+                <span className="mdocs-job-card-meta">最近 {Math.min(points.length, 60)} 点</span>
+              ) : null}
+              {props.canEdit && points.length > 0 ? (
+                <button
+                  type="button"
+                  className="ghost danger"
+                  disabled={busy}
+                  onClick={() => void clearAllPoints()}
+                >
+                  清空数据
+                </button>
+              ) : null}
+            </div>
           </div>
           <JobChart points={points} axisX={axisX} axisY={axisY} />
           <div className="mdocs-job-table-wrap">
@@ -341,12 +387,13 @@ export function JobPanel(props: Props) {
                   <th>{axisX}</th>
                   <th>{axisY}</th>
                   <th>Run</th>
+                  {props.canEdit ? <th className="mdocs-job-col-action" /> : null}
                 </tr>
               </thead>
               <tbody>
                 {points.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="mdocs-job-empty-cell">
+                    <td colSpan={props.canEdit ? 4 : 3} className="mdocs-job-empty-cell">
                       暂无采集数据
                     </td>
                   </tr>
@@ -363,6 +410,19 @@ export function JobPanel(props: Props) {
                             {shortId(p.job_running_id)}
                           </code>
                         </td>
+                        {props.canEdit ? (
+                          <td className="mdocs-job-col-action">
+                            <button
+                              type="button"
+                              className="ghost danger mdocs-job-icon-btn"
+                              title="删除此点"
+                              disabled={busy}
+                              onClick={() => void deletePoints([p.id])}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        ) : null}
                       </tr>
                     ))
                 )}

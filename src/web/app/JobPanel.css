@@ -243,6 +243,18 @@
   color: var(--mdocs-text-muted);
 }
 
+.mdocs-job-card-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.mdocs-job-col-action {
+  width: 40px;
+  text-align: right;
+}
+
 .mdocs-job-hint {
   margin: -4px 0 0;
   font-size: 12px;

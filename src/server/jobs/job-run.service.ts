@@ -9,6 +9,8 @@ import {
   enqueueJobExecution,
 } from "./executor.js";
 import {
+  clearJobRunningData,
+  deleteJobRunningDataByIds,
   findJobRunById,
   hasActiveJobRun,
   JOB_STATUS,
@@ -36,6 +38,25 @@ export function getJobRuns(documentId: string, limit?: number): JobRunningDetail
 export function getJobData(documentId: string, limit?: number): JobRunningDataRow[] {
   loadJobRow(documentId);
   return listJobRunningData(documentId, limit);
+}
+
+/** 人工删除产出点：传 ids，或 all=true 清空。不开放给 Agent。 */
+export function deleteJobData(params: {
+  documentId: string;
+  ids?: number[];
+  all?: boolean;
+}): { deleted: number } {
+  loadJobRow(params.documentId);
+  if (params.all) {
+    return { deleted: clearJobRunningData(params.documentId) };
+  }
+  const ids = (params.ids ?? []).filter((id) => Number.isFinite(id));
+  if (ids.length === 0) {
+    throw new DocumentError("BAD_REQUEST", "请指定要删除的数据点", 400);
+  }
+  return {
+    deleted: deleteJobRunningDataByIds({ jobId: params.documentId, ids }),
+  };
 }
 
 export function manualRunJob(documentId: string): { accepted: true } {

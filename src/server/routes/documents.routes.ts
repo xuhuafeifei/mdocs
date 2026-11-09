@@ -45,6 +45,7 @@ import {
 } from "../jobs/job-config.service.js";
 import {
   cancelJobRunForDocument,
+  deleteJobData,
   getJobData,
   getJobRuns,
   manualRunJob,
@@ -526,6 +527,28 @@ export function buildDocumentsRouter(): Router {
         res.json({ data: { points } });
       } catch (err) {
         respondError(res, err, "documents-route.job-data.get");
+      }
+    },
+  );
+
+  /** DELETE /:documentId/job-data — 人工删除产出点（ids 或 all） */
+  router.delete(
+    "/:documentId/job-data",
+    requireDocumentAccess("edit"),
+    (req: Request, res: Response) => {
+      try {
+        const body = (req.body ?? {}) as { ids?: unknown; all?: unknown };
+        const ids = Array.isArray(body.ids)
+          ? body.ids.map((v) => Number(v)).filter((n) => Number.isFinite(n))
+          : undefined;
+        const data = deleteJobData({
+          documentId: req.params.documentId!,
+          ids,
+          all: body.all === true,
+        });
+        res.json({ data });
+      } catch (err) {
+        respondError(res, err, "documents-route.job-data.delete");
       }
     },
   );

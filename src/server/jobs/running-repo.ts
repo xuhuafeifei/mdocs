@@ -116,6 +116,34 @@ export function deleteJobRuntimeByJobId(
   db.prepare(`DELETE FROM job_running_detail WHERE job_id = ?`).run(jobId);
 }
 
+/** 人工兜底：按 id 删除本 Job 下的产出点（不碰运行流水）。 */
+export function deleteJobRunningDataByIds(params: {
+  jobId: string;
+  ids: number[];
+  db?: Database.Database;
+}): number {
+  const ids = [...new Set(params.ids.filter((id) => Number.isFinite(id) && id > 0))];
+  if (ids.length === 0) return 0;
+  const db = params.db ?? getDb();
+  const placeholders = ids.map(() => "?").join(", ");
+  const result = db
+    .prepare(
+      `DELETE FROM job_running_data
+       WHERE job_id = ? AND id IN (${placeholders})`,
+    )
+    .run(params.jobId, ...ids);
+  return Number(result.changes ?? 0);
+}
+
+/** 人工兜底：清空本 Job 全部产出点（保留运行流水）。 */
+export function clearJobRunningData(
+  jobId: string,
+  db: Database.Database = getDb(),
+): number {
+  const result = db.prepare(`DELETE FROM job_running_data WHERE job_id = ?`).run(jobId);
+  return Number(result.changes ?? 0);
+}
+
 export type JobRunningDetailRow = {
   id: number;
   job_id: string;

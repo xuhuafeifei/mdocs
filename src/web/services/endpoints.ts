@@ -800,6 +800,17 @@ export function getJobDataApi(
   return api(`/api/documents/${encodeURIComponent(documentId)}/job-data`);
 }
 
+/** 人工删除产出点：传 ids，或 all:true 清空。 */
+export function deleteJobDataApi(
+  documentId: string,
+  input: { ids?: number[]; all?: boolean },
+): Promise<{ deleted: number }> {
+  return api(`/api/documents/${encodeURIComponent(documentId)}/job-data`, {
+    method: "DELETE",
+    body: JSON.stringify(input),
+  });
+}
+
 export function manualJobRunApi(
   documentId: string,
 ): Promise<{ accepted: true }> {
