@@ -2708,7 +2708,18 @@ export function App() {
                     <File size={16} strokeWidth={1.5} />
                     {t("startWriting")}
                   </button>
-
+                  <button type="button" onClick={() => openNewDocumentModal(undefined, "html")} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Code size={16} strokeWidth={1.5} />
+                    HTML
+                  </button>
+                  <button type="button" onClick={() => openNewDocumentModal(undefined, "sheet")} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Table size={16} strokeWidth={1.5} />
+                    {t("sheetDocument")}
+                  </button>
+                  <button type="button" onClick={() => openNewDocumentModal(undefined, "job")} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Timer size={16} strokeWidth={1.5} />
+                    {t("jobDocument")}
+                  </button>
                 </div>
                 <div className="mdocs-welcome-domain">
                   <label className="muted mdocs-welcome-domain-label">
