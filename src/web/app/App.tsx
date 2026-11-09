@@ -363,7 +363,11 @@ export function App() {
   const [mergeViewOpen, setMergeViewOpen] = useState(false);
   const [editorDraftExists, setEditorDraftExists] = useState(false);
 
-  const syncTargetDocumentId = activeDocMeta?.documentId ?? null;
+  // Job 无草稿/版本同步，禁止轮询 sync-status
+  const syncTargetDocumentId =
+    activeDocMeta?.fileType === FILE_TYPE.JOB
+      ? null
+      : (activeDocMeta?.documentId ?? null);
   const { syncBehind, remoteCommitId } = useDocumentVersion(syncTargetDocumentId, editBaseCommitId);
 
   const [mergeConflict, setMergeConflict] = useState<DraftConflictRecord | null>(null);
@@ -1229,8 +1233,9 @@ export function App() {
 
   async function loadDocIntoSecondary(docId: string): Promise<void> {
     try {
-      const draft = await getDraft(docId);
       const doc = await getDocumentApi(docId);
+      const isJob = doc.fileType === FILE_TYPE.JOB;
+      const draft = isJob ? null : await getDraft(docId);
       if (doc.domainId !== currentDomainId) {
         localStorage.setItem("mdocs.currentDomainId", doc.domainId);
         setCurrentDomainId(doc.domainId);
@@ -1245,7 +1250,7 @@ export function App() {
         }
       }
       setSecondaryMeta(documentDetailToMeta(doc));
-      if (draft && !draft.published) {
+      if (!isJob && draft && !draft.published) {
         setSecondaryContent({
           documentId: docId,
           content: draft.content,
