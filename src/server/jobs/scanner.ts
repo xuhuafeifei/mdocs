@@ -76,6 +76,11 @@ function considerJob(row: JobDocRow, atMs: number): void {
   if (hasJobRunInSecond(row.document_id, atMs)) return;
   if (hasActiveJobRun(row.document_id)) return;
 
+  log.info(
+    "cron due jobId=%s cron=%s → enqueue",
+    row.document_id,
+    cfg.cron,
+  );
   enqueueJobExecution({
     jobId: row.document_id,
     domainId: row.domain_id,
