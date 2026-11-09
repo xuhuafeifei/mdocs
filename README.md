@@ -1,28 +1,18 @@
 # mdocs
 
-**开源 Markdown 知识库** — 给人用，也给 Agent 用。
+**专门为 Markdown 设计的 Agent 工作台。**
 
-面向个人开发者与小团队：产品内 **智能助手 + 帮写**，外部 **CLI / Skills** 接入 Cursor / Claude；SQLite + 本地文件，**无账户**即可协作。
-
-[文档站点](https://xuhuafeifei.github.io/mdocs-site/) · [GitHub](https://github.com/xuhuafeifei/mdocs) · [npm `@fgbg/mdocs`](https://www.npmjs.com/package/@fgbg/mdocs) · 当前版本 **3.1.0**
-
-<p align="center">
-  <img src="image/site主页.png" alt="mdocs 文档站点首页" width="860" />
-</p>
+[文档站点](https://xuhuafeifei.github.io/mdocs-site/) · [GitHub](https://github.com/xuhuafeifei/mdocs) · [npm `@fgbg/mdocs`](https://www.npmjs.com/package/@fgbg/mdocs) · 当前版本 **3.1.13**
 
 ## 为什么选 mdocs
 
 | 能力 | 说明 |
 |------|------|
-| **AI 双模式** | **智能助手**：答疑、搜文、结构操作、有条件全文覆写（低交互），帮你省操作时间。**帮写**：左聊右 Diff、按段接受后再写回（高交互），精细控制每一段文字。 |
-| **Agent 开发闭环** | CLI Token + [mdocs-cli](https://github.com/xuhuafeifei/mdocs-cli) Skills：在 Cursor / Claude 里搜索、读写知识库；`mdocs-dev` / `diagram` 把契约与 Mermaid 落进仓库，减少决策不落盘与知识漂移。 |
-| **本地私有** | 单进程，SQLite + 磁盘文件，无外部 DB / 缓存 / 队列。 |
-| **无账户协作** | 访客即身份；工作空间 + 文档级邀请，从私有到开放按需放开。 |
-| **双模编辑与草稿** | Markdown + 富文本工具栏；Meta2d / Mermaid / Markmap；本地草稿自动保存，空闲可同步云端。 |
-
-<p align="center">
-  <img src="image/mdocs%20主页.png" alt="mdocs 编辑主界面" width="860" />
-</p>
+| **所见即所得** | 直接编辑渲染后的 Markdown，不必在源码和预览之间来回跳。 |
+| **Markdown inline Diff** | Agent 改稿与版本对比都在渲染态上按块 Keep / Undo，不是 IDE 源码 diff。 |
+| **Agent 代劳** | 搜文、建文档、改结构、写作审阅都可交给 Agent；可挂 **Engram** 本机记忆。 |
+| **内置版本 + 预览对比** | 发布即留历史，预览 / 对比旧稿；数据默认 `~/.mdocs`。 |
+| **流水线：MCP + Skills / CLI** | 插件挂 MCP；[mdocs-cli](https://github.com/xuhuafeifei/mdocs-cli) Skills 让 Cursor / Claude 读写同一知识库。 |
 
 ## 快速开始
 
@@ -38,55 +28,49 @@ mdocs
 npx @fgbg/mdocs
 ```
 
-需要 **Node.js 22+**。更细的安装（含低内存机器 Swap 说明）见 [文档 · 安装](https://xuhuafeifei.github.io/mdocs-site/docs/getting-started/installation.html)。
+需要 **Node.js 22+**。更细的安装见 [文档 · 安装](https://xuhuafeifei.github.io/mdocs-site/docs/getting-started/installation.html)。
 
-## 功能速览
+## 能力一览
 
-### 智能助手
-
-左下角悬浮入口（可拖动）：答疑、搜文、建空文档 / 文件夹、移动文档。已有正文时写作会弹出选择卡：**直接覆写 / 打开帮写审阅 / 取消**。
+### 所见即所得
 
 <p align="center">
-  <img src="image/Snipaste_2026-08-03_17-39-39.png" alt="智能助手入口标注" width="860" />
+  <img src="image/suojianjisuode-qingxiban.png" alt="所见即所得 Markdown 编辑" width="860" />
 </p>
 
-DeepSeek API Key 在设置页配置（按访客隔离）：
+### Markdown inline Diff
+
+Agent 提案写进当前打开的编辑器，在**渲染态**上显示红绿 Diff；按块 Keep / Undo 后再发布。
 
 <p align="center">
-  <img src="docs/screenshots/ai-settings.png" alt="AI 设置" width="720" />
+  <img src="image/inline-diff.png" alt="Markdown inline Diff" width="420" />
 </p>
 
-### 帮写
+### Agent 代劳
 
-顶栏 **帮写** 进入全屏工作台：左 AI、右 Markdown Diff，按段接受 / 拒绝后再「完成并写回」。改稿前可查手册 skill、读工作稿，避免盲改。
+搜文、建文档、改结构、写作与审阅——产品内能力都可以交给 Agent。
 
 <p align="center">
-  <img src="image/mdocs帮写主页.png" alt="帮写工作台" width="860" />
+  <img src="image/all-in-agent.png" alt="智能助手代劳" width="360" />
 </p>
 
-### Agent / CLI
-
-为 Agent 准备 CLI Token 后，可用 Skills 读写知识库（不必背完整命令，粘贴文章 URL 即可）。
+### 内置版本 + 预览对比
 
 <p align="center">
-  <img src="docs/screenshots/mdocs-cli.png" alt="mdocs-cli" width="720" />
+  <img src="image/history-diff.png" alt="版本历史预览与对比" width="860" />
 </p>
 
-详见：[Agent 开发闭环](https://xuhuafeifei.github.io/mdocs-site/docs/usage/agent-dev-loop.html) · [CLI Token](https://xuhuafeifei.github.io/mdocs-site/docs/usage/cli-token.html)
+### 流水线：MCP + Skills / CLI
 
-### 编辑与协作
-
-斜杠菜单插入 Meta2d / Markmap 等；工作空间、评论、收藏等能力齐全。
+插件市场管理 Skill / MCP；安装流水线可视化编排。
 
 <p align="center">
-  <img src="docs/screenshots/slash-menu.png" alt="斜杠菜单" width="420" />
-  <img src="docs/screenshots/domain-manager.png" alt="工作空间" width="420" />
+  <img src="image/chajian-shichang.png" alt="插件市场" width="280" />
+  <img src="image/chajian-anzhuang.png" alt="插件安装流水线" width="280" />
+  <img src="image/chajian-aianzhuang.png" alt="AI 安装插件" width="280" />
 </p>
 
-<p align="center">
-  <img src="docs/screenshots/doc-tree.png" alt="文档树" width="280" />
-  <img src="docs/screenshots/comments.png" alt="评论" width="560" />
-</p>
+CLI Token + Skills：Cursor / Claude 可搜索、读写同一知识库。详见 [Agent 开发闭环](https://xuhuafeifei.github.io/mdocs-site/docs/usage/agent-dev-loop.html) · [CLI Token](https://xuhuafeifei.github.io/mdocs-site/docs/usage/cli-token.html)。
 
 ## 从源码开发
 
@@ -104,7 +88,7 @@ pnpm typecheck
 pnpm mdocs visitor list    # 管理 CLI（开发用 tsx 入口）
 ```
 
-全局安装后原地升级（淘宝 npmmirror，保留 `node_modules`，依赖走 `--prefer-offline`）：
+全局安装后原地升级（淘宝 npmmirror，保留 `node_modules`）：
 
 ```bash
 mdocs update
@@ -146,16 +130,13 @@ mdocs visitor migrate --from Alice --to Bob --confirm
 
 ## 上传图片资源（CLI）
 
-HTML 原型里可以直接引用站内资源，不必把图 base64 内联：
-
 ```bash
 mdocs asset upload ./shot.png
 # → http://localhost:4000/api/assets/<uuid>.png
 mdocs asset upload ./a.png ./b.svg --base-url https://docs.example.com --json
 ```
 
-命名规则与网页上传一致（`uuid` + 小写扩展名），落到 `<数据目录>/files/assets/`，通过公开只读的
-`GET /api/assets/:id` 访问；单文件上限跟随设置页的「上传大小」。
+命名规则与网页上传一致，落到 `<数据目录>/files/assets/`，经 `GET /api/assets/:id` 访问。
 
 ## 相关链接
 
@@ -165,8 +146,6 @@ mdocs asset upload ./a.png ./b.svg --base-url https://docs.example.com --json
 | 文档源码站 | https://github.com/xuhuafeifei/mdocs-site |
 | CLI / Skills | https://github.com/xuhuafeifei/mdocs-cli |
 | 问题反馈 | https://github.com/xuhuafeifei/mdocs/issues |
-
-截图：[`image/`](./image/) 为最新实拍；[`docs/screenshots/`](./docs/screenshots/) 另有站点素材补充。
 
 ## License
 
