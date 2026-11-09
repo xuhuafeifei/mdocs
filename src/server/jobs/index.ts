@@ -21,6 +21,13 @@ export {
   saveJobConfig,
   saveMonitorConfig,
 } from "./job-config.service.js";
+export {
+  getJobRuns,
+  getJobData,
+  manualRunJob,
+  cancelJobRunForDocument,
+  JOB_STATUS,
+} from "./job-run.service.js";
 export type {
   JobAgentContext,
   JobAgentRunParams,

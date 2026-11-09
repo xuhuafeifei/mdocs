@@ -115,3 +115,83 @@ export function deleteJobRuntimeByJobId(
   db.prepare(`DELETE FROM job_running_data WHERE job_id = ?`).run(jobId);
   db.prepare(`DELETE FROM job_running_detail WHERE job_id = ?`).run(jobId);
 }
+
+export type JobRunningDetailRow = {
+  id: number;
+  job_id: string;
+  status: number;
+  start_time: string;
+  end_time: string | null;
+  failed_reason: string | null;
+  trigger: string;
+};
+
+export type JobRunningDataRow = {
+  id: number;
+  job_id: string;
+  job_running_id: number;
+  x: string;
+  y: number;
+  created_at: string;
+};
+
+export function listJobRuns(
+  jobId: string,
+  limit = 50,
+  db: Database.Database = getDb(),
+): JobRunningDetailRow[] {
+  return db
+    .prepare(
+      `SELECT id, job_id, status, start_time, end_time, failed_reason, trigger
+       FROM job_running_detail
+       WHERE job_id = ?
+       ORDER BY start_time DESC
+       LIMIT ?`,
+    )
+    .all(jobId, Math.min(Math.max(limit, 1), 200)) as JobRunningDetailRow[];
+}
+
+export function listJobRunningData(
+  jobId: string,
+  limit = 5000,
+  db: Database.Database = getDb(),
+): JobRunningDataRow[] {
+  return db
+    .prepare(
+      `SELECT id, job_id, job_running_id, x, y, created_at
+       FROM job_running_data
+       WHERE job_id = ?
+       ORDER BY id ASC
+       LIMIT ?`,
+    )
+    .all(jobId, Math.min(Math.max(limit, 1), 20000)) as JobRunningDataRow[];
+}
+
+export function findJobRunById(
+  jobRunningId: number,
+  db: Database.Database = getDb(),
+): JobRunningDetailRow | undefined {
+  return db
+    .prepare(
+      `SELECT id, job_id, status, start_time, end_time, failed_reason, trigger
+       FROM job_running_detail WHERE id = ?`,
+    )
+    .get(jobRunningId) as JobRunningDetailRow | undefined;
+}
+
+export function markJobRunFailedIfActive(
+  jobRunningId: number,
+  reason: string,
+  db: Database.Database = getDb(),
+): void {
+  db.prepare(
+    `UPDATE job_running_detail
+     SET status = @status, end_time = @endTime, failed_reason = @reason
+     WHERE id = @id AND status IN (${JOB_STATUS.prepare}, ${JOB_STATUS.running})`,
+  ).run({
+    id: jobRunningId,
+    status: JOB_STATUS.failed,
+    endTime: new Date().toISOString(),
+    reason,
+  });
+}

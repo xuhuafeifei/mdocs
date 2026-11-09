@@ -89,6 +89,7 @@ import { FILE_TYPE, isGraphFileType } from "../../shared/file-types.js";
 import { isFolderDescPath } from "../../shared/folderDesc.js";
 import { getPolicy } from "../../shared/file-type-policy.js";
 import { ensureJobFileContent } from "../jobs/job-file.js";
+import { deleteJobRuntimeByJobId } from "../jobs/running-repo.js";
 import {
   onArticleDeleted,
   onArticleMoved,
@@ -771,6 +772,9 @@ export function removeDocument(params: {
   const now = new Date().toISOString();
   const recovery = buildDeleteRecovery(db, row);
   const tx = db.transaction(() => {
+    if (row.file_type === FILE_TYPE.JOB) {
+      deleteJobRuntimeByJobId(row.document_id, db);
+    }
     deleteDocument(db, row.document_id);
     insertAuditLog(db, {
       actorVisitorId: params.actorVisitorId,

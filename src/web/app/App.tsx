@@ -9,7 +9,7 @@
  * 6. 全局消息提示与冲突处理
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, PanelRightClose, Search, Star, Table } from "lucide-react";
+import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, PanelRightClose, Search, Star, Table, Timer } from "lucide-react";
 import { useMatch, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -597,6 +597,10 @@ export function App() {
       setAlertMessage("表格文档不支持 Diff 审阅");
       return;
     }
+    if (payload.fileType === FILE_TYPE.JOB) {
+      setAlertMessage("定时任务不支持 Diff 审阅");
+      return;
+    }
     await runDiffOnOpenDocument(documentId, () => {
       applyAgentDiffWithToast({ op: "overwrite_all", markdown: payload.markdown });
       return true;
@@ -845,6 +849,9 @@ export function App() {
     }
     if (activeDocMeta.fileType === FILE_TYPE.SHEET) {
       return { status: "unavailable", reason: "sheet_not_supported" };
+    }
+    if (activeDocMeta.fileType === FILE_TYPE.JOB) {
+      return { status: "unavailable", reason: "job_not_supported" };
     }
     const isHtml = activeDocMeta.fileType === FILE_TYPE.HTML;
 
@@ -1270,7 +1277,9 @@ export function App() {
             "",
           domainId: doc.domainId,
           fileType:
-            doc.fileType === FILE_TYPE.HTML || doc.fileType === FILE_TYPE.SHEET
+            doc.fileType === FILE_TYPE.HTML ||
+            doc.fileType === FILE_TYPE.SHEET ||
+            doc.fileType === FILE_TYPE.JOB
               ? doc.fileType
               : FILE_TYPE.DOCUMENT,
         }),
@@ -1355,7 +1364,9 @@ export function App() {
             "",
           domainId: doc.domainId,
           fileType:
-            doc.fileType === FILE_TYPE.HTML || doc.fileType === FILE_TYPE.SHEET
+            doc.fileType === FILE_TYPE.HTML ||
+            doc.fileType === FILE_TYPE.SHEET ||
+            doc.fileType === FILE_TYPE.JOB
               ? doc.fileType
               : FILE_TYPE.DOCUMENT,
         }),
@@ -1438,7 +1449,10 @@ export function App() {
         ? (activeDocMeta?.documentId ?? null)
         : (secondaryMeta?.documentId ?? null);
     const fileType = pane === "primary" ? activeDocMeta?.fileType : secondaryMeta?.fileType;
-    const isMdPane = fileType !== FILE_TYPE.HTML && fileType !== FILE_TYPE.SHEET;
+    const isMdPane =
+      fileType !== FILE_TYPE.HTML &&
+      fileType !== FILE_TYPE.SHEET &&
+      fileType !== FILE_TYPE.JOB;
     return {
       tabs,
       activeDocumentId: activeId,
@@ -2125,6 +2139,17 @@ export function App() {
             >
               <Table size={14} strokeWidth={1.5} />
               {t("sheetDocument")}
+            </button>
+            <button
+              type="button"
+              className="mdocs-create-dropdown-item"
+              onClick={() => {
+                setCreateDropdownOpen(false);
+                openNewDocumentModal(undefined, "job");
+              }}
+            >
+              <Timer size={14} strokeWidth={1.5} />
+              {t("jobDocument")}
             </button>
           </div>
         ) : null}

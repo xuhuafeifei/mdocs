@@ -15,7 +15,7 @@ import { useI18n } from "../i18n";
 import type { TreeNode } from "../../shared/types/tree";
 import { copyTextToClipboard } from "./copyText";
 
-export type CreateDocFileType = "md" | "html" | "sheet";
+export type CreateDocFileType = "md" | "html" | "sheet" | "job";
 
 const VIEW_MARGIN = 8;
 
@@ -195,6 +195,14 @@ export function TreeContextMenu(props: {
               onClick={() => createDoc("sheet")}
             >
               {t("myDocumentsFileTypeSheet")}
+            </button>
+            <button
+              type="button"
+              className="mdocs-context-item"
+              role="menuitem"
+              onClick={() => createDoc("job")}
+            >
+              {t("myDocumentsFileTypeJob")}
             </button>
           </div>
         ) : null}

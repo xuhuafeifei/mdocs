@@ -89,7 +89,7 @@
 | `editor-content-width` | 编辑区宽度溢出 |
 | `agent-multimedia-assets` | **已同意**：SQLite + 全局 `agent-attachments`；能力表；ContentPart 注入 — [需求分析](./requirements/agent-multimedia-assets/需求分析.md) · [设计契约](./requirements/agent-multimedia-assets/设计契约.md) · [流程图](./diagrams/agent-multimedia-dsh-vs-proposal.md) |
 | `agent-memes` | **已同意 / P0 已实现**：助手输出 `[meme:<id>]` → 前端按 id 取图；系统库（只读可覆盖）+ 访客库（可增删，desc 必填）— [需求分析](./requirements/agent-memes/需求分析.md) · [设计契约](./requirements/agent-memes/设计契约.md) · [代码索引](./requirements/agent-memes/代码索引.md) |
-| `scheduled-jobs` | **已同意 / 实现中**：tick 总线 + Job Agent + scanner/executor + 运行时表；配置 API/前端待做 — [需求分析](./requirements/scheduled-jobs/需求分析.md) · [设计契约](./requirements/scheduled-jobs/设计契约.md) · [代码索引](./requirements/scheduled-jobs/代码索引.md) |
+| `scheduled-jobs` | **已同意 / 已实现**：`.job` 面板 + cron 调度 + Agent 落点 + 配置/流水 API（告警一期不做）— [需求分析](./requirements/scheduled-jobs/需求分析.md) · [设计契约](./requirements/scheduled-jobs/设计契约.md) · [代码索引](./requirements/scheduled-jobs/代码索引.md) |
 
 ## 目录约定
 

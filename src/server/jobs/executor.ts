@@ -28,15 +28,22 @@ const inflight = new Map<number, AbortController>();
  * 异步执行一次 Job：插流水 → Agent → 更新流水。
  * 调用方勿 await 堵塞 scanner；本函数内部 catch。
  */
-export function enqueueJobExecution(params: ExecuteJobParams): void {
+export function enqueueJobExecution(
+  params: ExecuteJobParams,
+): { enqueued: boolean } {
+  if (hasActiveJobRun(params.jobId)) {
+    log.debug("skip jobId=%s: already active", params.jobId);
+    return { enqueued: false };
+  }
   void runExecuteJob(params);
+  return { enqueued: true };
 }
 
 async function runExecuteJob(params: ExecuteJobParams): Promise<void> {
   const { jobId, ownerVisitorId, config, trigger } = params;
 
   if (hasActiveJobRun(jobId)) {
-    log.debug("skip jobId=%s: already active", jobId);
+    log.debug("skip jobId=%s: already active (race)", jobId);
     return;
   }
 

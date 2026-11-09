@@ -18,6 +18,9 @@ const HtmlEditor = lazy(() =>
 const SheetEditor = lazy(() =>
   import("./SheetEditor").then((m) => ({ default: m.SheetEditor })),
 );
+const JobPanel = lazy(() =>
+  import("./JobPanel").then((m) => ({ default: m.JobPanel })),
+);
 
 export type EditorPaneContent = {
   documentId: string;
@@ -94,7 +97,16 @@ export function EditorPaneHost(props: {
   );
 
   const body =
-    meta.fileType === "sheet" ? (
+    meta.fileType === "job" ? (
+      <JobPanel
+        key={meta.documentId}
+        meta={meta}
+        canEdit={canEdit}
+        onDelete={async () => props.onDeleteDocument(meta.documentId, meta.relativePath)}
+        readerChrome={props.readerChrome}
+        onOpenMobileNav={props.onOpenMobileNav}
+      />
+    ) : meta.fileType === "sheet" ? (
       <SheetEditor
         key={meta.documentId}
         meta={meta}

@@ -52,7 +52,7 @@ function buildLexicalJsonHeading(title: string): string {
 }
 
 export type CreateModalState =
-  | { kind: "document"; parentMode: "selection" | "fixed"; parentPath: string; draft: string; fileType: "md" | "html" | "sheet" }
+  | { kind: "document"; parentMode: "selection" | "fixed"; parentPath: string; draft: string; fileType: "md" | "html" | "sheet" | "job" }
   | { kind: "folder"; parentMode: "selection" | "fixed"; parentPath: string; draft: string };
 
 /**
@@ -161,7 +161,7 @@ export function useCreateModal(opts: UseCreateModalOpts) {
    */
   function openNewDocumentModal(
     explicitParentPath?: string,
-    fileType: "md" | "html" | "sheet" = "md",
+    fileType: "md" | "html" | "sheet" | "job" = "md",
   ): void {
     // 判断是否从上下文菜单传入的固定父路径
     const fixed = explicitParentPath !== undefined;
@@ -172,7 +172,9 @@ export function useCreateModal(opts: UseCreateModalOpts) {
         ? "untitled.html"
         : fileType === "sheet"
           ? "untitled.sheet"
-          : "untitled.md";
+          : fileType === "job"
+            ? "untitled.job"
+            : "untitled.md";
     // 设置模态框状态
     setCreateModal({
       kind: "document",
@@ -221,9 +223,10 @@ export function useCreateModal(opts: UseCreateModalOpts) {
       // ========== 新建文档逻辑 ==========
       if (createModal.kind === "document") {
         const fileType = createModal.fileType;
-        // html / sheet：原文落盘（非 Lexical）
-        if (fileType === "html" || fileType === "sheet") {
-          const defaultExt = fileType === "html" ? ".html" : ".sheet";
+        // html / sheet / job：原文落盘（非 Lexical）
+        if (fileType === "html" || fileType === "sheet" || fileType === "job") {
+          const defaultExt =
+            fileType === "html" ? ".html" : fileType === "sheet" ? ".sheet" : ".job";
           const fileParsed = parseDisplayNameMarkdownFile(createModal.draft, defaultExt);
           if (!fileParsed.ok) {
             setCreateModalError(translateStorageError(t, fileParsed.message));
@@ -233,6 +236,7 @@ export function useCreateModal(opts: UseCreateModalOpts) {
           const displayTitle = displayFile
             .replace(/\.html$/i, "")
             .replace(/\.sheet$/i, "")
+            .replace(/\.job$/i, "")
             .replace(/\.md$/i, "");
           let relativePath: string;
           try {

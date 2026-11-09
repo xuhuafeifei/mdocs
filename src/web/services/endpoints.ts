@@ -725,6 +725,100 @@ export function deleteDocumentApi(documentId: string): Promise<void> {
   });
 }
 
+/* ── Job 定时任务 ── */
+
+export type JobFilePayload = {
+  JobConfig: {
+    jobId: string;
+    jobType: string;
+    cron: string;
+    prompt: string;
+    tableSchema: { x: string; y: string };
+  };
+  MonitorConfig: Array<{ monitorId: string; rule: string; threshold: number }>;
+};
+
+export type JobRunRow = {
+  id: number;
+  job_id: string;
+  status: number;
+  start_time: string;
+  end_time: string | null;
+  failed_reason: string | null;
+  trigger: string;
+};
+
+export type JobDataPoint = {
+  id: number;
+  job_id: string;
+  job_running_id: number;
+  x: string;
+  y: number;
+  created_at: string;
+};
+
+export function getJobConfigApi(documentId: string): Promise<JobFilePayload> {
+  return api<JobFilePayload>(
+    `/api/documents/${encodeURIComponent(documentId)}/job-config`,
+  );
+}
+
+export function saveJobConfigApi(
+  documentId: string,
+  input: {
+    cron?: string;
+    prompt?: string;
+    jobType?: string;
+    tableSchema?: { x?: string; y?: string };
+  },
+): Promise<{ JobConfig: JobFilePayload["JobConfig"] }> {
+  return api(`/api/documents/${encodeURIComponent(documentId)}/job-config`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function saveJobMonitorConfigApi(
+  documentId: string,
+  rules: JobFilePayload["MonitorConfig"],
+): Promise<{ MonitorConfig: JobFilePayload["MonitorConfig"] }> {
+  return api(`/api/documents/${encodeURIComponent(documentId)}/monitor-config`, {
+    method: "PUT",
+    body: JSON.stringify({ rules }),
+  });
+}
+
+export function getJobRunsApi(
+  documentId: string,
+): Promise<{ runs: JobRunRow[] }> {
+  return api(`/api/documents/${encodeURIComponent(documentId)}/job-runs`);
+}
+
+export function getJobDataApi(
+  documentId: string,
+): Promise<{ points: JobDataPoint[] }> {
+  return api(`/api/documents/${encodeURIComponent(documentId)}/job-data`);
+}
+
+export function manualJobRunApi(
+  documentId: string,
+): Promise<{ accepted: true }> {
+  return api(`/api/documents/${encodeURIComponent(documentId)}/job-run`, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export function cancelJobRunApi(
+  documentId: string,
+  runId: number,
+): Promise<{ cancelled: boolean }> {
+  return api(
+    `/api/documents/${encodeURIComponent(documentId)}/job-runs/${runId}/cancel`,
+    { method: "POST", body: "{}" },
+  );
+}
+
 /** 同域移动文档到目标文件夹；parentId=null 表示域根。仅 owner 成功。 */
 export function moveDocumentApi(
   documentId: string,

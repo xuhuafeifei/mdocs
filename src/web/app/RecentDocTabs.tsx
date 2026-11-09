@@ -4,7 +4,7 @@
  * 大纲 / Lobe 仅 md 栏传入对应回调时显示。
  */
 import { useState, type MouseEvent } from "react";
-import { Code2, FileText, List, Pin, PinOff, Table, Type } from "lucide-react";
+import { Code2, FileText, List, Pin, PinOff, Table, Timer, Type } from "lucide-react";
 import { useI18n } from "../i18n";
 import { FILE_TYPE } from "../../shared/file-types";
 import type { RecentDocTab } from "../storage/recentDocTabs";
@@ -30,6 +30,7 @@ function TabTypeIcon({ fileType }: { fileType: string }) {
   const stroke = 1.9;
   if (fileType === FILE_TYPE.HTML) return <Code2 size={size} strokeWidth={stroke} />;
   if (fileType === FILE_TYPE.SHEET) return <Table size={size} strokeWidth={stroke} />;
+  if (fileType === FILE_TYPE.JOB) return <Timer size={size} strokeWidth={stroke} />;
   return <FileText size={size} strokeWidth={stroke} />;
 }
 

@@ -94,6 +94,7 @@ function formatMyDocFileType(
   if (fileType === "md") return t("myDocumentsFileTypeMd");
   if (fileType === "sheet") return t("myDocumentsFileTypeSheet");
   if (fileType === "html") return t("myDocumentsFileTypeHtml");
+  if (fileType === "job") return t("myDocumentsFileTypeJob");
   return fileType || "—";
 }
 

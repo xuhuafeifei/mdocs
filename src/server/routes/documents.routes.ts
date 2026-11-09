@@ -43,6 +43,12 @@ import {
   saveJobConfig,
   saveMonitorConfig,
 } from "../jobs/job-config.service.js";
+import {
+  cancelJobRunForDocument,
+  getJobData,
+  getJobRuns,
+  manualRunJob,
+} from "../jobs/job-run.service.js";
 
 const log = useLogger("documents-route");
 
@@ -484,6 +490,78 @@ export function buildDocumentsRouter(): Router {
         res.json({ data: { MonitorConfig } });
       } catch (err) {
         respondError(res, err, "documents-route.monitor-config.put");
+      }
+    },
+  );
+
+  /** GET /:documentId/job-runs — 运行流水 */
+  router.get(
+    "/:documentId/job-runs",
+    requireDocumentAccess("read"),
+    (req: Request, res: Response) => {
+      try {
+        const limitRaw = Number(req.query.limit);
+        const runs = getJobRuns(
+          req.params.documentId!,
+          Number.isFinite(limitRaw) ? limitRaw : undefined,
+        );
+        res.json({ data: { runs } });
+      } catch (err) {
+        respondError(res, err, "documents-route.job-runs.get");
+      }
+    },
+  );
+
+  /** GET /:documentId/job-data — 产出点 */
+  router.get(
+    "/:documentId/job-data",
+    requireDocumentAccess("read"),
+    (req: Request, res: Response) => {
+      try {
+        const limitRaw = Number(req.query.limit);
+        const points = getJobData(
+          req.params.documentId!,
+          Number.isFinite(limitRaw) ? limitRaw : undefined,
+        );
+        res.json({ data: { points } });
+      } catch (err) {
+        respondError(res, err, "documents-route.job-data.get");
+      }
+    },
+  );
+
+  /** POST /:documentId/job-run — 立刻执行 */
+  router.post(
+    "/:documentId/job-run",
+    requireDocumentAccess("edit"),
+    (req: Request, res: Response) => {
+      try {
+        const data = manualRunJob(req.params.documentId!);
+        res.status(202).json({ data });
+      } catch (err) {
+        respondError(res, err, "documents-route.job-run.post");
+      }
+    },
+  );
+
+  /** POST /:documentId/job-runs/:runId/cancel — 终止 */
+  router.post(
+    "/:documentId/job-runs/:runId/cancel",
+    requireDocumentAccess("edit"),
+    (req: Request, res: Response) => {
+      const runId = Number(req.params.runId);
+      if (!Number.isFinite(runId)) {
+        res.status(400).json({ error: { code: "BAD_REQUEST", message: "invalid runId" } });
+        return;
+      }
+      try {
+        const data = cancelJobRunForDocument({
+          documentId: req.params.documentId!,
+          jobRunningId: runId,
+        });
+        res.json({ data });
+      } catch (err) {
+        respondError(res, err, "documents-route.job-run.cancel");
       }
     },
   );

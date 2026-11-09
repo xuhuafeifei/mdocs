@@ -488,13 +488,17 @@ function DocRow(props: {
             ? " mdocs-tree-icon-html"
             : doc.fileType === "sheet"
               ? " mdocs-tree-icon-sheet"
-              : ""
+              : doc.fileType === "job"
+                ? " mdocs-tree-icon-job"
+                : ""
         }`}
       >
         {doc.fileType === "html" ? (
           <span className="mdocs-tree-html-bracket">&lt;/&gt;</span>
         ) : doc.fileType === "sheet" ? (
           "sheet"
+        ) : doc.fileType === "job" ? (
+          "job"
         ) : (
           "md"
         )}
