@@ -195,7 +195,7 @@ export const PIPELINE_STEP_DEFINITIONS: PipelineStepDefinition[] = [
     type: "git_clone",
     label: "Git 克隆",
     description:
-      "clone 到 plugins-home/<plugin-name>/。用服务器本机凭据；禁止 tty 交互。https 可带 token；SSH（git@ / ssh://）用跑 mdocs 用户的 ~/.ssh。",
+      "clone 到 plugins-home/<plugin-name>/（可重入：空目录直接 clone，同 remote 则 fetch/reset，其它残留先清再 clone）。用服务器本机凭据；禁止 tty 交互。https 可带 token；SSH（git@ / ssh://）用跑 mdocs 用户的 ~/.ssh。",
     category: "install",
     group: "下载与安装",
     fields: [

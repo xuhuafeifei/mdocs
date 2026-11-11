@@ -210,6 +210,79 @@ export function isAllowedGitCloneUrl(url: string): boolean {
   return false;
 }
 
+/** 比较两个 git remote 是否同一仓库（忽略 .git / 协议写法差异）。 */
+export function normalizeGitRemoteForCompare(url: string): string {
+  let u = url.trim().replace(/\.git$/i, "").replace(/\/+$/, "");
+  const scp = /^git@([^:]+):(.+)$/i.exec(u);
+  if (scp) {
+    return `${scp[1]}/${scp[2].replace(/^\/+/, "")}`.toLowerCase();
+  }
+  const ssh = /^ssh:\/\/(?:[^@/\s]+@)?([^/]+)\/(.+)$/i.exec(u);
+  if (ssh) {
+    return `${ssh[1]}/${ssh[2]}`.toLowerCase();
+  }
+  if (/^https?:\/\//i.test(u)) {
+    try {
+      const parsed = new URL(u);
+      return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, "").toLowerCase();
+    } catch {
+      /* fall through */
+    }
+  }
+  return u.toLowerCase();
+}
+
+function dirIsEmpty(dir: string): boolean {
+  try {
+    return fs.readdirSync(dir).length === 0;
+  } catch {
+    return false;
+  }
+}
+
+function clearDirectoryContents(dir: string): void {
+  if (!fs.existsSync(dir)) return;
+  for (const name of fs.readdirSync(dir)) {
+    fs.rmSync(path.join(dir, name), { recursive: true, force: true });
+  }
+}
+
+/**
+ * git_clone 可重入：空目录直接 clone；同 remote 的 git 仓 → sync；
+ * 其它残留 → 清掉再 clone（dest=. 时只清空内容，不删 install_root 本身）。
+ */
+export type GitCloneDestAction = "clone" | "sync";
+
+export function decideGitCloneDestAction(params: {
+  destAbs: string;
+  destRel: string;
+  url: string;
+  originUrl: string | null;
+}): GitCloneDestAction {
+  const { destAbs, destRel, url, originUrl } = params;
+  if (!fs.existsSync(destAbs)) return "clone";
+  const st = fs.statSync(destAbs);
+  if (!st.isDirectory()) {
+    fs.rmSync(destAbs, { force: true });
+    return "clone";
+  }
+  if (dirIsEmpty(destAbs)) return "clone";
+  const isRepo = fs.existsSync(path.join(destAbs, ".git"));
+  if (
+    isRepo &&
+    originUrl &&
+    normalizeGitRemoteForCompare(originUrl) === normalizeGitRemoteForCompare(url)
+  ) {
+    return "sync";
+  }
+  if (destRel === "." || destRel === "./") {
+    clearDirectoryContents(destAbs);
+  } else {
+    fs.rmSync(destAbs, { recursive: true, force: true });
+  }
+  return "clone";
+}
+
 /** 禁止 git/ssh 走 tty 要密码或 host 确认；仍继承 process.env（含已有 GIT_SSH_COMMAND / 钥匙）。 */
 function gitNonInteractiveEnv(
   base: NodeJS.ProcessEnv = process.env,
@@ -638,29 +711,14 @@ async function runStep(
       if (destRel.includes("..") || path.isAbsolute(destRel)) {
         throw new Error("git_clone.dest 必须是相对 install_root 的路径");
       }
-      within(ctx.installRoot, destRel === "." ? "." : destRel);
-      // -c credential.helper=：https 不走钥匙串弹窗；SSH 靠 GIT_SSH_COMMAND BatchMode
-      const args = ["-c", "credential.helper=", "clone"];
+      const destAbs = within(ctx.installRoot, destRel === "." ? "." : destRel);
+      const env = gitNonInteractiveEnv(process.env);
       const depth = Number(step.depth);
-      if (Number.isFinite(depth) && depth > 0) {
-        args.push("--depth", String(Math.floor(depth)));
-      }
+      const depthN =
+        Number.isFinite(depth) && depth > 0 ? Math.floor(depth) : 0;
       const branch = render(step.branch ?? "", ctx.vars).trim();
-      if (branch) args.push("--branch", branch);
-      args.push(url, destRel);
-      log(`$ git ${args.join(" ")}`);
-      try {
-        await runProcess({
-          command: "git",
-          args,
-          cwd: ctx.installRoot,
-          env: gitNonInteractiveEnv(process.env),
-          timeoutMs: 300_000,
-          stepIndex: index,
-          emit,
-          signal,
-        });
-      } catch (err) {
+
+      const wrapGitAuth = (err: unknown): never => {
         const msg = err instanceof Error ? err.message : String(err);
         if (
           /authentication|authorized|could not read username|terminal prompts disabled|Permission denied \(publickey\)|401|403/i.test(
@@ -671,7 +729,117 @@ async function runStep(
             `${msg.slice(0, 800)}（git_clone 禁止交互登录；https 私仓用 token URL；SSH 用跑 mdocs 用户的 ~/.ssh，需已能非交互 git clone）`,
           );
         }
-        throw err;
+        throw err instanceof Error ? err : new Error(String(err));
+      };
+
+      const runGit = async (
+        args: string[],
+        cwd: string,
+        timeoutMs = 300_000,
+      ) => {
+        log(`$ git ${args.join(" ")}`);
+        return runProcess({
+          command: "git",
+          args,
+          cwd,
+          env,
+          timeoutMs,
+          stepIndex: index,
+          emit,
+          signal,
+        });
+      };
+
+      let originUrl: string | null = null;
+      if (fs.existsSync(path.join(destAbs, ".git"))) {
+        try {
+          const { stdout } = await runGit(
+            ["-c", "credential.helper=", "remote", "get-url", "origin"],
+            destAbs,
+            15_000,
+          );
+          originUrl = stdout.trim() || null;
+        } catch {
+          originUrl = null;
+        }
+      }
+
+      const destAction = decideGitCloneDestAction({
+        destAbs,
+        destRel,
+        url,
+        originUrl,
+      });
+      if (destAction === "sync") {
+        log(`目标已存在且 remote 一致，改为 sync：${destRel}`);
+        try {
+          await runGit(
+            ["-c", "credential.helper=", "remote", "set-url", "origin", url],
+            destAbs,
+            15_000,
+          );
+          const fetchArgs = ["-c", "credential.helper=", "fetch", "origin"];
+          if (depthN > 0) fetchArgs.push(`--depth=${depthN}`);
+          if (branch) fetchArgs.push(branch);
+          await runGit(fetchArgs, destAbs);
+          if (branch) {
+            await runGit(
+              ["-c", "credential.helper=", "checkout", "-f", "-B", branch],
+              destAbs,
+            );
+            await runGit(
+              [
+                "-c",
+                "credential.helper=",
+                "reset",
+                "--hard",
+                `origin/${branch}`,
+              ],
+              destAbs,
+            );
+          } else {
+            const { stdout: headRef } = await runGit(
+              [
+                "-c",
+                "credential.helper=",
+                "rev-parse",
+                "--abbrev-ref",
+                "HEAD",
+              ],
+              destAbs,
+              15_000,
+            );
+            const cur = headRef.trim() || "HEAD";
+            const target = cur === "HEAD" ? "origin/HEAD" : `origin/${cur}`;
+            await runGit(
+              ["-c", "credential.helper=", "reset", "--hard", target],
+              destAbs,
+            );
+          }
+          return;
+        } catch (err) {
+          log(
+            `sync 失败，回落为清目录再 clone：${err instanceof Error ? err.message : String(err)}`,
+            "warn",
+          );
+          if (destRel === "." || destRel === "./") {
+            clearDirectoryContents(destAbs);
+          } else if (fs.existsSync(destAbs)) {
+            fs.rmSync(destAbs, { recursive: true, force: true });
+          }
+        }
+      }
+
+      ensureDir(destRel === "." ? ctx.installRoot : path.dirname(destAbs));
+      // -c credential.helper=：https 不走钥匙串弹窗；SSH 靠 GIT_SSH_COMMAND BatchMode
+      const args = ["-c", "credential.helper=", "clone"];
+      if (depthN > 0) args.push("--depth", String(depthN));
+      if (branch) args.push("--branch", branch);
+      args.push(url, destRel);
+      try {
+        await runGit(args, ctx.installRoot);
+      } catch (err) {
+        wrapGitAuth(err);
       }
       return;
     }

@@ -4,7 +4,9 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetConfigCacheForTests } from "../../config/index.js";
 import {
+  decideGitCloneDestAction,
   isAllowedGitCloneUrl,
+  normalizeGitRemoteForCompare,
   resolveUninstallSteps,
   runPipeline,
 } from "./executor.js";
@@ -203,6 +205,76 @@ describe("pipeline executor", () => {
     );
     expect(isAllowedGitCloneUrl("file:///tmp/repo.git")).toBe(false);
     expect(isAllowedGitCloneUrl("git@host")).toBe(false);
+  });
+
+  it("normalizeGitRemoteForCompare equates https / ssh / scp forms", () => {
+    expect(normalizeGitRemoteForCompare("https://git.example/a/b.git")).toBe(
+      normalizeGitRemoteForCompare("git@git.example:a/b"),
+    );
+    expect(
+      normalizeGitRemoteForCompare("ssh://git@git.example/a/b.git"),
+    ).toBe(normalizeGitRemoteForCompare("https://git.example/a/b"));
+  });
+
+  it("decideGitCloneDestAction is re-entrant on leftover dest", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "mdocs-clone-dest-"));
+    const dest = path.join(root, "src");
+    const url = "https://git.example/a/b.git";
+
+    expect(
+      decideGitCloneDestAction({
+        destAbs: dest,
+        destRel: "src",
+        url,
+        originUrl: null,
+      }),
+    ).toBe("clone");
+
+    fs.mkdirSync(dest, { recursive: true });
+    expect(
+      decideGitCloneDestAction({
+        destAbs: dest,
+        destRel: "src",
+        url,
+        originUrl: null,
+      }),
+    ).toBe("clone");
+
+    fs.mkdirSync(dest, { recursive: true });
+    fs.writeFileSync(path.join(dest, "junk.txt"), "x");
+    expect(
+      decideGitCloneDestAction({
+        destAbs: dest,
+        destRel: "src",
+        url,
+        originUrl: null,
+      }),
+    ).toBe("clone");
+    expect(fs.existsSync(dest)).toBe(false);
+
+    fs.mkdirSync(path.join(dest, ".git"), { recursive: true });
+    expect(
+      decideGitCloneDestAction({
+        destAbs: dest,
+        destRel: "src",
+        url,
+        originUrl: "https://git.example/a/b.git",
+      }),
+    ).toBe("sync");
+    expect(fs.existsSync(dest)).toBe(true);
+
+    fs.writeFileSync(path.join(dest, "other.txt"), "y");
+    expect(
+      decideGitCloneDestAction({
+        destAbs: dest,
+        destRel: "src",
+        url,
+        originUrl: "https://git.example/other/repo.git",
+      }),
+    ).toBe("clone");
+    expect(fs.existsSync(dest)).toBe(false);
+
+    fs.rmSync(root, { recursive: true, force: true });
   });
 
   it("git_clone fails without hanging on interactive auth", async () => {
