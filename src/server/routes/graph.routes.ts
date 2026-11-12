@@ -16,15 +16,15 @@ import { Router, type Request, type Response } from "express";
 import {
   getDomainGraph,
   getGraphByFolderId,
-} from "../documents/graph.service.js";
-import type { GraphAgentConfig } from "../documents/graph/graph-agent.js";
-import { getVisitorAgentConfig } from "../agent/Config/config.js";
-import { findDocumentById } from "../db/repositories/document.repo.js";
-import { getDb } from "../db/connection.js";
-import { taskQueue } from "../task-queue/index.js";
+} from "../modules/documents/graph.service.js";
+import type { GraphAgentConfig } from "../modules/documents/graph/graph-agent.js";
+import { getVisitorAgentConfig } from "../modules/agent/Config/config.js";
+import { findDocumentById } from "../infra/db/repositories/document.repo.js";
+import { getDb } from "../infra/db/connection.js";
+import { taskQueue } from "../infra/task-queue/index.js";
 import { FILE_TYPE } from "../../shared/file-types.js";
-import { assertGraphAccess, DocumentError } from "../access/access-control.js";
-import "../documents/graph-task.js"; // 副作用导入，注册图谱任务
+import { assertGraphAccess, DocumentError } from "../modules/access/access-control.js";
+import "../modules/documents/graph-task.js"; // 副作用导入，注册图谱任务
 
 const router = Router();
 

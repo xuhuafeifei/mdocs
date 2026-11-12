@@ -20,7 +20,7 @@ import {
   getUserSkillByName,
   removeUserSkillByName,
   updateUserSkillByName,
-} from "../../../agent/Agent/user-skills";
+} from "../../agent/Agent/user-skills";
 import {
   buildEngramMcpEnv,
   detectPlatform,

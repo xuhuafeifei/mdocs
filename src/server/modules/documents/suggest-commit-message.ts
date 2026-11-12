@@ -4,9 +4,9 @@
 import { getDb } from "../../infra/db/connection";
 import { findDocumentById } from "../../infra/db/repositories/document.repo";
 import { findLatestNonAutoCommit } from "../../infra/db/repositories/commit.repo";
-import { DocumentError } from "../../access/access-control";
+import { DocumentError } from "../access/access-control";
 import { readCommitBlob } from "../../infra/storage/file-store";
-import { getVisitorAgentConfig } from "../../agent/Config/config";
+import { getVisitorAgentConfig } from "../agent/Config/config";
 import { lexicalJsonToMarkdown } from "./lexical-to-markdown";
 import { getPolicy } from "../../../shared/file-type-policy";
 import { PUBLISH_MESSAGE_MAX_LENGTH } from "../../../shared/publish-meta";
@@ -110,7 +110,7 @@ export async function suggestCommitMessage(params: {
     return { message: "无内容变更", baseCommitId: base?.commit_id ?? null };
   }
 
-  const { createAgentModel } = await import("../../agent/Agent/run");
+  const { createAgentModel } = await import("../agent/Agent/run");
   const { models, model } = createAgentModel(cfg);
   const context: Context = {
     systemPrompt: SYSTEM,

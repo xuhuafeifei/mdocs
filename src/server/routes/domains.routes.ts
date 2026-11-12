@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Router, type Request, type Response } from "express";
-import { getDb } from "../db/connection.js";
+import { getDb } from "../infra/db/connection.js";
 import {
   findDomainById,
   listDomains,
@@ -11,14 +11,14 @@ import {
   listDomainMembers,
   replaceDomainMembers,
   type DomainMemberRole,
-} from "../db/repositories/domain.repo.js";
+} from "../infra/db/repositories/domain.repo.js";
 import {
   countDocumentsByDomain,
   listDomainIdsWithDocumentInviteForVisitor,
-} from "../db/repositories/document.repo.js";
-import { findVisitorById } from "../db/repositories/visitor.repo.js";
-import { resolveDomainAccess } from "../access/domain-access.js";
-import { changeDomainPermission, DomainPermissionError } from "../domains/change-domain-permission.js";
+} from "../infra/db/repositories/document.repo.js";
+import { findVisitorById } from "../infra/db/repositories/visitor.repo.js";
+import { resolveDomainAccess } from "../modules/access/domain-access.js";
+import { changeDomainPermission, DomainPermissionError } from "../modules/domains/change-domain-permission.js";
 
 /**
  * 规范化请求体中的访客ID数组。

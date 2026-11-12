@@ -3,9 +3,9 @@
  * 位置刻意简单（jobs/agent/），工具经 createJobAgentTools 扩展。
  */
 import { Agent, type AgentEvent } from "@earendil-works/pi-agent-core";
-import { getVisitorAgentConfig } from "../../../agent/Config/config";
-import { createAgentModel } from "../../../agent/Agent/run";
-import type { AgentStreamEvent } from "../../../agent/Agent/stream-events";
+import { getVisitorAgentConfig } from "../../agent/Config/config";
+import { createAgentModel } from "../../agent/Agent/run";
+import type { AgentStreamEvent } from "../../agent/Agent/stream-events";
 import { buildJobAgentSystemPrompt } from "./system-prompt";
 import { createJobAgentTools } from "./tools";
 import type { JobAgentRunParams, JobAgentRunResult } from "./types";

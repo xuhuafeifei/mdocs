@@ -12,8 +12,8 @@ import type {
   TaskScheduler,
   TaskStatus,
   TaskStatusResult,
-} from './types.js';
-import { TaskLogStore } from './log-store.js';
+} from './types';
+import { TaskLogStore } from './log-store';
 
 export interface TaskQueueOptions {
   concurrency?: number;

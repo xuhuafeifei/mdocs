@@ -4,7 +4,7 @@
  * 命名见 .mdocs-docs/archive/commit-naming-and-merge-base.md
  */
 import type Database from "better-sqlite3";
-import { DocumentError } from "../../access/access-control";
+import { DocumentError } from "../access/access-control";
 import { findCommitById, listParentCommitIds } from "../../infra/db/repositories/commit.repo";
 
 /**

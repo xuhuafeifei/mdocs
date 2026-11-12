@@ -6,8 +6,8 @@ import {
   type DocumentRow,
 } from "../../infra/db/repositories/document.repo";
 import { findDomainById } from "../../infra/db/repositories/domain.repo";
-import { resolveDomainAccess, canEnterDomainTree } from "../../access/domain-access";
-import { canReadDocument, DocumentError, makeDomainAccessInfo } from "../../access/access-control";
+import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access";
+import { canReadDocument, DocumentError, makeDomainAccessInfo } from "../access/access-control";
 import { getConfig } from "../../infra/config";
 import { FOLDER_DESC_FILENAME } from "../../../shared/folderDesc";
 import { getPolicy } from "../../../shared/file-type-policy";

@@ -7,7 +7,7 @@ import {
   optionalQueryNumber,
   optionalQueryString,
   requiredQueryString,
-} from "../http/request.js";
+} from "../infra/http/request.js";
 
 const contentFormatMarkdown = z
   .enum(["markdown", "lexical"])

@@ -3,7 +3,7 @@ import {
   getAgentStatus,
   getAgentContextUsageForApi,
   type AgentStreamEvent,
-} from "../agent/Agent/run.js";
+} from "../modules/agent/Agent/run.js";
 import {
   AgentRunActiveError,
   bootstrapAgentRuns,
@@ -12,10 +12,10 @@ import {
   getRunPublic,
   startAgentRun,
   subscribeAgentRun,
-} from "../agent/Agent/run-manager.js";
-import { buildContextInspector } from "../agent/Agent/context-inspector.js";
-import { SessionCompactingError } from "../agent/Agent/context-compact-lock.js";
-import { compactAgentSession } from "../agent/Agent/context-compact.js";
+} from "../modules/agent/Agent/run-manager.js";
+import { buildContextInspector } from "../modules/agent/Agent/context-inspector.js";
+import { SessionCompactingError } from "../modules/agent/Agent/context-compact-lock.js";
+import { compactAgentSession } from "../modules/agent/Agent/context-compact.js";
 import {
   getAgentSessionForApi,
   createAgentSessionForApi,
@@ -24,19 +24,19 @@ import {
   bindCodingSessionDocumentForApi,
   renameAgentSessionForApi,
   pinAgentSessionForApi,
-} from "../agent/Agent/session-manager.js";
+} from "../modules/agent/Agent/session-manager.js";
 import {
   allowedUploadAccept,
   getAttachmentStore,
-} from "../agent/attachments/index.js";
-import { createAgentAttachmentUpload } from "../agent/attachments/upload.js";
-import { resolveUserChoice, expireUserChoice, cancelUserChoice } from "../agent/Agent/choice-pending.js";
-import { resolveEditorDraft } from "../agent/Agent/editor-draft-wait.js";
+} from "../modules/agent/attachments/index.js";
+import { createAgentAttachmentUpload } from "../modules/agent/attachments/upload.js";
+import { resolveUserChoice, expireUserChoice, cancelUserChoice } from "../modules/agent/Agent/choice-pending.js";
+import { resolveEditorDraft } from "../modules/agent/Agent/editor-draft-wait.js";
 import {
   resolveSkillForm,
   expireSkillForm,
   cancelSkillForm,
-} from "../agent/Agent/skill-form-pending.js";
+} from "../modules/agent/Agent/skill-form-pending.js";
 import {
   getVisitorAgentConfig,
   listVisitorAgentConfigs,
@@ -44,7 +44,7 @@ import {
   upsertVisitorAgentConfig,
   setVisitorDefaultAgentConfig,
   deleteVisitorAgentConfig,
-} from "../agent/Config/config.js";
+} from "../modules/agent/Config/config.js";
 import {
   createUserSkill,
   listUserSkills,
@@ -52,8 +52,8 @@ import {
   removeUserSkill,
   updateUserSkill,
   USER_SKILL_BODY_MAX_CHARS,
-} from "../agent/Agent/user-skills.js";
-import { useLogger } from "../logger/logger.js";
+} from "../modules/agent/Agent/user-skills.js";
+import { useLogger } from "../infra/logger/logger.js";
 
 const log = useLogger("agent-route");
 

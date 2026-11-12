@@ -1,6 +1,6 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { asToolResult } from "../../../agent/Agent/tool-deps";
+import { asToolResult } from "../../agent/Agent/tool-deps";
 import type { JobAgentContext } from "./types";
 
 /** 向当前 job_running 追加表数据点（job_running_id 由运行时绑定，不可伪造）。 */

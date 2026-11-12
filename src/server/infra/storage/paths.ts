@@ -1,6 +1,6 @@
 import path from "node:path";
-import { getConfig } from "../infra/config/index.js";
-import { DocPathError, normaliseDocRelativePath as sharedNormaliseDocRelativePath } from "../../shared/docPath.js";
+import { getConfig } from "../config";
+import { DocPathError, normaliseDocRelativePath as sharedNormaliseDocRelativePath } from "../../../shared/docPath";
 export class StoragePathError extends Error {
   constructor(message: string) {
     super(message);

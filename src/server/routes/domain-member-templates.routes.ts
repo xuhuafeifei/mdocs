@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { getDb } from "../db/connection.js";
+import { getDb } from "../infra/db/connection.js";
 import {
   deleteDomainMemberTemplate,
   findDomainMemberTemplateById,
@@ -9,7 +9,7 @@ import {
   updateDomainMemberTemplate,
   visitorIdsFromStoredCsv,
   type DomainMemberTemplateRow,
-} from "../db/repositories/domain-member-template.repo.js";
+} from "../infra/db/repositories/domain-member-template.repo.js";
 
 /**
  * 将数据库模板记录转换为对外展示的 DTO。

@@ -7,12 +7,12 @@ import {
   setVisitorPassword,
   toPublic,
   VisitorValidationError,
-} from "../identity/visitor.service.js";
-import { getDb } from "../db/connection.js";
-import { listActiveVisitorsDirectory } from "../db/repositories/visitor.repo.js";
-import { listDocumentsByVisitor } from "../db/repositories/document.repo.js";
-import { ensurePersonalDomain } from "../domains/personal-domain.service.js";
-import { useLogger } from "../logger/logger.js";
+} from "../modules/identity/visitor.service.js";
+import { getDb } from "../infra/db/connection.js";
+import { listActiveVisitorsDirectory } from "../infra/db/repositories/visitor.repo.js";
+import { listDocumentsByVisitor } from "../infra/db/repositories/document.repo.js";
+import { ensurePersonalDomain } from "../modules/domains/personal-domain.service.js";
+import { useLogger } from "../infra/logger/logger.js";
 
 const log = useLogger("visitors-route");
 

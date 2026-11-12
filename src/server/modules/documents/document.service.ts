@@ -44,7 +44,7 @@ import {
 import {
   resolveDomainAccess,
   canEnterDomainTree,
-} from "../../access/domain-access";
+} from "../access/domain-access";
 import {
   DocumentError,
   Permission,
@@ -52,7 +52,7 @@ import {
   canEditDocument,
   makeDomainAccessInfo,
   validateDomainPermission,
-} from "../../access/access-control";
+} from "../access/access-control";
 import {
   findAuditById,
   insertAuditLog,

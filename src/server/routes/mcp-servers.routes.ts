@@ -3,7 +3,7 @@ import {
   getMcpServerById,
   listMcpServers,
   replaceMcpServers,
-} from "../mcp/mcp-servers-store.js";
+} from "../modules/mcp/mcp-servers-store.js";
 
 export function buildMcpServersRouter(): ReturnType<typeof Router> {
   const router = Router();
@@ -45,9 +45,9 @@ export function buildMcpServersRouter(): ReturnType<typeof Router> {
       return;
     }
     // 懒加载：缺 @modelcontextprotocol/sdk 时不应拖垮整个 mdocs 启动
-    let testMcpServer: typeof import("../mcp/mcp-client.js").testMcpServer;
+    let testMcpServer: typeof import("../modules/mcp/mcp-client.js").testMcpServer;
     try {
-      ({ testMcpServer } = await import("../mcp/mcp-client.js"));
+      ({ testMcpServer } = await import("../modules/mcp/mcp-client.js"));
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "MCP client unavailable";

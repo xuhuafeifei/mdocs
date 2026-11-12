@@ -47,7 +47,7 @@ vi.mock("../storage/file-store.js", () => ({
   sha256: (buf: Buffer) => createHash("sha256").update(buf).digest("hex"),
 }));
 
-import { DocumentError } from "../../access/access-control.js";
+import { DocumentError } from "../access/access-control.js";
 import { createDocument, getDocument, getDocumentMergeContext, updateDocument } from "./document.service.js";
 import { findCommitById } from "../../infra/db/repositories/commit.repo.js";
 import { findDocumentById } from "../../infra/db/repositories/document.repo.js";

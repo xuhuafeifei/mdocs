@@ -45,7 +45,7 @@ import {
   normalizePublishMeta,
   updateDocument,
 } from "./document.service.js";
-import { Permission } from "../../access/access-control.js";
+import { Permission } from "../access/access-control.js";
 import { roughUnifiedDiff } from "./suggest-commit-message.js";
 
 const OWNER = "pub-meta-owner";

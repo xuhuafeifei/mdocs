@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { resolveCommitBlobAbsolutePath, resolveDocAbsolutePath, StoragePathError } from "./paths.js";
+import { resolveCommitBlobAbsolutePath, resolveDocAbsolutePath, StoragePathError } from "./paths";
 
 /** 单篇文档允许的最大字节数（2 MB），超过则拒绝写入。 */
 const MAX_DOC_BYTES = 2 * 1024 * 1024;

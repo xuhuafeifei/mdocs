@@ -1,6 +1,6 @@
 import { buildApp } from "./app.js";
-import { getConfig } from "./config/index.js";
-import { useLogger } from "./logger/logger.js";
+import { getConfig } from "./infra/config/index.js";
+import { useLogger } from "./infra/logger/logger.js";
 
 const log = useLogger("server");
 

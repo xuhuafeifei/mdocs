@@ -6,7 +6,7 @@ import {
   requiredQueryString,
   zodBadRequestMessage,
 } from "./request.js";
-import { mergeContextQuerySchema } from "../routes/documents.schemas.js";
+import { mergeContextQuerySchema } from "../../routes/documents.schemas.js";
 
 function mockRes() {
   const res = {

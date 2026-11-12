@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { buildDocumentTree } from "../documents/tree.service.js";
+import { buildDocumentTree } from "../modules/documents/tree.service.js";
 import { treeIncludeTypes } from "../../shared/file-type-policy.js";
 
 /**

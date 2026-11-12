@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { assertDocumentAccess, assertDocumentOwner, DocumentError } from "../access/access-control.js";
+import { assertDocumentAccess, assertDocumentOwner, DocumentError } from "../modules/access/access-control.js";
 
 /**
  * 创建文档访问权限校验中间件。

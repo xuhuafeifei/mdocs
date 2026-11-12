@@ -3,7 +3,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import type { LogEntry, LogLevel } from './types.js';
+import type { LogEntry, LogLevel } from './types';
 
 export class TaskLogStore {
   private readonly dir: string;

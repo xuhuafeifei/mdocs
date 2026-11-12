@@ -2,13 +2,13 @@ import { Router, type Request, type Response } from "express";
 import {
   getPluginInstallJob,
   startPluginInstall,
-} from "../plugins/plugin-install-job.js";
-import { isEngramBinaryReady } from "../plugins/engram-runtime.js";
-import { isMemorixHttpUp } from "../plugins/memorix-runtime.js";
+} from "../modules/plugins/plugin-install-job.js";
+import { isEngramBinaryReady } from "../modules/plugins/engram-runtime.js";
+import { isMemorixHttpUp } from "../modules/plugins/memorix-runtime.js";
 import {
   listPlugins,
   uninstallPlugin,
-} from "../plugins/plugins-store.js";
+} from "../modules/plugins/plugins-store.js";
 import {
   createVisitorPipeline,
   deleteVisitorPipeline,
@@ -20,17 +20,17 @@ import {
   readSystemPipelineDefaultYaml,
   resetSystemPipeline,
   writePipelineYaml,
-} from "../plugins/pipeline/catalog.js";
-import { listStepDefinitions } from "../plugins/pipeline/step-definitions.js";
-import { pluginDataDir, pluginHomeDir } from "../plugins/plugin-paths.js";
+} from "../modules/plugins/pipeline/catalog.js";
+import { listStepDefinitions } from "../modules/plugins/pipeline/step-definitions.js";
+import { pluginDataDir, pluginHomeDir } from "../modules/plugins/plugin-paths.js";
 import {
   getLatestPipelineJob,
   getPipelineJob,
   startPipelineJob,
   type PipelineJobAction,
-} from "../plugins/pipeline-job.js";
-import { listPipelineHistory, listPipelineInstalls } from "../plugins/installed-store.js";
-import { isPipelineInstallMode } from "../plugins/pipeline/types.js";
+} from "../modules/plugins/pipeline-job.js";
+import { listPipelineHistory, listPipelineInstalls } from "../modules/plugins/installed-store.js";
+import { isPipelineInstallMode } from "../modules/plugins/pipeline/types.js";
 
 async function runtimeRunningFor(pluginId: string, installed: boolean): Promise<boolean> {
   if (!installed) return false;

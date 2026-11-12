@@ -3,8 +3,8 @@
  */
 import { getDb } from "../../infra/db/connection";
 import { findDocumentById } from "../../infra/db/repositories/document.repo";
-import { DocumentError } from "../../access/access-control";
-import { getVisitorAgentConfig } from "../../agent/Config/config";
+import { DocumentError } from "../access/access-control";
+import { getVisitorAgentConfig } from "../agent/Config/config";
 import { PUBLISH_MESSAGE_MAX_LENGTH } from "../../../shared/publish-meta";
 import { contentToDiffText, roughUnifiedDiff } from "./suggest-commit-message";
 import type { TextContent } from "@earendil-works/pi-ai";
@@ -73,7 +73,7 @@ export async function suggestMergeMessage(params: {
     ? `\n\n--- vs base ---\n${roughUnifiedDiff(base, merged, Math.floor(DIFF_MAX / 2))}`
     : "";
 
-  const { createAgentModel } = await import("../../agent/Agent/run");
+  const { createAgentModel } = await import("../agent/Agent/run");
   const { models, model } = createAgentModel(cfg);
   const context: Context = {
     systemPrompt: SYSTEM,

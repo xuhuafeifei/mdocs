@@ -5,8 +5,8 @@
 import fs from "node:fs";
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
-import { getMaxUploadBytes } from "../config/server-settings.js";
-import { useLogger } from "../logger/logger.js";
+import { getMaxUploadBytes } from "../infra/config/server-settings.js";
+import { useLogger } from "../infra/logger/logger.js";
 import {
   addTenantMeme,
   deleteTenantMeme,
@@ -19,7 +19,7 @@ import {
   DEFAULT_SYSTEM_MEME_SPEC,
   syncSystemMemesFrom,
   updateTenantMeme,
-} from "../memes/store.js";
+} from "../modules/memes/store.js";
 
 const log = useLogger("memes-route");
 

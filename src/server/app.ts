@@ -3,9 +3,9 @@ import path from "node:path";
 import compression from "compression";
 import express, { type Application, type Response } from "express";
 import cookieParser from "cookie-parser";
-import { getConfig } from "./config/index.js";
-import { getDb } from "./db/connection.js";
-import { authMiddleware } from "./identity/auth.middleware.js";
+import { getConfig } from "./infra/config/index.js";
+import { getDb } from "./infra/db/connection.js";
+import { authMiddleware } from "./modules/identity/auth.middleware.js";
 import { buildVisitorsRouter } from "./routes/visitors.routes.js";
 import { buildDocumentsRouter } from "./routes/documents.routes.js";
 import { buildTreeRouter } from "./routes/tree.routes.js";
@@ -22,14 +22,14 @@ import { buildServerSettingsRouter } from "./routes/server-settings.routes.js";
 import { buildMcpServersRouter } from "./routes/mcp-servers.routes.js";
 import { buildPluginsRouter } from "./routes/plugins.routes.js";
 import { buildMemesRouter } from "./routes/memes.routes.js";
-import { bootstrapAgentRuns } from "./agent/Agent/run-manager.js";
-import { bootstrapJobs } from "./jobs/index.js";
-import { startIndexTimer } from "./search/document-index-manager.js";
-import { ensureLocalEmbeddingModel } from "./search/embedding-model.js";
-import { ensureSystemMemesBackground } from "./memes/store.js";
-import { ensureSystemPipelinesSeeded } from "./plugins/pipeline/catalog.js";
-import { ensureGlobalSoulShell } from "./soul/ensure-shells.js";
-import { useLogger } from "./logger/logger.js";
+import { bootstrapAgentRuns } from "./modules/agent/Agent/run-manager.js";
+import { bootstrapJobs } from "./modules/jobs/index.js";
+import { startIndexTimer } from "./modules/search/document-index-manager.js";
+import { ensureLocalEmbeddingModel } from "./modules/search/embedding-model.js";
+import { ensureSystemMemesBackground } from "./modules/memes/store.js";
+import { ensureSystemPipelinesSeeded } from "./modules/plugins/pipeline/catalog.js";
+import { ensureGlobalSoulShell } from "./modules/soul/ensure-shells.js";
+import { useLogger } from "./infra/logger/logger.js";
 
 const log = useLogger("app");
 
@@ -74,7 +74,7 @@ export function buildApp(): Application {
       return res.status(400).json({ error: "缺少 documentId" });
     }
     try {
-      const { documentCommentService } = await import("./documents/document-comment.service.js");
+      const { documentCommentService } = await import("./modules/documents/document-comment.service.js");
       const comments = await documentCommentService.getCommentsByDocumentId(documentId);
       res.json({
         data: {

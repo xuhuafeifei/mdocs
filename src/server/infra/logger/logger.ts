@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { format } from "node:util";
-import { getConfig, type LoggingConfig } from "../infra/config/index.js";
+import { getConfig, type LoggingConfig } from "../config";
 
 /** 支持的日志级别，按严重程度从低到高排列 */
 export type LogLevel =

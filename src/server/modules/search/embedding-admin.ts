@@ -8,8 +8,8 @@ import {
   canReadDocument,
   makeDomainAccessInfo,
   type DomainAccessInfo,
-} from "../../access/access-control";
-import { resolveDomainAccess } from "../../access/domain-access";
+} from "../access/access-control";
+import { resolveDomainAccess } from "../access/domain-access";
 import { readDocument } from "../../infra/storage/file-store";
 import { listDomainIdsWithDocumentInviteForVisitor } from "../../infra/db/repositories/document.repo";
 import { useLogger } from "../../infra/logger/logger";

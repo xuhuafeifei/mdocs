@@ -49,7 +49,7 @@ vi.mock("../storage/file-store.js", () => ({
   sha256: (buf: Buffer) => createHash("sha256").update(buf).digest("hex"),
 }));
 
-import { Permission } from "../../access/access-control.js";
+import { Permission } from "../access/access-control.js";
 import {
   createDocument,
   getDocument,

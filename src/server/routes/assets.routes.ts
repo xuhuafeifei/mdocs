@@ -3,11 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
-import { getConfig } from "../config/index.js";
-import { getMaxUploadBytes } from "../config/server-settings.js";
-import { getDb } from "../db/connection.js";
-import { findDocumentById } from "../db/repositories/document.repo.js";
-import { useLogger } from "../logger/logger.js";
+import { getConfig } from "../infra/config/index.js";
+import { getMaxUploadBytes } from "../infra/config/server-settings.js";
+import { getDb } from "../infra/db/connection.js";
+import { findDocumentById } from "../infra/db/repositories/document.repo.js";
+import { useLogger } from "../infra/logger/logger.js";
 
 const log = useLogger("assets-route");
 

@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { applySchema } from "../../infra/db/schema.js";
 import { insertCommit, insertCommitParent } from "../../infra/db/repositories/commit.repo.js";
 import { isAncestorOf, assertMergeFork, findMergeBaseCommitId } from "./commit-graph.js";
-import { DocumentError } from "../../access/access-control.js";
+import { DocumentError } from "../access/access-control.js";
 
 describe("commit-graph", () => {
   let db: Database.Database;

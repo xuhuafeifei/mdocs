@@ -6,7 +6,7 @@ import Database from "better-sqlite3";
 import { Jieba } from "@node-rs/jieba";
 import { dict } from "@node-rs/jieba/dict.js";
 import { applySchema } from "../../infra/db/schema.js";
-import { Permission } from "../../access/access-control.js";
+import { Permission } from "../access/access-control.js";
 import { searchDocuments, tokenizeQuery } from "./search.service.js";
 import {
   blobToFloat32,

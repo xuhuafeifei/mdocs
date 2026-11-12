@@ -5,7 +5,7 @@
  */
 import path from 'node:path';
 import os from 'node:os';
-import { TaskQueue } from './TaskQueue.js';
+import { TaskQueue } from './TaskQueue';
 
 const dataDir = process.env.MDOCS_DATA_DIR || path.join(os.homedir(), '.mdocs');
 const logDir = path.join(dataDir, 'task-logs');
@@ -16,5 +16,5 @@ export const taskQueue = new TaskQueue({
   logDir,
 });
 
-export { TaskQueue } from './TaskQueue.js';
-export * from './types.js';
+export { TaskQueue } from './TaskQueue';
+export * from './types';

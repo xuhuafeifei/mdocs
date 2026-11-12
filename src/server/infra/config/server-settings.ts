@@ -4,7 +4,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { getConfig } from "./index.js";
+import { getConfig } from "./index";
 
 export const DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 export const MIN_MAX_UPLOAD_BYTES = 1 * 1024 * 1024;

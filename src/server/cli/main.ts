@@ -120,8 +120,8 @@ function printVersion(): void {
 
 /** 启动 HTTP 服务器。 */
 async function startServer(): Promise<void> {
-  const { useLogger } = await import("../logger/logger.js");
-  const { getConfig } = await import("../config/index.js");
+  const { useLogger } = await import("../infra/logger/logger.js");
+  const { getConfig } = await import("../infra/config/index.js");
   const { buildApp } = await import("../app.js");
   const log = useLogger("cli-server");
   const cfg = getConfig();
@@ -154,7 +154,7 @@ async function startServer(): Promise<void> {
 
 /** 执行 `visitor list`：查询访客并以 TSV 格式输出。 */
 async function runVisitorList(flags: Flags): Promise<void> {
-  const { listAllVisitors } = await import("../identity/visitor.service.js");
+  const { listAllVisitors } = await import("../modules/identity/visitor.service.js");
   let filter: "all" | "active" | "disabled" = "active";
   if (flags.all === true) filter = "all";
   if (flags.disabled === true) filter = "disabled";
@@ -174,12 +174,12 @@ async function runVisitorList(flags: Flags): Promise<void> {
 async function resolveVisitor(
   ident: string,
 ): Promise<{ visitorId: string; visitorName: string }> {
-  const { getDb } = await import("../db/connection.js");
+  const { getDb } = await import("../infra/db/connection.js");
   const { findVisitorById, findVisitorByName } = await import(
-    "../db/repositories/visitor.repo.js"
+    "../infra/db/repositories/visitor.repo.js"
   );
   const { MigrationError } = await import(
-    "../migrations/visitor-migration.service.js"
+    "../modules/migrations/visitor-migration.service.js"
   );
   const db = getDb();
   let row = findVisitorById(db, ident);
@@ -199,7 +199,7 @@ async function resolveVisitor(
 /** 执行 `visitor migrate`：校验参数后调用迁移服务，并输出结果或错误。 */
 async function runVisitorMigrate(flags: Flags): Promise<void> {
   const { migrateVisitor, MigrationError } = await import(
-    "../migrations/visitor-migration.service.js"
+    "../modules/migrations/visitor-migration.service.js"
   );
   type MigrationResult = Awaited<ReturnType<typeof migrateVisitor>>;
 
@@ -242,10 +242,10 @@ async function runVisitorMigrate(flags: Flags): Promise<void> {
  */
 async function runAgentSessionRepair(flags: Flags): Promise<void> {
   const { repairAgentSessionsUnderDataDir } = await import(
-    "../agent/Agent/session-manager.js"
+    "../modules/agent/Agent/session-manager.js"
   );
   const { MigrationError } = await import(
-    "../migrations/visitor-migration.service.js"
+    "../modules/migrations/visitor-migration.service.js"
   );
 
   const dryRun = flags["dry-run"] === true;
@@ -354,8 +354,8 @@ async function runAssetUpload(argv: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const { getConfig } = await import("../config/index.js");
-  const { getMaxUploadBytes } = await import("../config/server-settings.js");
+  const { getConfig } = await import("../infra/config/index.js");
+  const { getMaxUploadBytes } = await import("../infra/config/server-settings.js");
   const { AssetUploadError, uploadAssetFiles } = await import("./asset-upload.js");
 
   const cfg = getConfig();

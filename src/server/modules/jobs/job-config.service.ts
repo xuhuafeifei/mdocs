@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { DocumentError } from "../../access/access-control";
+import { DocumentError } from "../access/access-control";
 import { getDb } from "../../infra/db/connection";
 import { findDocumentById } from "../../infra/db/repositories/document.repo";
 import { updateDocumentContent } from "../../infra/db/repositories/document.repo";

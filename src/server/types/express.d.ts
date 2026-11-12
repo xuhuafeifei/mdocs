@@ -1,4 +1,4 @@
-import type { VisitorRow } from "../db/repositories/visitor.repo.js";
+import type { VisitorRow } from "../infra/db/repositories/visitor.repo.js";
 
 declare global {
   namespace Express {

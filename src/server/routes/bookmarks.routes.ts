@@ -4,10 +4,10 @@ import {
   removeBookmark,
   isBookmarked,
   listBookmarksByVisitor,
-} from "../db/repositories/bookmark.repo.js";
-import { getDb } from "../db/connection.js";
-import { findDocumentById } from "../db/repositories/document.repo.js";
-import { canReadDocument, getDomainInfo } from "../access/access-control.js";
+} from "../infra/db/repositories/bookmark.repo.js";
+import { getDb } from "../infra/db/connection.js";
+import { findDocumentById } from "../infra/db/repositories/document.repo.js";
+import { canReadDocument, getDomainInfo } from "../modules/access/access-control.js";
 
 /**
  * 构建书签相关路由。

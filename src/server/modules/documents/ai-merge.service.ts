@@ -3,7 +3,7 @@
  */
 import { getDb } from "../../infra/db/connection";
 import { findDocumentById } from "../../infra/db/repositories/document.repo";
-import { DocumentError } from "../../access/access-control";
+import { DocumentError } from "../access/access-control";
 import { canAiMerge } from "../../../shared/file-type-policy";
 import { getDocument, getDocumentMergeContext } from "./document.service";
 import { contentToDiffText } from "./suggest-commit-message";

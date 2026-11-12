@@ -4,7 +4,7 @@ import {
   setMaxUploadBytes,
   MIN_MAX_UPLOAD_BYTES,
   MAX_MAX_UPLOAD_BYTES,
-} from "../config/server-settings.js";
+} from "../infra/config/server-settings.js";
 
 export function buildServerSettingsRouter(): ReturnType<typeof Router> {
   const router = Router();

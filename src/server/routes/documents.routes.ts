@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { DocumentError } from "../access/access-control.js";
+import { DocumentError } from "../modules/access/access-control.js";
 import {
   addDocumentInvite,
   createDocument,
@@ -20,34 +20,34 @@ import {
   restoreDocumentFromAudit,
   restoreDocumentVersion,
   updateDocument,
-} from "../documents/document.service.js";
-import { suggestCommitMessage } from "../documents/suggest-commit-message.js";
-import { suggestDocumentMerge } from "../documents/ai-merge.service.js";
-import { suggestMergeMessage } from "../documents/suggest-merge-message.js";
-import { suggestMergeResolutions } from "../documents/suggest-merge-resolutions.js";
-import { findDomainByName } from "../db/repositories/domain.repo.js";
-import { getDb } from "../db/connection.js";
-import { searchDocuments, tokenizeQuery } from "../search/search.service.js";
-import { listEmbeddingIndex, rebuildEmbeddingIndex } from "../search/embedding-admin.js";
-import { isEmbeddingReady } from "../search/embedding-model.js";
+} from "../modules/documents/document.service.js";
+import { suggestCommitMessage } from "../modules/documents/suggest-commit-message.js";
+import { suggestDocumentMerge } from "../modules/documents/ai-merge.service.js";
+import { suggestMergeMessage } from "../modules/documents/suggest-merge-message.js";
+import { suggestMergeResolutions } from "../modules/documents/suggest-merge-resolutions.js";
+import { findDomainByName } from "../infra/db/repositories/domain.repo.js";
+import { getDb } from "../infra/db/connection.js";
+import { searchDocuments, tokenizeQuery } from "../modules/search/search.service.js";
+import { listEmbeddingIndex, rebuildEmbeddingIndex } from "../modules/search/embedding-admin.js";
+import { isEmbeddingReady } from "../modules/search/embedding-model.js";
 import { requireDocumentAccess, requireDocumentOwner } from "../middleware/document-auth.middleware.js";
-import { StoragePathError } from "../storage/paths.js";
+import { StoragePathError } from "../infra/storage/paths.js";
 import { treeIncludeTypes } from "../../shared/file-type-policy.js";
-import { useLogger } from "../logger/logger.js";
-import { buildFolderSubtree } from "../documents/tree.service.js";
+import { useLogger } from "../infra/logger/logger.js";
+import { buildFolderSubtree } from "../modules/documents/tree.service.js";
 import {
   getJobFile,
   saveJobConfig,
   saveMonitorConfig,
-} from "../jobs/job-config.service.js";
+} from "../modules/jobs/job-config.service.js";
 import {
   cancelJobRunForDocument,
   deleteJobData,
   getJobData,
   getJobRuns,
   manualRunJob,
-} from "../jobs/job-run.service.js";
-import { parseBody, parseQuery, requireVisitor } from "../http/request.js";
+} from "../modules/jobs/job-run.service.js";
+import { parseBody, parseQuery, requireVisitor } from "../infra/http/request.js";
 import {
   addInviteBodySchema,
   convertBodySchema,

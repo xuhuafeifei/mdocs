@@ -4,7 +4,7 @@
  */
 import type { Request, Response } from "express";
 import { z, type ZodTypeAny } from "zod";
-import type { VisitorRow } from "../infra/db/repositories/visitor.repo.js";
+import type { VisitorRow } from "../db/repositories/visitor.repo";
 
 export function zodBadRequestMessage(err: z.ZodError): string {
   const issue = err.issues[0];

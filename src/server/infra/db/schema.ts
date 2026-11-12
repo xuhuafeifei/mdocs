@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { backfillFolderDescHeadCommits } from "../../documents/initial-commit";
+import { backfillFolderDescHeadCommits } from "../../modules/documents/initial-commit";
 
 /** 数据库初始化所需的全部 DDL 语句，按顺序执行。 */
 const SCHEMA_STATEMENTS: string[] = [

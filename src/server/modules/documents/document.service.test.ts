@@ -17,7 +17,7 @@ vi.mock("../db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
-import { canReadDocument, canEditDocument, Permission, type DomainAccessInfo } from "../../access/access-control.js";
+import { canReadDocument, canEditDocument, Permission, type DomainAccessInfo } from "../access/access-control.js";
 import { deleteDocumentInvite, insertDocumentInvite } from "../../infra/db/repositories/document.repo.js";
 import type { DocumentRow } from "../../infra/db/repositories/document.repo.js";
 

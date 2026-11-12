@@ -1,21 +1,21 @@
 import { Router, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
-import { getDb } from "../db/connection.js";
-import { findDomainById } from "../db/repositories/domain.repo.js";
-import { findDocumentById, findDocumentByPath, insertDocument, countChildrenByParent, deleteDocument } from "../db/repositories/document.repo.js";
-import { resolveDomainAccess } from "../access/domain-access.js";
+import { getDb } from "../infra/db/connection.js";
+import { findDomainById } from "../infra/db/repositories/domain.repo.js";
+import { findDocumentById, findDocumentByPath, insertDocument, countChildrenByParent, deleteDocument } from "../infra/db/repositories/document.repo.js";
+import { resolveDomainAccess } from "../modules/access/domain-access.js";
 import {
   DocumentError,
   Permission,
   validateDomainPermission,
-} from "../access/access-control.js";
-import { insertAuditLog } from "../db/repositories/audit.repo.js";
+} from "../modules/access/access-control.js";
+import { insertAuditLog } from "../infra/db/repositories/audit.repo.js";
 import { FOLDER_DESC_FILENAME, folderDescPathForFolder } from "../../shared/folderDesc.js";
 import { normalisePathSegmentForStorage } from "../../shared/storagePath.js";
-import { writeDocument } from "../storage/file-store.js";
-import { insertMarkdownDocumentWithInitialCommit } from "../documents/initial-commit.js";
-import { getConfig } from "../config/index.js";
-import { useLogger } from "../logger/logger.js";
+import { writeDocument } from "../infra/storage/file-store.js";
+import { insertMarkdownDocumentWithInitialCommit } from "../modules/documents/initial-commit.js";
+import { getConfig } from "../infra/config/index.js";
+import { useLogger } from "../infra/logger/logger.js";
 
 const log = useLogger("folders-route");
 

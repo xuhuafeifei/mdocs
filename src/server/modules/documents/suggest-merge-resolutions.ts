@@ -8,8 +8,8 @@
  */
 import { getDb } from "../../infra/db/connection";
 import { findDocumentById } from "../../infra/db/repositories/document.repo";
-import { DocumentError } from "../../access/access-control";
-import { getVisitorAgentConfig } from "../../agent/Config/config";
+import { DocumentError } from "../access/access-control";
+import { getVisitorAgentConfig } from "../agent/Config/config";
 import { canAiMerge } from "../../../shared/file-type-policy";
 import type { AssistantMessage, Context, TextContent } from "@earendil-works/pi-ai";
 
@@ -199,7 +199,7 @@ export async function suggestMergeResolutions(params: {
       })
       .join("\n\n");
 
-    const { createAgentModel } = await import("../../agent/Agent/run");
+    const { createAgentModel } = await import("../agent/Agent/run");
     const { models, model } = createAgentModel(cfg);
     const context: Context = {
       systemPrompt: SYSTEM,

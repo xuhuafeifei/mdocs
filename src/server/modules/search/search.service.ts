@@ -13,7 +13,7 @@ import { Jieba } from "@node-rs/jieba";
 import { dict } from "@node-rs/jieba/dict.js";
 import { getDb } from "../../infra/db/connection";
 import { findDomainById } from "../../infra/db/repositories/domain.repo";
-import { canReadDocument, makeDomainAccessInfo } from "../../access/access-control";
+import { canReadDocument, makeDomainAccessInfo } from "../access/access-control";
 import type { DocumentRow } from "../../infra/db/repositories/document.repo";
 import { querySemanticNeighbors } from "./embedding-store";
 

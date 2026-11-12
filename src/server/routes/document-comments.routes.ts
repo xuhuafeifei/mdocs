@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { documentCommentService } from "../documents/document-comment.service.js";
+import { documentCommentService } from "../modules/documents/document-comment.service.js";
 
 export const documentCommentsRouter = Router();
 
