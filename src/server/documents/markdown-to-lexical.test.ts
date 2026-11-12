@@ -126,6 +126,19 @@ describe("markdownToLexicalJson", () => {
     expect(block.children[0]!.text).toContain("@lobehub/editor");
   });
 
+  it("GitHub 提示块：> [!NOTE] 变成 alert", () => {
+    const { root } = parseSerializedLexical("> [!NOTE]\n> 小心这里");
+    const alert = root.children[0] as {
+      type: string;
+      alertType: string;
+      children: { type: string; children: { text: string }[] }[];
+    };
+    expect(alert.type).toBe("alert");
+    expect(alert.alertType).toBe("note");
+    expect(alert.children[0]!.type).toBe("paragraph");
+    expect(alert.children[0]!.children[0]!.text).toBe("小心这里");
+  });
+
   it("blockquote：quote 内含 paragraph", () => {
     const { root } = parseSerializedLexical("> quote line");
     const q = root.children[0] as {

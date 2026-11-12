@@ -98,6 +98,26 @@ describe("toolCallPreparingDetail", () => {
       "正在准备参数…",
     );
   });
+
+  it("shows streamed input args on the preparing line", () => {
+    expect(
+      toolCallPreparingDetail("get_document_lexical_lines", {
+        documentId: "doc-untitled-3",
+      }),
+    ).toBe("正在准备参数 · documentId=doc-untitled-3");
+    expect(
+      toolCallPreparingDetail(
+        "get_document_lexical_lines",
+        '{"documentId":"abc',
+      ),
+    ).toContain("documentId");
+    const longId = "d".repeat(80);
+    const detail = toolCallPreparingDetail("get_document_lexical_lines", {
+      documentId: longId,
+    })!;
+    expect(detail.startsWith("正在准备参数 · documentId=")).toBe(true);
+    expect(detail.length).toBeLessThanOrEqual(72);
+  });
 });
 
 describe("toolCallDetailFromArgs", () => {
@@ -125,6 +145,14 @@ describe("toolCallDetailFromArgs", () => {
     expect(
       toolCallDetailFromArgs("search_documents", { query: "权限模型" }),
     ).toBe("权限模型");
+  });
+
+  it("keeps unread tool inputs visible", () => {
+    expect(
+      toolCallDetailFromArgs("get_document_lexical_lines", {
+        documentId: "doc-untitled-3",
+      }),
+    ).toBe("documentId=doc-untitled-3");
   });
 
   it("summarizes run_plugin_cli and exec args", () => {

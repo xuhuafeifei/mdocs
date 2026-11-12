@@ -9,7 +9,7 @@
  * 6. 全局消息提示与冲突处理
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, PanelRightClose, Search, Star, Table, Timer } from "lucide-react";
+import { AlarmClock, BookOpen, Code, Code2, File, FileText, FolderPlus, LogOut, MessageSquare, Network, PanelLeftClose, PanelLeftOpen, PanelRightClose, Search, Star, Table } from "lucide-react";
 import { useMatch, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { VisitorPublic } from "../../shared/types/visitor";
@@ -2162,7 +2162,7 @@ export function App() {
                 openNewDocumentModal(undefined, "job");
               }}
             >
-              <Timer size={14} strokeWidth={1.5} />
+              <AlarmClock size={14} strokeWidth={1.5} />
               {t("jobDocument")}
             </button>
           </div>
@@ -2731,7 +2731,7 @@ export function App() {
                     {t("sheetDocument")}
                   </button>
                   <button type="button" onClick={() => openNewDocumentModal(undefined, "job")} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <Timer size={16} strokeWidth={1.5} />
+                    <AlarmClock size={16} strokeWidth={1.5} />
                     {t("jobDocument")}
                   </button>
                 </div>

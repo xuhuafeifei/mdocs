@@ -208,6 +208,19 @@ function serializeBlock(node: LexNode, depth: number, listIndent = 0): string {
       const { lang, body } = codeFenceContent(node);
       return `\`\`\`${lang}\n${body}\n\`\`\``;
     }
+    case "alert": {
+      const raw = typeof node.alertType === "string" ? node.alertType : "note";
+      const alertType = raw.toUpperCase();
+      const kids = asNodes(node.children);
+      const inner = kids
+        .map((c) => serializeBlock(c, depth + 1))
+        .filter((part) => part.length > 0)
+        .join("\n\n");
+      const body = inner
+        ? inner.split("\n").map((line) => (line.length > 0 ? `> ${line}` : ">"))
+        : [];
+      return [`> [!${alertType}]`, ...body].join("\n");
+    }
     case "quote":
     case "blockquote": {
       const kids = asNodes(node.children);

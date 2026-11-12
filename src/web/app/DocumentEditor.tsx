@@ -14,6 +14,7 @@ import { Block } from "@lobehub/ui";
 import { upsertContentDraft } from "../storage/drafts";
 
 import {
+  INSERT_ALERT_COMMAND,
   INSERT_CODEINLINE_COMMAND,
   INSERT_CODEMIRROR_COMMAND,
   INSERT_FILE_COMMAND,
@@ -24,6 +25,8 @@ import {
   INSERT_MARKMAP_COMMAND,
   INSERT_META2D_COMMAND,
   INSERT_TABLE_COMMAND,
+  ReactAlertPlugin,
+  ReactBlockPlugin,
   ReactCodePlugin,
   ReactCodemirrorPlugin,
   ReactFilePlugin,
@@ -53,7 +56,7 @@ import type { ApplyAgentDiffFn } from "./lexical-lines/agentDiff";
 import { MdocsDiffPlugin } from "./lexical-lines/MdocsDiffPlugin";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
-import { Copy, Heading1Icon, Heading2Icon, Heading3Icon, History, MinusIcon, Network, SigmaIcon, Table2Icon, ShieldUser, Users, Star, Workflow } from "lucide-react";
+import { Copy, Heading1Icon, Heading2Icon, Heading3Icon, History, InfoIcon, MinusIcon, Network, SigmaIcon, Table2Icon, ShieldUser, Users, Star, Workflow } from "lucide-react";
 import { copyTextToClipboard } from "./copyText";
 
 import type { ActiveDocumentMeta, DocumentDetail } from "../../shared/types/document";
@@ -992,6 +995,14 @@ export function DocumentEditor(props: DocumentEditorProps) {
       // 分隔线
       { type: "divider" },
       {
+        icon: InfoIcon,
+        key: "alert",
+        label: "Alert",
+        onSelect: (editor: IEditor) => {
+          editor.dispatchCommand(INSERT_ALERT_COMMAND, { alertType: "note" });
+        },
+      },
+      {
         icon: MinusIcon,
         key: "hr",
         label: "Hr",
@@ -1093,6 +1104,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
    */
   const plugins = useMemo(
     () => [
+      // 块手柄（拖拽 ::）；放在最前面，避免被其他插件的 onClick 截走
+      ReactBlockPlugin,
+      ReactAlertPlugin,
       ReactMarkdownPlugin,
       MdocsDiffPlugin,
       ReactListPlugin,

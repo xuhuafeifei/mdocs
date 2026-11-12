@@ -215,6 +215,16 @@
   | `src/web/app/App.css` | `.mdocs-tree-rail` |
 - **需求**：[`../requirements/agent-dock-left/`](../requirements/agent-dock-left/)
 
+### 智能助手 UI 抛光（Lobe 气质）
+
+- **关键词**：`agent-chat-ui-polish` `mdocs-agent-panel` `输入岛` `弱工具卡` `Lobe Chat`
+- **结论**：CSS-first；面板挂 `--mdocs-agent-*` token；轻顶栏、透气消息间距、用户软气泡 / 助手无底、工具默认浅底弱边、composer 18px 输入岛；不改 SSE/session。
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/web/app/App.css` | `.mdocs-agent-panel` `.mdocs-agent-panel-header` `.mdocs-agent-tool-call` `.mdocs-agent-panel-input-wrap` |
+- **需求**：[`../requirements/agent-chat-ui-polish/`](../requirements/agent-chat-ui-polish/)
+
 ### 冲突 Merge（inline）
 
 - **关键词**：`MergeView` `MergeInlinePane` `接收` `拒绝` `全部用我的` `三路 diff` `AI 合并` `合并说明` `diff-hunk` `LexicalMarkdownBridge` `mdocs 加载中`

@@ -171,6 +171,35 @@ function quoteNode(children: LexicalNode[]): LexicalNode {
   return elementNode("quote", children);
 }
 
+const ALERT_MARKER = /^\[!(note|tip|important|warning|caution)][\t ]*(?:\r?\n|$)/i;
+
+/** GitHub 提示块：`> [!NOTE]` 单独起行。认不出来就当普通引用。 */
+function tryAlertNode(blockquote: Record<string, unknown>): LexicalNode | null {
+  const blocks = blockquote.children as Record<string, unknown>[] | undefined;
+  const first = blocks?.[0];
+  if (!first || first.type !== "paragraph") return null;
+  const inlines = first.children as Record<string, unknown>[] | undefined;
+  const text = inlines?.[0];
+  if (!text || text.type !== "text" || typeof text.value !== "string") return null;
+  const match = text.value.match(ALERT_MARKER);
+  if (!match?.[1]) return null;
+
+  const rest = text.value.slice(match[0].length).replace(/^\r?\n/, "");
+  const paragraphChildren: Record<string, unknown>[] = rest
+    ? [{ ...text, value: rest }, ...(inlines?.slice(1) ?? [])]
+    : [...(inlines?.slice(1) ?? [])];
+  while (paragraphChildren[0]?.type === "break") paragraphChildren.shift();
+
+  const restBlocks = (blocks ?? []).slice(1);
+  const bodySource = paragraphChildren.length
+    ? [{ ...first, children: paragraphChildren }, ...restBlocks]
+    : restBlocks;
+  const body = convertBlockChildren(bodySource);
+  return elementNode("alert", body.length > 0 ? body : [paragraphNode([])], {
+    alertType: match[1].toLowerCase(),
+  });
+}
+
 function horizontalRuleNode(): LexicalNode {
   return { ...BASE, type: "horizontalrule" };
 }
@@ -342,6 +371,8 @@ function convert(
       );
 
     case "blockquote": {
+      const alert = tryAlertNode(child);
+      if (alert) return alert;
       // remark 对单独一行 `>` 会给出 children:[]；Lexical Quote 无子节点时常被编辑器丢掉。
       // 补一个空 paragraph，保证空引用在 MD↔Lexical 往返后仍在。
       const kids = children ? convertBlockChildren(children) : [];

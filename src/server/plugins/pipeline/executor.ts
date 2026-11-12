@@ -214,11 +214,11 @@ export function isAllowedGitCloneUrl(url: string): boolean {
 export function normalizeGitRemoteForCompare(url: string): string {
   let u = url.trim().replace(/\.git$/i, "").replace(/\/+$/, "");
   const scp = /^git@([^:]+):(.+)$/i.exec(u);
-  if (scp) {
+  if (scp?.[1] && scp[2]) {
     return `${scp[1]}/${scp[2].replace(/^\/+/, "")}`.toLowerCase();
   }
   const ssh = /^ssh:\/\/(?:[^@/\s]+@)?([^/]+)\/(.+)$/i.exec(u);
-  if (ssh) {
+  if (ssh?.[1] && ssh[2]) {
     return `${ssh[1]}/${ssh[2]}`.toLowerCase();
   }
   if (/^https?:\/\//i.test(u)) {

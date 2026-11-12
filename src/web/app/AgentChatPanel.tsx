@@ -69,7 +69,7 @@ import {
   type SkillFormCardState,
 } from "./AgentSkillFormCard";
 import { AgentMermaidBlock, extractMermaidFromPre } from "./AgentMermaidBlock";
-import { AgentThinkingFold, sealThinking, useThinkClock } from "./AgentThinkingFold";
+import { AgentThinkingFold, AgentTraceStep, sealThinking, useThinkClock } from "./AgentThinkingFold";
 import { copyTextToClipboard } from "./copyText";
 import type { DomainSummary } from "../../shared/types/domain";
 import { DEFAULT_DOMAIN_ID } from "../../shared/domainUi";
@@ -697,118 +697,6 @@ function WebSearchResultsFold({
             <WebSearchResultItemRow key={item.url} item={item} />
           ))}
         </ol>
-      </div>
-    </details>
-  );
-}
-
-/** 写工具 detail：可折叠；输出中 summary 波浪，展开后正文增量跟滚 */
-function ToolCallDetailScroll({
-  detail,
-  followTail,
-  grow,
-  error,
-}: {
-  detail: string;
-  followTail: boolean;
-  grow?: boolean;
-  /** 失败态：红字展示错误原文 */
-  error?: boolean;
-}) {
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const stickRef = useRef(true);
-  const animRef = useRef(0);
-  const [open, setOpen] = useState(Boolean(error));
-  const nl = detail.indexOf("\n");
-  const meta = nl >= 0 ? detail.slice(0, nl) : detail;
-  const body = nl >= 0 ? detail.slice(nl + 1) : "";
-  const scrollable = body.length > 0;
-  const detailClass =
-    "mdocs-agent-tool-call-detail" +
-    (error ? " mdocs-agent-tool-call-detail--error" : "");
-
-  useLayoutEffect(() => {
-    if (!open || !followTail || !scrollable || !bodyRef.current) return;
-    if (!stickRef.current) return;
-    const el = bodyRef.current;
-    cancelAnimationFrame(animRef.current);
-    if (!grow) {
-      el.scrollTop = el.scrollHeight;
-      return;
-    }
-    const step = () => {
-      const target = el.scrollHeight - el.clientHeight;
-      const cur = el.scrollTop;
-      const delta = target - cur;
-      if (delta <= 1) {
-        el.scrollTop = target;
-        return;
-      }
-      el.scrollTop = cur + Math.max(1.5, delta * 0.28);
-      animRef.current = requestAnimationFrame(step);
-    };
-    animRef.current = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(animRef.current);
-  }, [body, followTail, scrollable, grow, open]);
-
-  if (!scrollable) {
-    return (
-      <p className={detailClass}>
-        <span
-          className={
-            "mdocs-agent-tool-call-fold-label" + (followTail ? " live" : "")
-          }
-        >
-          {meta}
-        </span>
-      </p>
-    );
-  }
-
-  return (
-    <details
-      className={
-        "mdocs-agent-tool-call-fold" +
-        (error ? " mdocs-agent-tool-call-fold--error" : "")
-      }
-      open={open}
-      onToggle={(e) => {
-        setOpen((e.currentTarget as HTMLDetailsElement).open);
-      }}
-    >
-      <summary>
-        <span
-          className={
-            "mdocs-agent-tool-call-fold-label" + (followTail ? " live" : "")
-          }
-        >
-          {meta}
-        </span>
-        <ChevronRight
-          size={14}
-          strokeWidth={1.8}
-          className="mdocs-agent-tool-call-fold-chevron"
-        />
-      </summary>
-      <div
-        ref={bodyRef}
-        className={
-          detailClass +
-          " scrollable" +
-          (grow ? " grow" : "") +
-          (followTail ? " live" : "")
-        }
-        onScroll={() => {
-          const el = bodyRef.current;
-          if (!el) return;
-          const gap = el.scrollHeight - el.clientHeight - el.scrollTop;
-          stickRef.current = gap < 28;
-        }}
-      >
-        {body}
-        {followTail && grow ? (
-          <span className="mdocs-agent-tool-call-caret" aria-hidden />
-        ) : null}
       </div>
     </details>
   );
@@ -3098,67 +2986,36 @@ export const AgentChatPanel = forwardRef<
                                 const live =
                                   block.status === "preparing" ||
                                   block.status === "running";
-                                const statusLabel =
-                                  block.status === "preparing"
-                                    ? "准备中"
-                                    : block.status === "running"
-                                      ? "进行中"
-                                      : block.status === "error"
-                                        ? "失败"
-                                        : "完成";
                                 return (
                                   <div
                                     key={`${m.id}-tc-${block.toolCallId}`}
-                                    className={`mdocs-agent-panel-block mdocs-agent-tool-call mdocs-agent-tool-call-${block.status}`}
+                                    className="mdocs-agent-panel-block"
                                   >
-                                    <div className="mdocs-agent-tool-call-head">
-                                      <span
-                                        className="mdocs-agent-tool-call-status"
-                                        aria-hidden
-                                      />
-                                      <span
-                                        className={
-                                          "mdocs-agent-tool-call-label" +
-                                          (live ? " live" : "")
-                                        }
-                                      >
-                                        {block.label}
-                                      </span>
-                                      <span className="mdocs-agent-tool-call-badge">
-                                        {statusLabel}
-                                      </span>
-                                    </div>
-                                    {block.detail || block.status === "error" ? (
-                                      <ToolCallDetailScroll
-                                        detail={
-                                          block.detail ||
-                                          (block.status === "error"
-                                            ? "工具执行失败（无详细信息）"
-                                            : "")
-                                        }
-                                        followTail={
-                                          block.status === "preparing" ||
-                                          block.status === "running"
-                                        }
-                                        grow={
-                                          (block.status === "preparing" ||
-                                            block.status === "running") &&
-                                          (block.toolName ===
-                                            "set_markdown_document" ||
-                                            block.toolName ===
-                                              "overwrite_document" ||
-                                            block.toolName === "web_fetch")
-                                        }
-                                        error={block.status === "error"}
-                                      />
-                                    ) : null}
-                                    {block.webResults &&
-                                    block.webResults.items.length > 0 ? (
-                                      <WebSearchResultsFold
-                                        query={block.webResults.query}
-                                        items={block.webResults.items}
-                                      />
-                                    ) : null}
+                                    <AgentTraceStep
+                                      title={block.label}
+                                      status={block.status}
+                                      detail={
+                                        block.detail ||
+                                        (block.status === "error"
+                                          ? "工具执行失败（无详细信息）"
+                                          : undefined)
+                                      }
+                                      followTail={live}
+                                      grow={
+                                        live &&
+                                        (block.toolName === "set_markdown_document" ||
+                                          block.toolName === "overwrite_document" ||
+                                          block.toolName === "web_fetch")
+                                      }
+                                    >
+                                      {block.webResults &&
+                                      block.webResults.items.length > 0 ? (
+                                        <WebSearchResultsFold
+                                          query={block.webResults.query}
+                                          items={block.webResults.items}
+                                        />
+                                      ) : null}
+                                    </AgentTraceStep>
                                   </div>
                                 );
                               }
@@ -3358,8 +3215,7 @@ export const AgentChatPanel = forwardRef<
                 title="回到底部"
                 aria-label="回到底部"
               >
-                <ArrowDown size={14} strokeWidth={2} aria-hidden />
-                <span>置底</span>
+                <ArrowDown size={16} strokeWidth={2} aria-hidden />
               </button>
             ) : null}
           </div>

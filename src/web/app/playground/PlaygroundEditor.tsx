@@ -5,6 +5,7 @@
  */
 import {
   IEditor,
+  INSERT_ALERT_COMMAND,
   INSERT_CODEINLINE_COMMAND,
   INSERT_CODEMIRROR_COMMAND,
   INSERT_FILE_COMMAND,
@@ -16,6 +17,7 @@ import {
   INSERT_MARKMAP_COMMAND,
   INSERT_META2D_COMMAND,
   INSERT_TABLE_COMMAND,
+  ReactAlertPlugin,
   ReactAutoCompletePlugin,
   ReactCodePlugin,
   ReactCodemirrorPlugin,
@@ -40,6 +42,7 @@ import { Editor, useEditor, withProps } from "@lobehub/editor/react";
 import { Avatar, Button, type CollapseProps, Text } from "@lobehub/ui";
 import {
   Heading1Icon,
+  InfoIcon,
   Heading2Icon,
   Heading3Icon,
   MinusIcon,
@@ -197,6 +200,14 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
       },
       // 分隔线
       { type: "divider" },
+      {
+        icon: InfoIcon,
+        key: "alert",
+        label: "Alert",
+        onSelect: (ed) => {
+          ed.dispatchCommand(INSERT_ALERT_COMMAND, { alertType: "note" });
+        },
+      },
       {
         icon: MinusIcon,
         key: "hr",
@@ -380,6 +391,7 @@ const PlaygroundEditor: FC<Pick<CollapseProps, "collapsible" | "defaultActiveKey
         pasteVSCodeAsCodeBlock
         placeholder="Type something..."
         plugins={[
+          ReactAlertPlugin,
           ReactMarkdownPlugin,
           ReactDiffPlugin,
           ReactListPlugin,

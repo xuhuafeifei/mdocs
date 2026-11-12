@@ -5,6 +5,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import {
+  ReactAlertPlugin,
   ReactCodePlugin,
   ReactCodemirrorPlugin,
   ReactHRPlugin,
@@ -29,6 +30,7 @@ interface LexicalMarkdownBridgeProps {
 
 /** 与 DocumentEditor 一致：能 round-trip 正文节点的插件（不含 Toolbar / File） */
 const BRIDGE_PLUGINS = [
+  ReactAlertPlugin,
   ReactMarkdownPlugin,
   ReactListPlugin,
   ReactLinkPlugin,

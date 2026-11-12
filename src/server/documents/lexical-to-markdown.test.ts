@@ -37,6 +37,13 @@ describe("lexicalJsonToMarkdown", () => {
     expect(back).toContain("[mdocs](https://example.com)");
   });
 
+  it("round-trips a GitHub alert", () => {
+    const src = "> [!WARNING]\n> 小心这里\n";
+    const back = lexicalJsonToMarkdown(markdownToLexicalJson(src));
+    expect(back).toContain("> [!WARNING]");
+    expect(back).toContain("> 小心这里");
+  });
+
   it("preserves empty blockquote line (lone >)", () => {
     const src = [
       "师姐笑嘻嘻地转过头",

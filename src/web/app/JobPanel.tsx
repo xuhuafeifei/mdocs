@@ -1,9 +1,9 @@
 /**
  * Job 操作面板：配置 / 图表 / 运行流水（无草稿发布）。
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Clock3,
+  AlarmClock,
   Menu,
   Play,
   Plus,
@@ -331,7 +331,7 @@ export function JobPanel(props: Props) {
           <section className="mdocs-job-card">
             <div className="mdocs-job-card-head">
               <div className="mdocs-job-card-title">
-                <Clock3 size={16} />
+                <AlarmClock size={16} />
                 <h2>任务配置</h2>
               </div>
               {props.canEdit ? (
@@ -594,19 +594,48 @@ function shortAxisLabel(raw: string): string {
   return raw.length > 10 ? `${raw.slice(0, 10)}…` : raw;
 }
 
+/** SVG viewBox ↔ 屏幕：避开 letterbox 把 hover 坐标拉歪。 */
+function clientToSvgPoint(svg: SVGSVGElement, clientX: number, clientY: number) {
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return null;
+  const pt = svg.createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  return pt.matrixTransform(ctm.inverse());
+}
+
+function svgPointToFramePx(
+  svg: SVGSVGElement,
+  frame: HTMLElement,
+  x: number,
+  y: number,
+) {
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return null;
+  const pt = svg.createSVGPoint();
+  pt.x = x;
+  pt.y = y;
+  const screen = pt.matrixTransform(ctm);
+  const rect = frame.getBoundingClientRect();
+  return { left: screen.x - rect.left, top: screen.y - rect.top };
+}
+
 function JobChart(props: {
   points: JobDataPoint[];
   axisX: string;
   axisY: string;
 }) {
   const { points, axisX, axisY } = props;
+  const frameRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{
-    x: number;
-    y: number;
+    left: number;
+    top: number;
     labelX: string;
     labelY: string;
     place: "above" | "below";
     align: "start" | "center" | "end";
+    vbX: number;
+    vbY: number;
   } | null>(null);
 
   if (points.length === 0) {
@@ -646,13 +675,11 @@ function JobChart(props: {
       ? series.map((_, i) => i)
       : [0, Math.floor((series.length - 1) / 2), series.length - 1];
 
-  function nearestCoord(clientX: number, svg: SVGSVGElement) {
-    const rect = svg.getBoundingClientRect();
-    const px = ((clientX - rect.left) / rect.width) * w;
+  function nearestCoord(svgX: number) {
     let best = coords[0]!;
-    let bestDist = Math.abs(best.x - px);
+    let bestDist = Math.abs(best.x - svgX);
     for (const c of coords) {
-      const d = Math.abs(c.x - px);
+      const d = Math.abs(c.x - svgX);
       if (d < bestDist) {
         best = c;
         bestDist = d;
@@ -662,7 +689,7 @@ function JobChart(props: {
   }
 
   return (
-    <div className="mdocs-job-chart-frame">
+    <div className="mdocs-job-chart-frame" ref={frameRef}>
       <svg
         className="mdocs-job-chart"
         viewBox={`0 0 ${w} ${h}`}
@@ -670,16 +697,22 @@ function JobChart(props: {
         aria-label={`${axisY} / ${axisX}`}
         onMouseLeave={() => setHover(null)}
         onMouseMove={(e) => {
-          const c = nearestCoord(e.clientX, e.currentTarget);
+          const svg = e.currentTarget;
+          const frame = frameRef.current;
+          const vb = clientToSvgPoint(svg, e.clientX, e.clientY);
+          if (!vb || !frame) return;
+          const c = nearestCoord(vb.x);
+          const pos = svgPointToFramePx(svg, frame, c.x, c.y);
+          if (!pos) return;
           const ratio = c.x / w;
           setHover({
-            x: c.x,
-            y: c.y,
+            left: pos.left,
+            top: pos.top,
+            vbX: c.x,
+            vbY: c.y,
             labelX: c.p.x,
             labelY: String(c.p.y),
-            // 靠近顶部时改到点下方，避免被卡片裁切
             place: c.y < padT + 48 ? "below" : "above",
-            // 左右贴边时改锚点，避免右侧被裁成「20… / 88…」
             align: ratio < 0.22 ? "start" : ratio > 0.78 ? "end" : "center",
           });
         }}
@@ -728,20 +761,20 @@ function JobChart(props: {
             key={c.p.id}
             cx={c.x}
             cy={c.y}
-            r={hover?.labelX === c.p.x && hover.labelY === String(c.p.y) ? 5 : 3.2}
+            r={hover?.vbX === c.x && hover.vbY === c.y ? 5 : 3.2}
             className="mdocs-job-chart-dot"
           />
         ))}
         {hover ? (
           <>
             <line
-              x1={hover.x}
-              x2={hover.x}
+              x1={hover.vbX}
+              x2={hover.vbX}
               y1={padT}
               y2={h - padB}
               className="mdocs-job-chart-cross"
             />
-            <circle cx={hover.x} cy={hover.y} r={5.5} className="mdocs-job-chart-dot is-active" />
+            <circle cx={hover.vbX} cy={hover.vbY} r={5.5} className="mdocs-job-chart-dot is-active" />
           </>
         ) : null}
       </svg>
@@ -753,8 +786,8 @@ function JobChart(props: {
             `is-align-${hover.align}`,
           ].join(" ")}
           style={{
-            left: `${(hover.x / w) * 100}%`,
-            top: `${(hover.y / h) * 100}%`,
+            left: `${hover.left}px`,
+            top: `${hover.top}px`,
           }}
         >
           <div>

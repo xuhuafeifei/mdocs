@@ -403,15 +403,16 @@ function emitToolCallPreparing(
   const args = block.arguments;
   const detail = toolCallPreparingDetail(toolName, args);
   const body = isWriteTool(toolName) ? writeToolBodyText(toolName, args) : "";
-  // 帮写/覆写更密推送，卡片增量滚动更跟手
+  // 帮写/覆写更密推送，卡片增量滚动更跟手；读工具跟入参变化推，避免停在「正在准备参数」
   const bucketSize =
     toolName === "set_markdown_document" || toolName === "overwrite_document"
       ? 48
       : isWriteTool(toolName)
         ? 100
-        : 800;
-  const detailBucket = Math.floor(body.length / bucketSize);
-  const previewTail = body.slice(-64);
+        : 24;
+  const trackText = body || detail || "";
+  const detailBucket = Math.floor(trackText.length / bucketSize);
+  const previewTail = body ? body.slice(-64) : trackText;
 
   if (
     ame.type === "toolcall_delta" &&

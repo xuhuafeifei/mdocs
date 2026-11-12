@@ -1,6 +1,6 @@
 {
   "name": "@fgbg/mdocs",
-  "version": "3.1.13",
+  "version": "3.1.16",
   "description": "A Markdown knowledge base for small teams",
   "license": "MIT",
   "type": "module",
@@ -29,6 +29,8 @@
     "build": "pnpm build:web && pnpm build:server",
     "start": "node dist/server/main.js",
     "mdocs": "tsx src/server/cli/main.ts",
+    "editor:local": "node scripts/editor-dep.mjs local",
+    "editor:published": "node scripts/editor-dep.mjs published",
     "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

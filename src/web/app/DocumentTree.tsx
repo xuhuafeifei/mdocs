@@ -12,7 +12,7 @@
  * drop 高亮由树根统一 state 管理，dragEnd / drop 时一律清空，避免残留。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Folder as FolderIcon, Network, Zap } from "lucide-react";
+import { AlarmClock, Folder as FolderIcon, Network, Zap } from "lucide-react";
 import { useI18n } from "../i18n";
 import type {
   TreeFolderNode,
@@ -498,7 +498,7 @@ function DocRow(props: {
         ) : doc.fileType === "sheet" ? (
           "sheet"
         ) : doc.fileType === "job" ? (
-          "job"
+          <AlarmClock size={14} strokeWidth={2} aria-hidden />
         ) : (
           "md"
         )}

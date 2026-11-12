@@ -107,6 +107,37 @@ function clip(text: string, max = 72): string {
   return `${t.slice(0, max)}…`;
 }
 
+/** 时间线标题只展示 ≤72 字的 hint，超出整段会被收成折叠正文 */
+function titleHint(text: string, max = 72): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1))}…`;
+}
+
+function formatArgValue(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return `[${value.length}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value as object).length}}`;
+  }
+  return "";
+}
+
+/** 把工具入参收成一行，供准备中的时间线直接看到 */
+function formatArgsPreview(args: unknown): string {
+  if (typeof args === "string") return args.trim();
+  const record = asRecord(args);
+  if (!record) return "";
+  return Object.entries(record)
+    .map(([key, value]) => {
+      const shown = formatArgValue(value);
+      return shown ? `${key}=${shown}` : "";
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -289,7 +320,9 @@ export function toolCallPreparingDetail(
     return formatWriteToolDetail(meta, body, mode);
   }
 
-  return "正在准备参数…";
+  const argsText = formatArgsPreview(args);
+  if (!argsText) return "正在准备参数…";
+  return titleHint(`正在准备参数 · ${argsText}`);
 }
 
 /** 调用开始时：从 args 抽可滚动预览 */
@@ -392,7 +425,7 @@ export function toolCallDetailFromArgs(
     return clip(String(a.url ?? "").trim()) || undefined;
   }
 
-  return undefined;
+  return titleHint(formatArgsPreview(a)) || undefined;
 }
 
 function formatCliInvocationDetail(

@@ -25,7 +25,6 @@ import { suggestCommitMessage } from "../documents/suggest-commit-message.js";
 import { suggestDocumentMerge } from "../documents/ai-merge.service.js";
 import { suggestMergeMessage } from "../documents/suggest-merge-message.js";
 import { suggestMergeResolutions } from "../documents/suggest-merge-resolutions.js";
-import { isPublishSource } from "../../shared/publish-meta.js";
 import { findDomainByName } from "../db/repositories/domain.repo.js";
 import { getDb } from "../db/connection.js";
 import { searchDocuments, tokenizeQuery } from "../search/search.service.js";
@@ -33,8 +32,6 @@ import { listEmbeddingIndex, rebuildEmbeddingIndex } from "../search/embedding-a
 import { isEmbeddingReady } from "../search/embedding-model.js";
 import { requireDocumentAccess, requireDocumentOwner } from "../middleware/document-auth.middleware.js";
 import { StoragePathError } from "../storage/paths.js";
-import type { PublishVersionContext } from "../../shared/types/document.js";
-import { FILE_TYPE } from "../../shared/file-types.js";
 import { treeIncludeTypes } from "../../shared/file-type-policy.js";
 import { useLogger } from "../logger/logger.js";
 import { buildFolderSubtree } from "../documents/tree.service.js";
@@ -50,66 +47,63 @@ import {
   getJobRuns,
   manualRunJob,
 } from "../jobs/job-run.service.js";
+import { parseBody, parseQuery, requireVisitor } from "../http/request.js";
+import {
+  addInviteBodySchema,
+  convertBodySchema,
+  createDocumentBodySchema,
+  deletedQuerySchema,
+  embeddingIndexQuerySchema,
+  embeddingRebuildBodySchema,
+  getDocumentQuerySchema,
+  jobConfigPutBodySchema,
+  jobDataDeleteBodySchema,
+  jobLimitQuerySchema,
+  listDocumentsQuerySchema,
+  mergeContextQuerySchema,
+  monitorConfigPutBodySchema,
+  moveDocumentBodySchema,
+  restoreBodySchema,
+  searchBodySchema,
+  suggestCommitMessageBodySchema,
+  suggestDocumentMergeBodySchema,
+  suggestMergeMessageBodySchema,
+  suggestMergeResolutionsBodySchema,
+  syncStatusQuerySchema,
+  updateDocumentBodySchema,
+} from "./documents.schemas.js";
 
 const log = useLogger("documents-route");
 
 /**
  * 构建文档相关路由。
  *
- * 包含以下接口：
- * - GET  /          列出当前访客在指定域下可见的文档列表
- * - POST /          创建新文档（需登录）
- * - GET  /deleted   最近删除（带 recovery，可恢复）
- * - POST /restore   按删除审计恢复文档
- * - GET  /:id       读取单篇文档详情（需 read 权限）
- * - PUT  /:id       更新文档（需 edit 权限）
- * - DELETE /:id     删除文档（需 delete 权限，仅限创建者）
- * - GET  /:id/invites          获取邀请列表（需登录；仅文档创建者）
- * - POST /:id/invites          添加邀请（需登录；仅创建者）
- * - DELETE /:id/invites/:vid   移除邀请（需登录；仅创建者）
- *
- * @returns Express Router 实例
+ * 边界校验见 documents.schemas.ts；业务在 document.service / jobs。
  */
 export function buildDocumentsRouter(): Router {
   const router = Router();
 
-  /**
-   * GET /deleted
-   * 当前访客作为删除者的最近 document.delete（含 recovery）。须在 /:documentId 之前注册。
-   */
   router.get("/deleted", (req: Request, res: Response) => {
-    if (!req.visitor) {
-      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-      return;
-    }
-    const rawLimit = typeof req.query.limit === "string" ? Number(req.query.limit) : 50;
+    const visitor = requireVisitor(req, res);
+    if (!visitor) return;
+    const query = parseQuery(req, res, deletedQuerySchema);
+    if (!query) return;
     const items = listDeletedDocuments({
-      actorVisitorId: req.visitor.visitor_id,
-      limit: Number.isFinite(rawLimit) ? rawLimit : 50,
+      actorVisitorId: visitor.visitor_id,
+      limit: query.limit ?? 50,
     });
     res.json({ data: items });
   });
 
-  /**
-   * POST /restore
-   * 按删除审计 auditId 恢复文档。须在 /:documentId 之前注册。
-   * Body: { auditId: number }
-   */
   router.post("/restore", (req: Request, res: Response) => {
-    if (!req.visitor) {
-      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-      return;
-    }
-    const body = (req.body ?? {}) as { auditId?: unknown };
-    const auditId = typeof body.auditId === "number" ? body.auditId : Number(body.auditId);
-    if (!Number.isInteger(auditId) || auditId < 1) {
-      res.status(400).json({ error: { code: "BAD_REQUEST", message: "auditId is required" } });
-      return;
-    }
+    const visitor = requireVisitor(req, res);
+    if (!visitor) return;
+    const body = parseBody(req, res, restoreBodySchema);
+    if (!body) return;
     try {
       const doc = restoreDocumentFromAudit({
-        actorVisitorId: req.visitor.visitor_id,
-        auditId,
+        actorVisitorId: visitor.visitor_id,
+        auditId: body.auditId,
       });
       res.status(201).json({ data: doc });
     } catch (err) {
@@ -117,24 +111,19 @@ export function buildDocumentsRouter(): Router {
     }
   });
 
-  /**
-   * GET /
-   * 列出当前访客在指定域下可见的文档列表。
-   *
-   * 查询参数：
-   * - domainId?: string  要查询的域ID，不传则使用默认域
-   *
-   * 逻辑：从请求中取出 domainId 和当前访客ID，调用 listDocuments 服务函数，
-   * 由服务层负责权限过滤，直接返回过滤后的列表。
-   */
   router.get("/", (req: Request, res: Response) => {
-    let domainId = typeof req.query.domainId === "string" ? req.query.domainId : undefined;
-    // 如果提供了 domainName，解析为 domainId
-    const domainName = typeof req.query.domainName === "string" ? req.query.domainName : undefined;
-    if (domainName) {
-      const domain = findDomainByName(getDb(), domainName);
+    const query = parseQuery(req, res, listDocumentsQuerySchema);
+    if (!query) return;
+    let domainId = query.domainId;
+    if (query.domainName) {
+      const domain = findDomainByName(getDb(), query.domainName);
       if (!domain) {
-        res.status(404).json({ error: { code: "DOMAIN_NOT_FOUND", message: `domain '${domainName}' not found` } });
+        res.status(404).json({
+          error: {
+            code: "DOMAIN_NOT_FOUND",
+            message: `domain '${query.domainName}' not found`,
+          },
+        });
         return;
       }
       domainId = domain.domain_id;
@@ -144,144 +133,74 @@ export function buildDocumentsRouter(): Router {
     res.json({ data: docs });
   });
 
-  /**
-   * POST /
-   * 创建新文档。需已登录。
-   *
-   * 请求体字段：
-   * - relativePath: string  必填，文档相对路径
-   * - content: string       必填，文档正文
-   * - displayName?: string  可选，展示名
-   * - domainId?: string     可选，目标域，不传则默认域
-   * - permission?: number   可选，权限档位，不传则按域类型给默认值
-   */
   router.post("/", (req: Request, res: Response) => {
-    // 创建文档必须先登录
-    if (!req.visitor) {
-      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-      return;
-    }
-    // 从请求体中解构可能存在的字段
-    const body = (req.body ?? {}) as {
-      fileName?: unknown;
-      displayName?: unknown;
-      content?: unknown;
-      domainId?: unknown;
-      permission?: unknown;
-      parentId?: unknown;
-      contentFormat?: unknown;
-      fileType?: unknown;
-    };
-    // 校验必填字段：文件名和内容必须是字符串
-    if (typeof body.fileName !== "string" || typeof body.content !== "string") {
-      res.status(400).json({ error: { code: "BAD_REQUEST", message: "fileName and content are required" } });
-      return;
-    }
-    // 校验 fileType：仅允许用户创建 md / html / sheet / job
-    const rawFileType = body.fileType;
-    const fileType =
-      rawFileType === FILE_TYPE.HTML
-        ? FILE_TYPE.HTML
-        : rawFileType === FILE_TYPE.SHEET
-          ? FILE_TYPE.SHEET
-          : rawFileType === FILE_TYPE.JOB
-            ? FILE_TYPE.JOB
-            : FILE_TYPE.DOCUMENT;
+    const visitor = requireVisitor(req, res);
+    if (!visitor) return;
+    const body = parseBody(req, res, createDocumentBodySchema);
+    if (!body) return;
     try {
-      // 调用服务层创建文档，把请求参数映射为服务参数
       const doc = createDocument({
-        actorVisitorId: req.visitor.visitor_id,
+        actorVisitorId: visitor.visitor_id,
         fileName: body.fileName,
-        displayName: typeof body.displayName === "string" ? body.displayName : undefined,
+        displayName: body.displayName,
         content: body.content,
-        fileType,
-        domainId: typeof body.domainId === "string" ? body.domainId : undefined,
-        permission: typeof body.permission === "number" ? body.permission : undefined,
-        parentId: typeof body.parentId === "string" ? body.parentId : undefined,
-        contentFormat: body.contentFormat === 'markdown' ? 'markdown' : undefined,
+        fileType: body.fileType,
+        domainId: body.domainId,
+        permission: body.permission,
+        parentId: body.parentId,
+        contentFormat: body.contentFormat,
       });
-      // 201 Created 返回新建文档的完整详情
       res.status(201).json({ data: doc });
     } catch (err) {
-      // 统一异常处理：DocumentError 返回对应状态码，其他记日志后返回 500
       respondError(res, err, "documents-route.create");
     }
   });
 
-  /**
-   * POST /convert
-   * 内容格式转换（markdown ↔ Lexical；lexical→markdown 走 lexicalJsonToMarkdown）。
-   */
   router.post("/convert", (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as {
-      content?: unknown;
-      from?: unknown;
-      to?: unknown;
-    };
-    if (typeof body.content !== "string") {
-      res.status(400).json({ error: { code: "BAD_REQUEST", message: "content is required" } });
-      return;
-    }
-    const from = body.from === "markdown" ? "markdown" : body.from === "lexical" ? "lexical" : null;
-    const to = body.to === "markdown" ? "markdown" : body.to === "lexical" ? "lexical" : null;
-    if (!from || !to) {
-      res.status(400).json({ error: { code: "BAD_REQUEST", message: "from and to are required" } });
-      return;
-    }
+    const body = parseBody(req, res, convertBodySchema);
+    if (!body) return;
     try {
-      const out = convertDocumentContent({ content: body.content, from, to });
+      const out = convertDocumentContent({
+        content: body.content,
+        from: body.from,
+        to: body.to,
+      });
       res.json({ data: { content: out } });
     } catch (err) {
       respondError(res, err, "documents-route.convert");
     }
   });
 
-  /**
-   * GET /embedding-index
-   * 当前访客可读的 md 文档语义索引状态（含上次构建时间）。
-   * query: domainId? 可选限定域
-   */
   router.get("/embedding-index", (req: Request, res: Response) => {
+    const query = parseQuery(req, res, embeddingIndexQuerySchema);
+    if (!query) return;
     const visitorId = req.visitor?.visitor_id ?? null;
-    const domainId = typeof req.query.domainId === "string" ? req.query.domainId : undefined;
-    const data = listEmbeddingIndex({ visitorId, domainId });
+    const data = listEmbeddingIndex({ visitorId, domainId: query.domainId });
     res.json({ data });
   });
 
-  /**
-   * POST /embedding-rebuild
-   * 对勾选的 documentIds 尽力重建语义索引。
-   * body: { documentIds: string[] }
-   */
   router.post("/embedding-rebuild", async (req: Request, res: Response) => {
+    const body = parseBody(req, res, embeddingRebuildBodySchema);
+    if (!body) return;
     const visitorId = req.visitor?.visitor_id ?? null;
-    const body = (req.body ?? {}) as { documentIds?: unknown };
-    if (!Array.isArray(body.documentIds) || body.documentIds.some((x) => typeof x !== "string")) {
-      res.status(400).json({ error: { code: "BAD_REQUEST", message: "documentIds string[] required" } });
-      return;
-    }
     const data = await rebuildEmbeddingIndex({
       visitorId,
-      documentIds: body.documentIds as string[],
+      documentIds: body.documentIds,
     });
     res.json({ data });
   });
 
-  /**
-   * GET /:documentId/sync-status
-   * 轻量同步状态（仅 head，不返回正文）。
-   */
   router.get(
     "/:documentId/sync-status",
     requireDocumentAccess("read"),
     (req: Request, res: Response) => {
-      const documentId = req.params.documentId!;
-      const localBaseCommitId =
-        typeof req.query.localBaseCommitId === "string"
-          ? req.query.localBaseCommitId
-          : undefined;
+      const query = parseQuery(req, res, syncStatusQuerySchema);
+      if (!query) return;
       try {
-        const status = getDocumentSyncStatus(documentId, localBaseCommitId);
+        const status = getDocumentSyncStatus(
+          req.params.documentId!,
+          query.localBaseCommitId,
+        );
         res.json({ data: status });
       } catch (err) {
         respondError(res, err, "documents-route.sync-status");
@@ -289,34 +208,17 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /**
-   * GET /:documentId/merge-context
-   * merge UI：LCA commit id + 祖先正文（Lexical JSON）。
-   */
   router.get(
     "/:documentId/merge-context",
     requireDocumentAccess("read"),
     (req: Request, res: Response) => {
-      const documentId = req.params.documentId!;
-      const localBaseCommitId =
-        typeof req.query.localBaseCommitId === "string"
-          ? req.query.localBaseCommitId.trim()
-          : "";
-      const remoteCommitId =
-        typeof req.query.remoteCommitId === "string"
-          ? req.query.remoteCommitId.trim()
-          : "";
-      if (!localBaseCommitId || !remoteCommitId) {
-        res.status(400).json({
-          error: { code: "BAD_REQUEST", message: "localBaseCommitId and remoteCommitId are required" },
-        });
-        return;
-      }
+      const query = parseQuery(req, res, mergeContextQuerySchema);
+      if (!query) return;
       try {
         const ctx = getDocumentMergeContext(
-          documentId,
-          localBaseCommitId,
-          remoteCommitId,
+          req.params.documentId!,
+          query.localBaseCommitId,
+          query.remoteCommitId,
         );
         res.json({ data: ctx });
       } catch (err) {
@@ -325,10 +227,6 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /**
-   * GET /:documentId/commits
-   * 文档版本列表（发布快照）。需 read。
-   */
   router.get(
     "/:documentId/commits",
     requireDocumentAccess("read"),
@@ -342,16 +240,15 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /**
-   * GET /:documentId/commits/:commitId
-   * 预览某版本正文。需 read。
-   */
   router.get(
     "/:documentId/commits/:commitId",
     requireDocumentAccess("read"),
     (req: Request, res: Response) => {
       try {
-        const detail = getDocumentCommit(req.params.documentId!, req.params.commitId!);
+        const detail = getDocumentCommit(
+          req.params.documentId!,
+          req.params.commitId!,
+        );
         res.json({ data: detail });
       } catch (err) {
         respondError(res, err, "documents-route.commits.get");
@@ -359,21 +256,15 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /**
-   * POST /:documentId/commits/:commitId/restore
-   * 将该版正文作为新 commit 发布。需 edit。
-   */
   router.post(
     "/:documentId/commits/:commitId/restore",
     requireDocumentAccess("edit"),
     (req: Request, res: Response) => {
-      if (!req.visitor) {
-        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-        return;
-      }
+      const visitor = requireVisitor(req, res);
+      if (!visitor) return;
       try {
         const doc = restoreDocumentVersion({
-          actorVisitorId: req.visitor.visitor_id,
+          actorVisitorId: visitor.visitor_id,
           documentId: req.params.documentId!,
           commitId: req.params.commitId!,
         });
@@ -384,19 +275,6 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /**
-   * GET /:documentId
-   * 获取单篇文档详情。需具备读取权限。
-   *
-   * 查询参数：
-   * - format?: "json" | "text"  - 返回格式，默认 json（Lexical JSON 字符串）；text 表示提取纯文本
-   *
-   * 前置校验：requireDocumentAccess("read") 中间件会先查文档和域信息，
-   * 判断当前访客是否有权读取；无权则直接返回 404/403。
-   */
-  /**
-   * GET /:documentId/job-config — 读 Job 配置 + 监控规则（.job JSON）
-   */
   router.get(
     "/:documentId/job-config",
     requireDocumentAccess("read"),
@@ -410,43 +288,22 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /**
-   * PUT /:documentId/job-config — 保存 JobConfig（读改写加锁；与 update 合并为 upsert 语义）
-   */
   router.put(
     "/:documentId/job-config",
     requireDocumentAccess("edit"),
     async (req: Request, res: Response) => {
-      if (!req.visitor) {
-        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-        return;
-      }
-      const body = (req.body ?? {}) as {
-        cron?: unknown;
-        prompt?: unknown;
-        jobType?: unknown;
-        tableSchema?: { x?: unknown; y?: unknown };
-      };
+      const visitor = requireVisitor(req, res);
+      if (!visitor) return;
+      const body = parseBody(req, res, jobConfigPutBodySchema);
+      if (!body) return;
       try {
         const JobConfig = await saveJobConfig({
-          actorVisitorId: req.visitor.visitor_id,
+          actorVisitorId: visitor.visitor_id,
           documentId: req.params.documentId!,
-          cron: typeof body.cron === "string" ? body.cron : undefined,
-          prompt: typeof body.prompt === "string" ? body.prompt : undefined,
-          jobType: typeof body.jobType === "string" ? body.jobType : undefined,
-          tableSchema:
-            body.tableSchema && typeof body.tableSchema === "object"
-              ? {
-                  x:
-                    typeof body.tableSchema.x === "string"
-                      ? body.tableSchema.x
-                      : undefined,
-                  y:
-                    typeof body.tableSchema.y === "string"
-                      ? body.tableSchema.y
-                      : undefined,
-                }
-              : undefined,
+          cron: body.cron,
+          prompt: body.prompt,
+          jobType: body.jobType,
+          tableSchema: body.tableSchema,
         });
         res.json({ data: { JobConfig } });
       } catch (err) {
@@ -455,38 +312,19 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /**
-   * PUT /:documentId/monitor-config — 整表替换 MonitorConfig（同文件锁）
-   */
   router.put(
     "/:documentId/monitor-config",
     requireDocumentAccess("edit"),
     async (req: Request, res: Response) => {
-      if (!req.visitor) {
-        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-        return;
-      }
-      const body = (req.body ?? {}) as { rules?: unknown; MonitorConfig?: unknown };
-      const rawRules = Array.isArray(body.rules)
-        ? body.rules
-        : Array.isArray(body.MonitorConfig)
-          ? body.MonitorConfig
-          : null;
-      if (!rawRules) {
-        res.status(400).json({
-          error: { code: "BAD_REQUEST", message: "rules (or MonitorConfig) array is required" },
-        });
-        return;
-      }
+      const visitor = requireVisitor(req, res);
+      if (!visitor) return;
+      const body = parseBody(req, res, monitorConfigPutBodySchema);
+      if (!body) return;
       try {
         const MonitorConfig = await saveMonitorConfig({
-          actorVisitorId: req.visitor.visitor_id,
+          actorVisitorId: visitor.visitor_id,
           documentId: req.params.documentId!,
-          rules: rawRules as Array<{
-            monitorId?: string;
-            rule?: string;
-            threshold?: number;
-          }>,
+          rules: body.rules,
         });
         res.json({ data: { MonitorConfig } });
       } catch (err) {
@@ -495,17 +333,14 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /** GET /:documentId/job-runs — 运行流水 */
   router.get(
     "/:documentId/job-runs",
     requireDocumentAccess("read"),
     (req: Request, res: Response) => {
+      const query = parseQuery(req, res, jobLimitQuerySchema);
+      if (!query) return;
       try {
-        const limitRaw = Number(req.query.limit);
-        const runs = getJobRuns(
-          req.params.documentId!,
-          Number.isFinite(limitRaw) ? limitRaw : undefined,
-        );
+        const runs = getJobRuns(req.params.documentId!, query.limit);
         res.json({ data: { runs } });
       } catch (err) {
         respondError(res, err, "documents-route.job-runs.get");
@@ -513,17 +348,14 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /** GET /:documentId/job-data — 产出点 */
   router.get(
     "/:documentId/job-data",
     requireDocumentAccess("read"),
     (req: Request, res: Response) => {
+      const query = parseQuery(req, res, jobLimitQuerySchema);
+      if (!query) return;
       try {
-        const limitRaw = Number(req.query.limit);
-        const points = getJobData(
-          req.params.documentId!,
-          Number.isFinite(limitRaw) ? limitRaw : undefined,
-        );
+        const points = getJobData(req.params.documentId!, query.limit);
         res.json({ data: { points } });
       } catch (err) {
         respondError(res, err, "documents-route.job-data.get");
@@ -531,19 +363,16 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /** DELETE /:documentId/job-data — 人工删除产出点（ids 或 all） */
   router.delete(
     "/:documentId/job-data",
     requireDocumentAccess("edit"),
     (req: Request, res: Response) => {
+      const body = parseBody(req, res, jobDataDeleteBodySchema);
+      if (!body) return;
       try {
-        const body = (req.body ?? {}) as { ids?: unknown; all?: unknown };
-        const ids = Array.isArray(body.ids)
-          ? body.ids.map((v) => Number(v)).filter((n) => Number.isFinite(n))
-          : undefined;
         const data = deleteJobData({
           documentId: req.params.documentId!,
-          ids,
+          ids: body.ids,
           all: body.all === true,
         });
         res.json({ data });
@@ -553,7 +382,6 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /** POST /:documentId/job-run — 立刻执行 */
   router.post(
     "/:documentId/job-run",
     requireDocumentAccess("edit"),
@@ -567,14 +395,15 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /** POST /:documentId/job-runs/:runId/cancel — 终止 */
   router.post(
     "/:documentId/job-runs/:runId/cancel",
     requireDocumentAccess("edit"),
     (req: Request, res: Response) => {
       const runId = Number(req.params.runId);
       if (!Number.isFinite(runId)) {
-        res.status(400).json({ error: { code: "BAD_REQUEST", message: "invalid runId" } });
+        res.status(400).json({
+          error: { code: "BAD_REQUEST", message: "invalid runId" },
+        });
         return;
       }
       try {
@@ -589,48 +418,31 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  router.get("/:documentId", requireDocumentAccess("read"), (req: Request, res: Response) => {
-    // 中间件已通过校验，这里直接从路由参数取文档ID
-    const documentId = req.params.documentId!;
-    const visitorId = req.visitor?.visitor_id ?? null;
-    const format = req.query.format === "text" ? "text" : "json";
-    try {
-      // 从数据库和磁盘读取完整文档内容
-      const doc = getDocument(documentId, visitorId, format);
-      res.json({ data: doc });
-    } catch (err) {
-      respondError(res, err, "documents-route.get");
-    }
-  });
+  router.get(
+    "/:documentId",
+    requireDocumentAccess("read"),
+    (req: Request, res: Response) => {
+      const query = parseQuery(req, res, getDocumentQuerySchema);
+      if (!query) return;
+      const visitorId = req.visitor?.visitor_id ?? null;
+      try {
+        const doc = getDocument(req.params.documentId!, visitorId, query.format);
+        res.json({ data: doc });
+      } catch (err) {
+        respondError(res, err, "documents-route.get");
+      }
+    },
+  );
 
-  /**
-   * POST /:documentId/move
-   * 同域移动文档（改 parent_id + relative_path + 磁盘）。仅创建者（service 内校验）。
-   * Body: { parentId: string | null } — null 表示移到域根。
-   */
   router.post("/:documentId/move", (req: Request, res: Response) => {
-    if (!req.visitor) {
-      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-      return;
-    }
-    const body = (req.body ?? {}) as { parentId?: unknown };
-    if (!("parentId" in body)) {
-      res.status(400).json({
-        error: { code: "BAD_REQUEST", message: "parentId is required (string or null)" },
-      });
-      return;
-    }
-    if (body.parentId !== null && typeof body.parentId !== "string") {
-      res.status(400).json({
-        error: { code: "BAD_REQUEST", message: "parentId must be string or null" },
-      });
-      return;
-    }
-    const documentId = req.params.documentId!;
+    const visitor = requireVisitor(req, res);
+    if (!visitor) return;
+    const body = parseBody(req, res, moveDocumentBodySchema);
+    if (!body) return;
     try {
       const doc = moveDocument({
-        actorVisitorId: req.visitor.visitor_id,
-        documentId,
+        actorVisitorId: visitor.visitor_id,
+        documentId: req.params.documentId!,
         parentId: body.parentId,
       });
       res.json({ data: doc });
@@ -639,98 +451,51 @@ export function buildDocumentsRouter(): Router {
     }
   });
 
-  /**
-   * PUT /:documentId
-   * 更新文档内容、展示名或权限。需具备编辑权限。
-   *
-   * 前置校验：requireDocumentAccess("edit") 中间件会先鉴权。
-   * 请求体字段：
-   * - content: string       必填，新正文
-   * - displayName?: string  可选，新展示名
-   * - permission?: number   可选，新权限档位
-   * - contentFormat?: 'markdown' | 'lexical'
-   * - version?: { localBaseCommitId?, merge?: { remoteCommitId, localSnapshotContent?, forceLocal? } }
-   * - message?: string
-   * - source?: 'auto' | 'manual' | 'agent' | 'cli'
-   */
-  router.put("/:documentId", requireDocumentAccess("edit"), (req: Request, res: Response) => {
-    // 中间件只校验了文档访问权，编辑操作仍需确认已登录（ req.visitor 存在）
-    if (!req.visitor) {
-      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-      return;
-    }
-    const body = (req.body ?? {}) as {
-      content?: unknown;
-      displayName?: unknown;
-      permission?: unknown;
-      contentFormat?: unknown;
-      version?: unknown;
-      message?: unknown;
-      source?: unknown;
-    };
-    // 更新时 content 是必填项（即使是空字符串也要显式传）
-    if (typeof body.content !== "string") {
-      res.status(400).json({ error: { code: "BAD_REQUEST", message: "content is required" } });
-      return;
-    }
-    if (body.source !== undefined && body.source !== null && !isPublishSource(body.source)) {
-      res.status(400).json({
-        error: { code: "BAD_REQUEST", message: "source must be auto|manual|agent|cli" },
-      });
-      return;
-    }
-    if (body.message !== undefined && body.message !== null && typeof body.message !== "string") {
-      res.status(400).json({ error: { code: "BAD_REQUEST", message: "message must be a string" } });
-      return;
-    }
-    const documentId = req.params.documentId!;
-    try {
-      const version = parsePublishVersion(body.version);
-      const doc = updateDocument({
-        actorVisitorId: req.visitor.visitor_id,
-        documentId,
-        content: body.content,
-        displayName: typeof body.displayName === "string" ? body.displayName : undefined,
-        permission: typeof body.permission === "number" ? body.permission : undefined,
-        contentFormat: body.contentFormat === 'markdown' ? 'markdown' : undefined,
-        version,
-        message: typeof body.message === "string" ? body.message : undefined,
-        source: isPublishSource(body.source) ? body.source : undefined,
-      });
-      // merge 发布仅返回成功状态：前端需随后 GET 文档详情，避免混合写接口职责。
-      if (version?.merge) {
-        res.status(204).end();
-        return;
+  router.put(
+    "/:documentId",
+    requireDocumentAccess("edit"),
+    (req: Request, res: Response) => {
+      const visitor = requireVisitor(req, res);
+      if (!visitor) return;
+      const body = parseBody(req, res, updateDocumentBodySchema);
+      if (!body) return;
+      try {
+        const doc = updateDocument({
+          actorVisitorId: visitor.visitor_id,
+          documentId: req.params.documentId!,
+          content: body.content,
+          displayName: body.displayName,
+          permission: body.permission,
+          contentFormat: body.contentFormat,
+          version: body.version,
+          message: body.message,
+          source: body.source,
+        });
+        if (body.version?.merge) {
+          res.status(204).end();
+          return;
+        }
+        res.json({ data: doc });
+      } catch (err) {
+        respondError(res, err, "documents-route.update");
       }
-      res.json({ data: doc });
-    } catch (err) {
-      respondError(res, err, "documents-route.update");
-    }
-  });
+    },
+  );
 
-  /**
-   * POST /:documentId/suggest-commit-message
-   * 根据当前待发正文相对最近一次非 auto 发布的 diff，用默认模型生成短 message。
-   */
   router.post(
     "/:documentId/suggest-commit-message",
     requireDocumentAccess("edit"),
     async (req: Request, res: Response) => {
-      if (!req.visitor) {
-        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-        return;
-      }
-      const body = (req.body ?? {}) as { content?: unknown; contentFormat?: unknown };
-      if (typeof body.content !== "string") {
-        res.status(400).json({ error: { code: "BAD_REQUEST", message: "content is required" } });
-        return;
-      }
+      const visitor = requireVisitor(req, res);
+      if (!visitor) return;
+      const body = parseBody(req, res, suggestCommitMessageBodySchema);
+      if (!body) return;
       try {
         const data = await suggestCommitMessage({
-          actorVisitorId: req.visitor.visitor_id,
+          actorVisitorId: visitor.visitor_id,
           documentId: req.params.documentId!,
           content: body.content,
-          contentFormat: body.contentFormat === "markdown" ? "markdown" : "lexical",
+          contentFormat: body.contentFormat,
         });
         res.json({ data });
       } catch (err) {
@@ -739,44 +504,21 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /**
-   * POST /:documentId/suggest-document-merge
-   * CLI / Agent 入口：localContent + tip/base → AI 消冲突，返回定稿 Markdown + 各侧快照。
-   * （Web Merge 页仍用 suggest-merge-resolutions，直接吃已序列化的 conflictMarkdown。）
-   */
   router.post(
     "/:documentId/suggest-document-merge",
     requireDocumentAccess("edit"),
     async (req: Request, res: Response) => {
-      if (!req.visitor) {
-        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-        return;
-      }
-      const body = (req.body ?? {}) as {
-        localContent?: unknown;
-        localBaseCommitId?: unknown;
-        contentFormat?: unknown;
-      };
-      if (typeof body.localContent !== "string") {
-        res.status(400).json({
-          error: { code: "BAD_REQUEST", message: "localContent is required" },
-        });
-        return;
-      }
-      const contentFormat =
-        body.contentFormat === "markdown" ||
-        body.contentFormat === "plain" ||
-        body.contentFormat === "lexical"
-          ? body.contentFormat
-          : "markdown";
+      const visitor = requireVisitor(req, res);
+      if (!visitor) return;
+      const body = parseBody(req, res, suggestDocumentMergeBodySchema);
+      if (!body) return;
       try {
         const data = await suggestDocumentMerge({
-          actorVisitorId: req.visitor.visitor_id,
+          actorVisitorId: visitor.visitor_id,
           documentId: req.params.documentId!,
           localContent: body.localContent,
-          localBaseCommitId:
-            typeof body.localBaseCommitId === "string" ? body.localBaseCommitId : undefined,
-          contentFormat,
+          localBaseCommitId: body.localBaseCommitId,
+          contentFormat: body.contentFormat,
         });
         res.json({ data });
       } catch (err) {
@@ -785,40 +527,19 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /**
-   * POST /:documentId/suggest-merge-resolutions
-   * AI 行级 merge：完整 git 冲突 Markdown → 定稿 Markdown（无冲突标记）。
-   */
   router.post(
     "/:documentId/suggest-merge-resolutions",
     requireDocumentAccess("edit"),
     async (req: Request, res: Response) => {
-      if (!req.visitor) {
-        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-        return;
-      }
-      const body = (req.body ?? {}) as {
-        conflictMarkdown?: unknown;
-        /** @deprecated 旧字段，等同 conflictMarkdown */
-        markedText?: unknown;
-      };
-      const conflictMarkdown =
-        typeof body.conflictMarkdown === "string"
-          ? body.conflictMarkdown
-          : typeof body.markedText === "string"
-            ? body.markedText
-            : null;
-      if (conflictMarkdown == null) {
-        res.status(400).json({
-          error: { code: "BAD_REQUEST", message: "conflictMarkdown is required" },
-        });
-        return;
-      }
+      const visitor = requireVisitor(req, res);
+      if (!visitor) return;
+      const body = parseBody(req, res, suggestMergeResolutionsBodySchema);
+      if (!body) return;
       try {
         const data = await suggestMergeResolutions({
-          actorVisitorId: req.visitor.visitor_id,
+          actorVisitorId: visitor.visitor_id,
           documentId: req.params.documentId!,
-          conflictMarkdown,
+          conflictMarkdown: body.conflictMarkdown,
         });
         res.json({ data });
       } catch (err) {
@@ -827,51 +548,23 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /**
-   * POST /:documentId/suggest-merge-message
-   * 合并发布说明：local / remote / merged（可选 base）→ 短 message。
-   */
   router.post(
     "/:documentId/suggest-merge-message",
     requireDocumentAccess("edit"),
     async (req: Request, res: Response) => {
-      if (!req.visitor) {
-        res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-        return;
-      }
-      const body = (req.body ?? {}) as {
-        localContent?: unknown;
-        remoteContent?: unknown;
-        mergedContent?: unknown;
-        baseContent?: unknown;
-        contentFormat?: unknown;
-      };
-      if (
-        typeof body.localContent !== "string" ||
-        typeof body.remoteContent !== "string" ||
-        typeof body.mergedContent !== "string"
-      ) {
-        res.status(400).json({
-          error: {
-            code: "BAD_REQUEST",
-            message: "localContent, remoteContent and mergedContent are required",
-          },
-        });
-        return;
-      }
-      const contentFormat =
-        body.contentFormat === "markdown" || body.contentFormat === "plain"
-          ? body.contentFormat
-          : "lexical";
+      const visitor = requireVisitor(req, res);
+      if (!visitor) return;
+      const body = parseBody(req, res, suggestMergeMessageBodySchema);
+      if (!body) return;
       try {
         const data = await suggestMergeMessage({
-          actorVisitorId: req.visitor.visitor_id,
+          actorVisitorId: visitor.visitor_id,
           documentId: req.params.documentId!,
           localContent: body.localContent,
           remoteContent: body.remoteContent,
           mergedContent: body.mergedContent,
-          baseContent: typeof body.baseContent === "string" ? body.baseContent : undefined,
-          contentFormat,
+          baseContent: body.baseContent,
+          contentFormat: body.contentFormat,
         });
         res.json({ data });
       } catch (err) {
@@ -880,46 +573,31 @@ export function buildDocumentsRouter(): Router {
     },
   );
 
-  /**
-   * DELETE /:documentId
-   * 删除文档。需具备删除权限（仅限创建者）。
-   *
-   * 前置校验：requireDocumentAccess("delete") 中间件会确保只有创建者能过。
-   */
-  router.delete("/:documentId", requireDocumentAccess("delete"), (req: Request, res: Response) => {
-    if (!req.visitor) {
-      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-      return;
-    }
-    const documentId = req.params.documentId!;
-    try {
-      removeDocument({
-        actorVisitorId: req.visitor.visitor_id,
-        documentId,
-      });
-      // 删除成功返回 204 No Content，无响应体
-      res.status(204).end();
-    } catch (err) {
-      respondError(res, err, "documents-route.delete");
-    }
-  });
+  router.delete(
+    "/:documentId",
+    requireDocumentAccess("delete"),
+    (req: Request, res: Response) => {
+      const visitor = requireVisitor(req, res);
+      if (!visitor) return;
+      try {
+        removeDocument({
+          actorVisitorId: visitor.visitor_id,
+          documentId: req.params.documentId!,
+        });
+        res.status(204).end();
+      } catch (err) {
+        respondError(res, err, "documents-route.delete");
+      }
+    },
+  );
 
-  /**
-   * DELETE /folder/:folderDocumentId
-   * 删除目录及其下所有文档和子目录。需目录创建者身份。
-   *
-   * 通过 folder 的 documentId 定位目录，递归删除该路径下所有内容。
-   */
   router.delete("/folder/:folderDocumentId", (req: Request, res: Response) => {
-    if (!req.visitor) {
-      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-      return;
-    }
-    const folderDocumentId = req.params.folderDocumentId!;
+    const visitor = requireVisitor(req, res);
+    if (!visitor) return;
     try {
       const result = removeFolder({
-        actorVisitorId: req.visitor.visitor_id,
-        folderDocumentId,
+        actorVisitorId: visitor.visitor_id,
+        folderDocumentId: req.params.folderDocumentId!,
       });
       res.json({ data: result });
     } catch (err) {
@@ -927,181 +605,103 @@ export function buildDocumentsRouter(): Router {
     }
   });
 
-  /**
-   * GET /folder/:folderId/children
-   * 列出指定目录下的所有直接子节点（文件夹 + 文档）。
-   *
-   * 自动过滤当前访客无权阅读的文档，返回空数组表示无权限或目录不存在。
-   */
   router.get("/folder/:folderId/children", (req: Request, res: Response) => {
-    const folderId = req.params.folderId!;
     const visitorId = req.visitor?.visitor_id ?? null;
-    const children = listFolderChildren(folderId, visitorId);
+    const children = listFolderChildren(req.params.folderId!, visitorId);
     res.json({ data: children });
   });
 
-  /**
-   * GET /folder/:folderId/tree
-   * 列出指定目录下的精简嵌套子树（type + id + title；不含自身）。
-   */
   router.get("/folder/:folderId/tree", (req: Request, res: Response) => {
-    const folderId = req.params.folderId!;
     const visitorId = req.visitor?.visitor_id ?? null;
     try {
-      const tree = buildFolderSubtree(folderId, visitorId, { includeTypes: treeIncludeTypes() });
+      const tree = buildFolderSubtree(req.params.folderId!, visitorId, {
+        includeTypes: treeIncludeTypes(),
+      });
       res.json({ data: tree });
     } catch (err) {
       respondError(res, err, "documents-route.folder-tree");
     }
   });
 
-  /**
-   * POST /search
-   * 全文检索文档。结果按相关性排序，
-   * 自动过滤当前访客无权阅读的文档。
-   *
-   * 请求体字段：
-   * - query: string     必填，搜索关键词
-   * - domainId?: string  可选，限定搜索域
-   * - topN?: number     可选，返回数量，默认 10
-   * - mode?: string     可选，检索模式：auto（默认，FTS+语义混合）/ keyword（仅关键词）/ semantic（仅语义）
-   *
-   * 响应：{ results: SearchResult[], modelReady: boolean, tokens: string[] }
-   *      modelReady = 语义模型是否可用；tokens = 查询分词（供前端命中高亮）
-   */
   router.post("/search", async (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as { query?: unknown; domainId?: unknown; topN?: unknown; mode?: unknown };
-    if (typeof body.query !== "string" || !body.query.trim()) {
-      res.status(400).json({ error: { code: "BAD_REQUEST", message: "query is required" } });
-      return;
-    }
+    const body = parseBody(req, res, searchBodySchema);
+    if (!body) return;
     const visitorId = req.visitor?.visitor_id ?? null;
-    const mode =
-      body.mode === "keyword" || body.mode === "semantic" ? body.mode : ("auto" as const);
     const results = await searchDocuments({
       query: body.query,
       visitorId,
-      domainId: typeof body.domainId === "string" ? body.domainId : undefined,
-      topN: typeof body.topN === "number" ? body.topN : undefined,
-      mode,
+      domainId: body.domainId,
+      topN: body.topN,
+      mode: body.mode,
     });
-    // 分词结果供前端高亮（与 FTS MATCH 同一套 jieba 切词）
-    res.json({ data: { results, modelReady: isEmbeddingReady(), tokens: tokenizeQuery(body.query) } });
+    res.json({
+      data: {
+        results,
+        modelReady: isEmbeddingReady(),
+        tokens: tokenizeQuery(body.query),
+      },
+    });
   });
 
-  /**
-   * GET /:documentId/invites
-   * 获取文档邀请列表。仅文档创建者可访问。
-   */
-  router.get("/:documentId/invites", requireDocumentOwner(), (req: Request, res: Response) => {
-    const documentId = req.params.documentId!;
-    try {
-      const invites = getDocumentInvites(documentId);
-      res.json({ data: invites });
-    } catch (err) {
-      respondError(res, err, "documents-route.invites.get");
-    }
-  });
+  router.get(
+    "/:documentId/invites",
+    requireDocumentOwner(),
+    (req: Request, res: Response) => {
+      try {
+        const invites = getDocumentInvites(req.params.documentId!);
+        res.json({ data: invites });
+      } catch (err) {
+        respondError(res, err, "documents-route.invites.get");
+      }
+    },
+  );
 
-  /**
-   * POST /:documentId/invites
-   * 添加邀请。仅创建者。
-   *
-   * 请求体字段：
-   * - targetVisitorId: string  必填，被邀请的访客ID
-   * - targetPermission: string  必填，授予的权限（read / edit）
-   *
-   * 业务限制：
-   * - 仅创建者可邀请。
-   * - 目标访客不能已是该域成员（邀请与域成员互斥）。
-   */
-  router.post("/:documentId/invites", requireDocumentOwner(), (req: Request, res: Response) => {
-    if (!req.visitor) {
-      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-      return;
-    }
-    const targetVisitorId = (req.body as { targetVisitorId?: string }).targetVisitorId;
-    const targetPermission = (req.body as { targetPermission?: string }).targetPermission;
-    // 校验请求体里是否同时提供了目标访客ID和权限
-    if (typeof targetVisitorId !== "string" || !targetPermission) {
-      res.status(400).json({ error: { code: "BAD_REQUEST", message: "targetVisitorId and targetPermission are required" } });
-      return;
-    }
-    const documentId = req.params.documentId!;
-    try {
-      // 调用服务层插入邀请记录
-      addDocumentInvite(req.visitor.visitor_id, documentId, targetVisitorId, targetPermission);
-      // 成功返回 204 No Content
-      res.status(204).end();
-    } catch (err) {
-      respondError(res, err, "documents-route.invites.add");
-    }
-  });
+  router.post(
+    "/:documentId/invites",
+    requireDocumentOwner(),
+    (req: Request, res: Response) => {
+      const visitor = requireVisitor(req, res);
+      if (!visitor) return;
+      const body = parseBody(req, res, addInviteBodySchema);
+      if (!body) return;
+      try {
+        addDocumentInvite(
+          visitor.visitor_id,
+          req.params.documentId!,
+          body.targetVisitorId,
+          body.targetPermission,
+        );
+        res.status(204).end();
+      } catch (err) {
+        respondError(res, err, "documents-route.invites.add");
+      }
+    },
+  );
 
-  /**
-   * DELETE /:documentId/invites/:targetVisitorId
-   * 移除邀请。仅创建者。
-   */
-  router.delete("/:documentId/invites/:targetVisitorId", requireDocumentOwner(), (req: Request, res: Response) => {
-    if (!req.visitor) {
-      res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "no visitor" } });
-      return;
-    }
-    const documentId = req.params.documentId!;
-    try {
-      // 从 URL 参数中读取要移除邀请的目标访客ID
-      removeDocumentInvite(req.visitor.visitor_id, documentId, req.params.targetVisitorId!);
-      res.status(204).end();
-    } catch (err) {
-      respondError(res, err, "documents-route.invites.remove");
-    }
-  });
+  router.delete(
+    "/:documentId/invites/:targetVisitorId",
+    requireDocumentOwner(),
+    (req: Request, res: Response) => {
+      const visitor = requireVisitor(req, res);
+      if (!visitor) return;
+      try {
+        removeDocumentInvite(
+          visitor.visitor_id,
+          req.params.documentId!,
+          req.params.targetVisitorId!,
+        );
+        res.status(204).end();
+      } catch (err) {
+        respondError(res, err, "documents-route.invites.remove");
+      }
+    },
+  );
 
   return router;
 }
 
-/** 解析 PUT 请求体中的 version 对象。 */
-function parsePublishVersion(raw: unknown): PublishVersionContext | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const v = raw as Record<string, unknown>;
-  const localBaseCommitId =
-    typeof v.localBaseCommitId === "string" ? v.localBaseCommitId : undefined;
-
-  let merge: PublishVersionContext["merge"];
-  if (v.merge && typeof v.merge === "object") {
-    const m = v.merge as Record<string, unknown>;
-    if (typeof m.remoteCommitId === "string") {
-      merge = {
-        remoteCommitId: m.remoteCommitId,
-        localSnapshotContent:
-          typeof m.localSnapshotContent === "string"
-            ? m.localSnapshotContent
-            : undefined,
-        forceLocal: m.forceLocal === true ? true : undefined,
-      };
-    }
-  }
-
-  if (!localBaseCommitId && !merge) return undefined;
-  return { localBaseCommitId, merge };
-}
-
-/**
- * 统一处理文档路由中的异常，映射为对应的 HTTP 响应。
- *
- * 异常映射规则：
- * - DocumentError → 返回其自带的 status（400/403/404/409）和错误信息
- * - StoragePathError → 返回 400，表示路径不合法
- * - 其他未知异常 → 记日志后返回 500
- *
- * @param res - Express 响应对象
- * @param err - 捕获到的异常
- * @param context - 日志上下文标识，用于定位哪个路由处理函数出错
- */
 function respondError(res: Response, err: unknown, context: string): void {
-  // 业务异常：带有明确 HTTP 状态码和错误码
   if (err instanceof DocumentError) {
-    // VERSION_CONFLICT 时 error.details 含 headCommitId、远端正文等
     res.status(err.status).json({
       error: {
         code: err.code,
@@ -1111,12 +711,18 @@ function respondError(res: Response, err: unknown, context: string): void {
     });
     return;
   }
-  // 路径类异常：统一映射为 400 Bad Request
   if (err instanceof StoragePathError) {
-    res.status(400).json({ error: { code: "INVALID_PATH", message: err.message } });
+    res.status(400).json({
+      error: { code: "INVALID_PATH", message: err.message },
+    });
     return;
   }
-  // 未识别的异常记录日志后返回 500，避免把内部错误详情暴露给客户端
-  log.error("%s failed: %s", context, err instanceof Error ? err.message : String(err));
-  res.status(500).json({ error: { code: "INTERNAL", message: "internal error" } });
+  log.error(
+    "%s failed: %s",
+    context,
+    err instanceof Error ? err.message : String(err),
+  );
+  res.status(500).json({
+    error: { code: "INTERNAL", message: "internal error" },
+  });
 }
