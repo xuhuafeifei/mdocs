@@ -56,7 +56,7 @@ export default defineConfig({
 | ----------------------------------------------- | ------------------------------ | --- |
 | `src/server/documents/tree.service.ts`          | 树构建（parent_id 递归）、desc.md 关联   | P1  |
 | `src/server/documents/document.service.ts`      | CRUD、权限鉴权逻辑（五档 × 域类型 × invite） | P1  |
-| `src/server/identity/visitor.service.ts`        | visitor 注册、token 签发、身份恢复       | P2  |
+| `src/server/modules/visitor/visitor.service.ts` | visitor 注册、token 签发、身份恢复       | P2  |
 | `src/server/domains/personal-domain.service.ts` | 个人域自动创建、域类型校验                  | P2  |
 | `src/server/storage/file-store.ts`              | 路径拼接、文件读写、去冲突                  | P2  |
 
@@ -150,7 +150,7 @@ src/
     documents/
       tree.service.test.ts    # P1（需 DB）
       document.service.test.ts # P1（需 DB）
-    identity/
+    visitor/
       visitor.service.test.ts # P2（需 DB）
 ```
 

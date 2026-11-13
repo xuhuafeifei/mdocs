@@ -34,7 +34,7 @@ src/
     domains/         Personal-domain service
     db/              Schema, connection, repositories (data access)
     storage/         File-store (read/write .md files on disk)
-    identity/        Visitor registration, auth middleware, token hashing
+    visitor/         Visitor registration, auth middleware, token hashing
     migrations/      Visitor migration CLI logic
     cli/             CLI entry point
     config/          Runtime config
@@ -64,7 +64,7 @@ src/
 
 No accounts. On first visit user enters a nickname → server creates a visitor (UUID) + high-entropy token. Browser stores both in localStorage. The raw token is sent as `x-visitor-token` header; server stores only `SHA-256(token)`.
 
-Auth middleware (`src/server/identity/auth.middleware.ts`) applies to all `/api` routes except `/visitors/register` and `/health`. It hashes the header token and resolves the visitor, attaching `req.visitor`. Routes without a valid token get 401.
+Auth middleware (`src/server/modules/visitor/auth.middleware.ts`) applies to all `/api` routes except `/visitors/register` and `/health`. It hashes the header token and resolves the visitor, attaching `req.visitor`. Routes without a valid token get 401.
 
 ## Permission model
 

@@ -4,7 +4,7 @@ import {
   listCliTokens,
   setCliTokenRevoked,
   deleteCliToken,
-} from "../modules/identity/cli-token.service.js";
+} from "../modules/visitor/cli-token.service.js";
 
 /**
  * CLI Token 管理：

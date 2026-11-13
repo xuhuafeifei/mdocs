@@ -28,7 +28,7 @@ import {
 import { useLogger } from "../../infra/logger/logger";
 import type { VisitorPublic } from "../../../shared/types/visitor";
 
-const log = useLogger("identity");
+const log = useLogger("visitor");
 
 /** 注册访客后的返回结果 */
 export interface RegisteredVisitor {
@@ -300,12 +300,31 @@ export function generateRecoveryCode(visitorId: string): string {
   return recoveryCode;
 }
 
-/** 访客信息校验失败的自定义错误 */
-export class VisitorValidationError extends Error {
-  constructor(message: string) {
+/** 访客相关 HTTP 错误（Nest ExceptionFilter 识别 code + status） */
+export class VisitorError extends Error {
+  code: string;
+  status: number;
+  constructor(code: string, message: string, status = 400) {
     super(message);
+    this.name = "VisitorError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+/** 访客信息校验失败（注册名等） */
+export class VisitorValidationError extends VisitorError {
+  constructor(message: string) {
+    super("INVALID_VISITOR_NAME", message, 400);
     this.name = "VisitorValidationError";
   }
+}
+
+/** 按名查未停用访客（登录编排用） */
+export function findActiveVisitorByName(visitorName: string): VisitorRow | null {
+  const trimmed = visitorName.trim();
+  if (!trimmed) return null;
+  return findVisitorByName(getDb(), trimmed) ?? null;
 }
 
 /**

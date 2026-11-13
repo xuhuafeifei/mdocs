@@ -184,5 +184,8 @@ desktop/*.app
 # 仓库默认依赖 npm:@fgbg/lobe-editor（pnpm editor:published）
 /vendor/
 
+# rd-flow 本地状态（技能更新缓存；DSH hook 会写到 cwd）
+.rd-flow/
+
 # IDE
 .idea/

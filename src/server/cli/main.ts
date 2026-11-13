@@ -157,7 +157,7 @@ async function startServer(): Promise<void> {
 
 /** 执行 `visitor list`：查询访客并以 TSV 格式输出。 */
 async function runVisitorList(flags: Flags): Promise<void> {
-  const { listAllVisitors } = await import("../modules/identity/visitor.service.js");
+  const { listAllVisitors } = await import("../modules/visitor/visitor.service.js");
   let filter: "all" | "active" | "disabled" = "active";
   if (flags.all === true) filter = "all";
   if (flags.disabled === true) filter = "disabled";

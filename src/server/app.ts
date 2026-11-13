@@ -5,8 +5,7 @@ import express, { type Application, type Response } from "express";
 import cookieParser from "cookie-parser";
 import { getConfig } from "./infra/config/index.js";
 import { getDb } from "./infra/db/connection.js";
-import { authMiddleware } from "./modules/identity/auth.middleware.js";
-import { buildVisitorsRouter } from "./routes/visitors.routes.js";
+import { authMiddleware } from "./modules/visitor/auth.middleware.js";
 import { buildDocumentsRouter } from "./routes/documents.routes.js";
 import { buildDomainsRouter } from "./routes/domains.routes.js";
 import { buildDomainMemberTemplatesRouter } from "./routes/domain-member-templates.routes.js";
@@ -88,7 +87,6 @@ export function buildApp(): Application {
   // 后续 /api 路由均需经过身份认证
   app.use("/api", authMiddleware);
   app.use("/api/assets", buildAssetsUploadRouter());
-  app.use("/api/visitors", buildVisitorsRouter());
   app.use("/api/documents", buildDocumentsRouter());
   app.use("/api/domains", buildDomainsRouter());
   app.use("/api/domain-member-templates", buildDomainMemberTemplatesRouter());

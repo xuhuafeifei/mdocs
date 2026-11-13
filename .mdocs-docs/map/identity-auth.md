@@ -17,11 +17,17 @@
 ### 访客注册 / Token
 
 - **关键词**：`visitor` `x-visitor-token` `SHA-256` `register`
+- **结论**：`visitor` + session + `cli-token` + `token.ts` **同属 `modules/visitor`**（不单开 token / cli-token 模块）。见 ADR 021。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/server/identity/auth.middleware.ts` | 鉴权中间件 |
-  | `src/server/identity/visitor.service.ts` | 注册 / 解析 |
+  | `src/server/modules/visitor/controller/visitors.controller.ts` | Nest HTTP（原 `routes/visitors.routes` 已删） |
+  | `src/server/modules/visitor/visitor.application.ts` | 注册 / 登录 / 恢复 / me 编排 |
+  | `src/server/modules/visitor/auth.middleware.ts` | Express 鉴权（**to-do**：迁 Nest Guard + 白名单） |
+  | `src/server/modules/visitor/visitor.service.ts` | 注册 / 解析等薄能力 |
+  | `src/server/modules/visitor/cli-token.service.ts` | CLI 签发 / 解析（包内依赖 visitor） |
+  | `src/server/modules/visitor/token.ts` | 哈希 / 生成工具 |
+  | `src/server/nest/guards/nest-require-visitor.guard.ts` | 要求已解析 `req.visitor` |
   | `src/shared/types/visitor.ts` | 类型 |
 
 ### 访问控制（档位判定）
@@ -67,8 +73,8 @@
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/server/identity/auth.middleware.ts` | 先 visitor 再 cli |
-  | `src/server/identity/cli-token.service.ts` | `createCliToken` `setCliTokenRevoked` `deleteCliToken` |
+  | `src/server/modules/visitor/auth.middleware.ts` | 先 visitor 再 cli |
+  | `src/server/modules/visitor/cli-token.service.ts` | `createCliToken` `setCliTokenRevoked` `deleteCliToken` |
   | `src/server/routes/cli-tokens.routes.ts` | GET/POST/PATCH/DELETE |
 - **需求**：[`../requirements/cli-multi-token/`](../requirements/cli-multi-token/)
 

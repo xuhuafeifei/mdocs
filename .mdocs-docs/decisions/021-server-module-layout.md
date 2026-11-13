@@ -22,10 +22,22 @@ controller  →  application  →  service  → （repo / 文件 / 外部）
     | 层 | 职责 |
     |----|------|
     | **controller** | HTTP 进出：路由、Guard、校验 request 后交给 application，`return` 业务结果 |
-    | **application** | 业务编排：每模块 **一个** `<name>.application.ts`（如 `tree.application.ts`），不按细能力拆多文件；组合 service / access；**不** `import` Database |
-    | **service** | 基础能力：对本模块持久化或单一外部资源的薄封装，不含复杂编排 |
+    | **application** | 业务编排：每模块 **一个** `<name>.application.ts`（如 `tree.application.ts`），不按细能力拆多文件；组合 service / access / **mapper**；**不** `import` Database；**本身不做数据组装**（字段拼装、row↔对外形状交给 mapper） |
+    | **mapper** | 本模块数据映射（`modules/<name>/` 内，如 `*.mapper.ts` 或 `mapper/`）：入参→落库行、row→对外形状等。函数名写清方向（`toXxxRow` / `toXxxPublic`）。**只服务本聚合**；跨模块实体互转不是 mapper，是 application 编排 |
+    | **service** | 基础能力：对本模块持久化或单一外部资源的薄封装，不含复杂编排；接收 application 经 mapper 组装好的数据（或自行再调 mapper，见下 to-do 落地时对齐） |
     | **repo** | 本模块 SQL；**DB 藏在 repo 内**（默认 `getDb()`）。签名可保留可选 `db?: Database`（默认不传），**仅单测注入**；application **永不**传 db |
-    | **无表模块** | 无自己的持久化（如 tree）→ **不设 `service/`**，只有 `application/` |
+    | **无表模块** | 无自己的持久化（如 tree）→ **不设 `service/`**，只有 `application/`（需要形状转换时可有轻量 mapper） |
+
+  - **mapper 调用链（已拍板，代码待拆）**：
+
+```text
+application  ──调──►  mapper（组装 / 映射）  ──结果──►  service  ──►  repo
+```
+
+    - application **只编排**：决定顺序、调谁；需要落库形状或对外形状时 **调用 mapper**，把结果传给 service。
+    - application **禁止**在体内手写 `{ ... }` 拼 insert 行、或散落 `row → public` 字段搬运。
+    - 不拆三套目录（to-sql / to-response / entity-entity）；一个模块内一个 mapper 文件（或小目录）即可，靠函数名区分方向。
+    - 跨聚合：application 调多个 service 组合，**不**用 A→B 万能 mapper。
 
   - **事务规矩**：`infra/db` 提供函数式 `runInTransaction(() => { ... })`（内部取连接并 `db.transaction`）。application 组合多个 repo 需要原子性时只调该函数；**不把 Database 暴露给业务层**。单例连接下，事务回调里 repo 再 `getDb()` 仍属同一事务。
   - **迁移策略**：先迁 controller，顺路审视依赖；再把编排抽到 `application/`，service 削薄。`tree` 目标 `modules/tree`（仅 application）；过渡期可暂挂 documents。依赖：documents（列文）+ domains（查域）+ access（过滤）→ tree.application 建树；**删除胖 `tree.service`**。
@@ -118,7 +130,16 @@ src/server/
 - **落点**：
   | 位置 | 说明 |
   |------|------|
-  | `src/server/identity/` | 今天的访客、令牌、中间件，以后并入 `modules/visitor` |
+  | `src/server/modules/visitor/` | 原 `identity` 已迁入；`controller/` + `visitor.application.ts` + request 已立；Express `visitors.routes` 已删；service/cli-token/token/middleware 仍扁平 |
   | `src/server/access/access-control.ts` | `canReadDocument` / `canEditDocument` |
   | `src/server/documents/document.service.ts` | 今天是编排，目标迁 `modules/documents/application/`；绕圈调 jobs/agent/search 仍待解 |
   | `.mdocs-docs/decisions/020-job-file-vs-watchdog.md` | Job 文件与 watch-dog 的职责，本次不搬 |
+- **已拍板（2026-11-13）— visitor 凭证聚合**：
+  - `visitor`（人）/ `visitor_sessions`（登录会话）/ `cli_tokens`（CLI 凭证）/ `token.ts`（哈希工具）**同属 `modules/visitor`**，不平级拆 `modules/cli-token` 或 `modules/token`。
+  - 理由：模块按「同一实体相关能力」聚合；二者都服务于 visitor。表可分、模块不分。包内 `cli-token → visitor` 单向即可。
+  - **鉴权不装进业务聚合的永久位置**：`auth.middleware` **未来拆出** → Nest **Guard**（白名单豁免强制登录；不是 Interceptor）。迁走后 visitor 模块只剩「人 + 凭证」。
+- **技术债 / to-do（2026-11-13 记）**：
+  1. **`infra/db/repositories/*` 放错层**——契约要求 repo 在对应 `modules/<name>/` 下；`infra/db` 只留连接 / schema / `runInTransaction`。现堆在 infra 是历史债，**等 Express `routes/` 全部干掉后再按模块搬回**。
+  2. **`auth.middleware` → Nest Guard**——现 `src/server/modules/visitor/auth.middleware.ts`（Express）；目标：全局/路由 Guard + 白名单（对齐现 `EXEMPT_PATHS`）；Interceptor 只做 `{ data }` 等环绕，不做登录拦截。触发：router 迁 Nest 过程中顺手拆，或 routes 清空后专项。
+  3. **各 module 引入 mapper，application 下沉数据组装（以后再拆）**——现状：组装散落在胖 service / 薄 application 转发里。目标：`modules/<name>/*.mapper.ts`（或 `mapper/`）；application 调 mapper 得到组装结果再传 service；application 自身不拼装。优先从 visitor / documents 试点，不阻塞当前 router→Nest 迁移。
+  4. mdocs 活备注：本地 `迁移方案/服务端目录迁移备注`（`e1052e98-…`）；远端 `重构文档`（`3e271553-…`）。
