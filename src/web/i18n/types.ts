@@ -165,6 +165,10 @@ export type TranslationKey =
   // Settings
   | "settings"
   | "general"
+  | "features"
+  | "featuresIntro"
+  | "featureSelectAllSkipLeadingH1"
+  | "featureSelectAllSkipLeadingH1Desc"
   | "settingsNavSearch"
   | "settingsNavNoMatch"
   | "language"

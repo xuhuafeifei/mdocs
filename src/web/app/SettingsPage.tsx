@@ -22,6 +22,7 @@ import {
   Smile,
   Sparkles,
   Star,
+  ToggleLeft,
   Trash2,
   Users,
 } from "lucide-react";
@@ -67,6 +68,10 @@ import type { Bookmark, MyDocument, SearchMode, SearchResult } from "../services
 import type { DomainSummary } from "../../shared/types/domain";
 import type { VisitorDirectoryEntry } from "../../shared/types/visitor";
 import mdocsLogo from "../assets/mdocs-logo.svg";
+import {
+  EDITOR_FEATURE_TOGGLES,
+  type EditorFeatureToggleId,
+} from "../storage/editorFeaturePrefs";
 
 /**
  * 从 localStorage 读取布尔值，不存在时返回默认值。
@@ -100,6 +105,7 @@ function formatMyDocFileType(
 
 type SettingsTab =
   | "general"
+  | "features"
   | "bookmarks"
   | "myDocuments"
   | "trash"
@@ -120,6 +126,12 @@ const SETTINGS_NAV: Array<{
   Icon: LucideIcon;
 }> = [
   { id: "general", labelKey: "general", keywords: ["设置", "语言", "settings", "language"], Icon: Settings2 },
+  {
+    id: "features",
+    labelKey: "features",
+    keywords: ["功能", "编辑器", "全选", "h1", "features", "select all"],
+    Icon: ToggleLeft,
+  },
   { id: "bookmarks", labelKey: "bookmarkTitle", keywords: ["收藏", "bookmark", "star"], Icon: Star },
   { id: "myDocuments", labelKey: "myDocuments", keywords: ["文章", "文档", "documents", "articles"], Icon: FileText },
   { id: "trash", labelKey: "trashTitle", keywords: ["回收站", "删除", "恢复", "trash", "recycle"], Icon: Trash2 },
@@ -167,6 +179,23 @@ export function SettingsPage(props: {
   // ---- 自动编辑开关（打开文档时自动进入编辑模式） ----
   const [autoEdit, setAutoEdit] = useState(() => getBool("mdocs.autoEdit", true));
 
+  const [editorFeatures, setEditorFeatures] = useState(() =>
+    Object.fromEntries(EDITOR_FEATURE_TOGGLES.map((f) => [f.id, f.load()])) as Record<
+      EditorFeatureToggleId,
+      boolean
+    >,
+  );
+
+  function toggleEditorFeature(id: EditorFeatureToggleId): void {
+    const def = EDITOR_FEATURE_TOGGLES.find((f) => f.id === id);
+    if (!def) return;
+    setEditorFeatures((prev) => {
+      const next = !prev[id];
+      def.save(next);
+      return { ...prev, [id]: next };
+    });
+  }
+
   // ---- 服务端单文件上传上限（MB，热更新） ----
   const [uploadLimitMb, setUploadLimitMb] = useState("100");
   const [uploadLimitBusy, setUploadLimitBusy] = useState(false);
@@ -202,7 +231,9 @@ export function SettingsPage(props: {
   const tabTitle =
     tab === "general"
       ? t("general")
-      : tab === "bookmarks"
+      : tab === "features"
+        ? t("features")
+        : tab === "bookmarks"
         ? t("bookmarkTitle")
         : tab === "myDocuments"
           ? t("myDocuments")
@@ -1006,6 +1037,36 @@ export function SettingsPage(props: {
                   </button>
                 </form>
               </div>
+            </div>
+          </div>
+        ) : tab === "features" ? (
+          <div className="mdocs-settings">
+            <div className="mdocs-settings-header">
+              <h2 className="mdocs-settings-title">{t("features")}</h2>
+            </div>
+            <p className="mdocs-settings-item-desc" style={{ marginBottom: 16 }}>
+              {t("featuresIntro")}
+            </p>
+            <div className="mdocs-settings-cards">
+              {EDITOR_FEATURE_TOGGLES.map((feat) => (
+                <div key={feat.id} className="mdocs-settings-card">
+                  <label className="mdocs-settings-item">
+                    <span className="mdocs-settings-item-info">
+                      <span className="mdocs-settings-card-title">{t(feat.titleKey)}</span>
+                      <span className="mdocs-settings-item-desc">{t(feat.descKey)}</span>
+                    </span>
+                    <button
+                      type="button"
+                      className={"mdocs-toggle" + (editorFeatures[feat.id] ? " active" : "")}
+                      role="switch"
+                      aria-checked={editorFeatures[feat.id]}
+                      onClick={() => toggleEditorFeature(feat.id)}
+                    >
+                      <span className="mdocs-toggle-knob" />
+                    </button>
+                  </label>
+                </div>
+              ))}
             </div>
           </div>
         ) : tab === "bookmarks" ? (
