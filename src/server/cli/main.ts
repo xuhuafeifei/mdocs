@@ -122,10 +122,13 @@ function printVersion(): void {
 async function startServer(): Promise<void> {
   const { useLogger } = await import("../infra/logger/logger.js");
   const { getConfig } = await import("../infra/config/index.js");
-  const { buildApp } = await import("../app.js");
+  const { buildApp, mountApiNotFound } = await import("../app.js");
+  const { attachNest } = await import("../nest/nest-attach.js");
   const log = useLogger("cli-server");
   const cfg = getConfig();
   const app = buildApp();
+  await attachNest(app);
+  mountApiNotFound(app);
 
   process.on("uncaughtException", (err) => {
     log.error(

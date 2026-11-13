@@ -17,7 +17,7 @@ import {
   moveDocument,
   renameDocument,
 } from "../../documents/document.service";
-import { buildDocumentTree } from "../../documents/tree.service";
+import { buildDocumentTree } from "../../tree/tree.application.js";
 import { createFolder } from "../../../routes/folders.routes";
 import { searchDocuments, tokenizeQuery, type SearchMode } from "../../search/search.service";
 import { listEmbeddingIndex, rebuildEmbeddingIndex } from "../../search/embedding-admin";

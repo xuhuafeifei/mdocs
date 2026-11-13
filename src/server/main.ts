@@ -1,6 +1,7 @@
-import { buildApp } from "./app.js";
+import { buildApp, mountApiNotFound } from "./app.js";
 import { getConfig } from "./infra/config/index.js";
 import { useLogger } from "./infra/logger/logger.js";
+import { attachNest } from "./nest/nest-attach.js";
 
 const log = useLogger("server");
 
@@ -9,9 +10,11 @@ const log = useLogger("server");
  * 从配置中读取端口和主机地址，构建 Express 应用并监听请求。
  * 若启动失败会将错误写入日志并退出进程。
  */
-function start(): void {
+async function start(): Promise<void> {
   const cfg = getConfig();
   const app = buildApp();
+  await attachNest(app);
+  mountApiNotFound(app);
 
   process.on("uncaughtException", (err) => {
     log.error("uncaughtException: %s", err instanceof Error ? err.stack ?? err.message : String(err));

@@ -8,7 +8,6 @@ import { getDb } from "./infra/db/connection.js";
 import { authMiddleware } from "./modules/identity/auth.middleware.js";
 import { buildVisitorsRouter } from "./routes/visitors.routes.js";
 import { buildDocumentsRouter } from "./routes/documents.routes.js";
-import { buildTreeRouter } from "./routes/tree.routes.js";
 import { buildDomainsRouter } from "./routes/domains.routes.js";
 import { buildDomainMemberTemplatesRouter } from "./routes/domain-member-templates.routes.js";
 import { buildFoldersRouter } from "./routes/folders.routes.js";
@@ -18,7 +17,6 @@ import { documentCommentsRouter } from "./routes/document-comments.routes.js";
 import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
 import { buildAgentRouter } from "./routes/agent.routes.js";
 import { buildGraphRouter } from "./routes/graph.routes.js";
-import { buildServerSettingsRouter } from "./routes/server-settings.routes.js";
 import { buildMcpServersRouter } from "./routes/mcp-servers.routes.js";
 import { buildPluginsRouter } from "./routes/plugins.routes.js";
 import { buildMemesRouter } from "./routes/memes.routes.js";
@@ -92,7 +90,6 @@ export function buildApp(): Application {
   app.use("/api/assets", buildAssetsUploadRouter());
   app.use("/api/visitors", buildVisitorsRouter());
   app.use("/api/documents", buildDocumentsRouter());
-  app.use("/api/tree", buildTreeRouter());
   app.use("/api/domains", buildDomainsRouter());
   app.use("/api/domain-member-templates", buildDomainMemberTemplatesRouter());
   app.use("/api/folders", buildFoldersRouter());
@@ -100,17 +97,11 @@ export function buildApp(): Application {
   app.use("/api/bookmarks", buildBookmarksRouter());
   app.use("/api/agent", buildAgentRouter());
   app.use("/api/graph", buildGraphRouter());
-  app.use("/api/server-settings", buildServerSettingsRouter());
   app.use("/api/mcp-servers", buildMcpServersRouter());
   app.use("/api/plugins", buildPluginsRouter());
   app.use("/api/memes", buildMemesRouter());
   // 发表/删除评论：需要认证
   app.use("/api/documents", documentCommentsRouter);
-
-  // 兜底：未匹配到的 API 路径返回 404
-  app.use("/api", (_req, res) => {
-    res.status(404).json({ error: { code: "NOT_FOUND", message: "api not found" } });
-  });
 
   // 若前端构建产物存在，则提供静态文件服务与单页应用回退
   if (fs.existsSync(cfg.webDistDir)) {
@@ -153,6 +144,13 @@ export function buildApp(): Application {
   }
 
   return app;
+}
+
+/** Nest 路由注册完成后再挂。提前挂会把 Nest 的接口先答成 404。 */
+export function mountApiNotFound(app: Application): void {
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: { code: "NOT_FOUND", message: "api not found" } });
+  });
 }
 
 /** 确保运行时所需的各目录已存在，按 0o700 权限递归创建。 */

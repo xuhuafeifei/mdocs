@@ -80,6 +80,10 @@ export default defineConfig({
       { find: /^shiki$/, replacement: path.resolve(__dirname, "src/web/shiki/shiki-shim.ts") },
       // file: 依赖下 Vite 可能解析不了 package exports 子路径；显式指到 es/
       {
+        find: /^@lobehub\/editor$/,
+        replacement: path.join(lobeEditorPkg, "es/index.js"),
+      },
+      {
         find: /^@lobehub\/editor\/renderer$/,
         replacement: path.join(lobeEditorPkg, "es/renderer.js"),
       },

@@ -29,7 +29,8 @@
   | 路径 | 符号 |
   |------|------|
   | `src/server/documents/document.service.ts` | 文档业务（含 html raw / FTS·图谱政策门控）；`removeDocument` recovery / `restoreDocumentFromAudit` / `listDeletedDocuments`；`moveDocument`（含 `dir` 子树，图谱隐藏文件删除）；`listDocumentCommits` / `restoreDocumentVersion` |
-  | `src/server/documents/tree.service.ts` | `buildDocumentTree` `buildFolderSubtree` |
+  | `src/server/modules/tree/controller/tree.controller.ts` | Nest `GET /api/tree` + `NestCanEnterDomainGuard` |
+  | `src/server/modules/tree/tree.application.ts` | 编排层唯一文件：`getDocumentTree` / `buildDocumentTree` / `buildFolderSubtree` |
   | `src/server/storage/file-store.ts` | `readDocument` / `writeDocument`（拟增 rename） |
   | `src/server/db/repositories/audit.repo.ts` | `insertAuditLog` `findAuditById` `listDocumentDeleteAuditsByActor` |
   | `src/server/routes/documents.routes.ts` | `GET /deleted` `POST /restore`（须在 `/:documentId` 前） |

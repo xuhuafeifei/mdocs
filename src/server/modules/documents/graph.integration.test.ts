@@ -59,7 +59,7 @@ vi.mock("../logger/logger.js", () => ({
 import { buildGraph } from "./graph";
 import type { Graph, GraphDeps } from "./graph/types.js";
 import { findDocumentById } from "../../infra/db/repositories/document.repo.js";
-import { buildDocumentTree } from "./tree.service.js";
+import { buildDocumentTree } from "../tree/tree.application.js";
 
 /* ── 测试辅助 ── */
 

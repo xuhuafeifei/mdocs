@@ -693,15 +693,18 @@ export function App() {
         return;
       }
       void runDiffOnOpenDocument(payload.documentId, (liveDocumentId) => {
-        const baseSnap = editorContentRef.current;
-        if (!baseSnap) {
+        // 必须用 live 编辑器 toJSON，不能用 React 里可能漂移的 editorContent；
+        // 否则 LCS 会把未改块也判成 modify，整篇红绿。
+        const liveJson =
+          exportLexicalJsonRef.current?.() ??
+          editorContentRef.current?.content ??
+          null;
+        if (!liveJson) {
           setAlertMessage("编辑器未就绪，Diff 未写入");
           return false;
         }
-        const baseLexicalJson = baseSnap.content;
         try {
-          // 直接交 Lexical 提案态：未改块与 live toJSON 同源，避免整篇 MD 往返「全文红绿」
-          const built = batchRangesToProposedState(baseLexicalJson, ranges);
+          const built = batchRangesToProposedState(liveJson, ranges);
           if (!built.ok) {
             setAlertMessage(built.error);
             return false;
@@ -764,6 +767,7 @@ export function App() {
   // DocumentEditor 会通过这个 ref 暴露 saveDraft 方法
   const saveBeforeNavRef = useRef<(() => Promise<void>) | undefined>(undefined);
   const exportMarkdownRef = useRef<(() => string) | undefined>(undefined);
+  const exportLexicalJsonRef = useRef<(() => string | null) | undefined>(undefined);
   const applyAgentDiffRef = useRef<ApplyAgentDiffFn | undefined>(undefined);
 
   // ---- 手动发布说明弹框（Promise 桥）----
@@ -2557,6 +2561,7 @@ export function App() {
                     onDeleteFolder={(id, p) => requestDeleteFolder(id, p)}
                     saveBeforeNavRef={saveBeforeNavRef}
                     exportMarkdownRef={exportMarkdownRef}
+                    exportLexicalJsonRef={exportLexicalJsonRef}
                     applyAgentDiffRef={applyAgentDiffRef}
                     onShowToast={setMessage}
                     onShowError={setAlertMessage}

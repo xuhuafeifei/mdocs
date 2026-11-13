@@ -30,4 +30,5 @@
 | 017 | [CLI 直传 assets](./017-cli-asset-upload.md) | accepted | `mdocs asset upload` 直接落 `files/assets`，不引入 token / 文档归属，命名与网页上传一致 |
 | 018 | [插件 CLI：cwd / 假 HOME，非 env 魔法](./018-plugin-cli-cwd-home-not-env-magic.md) | accepted | `run_plugin_cli` 靠 cwd + 假 HOME 控落盘；`MDOCS_PLUGIN_*` 仅合约信号 |
 | 020 | [Job 文件与后台调度分开](./020-job-file-vs-watchdog.md) | accepted | Job 文件归文档；调度暂名 watch-dog；Agent 一律放 `agent/`。本次不搬代码 |
-| 021 | [server 模块目录与调用方向](./021-server-module-layout.md) | accepted | `infra` / `modules`；取消 `identity`，访客含令牌与鉴权；调用只允许从上往下。本次不搬代码 |
+| 021 | [server 模块目录与调用方向](./021-server-module-layout.md) | accepted | `infra` / `modules` / `nest`；分层与 DB·事务规矩；调用只允许从上往下 |
+| 022 | [access id 门面 + Guard](./022-access-id-facade-and-guards.md) | accepted | `canRead(visitorId, domainId, documentId)`；Guard 薄适配；规则只在 access |

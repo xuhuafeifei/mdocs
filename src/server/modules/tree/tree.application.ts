@@ -1,28 +1,39 @@
-import { getDb } from "../../infra/db/connection";
+/**
+ * tree 编排层（本模块仅此一个 application 文件）。
+ * 过渡：鉴权+列文+建树仍揉在一起；目标改走 access 门面 + documents 薄查询。见 ADR 022。
+ * tree 无表，不设 service/repo。
+ */
+import { getDb } from "../../infra/db/connection.js";
 import {
   findChildrenByParent,
   findDocumentById,
   listDocumentsByDomain,
   type DocumentRow,
-} from "../../infra/db/repositories/document.repo";
-import { findDomainById } from "../../infra/db/repositories/domain.repo";
-import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access";
-import { canReadDocument, DocumentError, makeDomainAccessInfo } from "../access/access-control";
-import { getConfig } from "../../infra/config";
-import { FOLDER_DESC_FILENAME } from "../../../shared/folderDesc";
-import { getPolicy } from "../../../shared/file-type-policy";
-import type { FileType } from "../../../shared/file-types";
+} from "../../infra/db/repositories/document.repo.js";
+import { findDomainById } from "../../infra/db/repositories/domain.repo.js";
+import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access.js";
+import { canReadDocument, DocumentError, makeDomainAccessInfo } from "../access/access-control.js";
+import { getConfig } from "../../infra/config/index.js";
+import { FOLDER_DESC_FILENAME } from "../../../shared/folderDesc.js";
+import { getPolicy, treeIncludeTypes } from "../../../shared/file-type-policy.js";
+import type { FileType } from "../../../shared/file-types.js";
 import type {
   FolderSubtreeNode,
   TreeFolderNode,
   TreeNode,
-} from "../../../shared/types/tree";
+} from "../../../shared/types/tree.js";
 
 export type { FolderSubtreeNode };
 
-/**
- * 构建指定域的文档目录树。
- */
+/** HTTP / 对外用例：当前访客在指定域下可见的文档树。 */
+export function getDocumentTree(
+  domainId: string | undefined,
+  visitorId: string | null,
+): TreeNode[] {
+  return buildDocumentTree(domainId, visitorId, { includeTypes: treeIncludeTypes() });
+}
+
+/** @deprecated 优先 getDocumentTree；Agent 等仍可直接调。内部待换 canEnterDomain / canRead。 */
 export function buildDocumentTree(
   domainId?: string,
   visitorId?: string | null,

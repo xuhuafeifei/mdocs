@@ -9,7 +9,7 @@
 |-----------|--------|
 | 关键词 → 代码坐标 | [`map/`](./map/) |
 | 架构 / schema / API 等长文（人读） | [`archive/`](./archive/) |
-| 技术决策 ADR | [`decisions/`](./decisions/)（含 [011 权限可见性/无目录邀请](./decisions/011-permission-visibility-no-folder-invite.md)） |
+| 技术决策 ADR | [`decisions/`](./decisions/)（**server 目录 / 分层 / DB·事务 / access 三权**：[021](./decisions/021-server-module-layout.md)；另 [011 权限可见性](./decisions/011-permission-visibility-no-folder-invite.md)） |
 | Bug 修复记录 | [`bug-fixes/`](./bug-fixes/) |
 | 已落地功能设计 | [`requirements/`](./requirements/) |
 | Mermaid 图册 | [`diagrams/`](./diagrams/) |

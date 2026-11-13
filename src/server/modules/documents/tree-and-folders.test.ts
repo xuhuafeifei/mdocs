@@ -62,7 +62,7 @@ vi.mock("../logger/logger.js", () => ({
   }),
 }));
 
-import { buildDocumentTree, buildFolderSubtree } from "./tree.service.js";
+import { buildDocumentTree, buildFolderSubtree } from "../tree/tree.application.js";
 import { createDocument, removeFolder } from "./document.service.js";
 import { DocumentError } from "../access/access-control.js";
 import { findDocumentById, countChildrenByParent, listDocumentsByPathPrefix } from "../../infra/db/repositories/document.repo.js";

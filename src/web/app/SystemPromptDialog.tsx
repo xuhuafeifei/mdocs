@@ -11,6 +11,7 @@ import {
   type AgentContextBucketId,
   type AgentSystemPromptPayload,
 } from "../services/endpoints";
+import { copyTextToClipboard } from "./copyText";
 
 const BUCKET_COLORS: Record<AgentContextBucketId, string> = {
   system: "#2f6f4e",
@@ -112,7 +113,8 @@ export function SystemPromptDialog(props: {
     const text = selected?.content ?? data?.prompt;
     if (!text) return;
     try {
-      await navigator.clipboard.writeText(text);
+      const ok = await copyTextToClipboard(text);
+      if (!ok) return;
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {

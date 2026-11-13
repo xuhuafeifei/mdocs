@@ -131,6 +131,9 @@ export function getDomainInfo(db: any, domainId: string, visitorId: string | nul
 /**
  * 判断某访客是否有权读取该文档。
  * 注意：此函数不检查域入口（domain entry）—— 调用方应先用 canEnterDomainTree 过滤。
+ *
+ * @deprecated 新代码用 `canRead(visitorId, domainId, documentId)`（access.ts）。
+ * 勿再让业务拼 Row / DomainAccessInfo。见 ADR 022 重构 TODO。
  */
 export function canReadDocument(
   row: DocumentRow,
@@ -178,6 +181,8 @@ export function canReadDocument(
 
 /**
  * 判断某访客是否有权编辑该文档。
+ *
+ * @deprecated 新代码用 `canWrite(visitorId, domainId, documentId)`（access.ts）。见 ADR 022 重构 TODO。
  */
 export function canEditDocument(
   row: DocumentRow,

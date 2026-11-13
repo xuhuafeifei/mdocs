@@ -194,6 +194,7 @@ export function EditorPaneHost(props: {
         }}
         saveBeforeNavRef={props.saveBeforeNavRef}
         exportMarkdownRef={props.exportMarkdownRef}
+        exportLexicalJsonRef={props.exportLexicalJsonRef}
         applyAgentDiffRef={props.applyAgentDiffRef}
         onShowToast={props.onShowToast}
         onShowError={props.onShowError}

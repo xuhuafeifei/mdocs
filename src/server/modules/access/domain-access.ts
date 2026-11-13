@@ -20,12 +20,22 @@ export interface DomainAccess {
   kind: DomainAccessKind;
 }
 
+/**
+ * @deprecated 邀请预取不应暴露给调用方。重构目标：`canEnterDomains(visitorId, domainIds)` 批量门面，
+ * 邀请/成员查询封在 access 内。见 ADR 022 重构 TODO。
+ */
 export interface ResolveDomainAccessOptions {
   /** 批量列域时预先查好的"有文档邀请我的域"ID 集合，省得逐域查库。 */
   documentInviteDomainIds?: Set<string>;
 }
 
-/** 解析访客对该域的入口级别 */
+/**
+ * 解析访客对该域的入口级别。
+ *
+ * @deprecated 签名脏（db + DomainRow + options）。新代码用 `canEnterDomain(visitorId, domainId)`（access.ts）。
+ * 重构：经 domains/documents **service** 查，不直打 repo；批量用 `canEnterDomains`，删掉 Options。
+ * 见 `.mdocs-docs/decisions/022-access-id-facade-and-guards.md` 重构 TODO。
+ */
 export function resolveDomainAccess(
   db: Database.Database,
   domain: DomainRow | undefined,
@@ -63,7 +73,10 @@ export function resolveDomainAccess(
   return { kind: "none" };
 }
 
-/** 能否拉目录树 / 域下列表：kind 不是 "none" 即可 */
+/**
+ * 能否拉目录树 / 域下列表：kind 不是 "none" 即可。
+ * @deprecated 新代码用 `canEnterDomain(visitorId, domainId)`，不要先 resolve 再判断。
+ */
 export function canEnterDomainTree(access: DomainAccess): boolean {
   return access.kind !== "none";
 }

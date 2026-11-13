@@ -21,7 +21,7 @@ import {
   type DocumentRow,
 } from "../../infra/db/repositories/document.repo";
 import { findDomainById } from "../../infra/db/repositories/domain.repo";
-import { buildFolderSubtree } from "./tree.service";
+import { buildFolderSubtree } from "../tree/tree.application.js";
 import { readDocument } from "../../infra/storage/file-store";
 import {
   buildGraph,

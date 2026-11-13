@@ -34,7 +34,7 @@ import { requireDocumentAccess, requireDocumentOwner } from "../middleware/docum
 import { StoragePathError } from "../infra/storage/paths.js";
 import { treeIncludeTypes } from "../../shared/file-type-policy.js";
 import { useLogger } from "../infra/logger/logger.js";
-import { buildFolderSubtree } from "../modules/documents/tree.service.js";
+import { buildFolderSubtree } from "../modules/tree/tree.application.js";
 import {
   getJobFile,
   saveJobConfig,
