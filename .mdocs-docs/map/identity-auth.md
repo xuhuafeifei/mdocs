@@ -74,8 +74,9 @@
   | 路径 | 符号 |
   |------|------|
   | `src/server/modules/visitor/auth.middleware.ts` | 先 visitor 再 cli |
+  | `src/server/modules/visitor/controller/cli-tokens.controller.ts` | Nest HTTP（原 `routes/cli-tokens.routes` 已删） |
+  | `src/server/modules/visitor/application/cli-token.application.ts` | 签发 / 列表 / 启停 / 硬删编排 |
   | `src/server/modules/visitor/cli-token.service.ts` | `createCliToken` `setCliTokenRevoked` `deleteCliToken` |
-  | `src/server/routes/cli-tokens.routes.ts` | GET/POST/PATCH/DELETE |
 - **需求**：[`../requirements/cli-multi-token/`](../requirements/cli-multi-token/)
 
 ### 登录态失效（修复记录）

@@ -10,6 +10,7 @@ import {
 } from "../../infra/db/repositories/cli-token.repo";
 import { hashVisitorToken } from "./token";
 import { findVisitorById, type VisitorRow } from "../../infra/db/repositories/visitor.repo";
+import { VisitorError } from "./visitor.service.js";
 
 export interface CliTokenSummary {
   tokenId: string;
@@ -68,7 +69,7 @@ export function setCliTokenRevoked(
   const db = getDb();
   const rows = listCliTokensByVisitor(db, visitorId);
   const token = rows.find((r) => r.token_id === tokenId);
-  if (!token) throw new Error("CLI token not found");
+  if (!token) throw new VisitorError("NOT_FOUND", "CLI token not found", 404);
   setCliTokenRevokedRow(db, tokenId, revoked);
 }
 
@@ -84,7 +85,7 @@ export function deleteCliToken(visitorId: string, tokenId: string): void {
   const db = getDb();
   const rows = listCliTokensByVisitor(db, visitorId);
   const token = rows.find((r) => r.token_id === tokenId);
-  if (!token) throw new Error("CLI token not found");
+  if (!token) throw new VisitorError("NOT_FOUND", "CLI token not found", 404);
   deleteCliTokenRow(db, tokenId);
 }
 

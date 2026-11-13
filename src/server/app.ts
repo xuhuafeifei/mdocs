@@ -10,7 +10,6 @@ import { buildDocumentsRouter } from "./routes/documents.routes.js";
 import { buildDomainsRouter } from "./routes/domains.routes.js";
 import { buildDomainMemberTemplatesRouter } from "./routes/domain-member-templates.routes.js";
 import { buildFoldersRouter } from "./routes/folders.routes.js";
-import { buildCliTokensRouter } from "./routes/cli-tokens.routes.js";
 import { buildBookmarksRouter } from "./routes/bookmarks.routes.js";
 import { documentCommentsRouter } from "./routes/document-comments.routes.js";
 import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
@@ -91,7 +90,6 @@ export function buildApp(): Application {
   app.use("/api/domains", buildDomainsRouter());
   app.use("/api/domain-member-templates", buildDomainMemberTemplatesRouter());
   app.use("/api/folders", buildFoldersRouter());
-  app.use("/api/cli", buildCliTokensRouter());
   app.use("/api/bookmarks", buildBookmarksRouter());
   app.use("/api/agent", buildAgentRouter());
   app.use("/api/graph", buildGraphRouter());
