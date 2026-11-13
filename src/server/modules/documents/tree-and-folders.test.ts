@@ -1,5 +1,5 @@
 /**
- * 文档树与文件夹接口测试（tree.service.ts + folders.routes.ts）
+ * 文档树与文件夹接口测试（tree.application + folders.application）
  *
  * 覆盖：
  * 1. 按 parent_id 构建文档树
@@ -16,12 +16,12 @@ import { applySchema } from "../../infra/db/schema.js";
 
 const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
 // mock file-store：不写磁盘
-vi.mock("../storage/file-store.js", () => ({
+vi.mock("../../infra/storage/file-store.js", () => ({
   writeDocument: () => ({ contentHash: "mock-hash", bytes: 0 }),
   readDocument: () => ({ content: "# test", contentHash: "mock-hash" }),
   writeCommitBlob: () => ({ blobRef: "ab/mock", bytes: 0 }),
@@ -29,7 +29,7 @@ vi.mock("../storage/file-store.js", () => ({
 }));
 
 // mock config：确保 dataDir 存在，让路径解析不报错
-vi.mock("../config/index.js", () => ({
+vi.mock("../../infra/config/index.js", () => ({
   getConfig: () => ({
     host: "127.0.0.1",
     port: 4000,
@@ -53,7 +53,7 @@ vi.mock("../config/index.js", () => ({
 }));
 
 // mock logger
-vi.mock("../logger/logger.js", () => ({
+vi.mock("../../infra/logger/logger.js", () => ({
   useLogger: () => ({
     debug: () => {},
     info: () => {},
@@ -68,11 +68,12 @@ import { DocumentError } from "../access/access-control.js";
 import { findDocumentById, countChildrenByParent, listDocumentsByPathPrefix } from "../../infra/db/repositories/document.repo.js";
 import { FOLDER_DESC_FILENAME } from "../../../shared/folderDesc.js";
 import type { FolderSubtreeNode } from "../../../shared/types/tree.js";
-import type { Express } from "express";
-import express from "express";
 import { findCommitById } from "../../infra/db/repositories/commit.repo.js";
 import { getDb } from "../../infra/db/connection.js";
-import { buildFoldersRouter } from "../../routes/folders.routes.js";
+import {
+  createFolder as createFolderApi,
+  deleteFolder as deleteFolderApi,
+} from "./application/folders.application.js";
 
 /* ── 测试辅助 ── */
 
@@ -348,39 +349,14 @@ describe("cross-domain path isolation", () => {
 });
 
 // ============================================================
-//  文件夹接口测试（通过 Express Router）
+//  文件夹 application（原 Express /api/folders）
 // ============================================================
 
-describe("POST /api/folders", () => {
-  function makeApp(): Express {
-    const app = express();
-    app.use(express.json());
-    // 模拟已认证访客
-    app.use((req, _res, next) => {
-      req.visitor = { visitor_id: OWNER, visitor_name: "test", token: "test" } as any;
-      next();
-    });
-    app.use("/api/folders", buildFoldersRouter());
-    return app;
-  }
-
-  it("创建根级目录", async () => {
-    const app = makeApp();
-    const res = await (app as any).listen(0);
-    const server = app.listen(0);
-    const addr = server.address() as any;
-
-    const response = await fetch(`http://127.0.0.1:${addr.port}/api/folders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "new-folder" }),
-    });
-    const json = await response.json();
-
-    server.close();
-    expect(response.status).toBe(201);
-    expect(json.data.folderId).toBeTruthy();
-    expect(json.data.path).toBe("new-folder");
+describe("folders.application createFolder", () => {
+  it("创建根级目录", () => {
+    const result = createFolderApi({ actorVisitorId: OWNER, name: "new-folder" });
+    expect(result.folderId).toBeTruthy();
+    expect(result.path).toBe("new-folder");
 
     const desc = getDb()
       .prepare(`SELECT head_commit_id FROM documents WHERE relative_path = ?`)
@@ -389,111 +365,66 @@ describe("POST /api/folders", () => {
     expect(findCommitById(getDb(), desc.head_commit_id!)).toBeTruthy();
   });
 
-  it("创建子目录", async () => {
+  it("创建子目录", () => {
     const folderId = createFolder("parent");
-    const app = makeApp();
-    const server = app.listen(0);
-    const addr = server.address() as any;
-
-    const response = await fetch(`http://127.0.0.1:${addr.port}/api/folders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "child", parentId: folderId }),
+    const result = createFolderApi({
+      actorVisitorId: OWNER,
+      name: "child",
+      parentId: folderId,
     });
-    const json = await response.json();
-
-    server.close();
-    expect(response.status).toBe(201);
-    expect(json.data.path).toBe("parent/child");
+    expect(result.path).toBe("parent/child");
   });
 
-  it("空 name 返回 400", async () => {
-    const app = makeApp();
-    const server = app.listen(0);
-    const addr = server.address() as any;
-
-    const response = await fetch(`http://127.0.0.1:${addr.port}/api/folders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "" }),
-    });
-
-    server.close();
-    expect(response.status).toBe(400);
+  it("空 name 抛 BAD_REQUEST", () => {
+    try {
+      createFolderApi({ actorVisitorId: OWNER, name: "" });
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(DocumentError);
+      expect((err as DocumentError).status).toBe(400);
+    }
   });
 
-  it("同名目录已存在返回 409", async () => {
+  it("同名目录已存在抛 409", () => {
     createFolder("dup-folder");
-    const app = makeApp();
-    const server = app.listen(0);
-    const addr = server.address() as any;
-
-    const response = await fetch(`http://127.0.0.1:${addr.port}/api/folders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "dup-folder" }),
-    });
-
-    server.close();
-    expect(response.status).toBe(409);
+    try {
+      createFolderApi({ actorVisitorId: OWNER, name: "dup-folder" });
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(DocumentError);
+      expect((err as DocumentError).status).toBe(409);
+    }
   });
 });
 
-describe("DELETE /api/folders/:id", () => {
-  function makeApp(): Express {
-    const app = express();
-    app.use(express.json());
-    app.use((req, _res, next) => {
-      req.visitor = { visitor_id: OWNER, visitor_name: "test", token: "test" } as any;
-      next();
-    });
-    app.use("/api/folders", buildFoldersRouter());
-    return app;
-  }
-
-  it("删除空目录成功", async () => {
+describe("folders.application deleteFolder", () => {
+  it("删除空目录成功", () => {
     const folderId = createFolder("to-delete");
-    const app = makeApp();
-    const server = app.listen(0);
-    const addr = server.address() as any;
-
-    const response = await fetch(`http://127.0.0.1:${addr.port}/api/folders/${folderId}`, {
-      method: "DELETE",
-    });
-
-    server.close();
-    expect(response.status).toBe(204);
-    // 确认数据库里已删除
+    deleteFolderApi({ actorVisitorId: OWNER, folderId });
     const row = findDocumentById(getDb(), folderId);
     expect(row).toBeUndefined();
   });
 
-  it("非空目录返回 409", async () => {
+  it("非空目录抛 409", () => {
     const folderId = createFolder("not-empty");
     createDoc("not-empty/doc.md", "content", "default", folderId);
-    const app = makeApp();
-    const server = app.listen(0);
-    const addr = server.address() as any;
-
-    const response = await fetch(`http://127.0.0.1:${addr.port}/api/folders/${folderId}`, {
-      method: "DELETE",
-    });
-
-    server.close();
-    expect(response.status).toBe(409);
+    try {
+      deleteFolderApi({ actorVisitorId: OWNER, folderId });
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(DocumentError);
+      expect((err as DocumentError).status).toBe(409);
+    }
   });
 
-  it("不存在的目录返回 404", async () => {
-    const app = makeApp();
-    const server = app.listen(0);
-    const addr = server.address() as any;
-
-    const response = await fetch(`http://127.0.0.1:${addr.port}/api/folders/non-existent`, {
-      method: "DELETE",
-    });
-
-    server.close();
-    expect(response.status).toBe(404);
+  it("不存在的目录抛 404", () => {
+    try {
+      deleteFolderApi({ actorVisitorId: OWNER, folderId: "non-existent" });
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(DocumentError);
+      expect((err as DocumentError).status).toBe(404);
+    }
   });
 });
 
