@@ -180,5 +180,9 @@ desktop/*.app
 # Local portable Node / deploy helpers (not published)
 .tools/
 
+# 本地编辑器 fork 构建产物（仅本机测试；用 pnpm editor:local 切换，勿提交）
+# 仓库默认依赖 npm:@fgbg/lobe-editor（pnpm editor:published）
+/vendor/
+
 # IDE
 .idea/
