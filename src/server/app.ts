@@ -15,7 +15,6 @@ import { documentCommentsRouter } from "./routes/document-comments.routes.js";
 import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
 import { buildAgentRouter } from "./routes/agent.routes.js";
 import { buildGraphRouter } from "./routes/graph.routes.js";
-import { buildMcpServersRouter } from "./routes/mcp-servers.routes.js";
 import { bootstrapAgentRuns } from "./modules/agent/Agent/run-manager.js";
 import { bootstrapJobs } from "./modules/jobs/index.js";
 import { startIndexTimer } from "./modules/search/document-index-manager.js";
@@ -91,7 +90,6 @@ export function buildApp(): Application {
   app.use("/api/bookmarks", buildBookmarksRouter());
   app.use("/api/agent", buildAgentRouter());
   app.use("/api/graph", buildGraphRouter());
-  app.use("/api/mcp-servers", buildMcpServersRouter());
   // 发表/删除评论：需要认证
   app.use("/api/documents", documentCommentsRouter);
 
