@@ -174,7 +174,7 @@ export const zh: Record<TranslationKey, string> = {
   featuresIntro: "可选编辑器行为开关；更改后立即生效，无需刷新页面。",
   featureSelectAllSkipLeadingH1: "正文全选不含首个 H1",
   featureSelectAllSkipLeadingH1Desc:
-    "在正文按 ⌘A / Ctrl+A 时，若文档第一个块是一级标题（H1），全选范围不包含该标题；在标题内全选仍只选标题。",
+    "在正文按 ⌘A / Ctrl+A 时，若首个有效块是一级标题（H1，其前可有空段落），全选不包含该标题；在标题内全选仍只选标题。",
   settingsNavSearch: "搜索设置…",
   settingsNavNoMatch: "无匹配项",
   language: "语言",

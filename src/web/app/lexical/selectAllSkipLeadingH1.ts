@@ -3,6 +3,7 @@ import {
   $getRoot,
   $getSelection,
   $isElementNode,
+  $isParagraphNode,
   $isRangeSelection,
   $normalizeSelection__EXPERIMENTAL,
   $setSelection,
@@ -11,8 +12,28 @@ import {
 } from "lexical";
 import { $isHeadingNode, type HeadingNode } from "@lexical/rich-text";
 
-function isLeadingH1(node: LexicalNode): node is HeadingNode {
-  return $isHeadingNode(node) && node.getTag() === "h1";
+function isH1Block(node: LexicalNode): node is HeadingNode {
+  if ($isHeadingNode(node)) return node.getTag() === "h1";
+  if (node.getType() !== "heading") return false;
+  const tag = (node as { getTag?: () => string }).getTag?.();
+  return tag === "h1";
+}
+
+function isSkippableLeadingBlock(node: LexicalNode): boolean {
+  return $isParagraphNode(node) && node.getTextContent().trim() === "";
+}
+
+/** 首个「有效」块前只允许空段落；该块须为 H1 */
+export function findLeadingH1(
+  children: LexicalNode[],
+): { h1: LexicalNode; index: number } | null {
+  for (let i = 0; i < children.length; i++) {
+    const node = children[i]!;
+    if (isSkippableLeadingBlock(node)) continue;
+    if (isH1Block(node)) return { h1: node, index: i };
+    return null;
+  }
+  return null;
 }
 
 function elementChildCount(node: LexicalNode): number {
@@ -59,8 +80,7 @@ function selectTopLevelBlock(blockKey: string, childCount: number): void {
 }
 
 /**
- * 飞书式全选：首块为 H1 时，正文区 Cmd+A 不包含该 H1。
- * 须在 editor.update() 内调用。
+ * 飞书式全选：首个 H1（前可有空段落）时，正文区 Ctrl/⌘+A 不包含该 H1。
  * @returns 是否已自定义处理（true 则不再走 Lexical 默认 $selectAll）
  */
 export function applySelectAllSkipLeadingH1(): boolean {
@@ -68,26 +88,27 @@ export function applySelectAllSkipLeadingH1(): boolean {
   const children = root.getChildren();
   if (children.length === 0) return false;
 
-  const first = children[0];
-  if (!first || !isLeadingH1(first)) return false;
+  const leading = findLeadingH1(children);
+  if (!leading) return false;
 
   const sel = $getSelection();
   if (!$isRangeSelection(sel)) return false;
 
-  const firstKey = first.getKey();
+  const firstKey = leading.h1.getKey();
 
   if (isSelectionInsideNode(sel, firstKey)) {
-    selectTopLevelBlock(firstKey, elementChildCount(first));
+    selectTopLevelBlock(firstKey, elementChildCount(leading.h1));
     return true;
   }
 
-  if (children.length < 2) {
-    setElementRange(sel, root.getKey(), 1, root.getKey(), root.getChildrenSize());
+  const bodyStartIndex = leading.index + 1;
+  if (bodyStartIndex >= children.length) {
+    setElementRange(sel, root.getKey(), bodyStartIndex, root.getKey(), root.getChildrenSize());
     return true;
   }
 
   const last = children[children.length - 1]!;
-  const bodyStart = children[1]!;
+  const bodyStart = children[bodyStartIndex]!;
   setElementRange(
     sel,
     bodyStart.getKey(),
@@ -96,4 +117,17 @@ export function applySelectAllSkipLeadingH1(): boolean {
     elementChildCount(last),
   );
   return true;
+}
+
+/** Win / Mac 全选快捷键（与 Lexical isSelectAll 一致） */
+export function isDocumentSelectAllKey(event: KeyboardEvent): boolean {
+  if (event.isComposing) return false;
+  if (event.shiftKey || event.altKey) return false;
+  const isApple =
+    typeof navigator !== "undefined" &&
+    /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+  const modOk = isApple ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+  if (!modOk) return false;
+  if (event.key.toLowerCase() === "a") return true;
+  return event.code === "KeyA";
 }

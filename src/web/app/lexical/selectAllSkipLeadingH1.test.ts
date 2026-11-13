@@ -5,14 +5,18 @@ import {
   $getRoot,
   $getSelection,
   $isRangeSelection,
-  COMMAND_PRIORITY_HIGH,
+  COMMAND_PRIORITY_CRITICAL,
   createEditor,
   ParagraphNode,
   SELECT_ALL_COMMAND,
   TextNode,
 } from "lexical";
 import { $createHeadingNode, HeadingNode } from "@lexical/rich-text";
-import { applySelectAllSkipLeadingH1 } from "./selectAllSkipLeadingH1";
+import {
+  applySelectAllSkipLeadingH1,
+  findLeadingH1,
+  isDocumentSelectAllKey,
+} from "./selectAllSkipLeadingH1";
 
 function makeTestEditor() {
   return createEditor({
@@ -29,6 +33,46 @@ function selectedText(): string {
   if (!$isRangeSelection(sel)) return "";
   return sel.getTextContent();
 }
+
+describe("isDocumentSelectAllKey", () => {
+  it("accepts Ctrl+A on Windows", () => {
+    const ev = new KeyboardEvent("keydown", {
+      key: "a",
+      code: "KeyA",
+      ctrlKey: true,
+      bubbles: true,
+    });
+    expect(isDocumentSelectAllKey(ev)).toBe(true);
+  });
+
+  it("accepts Ctrl+A when code matches (non-US layout)", () => {
+    const ev = new KeyboardEvent("keydown", {
+      key: "ф",
+      code: "KeyA",
+      ctrlKey: true,
+      bubbles: true,
+    });
+    expect(isDocumentSelectAllKey(ev)).toBe(true);
+  });
+});
+
+describe("findLeadingH1", () => {
+  it("skips empty leading paragraphs", async () => {
+    const editor = makeTestEditor();
+    await editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+      const empty = $createParagraphNode();
+      const h1 = $createHeadingNode("h1");
+      h1.append($createTextNode("T"));
+      root.append(empty, h1);
+    });
+    editor.getEditorState().read(() => {
+      const found = findLeadingH1($getRoot().getChildren());
+      expect(found?.index).toBe(1);
+    });
+  });
+});
 
 describe("applySelectAllSkipLeadingH1", () => {
   it("skips leading h1 when selection is in body", async () => {
@@ -93,7 +137,7 @@ describe("applySelectAllSkipLeadingH1", () => {
         handled = applySelectAllSkipLeadingH1();
         return handled;
       },
-      COMMAND_PRIORITY_HIGH,
+      COMMAND_PRIORITY_CRITICAL,
     );
     await editor.update(() => {
       const root = $getRoot();

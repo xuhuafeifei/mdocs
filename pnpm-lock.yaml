@@ -33,8 +33,8 @@ importers:
         specifier: 0.42.0
         version: 0.42.0
       '@lobehub/editor':
-        specifier: npm:@fgbg/lobe-editor@1.0.0-fork.40
-        version: '@fgbg/lobe-editor@1.0.0-fork.40(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(markmap-common@0.18.9)(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)'
+        specifier: npm:@fgbg/lobe-editor@1.0.0-fork.44
+        version: '@fgbg/lobe-editor@1.0.0-fork.44(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(markmap-common@0.18.9)(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)'
       '@lobehub/ui':
         specifier: ^5.0.0
         version: 5.10.0(@lobehub/fluent-emoji@4.1.0(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@lobehub/icons@5.6.0)(@types/mdast@4.0.4)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -960,8 +960,8 @@ packages:
       '@noble/hashes':
         optional: true
 
-  '@fgbg/lobe-editor@1.0.0-fork.40':
-    resolution: {integrity: sha512-+dfFYE/5pkj5mwjNj06wm0TlgwPWfN3e1j6XUMPqclDElTS2l5UuHGWN5tm+je4l5c6fEs7xjuTmXFjYj+eTcw==}
+  '@fgbg/lobe-editor@1.0.0-fork.44':
+    resolution: {integrity: sha512-O8db0F1DH2Q4+U8qfVX2SFxRijN8LoKKPZh9wyDRvTAaJUV4IKgNxABUu7rst21pOeo6UfWkUmY6mhYZF+iWmA==}
     peerDependencies:
       '@lobehub/ui': ^5.0.0
       antd: ^6.1.1
@@ -1263,42 +1263,49 @@ packages:
     engines: {node: '>=20.0.0'}
     cpu: [arm64, x64]
     os: [linux]
+    libc: [glibc]
 
   '@node-llama-cpp/linux-armv7l@3.22.1':
     resolution: {integrity: sha512-v/pHg4BcQHRDna+YYq4vWp44HCFluar4hAiB732Pa5PF89flMXhHSku68tQn+25RJjuc3TtoeY/i57WnX9GrdQ==}
     engines: {node: '>=20.0.0'}
     cpu: [arm, x64]
     os: [linux]
+    libc: [glibc]
 
   '@node-llama-cpp/linux-riscv64@3.22.1':
     resolution: {integrity: sha512-AUnyUgcIUiGbWce/jWqM13Hs3wPyIZG3mxnR/GXm3/F8g8vNlqCldeVdRS6lyZ0xWQkCowdMQkbdoQuuu7YWOw==}
     engines: {node: '>=20.0.0'}
     cpu: [riscv64]
     os: [linux]
+    libc: [glibc]
 
   '@node-llama-cpp/linux-x64-cuda-ext@3.22.1':
     resolution: {integrity: sha512-4e5ajkiM2aR2WAdB/N/ACk4weEhHvOAIrzxZPsIX0xDFW5+6hhShuy1/vs88SK9NGdgAco9IyE28eYS0H1efpA==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@node-llama-cpp/linux-x64-cuda@3.22.1':
     resolution: {integrity: sha512-8rQCjyNNLZJUFit+YpjwlC4hwkKgOMIkB2wuycKBf8NU2O3ySKbiWZQ8aw9ku2nUTXjSnUIrE6KB88itduTBuA==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@node-llama-cpp/linux-x64-vulkan@3.22.1':
     resolution: {integrity: sha512-bBxqU+JOcBu1nb5Qj2zcMci+JByT1E8EajHvYodyNfVIPkEhXh+/HMwR1/BT7xP08YK0hks+kM8fglER0P8JEg==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@node-llama-cpp/linux-x64@3.22.1':
     resolution: {integrity: sha512-5uCCDNqWCNfaAm8aR/Uzxbo4HBpKgNF91kCHPepKhgMgV2OAmatoefbOlMihsqCiH2Od35E/eUHQCFbfRBJuOg==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@node-llama-cpp/mac-arm64-metal@3.22.1':
     resolution: {integrity: sha512-ZnKeJSCcT7ueulMEktdWxjf4AcgbvaLvWdNYzBuysgMEypD9VjGQmMGAU0O4sybVmiaz3o+rdiYV4AUD4P3M4g==}
@@ -1383,24 +1390,28 @@ packages:
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   '@node-rs/jieba-linux-arm64-musl@2.0.1':
     resolution: {integrity: sha512-K4EDyNixSLVdTNYnHwD+7I/ytvzpo7tt+vdCLqwQViiek2PMpL/FFRvA39uU2tk99jXIxvkczdxARG20BRZppg==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   '@node-rs/jieba-linux-x64-gnu@2.0.1':
     resolution: {integrity: sha512-sq3J6L2ANTE25I9eVFq/nb57OtXcvUIeUD1CTKJxwgTKIVmcB2LyOZpWf20AjHRUfbMER9Klqg5dgyyO+Six+w==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@node-rs/jieba-linux-x64-musl@2.0.1':
     resolution: {integrity: sha512-0zfP9Qy68yEXrhBFknfhF6WUJDPU/8eRuyIrkMGdMjfRpxhpSbr2fMfnsqhOQLvhuK4w3iDFvTy4t5d0s6JKMA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   '@node-rs/jieba-wasm32-wasi@2.0.1':
     resolution: {integrity: sha512-7I5rJya5rlQNJIhv8PvPzIVT1/gVc0vFzHmlfRGwCPGDJ3tHVxkSPW34dDx3OgDmbIeadNpmgIyC1RaS9djPJg==}
@@ -2038,24 +2049,28 @@ packages:
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   '@reflink/reflink-linux-arm64-musl@0.1.19':
     resolution: {integrity: sha512-37iO/Dp6m5DDaC2sf3zPtx/hl9FV3Xze4xoYidrxxS9bgP3S8ALroxRK6xBG/1TtfXKTvolvp+IjrUU6ujIGmA==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   '@reflink/reflink-linux-x64-gnu@0.1.19':
     resolution: {integrity: sha512-jbI8jvuYCaA3MVUdu8vLoLAFqC+iNMpiSuLbxlAgg7x3K5bsS8nOpTRnkLF7vISJ+rVR8W+7ThXlXlUQ93ulkw==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@reflink/reflink-linux-x64-musl@0.1.19':
     resolution: {integrity: sha512-e9FBWDe+lv7QKAwtKOt6A2W/fyy/aEEfr0g6j/hWzvQcrzHCsz07BNQYlNOjTfeytrtLU7k449H1PI95jA4OjQ==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   '@reflink/reflink-win32-arm64-msvc@0.1.19':
     resolution: {integrity: sha512-09PxnVIQcd+UOn4WAW73WU6PXL7DwGS6wPlkMhMg2zlHHG65F3vHepOw06HFCq+N42qkaNAc8AKIabWvtk6cIQ==}
@@ -2110,66 +2125,79 @@ packages:
     resolution: {integrity: sha512-2QxQrM+KQ7DAW4o22j+XZ6RKdxjLD7BOWTP0Bv0tmjdyhXSsr2Ul1oJDQqh9Zf5qOwTuTc7Ek83mOFaKnodPjg==}
     cpu: [arm]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-arm-musleabihf@4.60.2':
     resolution: {integrity: sha512-TbziEu2DVsTEOPif2mKWkMeDMLoYjx95oESa9fkQQK7r/Orta0gnkcDpzwufEcAO2BLBsD7mZkXGFqEdMRRwfw==}
     cpu: [arm]
     os: [linux]
+    libc: [musl]
 
   '@rollup/rollup-linux-arm64-gnu@4.60.2':
     resolution: {integrity: sha512-bO/rVDiDUuM2YfuCUwZ1t1cP+/yqjqz+Xf2VtkdppefuOFS2OSeAfgafaHNkFn0t02hEyXngZkxtGqXcXwO8Rg==}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-arm64-musl@4.60.2':
     resolution: {integrity: sha512-hr26p7e93Rl0Za+JwW7EAnwAvKkehh12BU1Llm9Ykiibg4uIr2rbpxG9WCf56GuvidlTG9KiiQT/TXT1yAWxTA==}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   '@rollup/rollup-linux-loong64-gnu@4.60.2':
     resolution: {integrity: sha512-pOjB/uSIyDt+ow3k/RcLvUAOGpysT2phDn7TTUB3n75SlIgZzM6NKAqlErPhoFU+npgY3/n+2HYIQVbF70P9/A==}
     cpu: [loong64]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-loong64-musl@4.60.2':
     resolution: {integrity: sha512-2/w+q8jszv9Ww1c+6uJT3OwqhdmGP2/4T17cu8WuwyUuuaCDDJ2ojdyYwZzCxx0GcsZBhzi3HmH+J5pZNXnd+Q==}
     cpu: [loong64]
     os: [linux]
+    libc: [musl]
 
   '@rollup/rollup-linux-ppc64-gnu@4.60.2':
     resolution: {integrity: sha512-11+aL5vKheYgczxtPVVRhdptAM2H7fcDR5Gw4/bTcteuZBlH4oP9f5s9zYO9aGZvoGeBpqXI/9TZZihZ609wKw==}
     cpu: [ppc64]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-ppc64-musl@4.60.2':
     resolution: {integrity: sha512-i16fokAGK46IVZuV8LIIwMdtqhin9hfYkCh8pf8iC3QU3LpwL+1FSFGej+O7l3E/AoknL6Dclh2oTdnRMpTzFQ==}
     cpu: [ppc64]
     os: [linux]
+    libc: [musl]
 
   '@rollup/rollup-linux-riscv64-gnu@4.60.2':
     resolution: {integrity: sha512-49FkKS6RGQoriDSK/6E2GkAsAuU5kETFCh7pG4yD/ylj9rKhTmO3elsnmBvRD4PgJPds5W2PkhC82aVwmUcJ7A==}
     cpu: [riscv64]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-riscv64-musl@4.60.2':
     resolution: {integrity: sha512-mjYNkHPfGpUR00DuM1ZZIgs64Hpf4bWcz9Z41+4Q+pgDx73UwWdAYyf6EG/lRFldmdHHzgrYyge5akFUW0D3mQ==}
     cpu: [riscv64]
     os: [linux]
+    libc: [musl]
 
   '@rollup/rollup-linux-s390x-gnu@4.60.2':
     resolution: {integrity: sha512-ALyvJz965BQk8E9Al/JDKKDLH2kfKFLTGMlgkAbbYtZuJt9LU8DW3ZoDMCtQpXAltZxwBHevXz5u+gf0yA0YoA==}
     cpu: [s390x]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-x64-gnu@4.60.2':
     resolution: {integrity: sha512-UQjrkIdWrKI626Du8lCQ6MJp/6V1LAo2bOK9OTu4mSn8GGXIkPXk/Vsp4bLHCd9Z9Iz2OTEaokUE90VweJgIYQ==}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-x64-musl@4.60.2':
     resolution: {integrity: sha512-bTsRGj6VlSdn/XD4CGyzMnzaBs9bsRxy79eTqTCBsA8TMIEky7qg48aPkvJvFe1HyzQ5oMZdg7AnVlWQSKLTnw==}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   '@rollup/rollup-openbsd-x64@4.60.2':
     resolution: {integrity: sha512-6d4Z3534xitaA1FcMWP7mQPq5zGwBmGbhphh2DwaA1aNIXUu3KTOfwrWpbwI4/Gr0uANo7NTtaykFyO2hPuFLg==}
@@ -3647,10 +3675,6 @@ packages:
     resolution: {integrity: sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==}
     engines: {node: 6.* || 8.* || >= 10.*}
 
-  get-east-asian-width@1.6.0:
-    resolution: {integrity: sha512-QRbvDIbx6YklUe6RxeTeleMR0yv3cYH6PsPZHcnVn7xv7zO1BHN8r0XETu8n6Ye3Q+ahtSarc3WgtNWmehIBfA==}
-    engines: {node: '>=18'}
-
   get-east-asian-width@1.7.0:
     resolution: {integrity: sha512-XjH1AECxf0giL2V1aU8vKyRR2ppRUb5c0EvT7zuJTokQ74bNo52zOtghqdWIqrhUD79fo3x0WfKZdOqxF6LG1Q==}
     engines: {node: '>=18'}
@@ -3946,10 +3970,6 @@ packages:
   jose@6.2.13:
     resolution: {integrity: sha512-7TIg10ZE1x82YediN+lcrPNvGMKge9yFHQD+Qho/b8y2adfugU3AsvvHfxV0fzyFllT6l9xCjf4RWY9g/Z9PJQ==}
 
-  js-cookie@3.0.5:
-    resolution: {integrity: sha512-cEiJEAEoIbWfCZYKWhVwFuvPX1gETRYPw6LlaTKoxD3s2AkXzkCjnp6h0V77ozyqj0jakteJ4YqDJT830+lVGw==}
-    engines: {node: '>=14'}
-
   js-cookie@3.0.8:
     resolution: {integrity: sha512-yeJd4aNAdYZQjaon2bpD/Gb0B/omw7HQOsynXXcOiWVCacbBcPlgn8S/d1X6blFSaHao7ozqtW7NZW19xpCtIw==}
 
@@ -4165,9 +4185,11 @@ packages:
 
   markmap-common@0.18.9:
     resolution: {integrity: sha512-MV2HQO7IGIm3jWEJXSG8vmdpqf4WIDXcEyAEN52lrWR1qD53Zg5l81JwjXoZ2l0rY5mofKYqUFlmdM2fqTGMVg==}
+    deprecated: Replaced by @markmap/* in 1.0.0. See https://markmap.js.org/docs/migration
 
   markmap-html-parser@0.18.11:
     resolution: {integrity: sha512-+kC5C4sCGntGUhGvTa5VIb5rtM75cSy/VCy3tzZoNAcn2qZGdgYvljN0WvjsOzrEzp+V6XKgwzO0u2TdzNAiOg==}
+    deprecated: Replaced by @markmap/* in 1.0.0. See https://markmap.js.org/docs/migration
     peerDependencies:
       markmap-common: '*'
 
@@ -5447,9 +5469,6 @@ packages:
   symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
 
-  tabbable@6.5.0:
-    resolution: {integrity: sha512-wieBHXygIm7OyQOu5hQlkk62/WyCFYGlWg7L6/ZCUZwx0o398Zkn4pVmMyfYhfMG8kGrj/Krt8eIk6UKC6VzwA==}
-
   tabbable@6.5.1:
     resolution: {integrity: sha512-dMCuwDUY6Noz3zVKLefBC4wq+aJV20yc7vWmM7uTNGwtQSFF5kX7OUIUsxuVajz/bdt5Xqdah3/0NLjth+cM5A==}
 
@@ -5869,18 +5888,6 @@ packages:
       utf-8-validate:
         optional: true
 
-  ws@8.21.3:
-    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
   ws@8.22.0:
     resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
     engines: {node: '>=10.0.0'}
@@ -5978,14 +5985,14 @@ snapshots:
   '@ant-design/cssinjs-utils@2.1.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@ant-design/cssinjs': 2.1.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@rc-component/util': 1.10.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
 
   '@ant-design/cssinjs@2.1.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@emotion/hash': 0.8.0
       '@emotion/unitless': 0.7.5
       '@rc-component/util': 1.10.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -6010,7 +6017,7 @@ snapshots:
 
   '@ant-design/react-slick@2.0.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       clsx: 2.1.1
       json2mq: 0.2.0
       react: 19.2.5
@@ -6382,21 +6389,21 @@ snapshots:
 
   '@base-ui/react@1.0.0(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@base-ui/utils': 0.2.3(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@floating-ui/react-dom': 2.1.9(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@floating-ui/utils': 0.2.12
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
       reselect: 5.1.1
-      tabbable: 6.5.0
+      tabbable: 6.5.1
       use-sync-external-store: 1.6.0(react@19.2.5)
     optionalDependencies:
       '@types/react': 19.2.14
 
   '@base-ui/utils@0.2.3(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@floating-ui/utils': 0.2.12
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
@@ -6815,7 +6822,7 @@ snapshots:
 
   '@exodus/bytes@1.15.0': {}
 
-  '@fgbg/lobe-editor@1.0.0-fork.40(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(markmap-common@0.18.9)(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)':
+  '@fgbg/lobe-editor@1.0.0-fork.44(@lobehub/ui@5.10.0)(@types/mdast@4.0.4)(@types/react@19.2.14)(antd@6.3.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(markmap-common@0.18.9)(micromark-util-types@2.0.2)(micromark@4.0.2)(motion@12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(unified@11.0.5)':
     dependencies:
       '@floating-ui/dom': 1.8.0
       '@floating-ui/react': 0.27.20(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -6901,7 +6908,7 @@ snapshots:
       '@floating-ui/utils': 0.2.12
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
-      tabbable: 6.5.0
+      tabbable: 6.5.1
 
   '@floating-ui/react@0.27.20(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
@@ -6928,7 +6935,7 @@ snapshots:
       google-auth-library: 10.9.1
       p-retry: 4.6.2
       protobufjs: 7.6.5
-      ws: 8.21.3
+      ws: 8.22.0
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.32.2(zod@3.25.76)
     transitivePeerDependencies:
@@ -7284,7 +7291,7 @@ snapshots:
   '@mistralai/mistralai@2.2.6(@opentelemetry/api@1.9.0)':
     dependencies:
       '@opentelemetry/semantic-conventions': 1.43.0
-      ws: 8.21.3
+      ws: 8.22.0
       zod: 3.25.76
       zod-to-json-schema: 3.25.2(zod@3.25.76)
     optionalDependencies:
@@ -7714,7 +7721,7 @@ snapshots:
 
   '@rc-component/async-validator@5.1.0':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
 
   '@rc-component/cascader@1.14.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
@@ -7734,7 +7741,7 @@ snapshots:
 
   '@rc-component/collapse@1.2.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@rc-component/motion': 1.3.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@rc-component/util': 1.10.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       clsx: 2.1.1
@@ -7836,7 +7843,7 @@ snapshots:
 
   '@rc-component/mini-decimal@1.1.3':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
 
   '@rc-component/motion@1.3.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
@@ -7861,7 +7868,7 @@ snapshots:
 
   '@rc-component/overflow@1.0.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@rc-component/resize-observer': 1.1.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@rc-component/util': 1.10.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       clsx: 2.1.1
@@ -7889,7 +7896,7 @@ snapshots:
 
   '@rc-component/portal@1.1.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       classnames: 2.5.1
       rc-util: 5.44.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       react: 19.2.5
@@ -7911,7 +7918,7 @@ snapshots:
 
   '@rc-component/qrcode@1.1.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
 
@@ -7930,7 +7937,7 @@ snapshots:
 
   '@rc-component/segmented@1.3.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@rc-component/motion': 1.3.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@rc-component/util': 1.10.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       clsx: 2.1.1
@@ -8035,7 +8042,7 @@ snapshots:
 
   '@rc-component/trigger@2.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@rc-component/portal': 1.1.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       classnames: 2.5.1
       rc-motion: 2.9.5(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -8070,7 +8077,7 @@ snapshots:
 
   '@rc-component/virtual-list@1.0.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@rc-component/resize-observer': 1.1.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@rc-component/util': 1.10.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       clsx: 2.1.1
@@ -8220,7 +8227,7 @@ snapshots:
   '@shikijs/engine-oniguruma@3.23.0':
     dependencies:
       '@shikijs/types': 3.23.0
-      '@shikijs/vscode-textmate': 10.0.2
+      '@shikijs/vscode-textmate': 10.1.0
 
   '@shikijs/engine-oniguruma@4.0.2':
     dependencies:
@@ -8261,7 +8268,7 @@ snapshots:
 
   '@shikijs/types@3.23.0':
     dependencies:
-      '@shikijs/vscode-textmate': 10.0.2
+      '@shikijs/vscode-textmate': 10.1.0
       '@types/hast': 3.0.5
 
   '@shikijs/types@4.0.2':
@@ -8738,11 +8745,11 @@ snapshots:
 
   ahooks@3.9.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@types/js-cookie': 3.0.6
-      dayjs: 1.11.21
+      dayjs: 1.11.23
       intersection-observer: 0.12.2
-      js-cookie: 3.0.5
+      js-cookie: 3.0.8
       lodash: 4.18.1
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
@@ -9942,8 +9949,6 @@ snapshots:
 
   get-caller-file@2.0.5: {}
 
-  get-east-asian-width@1.6.0: {}
-
   get-east-asian-width@1.7.0: {}
 
   get-intrinsic@1.3.0:
@@ -10319,7 +10324,7 @@ snapshots:
 
   is-fullwidth-code-point@5.1.0:
     dependencies:
-      get-east-asian-width: 1.6.0
+      get-east-asian-width: 1.7.0
 
   is-hexadecimal@2.0.1: {}
 
@@ -10350,8 +10355,6 @@ snapshots:
   jerrypick@1.1.2: {}
 
   jose@6.2.13: {}
-
-  js-cookie@3.0.5: {}
 
   js-cookie@3.0.8: {}
 
@@ -10395,7 +10398,7 @@ snapshots:
 
   json-schema-to-ts@3.1.1:
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       ts-algebra: 2.0.0
 
   json-schema-traverse@1.0.0: {}
@@ -10865,7 +10868,7 @@ snapshots:
 
   micromark-extension-cjk-friendly-util@3.0.1(micromark-util-types@2.0.2):
     dependencies:
-      get-east-asian-width: 1.6.0
+      get-east-asian-width: 1.7.0
       micromark-util-character: 2.1.1
       micromark-util-symbol: 2.0.1
     optionalDependencies:
@@ -11477,7 +11480,7 @@ snapshots:
 
   polished@4.3.1:
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
 
   postcss@8.5.10:
     dependencies:
@@ -11600,7 +11603,7 @@ snapshots:
 
   rc-collapse@4.0.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       classnames: 2.5.1
       rc-motion: 2.9.5(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       rc-util: 5.44.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -11609,7 +11612,7 @@ snapshots:
 
   rc-dialog@9.6.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@rc-component/portal': 1.1.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       classnames: 2.5.1
       rc-motion: 2.9.5(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -11619,14 +11622,14 @@ snapshots:
 
   rc-footer@0.6.8(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       classnames: 2.5.1
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
 
   rc-image@7.12.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@rc-component/portal': 1.1.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       classnames: 2.5.1
       rc-dialog: 9.6.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -11637,7 +11640,7 @@ snapshots:
 
   rc-input-number@9.5.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@rc-component/mini-decimal': 1.1.3
       classnames: 2.5.1
       rc-input: 1.8.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -11647,7 +11650,7 @@ snapshots:
 
   rc-input@1.8.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       classnames: 2.5.1
       rc-util: 5.44.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       react: 19.2.5
@@ -11655,7 +11658,7 @@ snapshots:
 
   rc-menu@9.16.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@rc-component/trigger': 2.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       classnames: 2.5.1
       rc-motion: 2.9.5(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -11666,7 +11669,7 @@ snapshots:
 
   rc-motion@2.9.5(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       classnames: 2.5.1
       rc-util: 5.44.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       react: 19.2.5
@@ -11674,7 +11677,7 @@ snapshots:
 
   rc-overflow@1.5.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       classnames: 2.5.1
       rc-resize-observer: 1.4.3(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       rc-util: 5.44.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -11683,7 +11686,7 @@ snapshots:
 
   rc-resize-observer@1.4.3(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       classnames: 2.5.1
       rc-util: 5.44.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       react: 19.2.5
@@ -11692,7 +11695,7 @@ snapshots:
 
   rc-util@5.44.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
       react-is: 18.3.1
@@ -12205,7 +12208,7 @@ snapshots:
       '@shikijs/langs': 3.23.0
       '@shikijs/themes': 3.23.0
       '@shikijs/types': 3.23.0
-      '@shikijs/vscode-textmate': 10.0.2
+      '@shikijs/vscode-textmate': 10.1.0
       '@types/hast': 3.0.5
 
   shiki@4.0.2:
@@ -12345,12 +12348,12 @@ snapshots:
   string-width@7.2.0:
     dependencies:
       emoji-regex: 10.6.0
-      get-east-asian-width: 1.6.0
+      get-east-asian-width: 1.7.0
       strip-ansi: 7.2.0
 
   string-width@8.3.0:
     dependencies:
-      get-east-asian-width: 1.6.0
+      get-east-asian-width: 1.7.0
       strip-ansi: 7.2.0
 
   string_decoder@1.3.0:
@@ -12399,8 +12402,6 @@ snapshots:
       use-sync-external-store: 1.6.0(react@19.2.5)
 
   symbol-tree@3.2.4: {}
-
-  tabbable@6.5.0: {}
 
   tabbable@6.5.1: {}
 
@@ -12771,8 +12772,6 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@7.5.13: {}
-
-  ws@8.21.3: {}
 
   ws@8.22.0: {}
 
