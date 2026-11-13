@@ -377,6 +377,11 @@ type AssistantBlock =
       label: string;
       status: "preparing" | "running" | "done" | "error";
       detail?: string;
+      summary?: string;
+      input?: string;
+      output?: string;
+      documentId?: string;
+      documentTitle?: string;
       webResults?: {
         query: string;
         items: Array<{
@@ -525,6 +530,11 @@ function upsertToolCallBlock(
       toolCallId: call.toolCallId || prev.toolCallId,
       label: call.label || prev.label,
       detail: call.detail ?? prev.detail,
+      summary: call.summary ?? prev.summary,
+      input: call.input ?? prev.input,
+      output: call.output ?? prev.output,
+      documentId: call.documentId ?? prev.documentId,
+      documentTitle: call.documentTitle ?? prev.documentTitle,
       webResults: call.webResults ?? prev.webResults,
     };
   } else {
@@ -1885,6 +1895,11 @@ export const AgentChatPanel = forwardRef<
             label: event.label,
             status: event.status,
             detail: event.detail,
+            summary: event.summary,
+            input: event.input,
+            output: event.output,
+            documentId: event.documentId,
+            documentTitle: event.documentTitle,
             webResults: event.webResults,
           });
           return { ...m, blocks };
@@ -3000,12 +3015,29 @@ export const AgentChatPanel = forwardRef<
                                           ? "工具执行失败（无详细信息）"
                                           : undefined)
                                       }
+                                      summary={block.summary}
+                                      input={block.input}
+                                      output={
+                                        block.output ||
+                                        (block.status === "error" && !block.output
+                                          ? block.detail
+                                          : undefined)
+                                      }
+                                      documentId={block.documentId}
+                                      documentTitle={block.documentTitle}
+                                      onOpenDocument={
+                                        onOpenDocument
+                                          ? (id) => void onOpenDocument(id)
+                                          : undefined
+                                      }
                                       followTail={live}
                                       grow={
                                         live &&
                                         (block.toolName === "set_markdown_document" ||
                                           block.toolName === "overwrite_document" ||
-                                          block.toolName === "web_fetch")
+                                          block.toolName === "web_fetch" ||
+                                          block.toolName === "get_document" ||
+                                          block.toolName === "get_document_lexical_lines")
                                       }
                                     >
                                       {block.webResults &&

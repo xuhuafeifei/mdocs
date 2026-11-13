@@ -22,6 +22,14 @@ export type AgentStreamEvent =
       label: string;
       status: "preparing" | "running" | "done" | "error";
       detail?: string;
+      /** 标题行右侧摘要；有 documentId 时可点跳转 */
+      summary?: string;
+      /** 展开区上方：工具输入 */
+      input?: string;
+      /** 展开区下方：执行结果 */
+      output?: string;
+      documentId?: string;
+      documentTitle?: string;
       /** web_search 完成态：结构化结果供前端卡片展示 */
       webResults?: AgentWebSearchResults;
     }

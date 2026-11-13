@@ -1,5 +1,6 @@
-import { Check, ChevronRight, CircleCheck, Copy, Sparkles, Terminal, X } from "lucide-react";
+import { ChevronRight, CircleCheck, Copy, Sparkles, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { copyTextToClipboard } from "./copyText";
 
 export type ThinkingTiming = {
   text: string;
@@ -38,33 +39,30 @@ export function sealThinking<B extends { type: string; startedAt?: number; ended
   return changed ? next : blocks;
 }
 
-function splitTraceDetail(detail: string | undefined): {
-  hint: string;
-  command: string;
+/** 兼容旧 detail：meta\\nbody → input/output */
+function splitLegacyDetail(detail: string | undefined): {
+  summary: string;
+  input: string;
   output: string;
 } {
-  if (!detail?.trim()) return { hint: "", command: "", output: "" };
+  if (!detail?.trim()) return { summary: "", input: "", output: "" };
   const nl = detail.indexOf("\n");
   const head = (nl >= 0 ? detail.slice(0, nl) : detail).trim();
   const rest = nl >= 0 ? detail.slice(nl + 1).replace(/^\n/, "") : "";
-  const command = head
-    .split(/\s·\s/)
-    .find((part) => part.startsWith("$ "));
-  if (command) return { hint: "", command, output: rest };
-  // 读取这类只有一行参数时，标题留短提示，同一段参数放进展开面板
-  if (!rest) return { hint: head, command: "", output: head };
-  return { hint: head, command: "", output: rest };
+  if (head.startsWith("$ ")) {
+    return { summary: "", input: head, output: rest };
+  }
+  if (!rest) {
+    // 仅一行：当作 input（参数预览）
+    return { summary: head, input: head, output: "" };
+  }
+  return { summary: head, input: "", output: rest };
 }
 
-function traceTitle(label: string, hint: string): string {
-  if (!hint || hint === label || hint.length > 72) return label;
-  return `${label} ${hint}`;
-}
-
-function commandChipText(command: string): string {
-  const text = command.replace(/^\$\s*/, "").trim();
-  if (text.length <= 42) return text;
-  return `${text.slice(0, 42)}…`;
+function clipLabel(text: string, max = 36): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1))}…`;
 }
 
 /** 智能助手与帮写共用：已完成的深度思考 */
@@ -88,24 +86,50 @@ export function AgentThinkingFold(props: {
   );
 }
 
-/** 智能助手与帮写共用：一行工具步骤，展开后是命令和输出 */
+/** 工具卡片：标题行右侧摘要/文档链；展开后上输入（浅）下输出（灰） */
 export function AgentTraceStep(props: {
   title: string;
   status: "preparing" | "running" | "done" | "error";
   detail?: string;
+  summary?: string;
+  input?: string;
+  output?: string;
+  documentId?: string;
+  documentTitle?: string;
+  onOpenDocument?: (documentId: string) => void;
   followTail?: boolean;
   grow?: boolean;
   children?: ReactNode;
 }) {
-  const { title, status, detail, followTail = false, grow = false, children } = props;
-  const { hint, command, output } = splitTraceDetail(detail);
-  const expandable = Boolean(command || output);
+  const {
+    title,
+    status,
+    detail,
+    summary: summaryProp,
+    input: inputProp,
+    output: outputProp,
+    documentId,
+    documentTitle,
+    onOpenDocument,
+    followTail = false,
+    grow = false,
+    children,
+  } = props;
+
+  const legacy = splitLegacyDetail(detail);
+  const input = (inputProp ?? "").trim() || legacy.input;
+  const output = (outputProp ?? "").trim() || legacy.output;
+  const summaryText =
+    (summaryProp ?? "").trim() ||
+    (documentTitle ?? "").trim() ||
+    (legacy.summary && legacy.summary !== input ? legacy.summary : "");
+
+  const expandable = Boolean(input || output);
   const [open, setOpen] = useState(status === "error");
   const bodyRef = useRef<HTMLPreElement>(null);
   const stickRef = useRef(true);
   const animRef = useRef(0);
   const live = status === "preparing" || status === "running";
-  const rowTitle = traceTitle(title, hint);
 
   useLayoutEffect(() => {
     if (!open || !followTail || !output || !bodyRef.current) return;
@@ -130,26 +154,37 @@ export function AgentTraceStep(props: {
     return () => cancelAnimationFrame(animRef.current);
   }, [output, followTail, grow, open]);
 
-  const panelLead = command || (hint && hint !== output ? hint : "");
-  const copyText = [panelLead, output].filter(Boolean).join("\n");
+  const copyText = [input, output].filter(Boolean).join("\n\n");
+  const rightLabel = clipLabel(documentTitle || summaryText);
+  const canLink = Boolean(documentId && onOpenDocument);
 
   const summary = (
     <>
       <TraceMark status={status} />
-      <span className={"mdocs-agent-trace-step-title" + (live ? " live" : "")}>
-        {rowTitle}
-        {command ? "：" : ""}
+      <span className={"mdocs-agent-trace-step-title" + (live ? " live" : "")}>{title}</span>
+      <span className="mdocs-agent-trace-step-right">
+        {canLink && rightLabel ? (
+          <button
+            type="button"
+            className="mdocs-agent-trace-doc-link"
+            title={documentTitle || summaryText || documentId}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onOpenDocument?.(documentId!);
+            }}
+          >
+            《{rightLabel}》
+          </button>
+        ) : rightLabel ? (
+          <span className="mdocs-agent-trace-step-summary-text" title={summaryText}>
+            {rightLabel}
+          </span>
+        ) : null}
+        {expandable ? (
+          <ChevronRight size={14} strokeWidth={1.8} className="mdocs-agent-trace-step-chevron" />
+        ) : null}
       </span>
-      {command ? (
-        <span className="mdocs-agent-trace-chip" title={command.replace(/^\$\s*/, "")}>
-          <Terminal size={12} strokeWidth={1.8} />
-          <span className="mdocs-agent-trace-chip-text">{commandChipText(command)}</span>
-          {status === "done" ? <Check size={12} strokeWidth={2.4} className="mdocs-agent-trace-chip-ok" /> : null}
-        </span>
-      ) : null}
-      {expandable ? (
-        <ChevronRight size={14} strokeWidth={1.8} className="mdocs-agent-trace-step-chevron" />
-      ) : null}
     </>
   );
 
@@ -169,8 +204,8 @@ export function AgentTraceStep(props: {
         onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
       >
         <summary className="mdocs-agent-trace-step-summary">{summary}</summary>
-        <div className="mdocs-agent-trace-panel">
-          {panelLead ? <pre className="mdocs-agent-trace-command">{panelLead}</pre> : null}
+        <div className="mdocs-agent-trace-io">
+          {input ? <pre className="mdocs-agent-trace-input">{input}</pre> : null}
           {output ? (
             <pre
               ref={bodyRef}
@@ -183,13 +218,15 @@ export function AgentTraceStep(props: {
             >
               {output}
             </pre>
+          ) : live ? (
+            <pre className="mdocs-agent-trace-output muted">执行中…</pre>
           ) : null}
           {copyText ? (
             <button
               type="button"
               className="mdocs-agent-trace-copy"
               aria-label="复制"
-              onClick={() => void navigator.clipboard.writeText(copyText)}
+              onClick={() => void copyTextToClipboard(copyText)}
             >
               <Copy size={13} strokeWidth={1.8} />
             </button>

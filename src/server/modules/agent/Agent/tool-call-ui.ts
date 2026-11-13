@@ -166,8 +166,14 @@ export function headBodyPreview(text: string, maxChars = 480): string {
   return `${slice}\n…`;
 }
 
+/** 工具卡片正文预览上限（读文档 / 写预览共用）：≤ 此长度完整展示，超出截断 */
+export const TOOL_CARD_CONTENT_MAX_CHARS = 10_000;
+
 /** 增量生长：尽量保留全文，卡片里跟着往下滚 */
-export function growingBodyPreview(text: string, maxChars = 12000): string {
+export function growingBodyPreview(
+  text: string,
+  maxChars = TOOL_CARD_CONTENT_MAX_CHARS,
+): string {
   const t = text.replace(/\r\n/g, "\n");
   if (!t) return "";
   if (t.length <= maxChars) return t;
@@ -296,6 +302,21 @@ export function writeToolBodyText(toolName: string, source: unknown): string {
 
 function bodyLenHint(body: string): string {
   return body ? `约 ${body.length} 字` : "";
+}
+
+/** 门牌表 → 卡片正文：`1: …` 每块一行/一段 */
+function formatLexicalLinesPreview(lines: unknown): string {
+  if (!lines || typeof lines !== "object" || Array.isArray(lines)) return "";
+  const entries = Object.entries(lines as Record<string, unknown>).sort(
+    (a, b) => Number(a[0]) - Number(b[0]) || a[0].localeCompare(b[0]),
+  );
+  if (entries.length === 0) return "";
+  return entries
+    .map(([slot, value]) => {
+      const text = typeof value === "string" ? value : String(value ?? "");
+      return `${slot}: ${text}`;
+    })
+    .join("\n\n");
 }
 
 /** 参数仍在流式拼装时 */
@@ -590,7 +611,40 @@ export function toolCallDetailFromResult(
 
   if (toolName === "get_document") {
     const name = String(details.displayName ?? "").trim();
-    return name ? `已读「${name}」` : fallback;
+    const body = String(details.content ?? "");
+    const toolTruncated = details.contentTruncated === true;
+    const cardTruncated = body.length > TOOL_CARD_CONTENT_MAX_CHARS;
+    const meta = [
+      name ? `已读「${name}」` : "已读文档",
+      body ? `${body.length} 字` : "",
+      toolTruncated || cardTruncated ? "已截断" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    if (!body) return meta || fallback;
+    return formatWriteToolDetail(meta, body, "grow");
+  }
+
+  if (toolName === "get_document_lexical_lines") {
+    const name = String(details.displayName ?? "").trim();
+    const lineCount =
+      typeof details.lineCount === "number"
+        ? details.lineCount
+        : details.lines && typeof details.lines === "object"
+          ? Object.keys(details.lines as object).length
+          : 0;
+    const body = formatLexicalLinesPreview(details.lines);
+    const toolTruncated = details.truncated === true;
+    const cardTruncated = body.length > TOOL_CARD_CONTENT_MAX_CHARS;
+    const meta = [
+      name ? `已读「${name}」` : "已按块读取",
+      `${lineCount} 块`,
+      toolTruncated || cardTruncated ? "已截断" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    if (!body) return meta || fallback;
+    return formatWriteToolDetail(meta, body, "grow");
   }
 
   if (toolName === "list_document_commits") {
@@ -606,8 +660,23 @@ export function toolCallDetailFromResult(
   if (toolName === "get_document_commit") {
     const msg = String(details.message ?? "").trim();
     const id = String(details.commitId ?? "").trim();
-    if (msg) return `已读历史「${clip(msg, 32)}」`;
-    return id ? `已读历史 ${id.slice(0, 8)}…` : fallback;
+    const body = String(details.content ?? "");
+    const toolTruncated = details.contentTruncated === true;
+    const cardTruncated = body.length > TOOL_CARD_CONTENT_MAX_CHARS;
+    const head = msg
+      ? `已读历史「${clip(msg, 32)}」`
+      : id
+        ? `已读历史 ${id.slice(0, 8)}…`
+        : "已读历史版本";
+    const meta = [
+      head,
+      body ? `${body.length} 字` : "",
+      toolTruncated || cardTruncated ? "已截断" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    if (!body) return meta || fallback;
+    return formatWriteToolDetail(meta, body, "grow");
   }
 
   if (toolName === "create_document") {
@@ -693,4 +762,248 @@ export function toolCallDetailFromResult(
   }
 
   return fallback;
+}
+
+// ── 结构化工具卡片（上输入 / 下输出 + 右侧摘要/文档链）────────
+
+export type ToolCallCardParts = {
+  /** 标题行右侧短摘要；有 documentId 时前端可渲染成可跳转链接 */
+  summary?: string;
+  /** 展开区上方：工具输入 */
+  input?: string;
+  /** 展开区下方：执行结果 */
+  output?: string;
+  documentId?: string;
+  documentTitle?: string;
+};
+
+function pickDocumentId(...values: unknown[]): string | undefined {
+  for (const v of values) {
+    const id = String(v ?? "").trim();
+    if (id) return id;
+  }
+  return undefined;
+}
+
+function cliCommandLine(a: Record<string, unknown>): string {
+  const cmd = String(a.command ?? "").trim();
+  const args = Array.isArray(a.args)
+    ? a.args.map((x) => String(x)).filter(Boolean)
+    : [];
+  const line = [cmd, ...args].filter(Boolean).join(" ");
+  return line ? `$ ${line}` : "";
+}
+
+/** 准备中 / 开始执行：从 args 抽输入与文档链 */
+export function toolCallCardFromArgs(
+  toolName: string,
+  args: unknown,
+): ToolCallCardParts {
+  const a = asRecord(args) ?? {};
+  const documentId = pickDocumentId(a.documentId);
+  const documentTitle =
+    String(a.displayName ?? a.title ?? "").trim() || undefined;
+
+  if (toolName === "run_plugin_cli" || toolName === "exec") {
+    const input = cliCommandLine(a) || formatArgsPreview(args) || undefined;
+    return { input, summary: input ? clip(input.replace(/^\$\s*/, ""), 48) : undefined };
+  }
+
+  if (isWriteTool(toolName)) {
+    const body = writeToolBodyText(toolName, args);
+    const input =
+      body ||
+      formatArgsPreview(args) ||
+      (documentId ? `documentId=${documentId}` : undefined);
+    return {
+      summary: documentTitle || (body ? `${body.length} 字` : undefined),
+      input,
+      documentId,
+      documentTitle,
+    };
+  }
+
+  if (toolName === "web_fetch" || toolName === "download" || toolName === "fetch_page") {
+    const url = String(a.url ?? "").trim();
+    return {
+      input: url || formatArgsPreview(args) || undefined,
+      summary: url ? clip(url, 48) : undefined,
+    };
+  }
+
+  const input =
+    formatArgsPreview(args) ||
+    (documentId ? `documentId=${documentId}` : undefined);
+  return {
+    input,
+    summary: documentTitle,
+    documentId,
+    documentTitle,
+  };
+}
+
+/** 结束态：结果正文进 output，保留 prior.input */
+export function toolCallCardFromResult(
+  toolName: string,
+  result: unknown,
+  prior?: ToolCallCardParts,
+): ToolCallCardParts {
+  const details = asRecord(asRecord(result)?.details) ?? asRecord(result);
+  const base: ToolCallCardParts = {
+    input: prior?.input,
+    documentId: prior?.documentId,
+    documentTitle: prior?.documentTitle,
+    summary: prior?.summary,
+  };
+  if (!details) return base;
+
+  if (toolName === "get_document") {
+    const name = String(details.displayName ?? "").trim();
+    const documentId = pickDocumentId(details.documentId, prior?.documentId);
+    const body = String(details.content ?? "");
+    const truncated =
+      details.contentTruncated === true ||
+      body.length > TOOL_CARD_CONTENT_MAX_CHARS;
+    return {
+      input: prior?.input || (documentId ? `documentId=${documentId}` : undefined),
+      output: body ? growingBodyPreview(body) : undefined,
+      summary: name || undefined,
+      documentId,
+      documentTitle: name || prior?.documentTitle,
+      ...(truncated ? {} : {}),
+    };
+  }
+
+  if (toolName === "get_document_lexical_lines") {
+    const name = String(details.displayName ?? "").trim();
+    const documentId = pickDocumentId(details.documentId, prior?.documentId);
+    const lineCount =
+      typeof details.lineCount === "number"
+        ? details.lineCount
+        : details.lines && typeof details.lines === "object"
+          ? Object.keys(details.lines as object).length
+          : 0;
+    const body = formatLexicalLinesPreview(details.lines);
+    return {
+      input: prior?.input || (documentId ? `documentId=${documentId}` : undefined),
+      output: body ? growingBodyPreview(body) : undefined,
+      summary: name || `${lineCount} 块`,
+      documentId,
+      documentTitle: name || prior?.documentTitle,
+    };
+  }
+
+  if (toolName === "get_document_commit") {
+    const msg = String(details.message ?? "").trim();
+    const documentId = pickDocumentId(details.documentId, prior?.documentId);
+    const body = String(details.content ?? "");
+    return {
+      input: prior?.input,
+      output: body ? growingBodyPreview(body) : undefined,
+      summary: msg ? clip(msg, 40) : prior?.summary,
+      documentId,
+      documentTitle: msg || prior?.documentTitle,
+    };
+  }
+
+  if (toolName === "overwrite_document" || toolName === "append_document" || toolName === "replace_document_markdown") {
+    const name = String(details.displayName ?? "").trim();
+    const documentId = pickDocumentId(details.documentId, prior?.documentId);
+    const body =
+      writeToolBodyText(toolName, details) ||
+      prior?.input ||
+      previewFromFallback(
+        typeof details.message === "string" ? details.message : undefined,
+      );
+    const status = String(details.status ?? "");
+    const summary =
+      name ||
+      (status === "overwritten"
+        ? "已覆写"
+        : status === "proposed_as_diff"
+          ? "Diff 待确认"
+          : prior?.summary);
+    return {
+      input: prior?.input || (body || undefined),
+      output: status ? `status=${status}` : undefined,
+      summary,
+      documentId,
+      documentTitle: name || prior?.documentTitle,
+    };
+  }
+
+  if (toolName === "create_document") {
+    const name = String(details.displayName ?? "").trim();
+    const documentId = pickDocumentId(details.documentId, prior?.documentId);
+    return {
+      input: prior?.input,
+      output: name ? `已创建「${name}」` : "已创建",
+      summary: name || undefined,
+      documentId,
+      documentTitle: name || undefined,
+    };
+  }
+
+  if (toolName === "web_fetch") {
+    const title = String(details.title ?? "").trim();
+    const body = String(details.content ?? "").trim();
+    return {
+      input: prior?.input || String(details.url ?? "").trim() || undefined,
+      output: body ? growingBodyPreview(body) : undefined,
+      summary: title ? clip(title, 40) : prior?.summary,
+    };
+  }
+
+  if (toolName === "run_plugin_cli" || toolName === "exec") {
+    const cmd = cliCommandLine(details) || prior?.input;
+    const stdout = String(details.stdout ?? "").trim();
+    const stderr = String(details.stderr ?? "").trim();
+    const body = [stdout && `── stdout ──\n${stdout}`, stderr && `── stderr ──\n${stderr}`]
+      .filter(Boolean)
+      .join("\n\n");
+    const code =
+      typeof details.exitCode === "number" ? details.exitCode : null;
+    return {
+      input: cmd || undefined,
+      output: body ? growingBodyPreview(body) : undefined,
+      summary: code != null ? `exit ${code}` : prior?.summary,
+    };
+  }
+
+  if (toolName === "read_plugin_content") {
+    const pathLabel = String(details.path ?? "").trim() || "文件";
+    const content = String(details.content ?? "");
+    return {
+      input: prior?.input || pathLabel,
+      output: content ? growingBodyPreview(content) : undefined,
+      summary: pathLabel,
+    };
+  }
+
+  // 兜底：沿用 detail 字符串拆成 summary/output
+  const detail = toolCallDetailFromResult(toolName, result, prior?.input);
+  if (!detail) return base;
+  const nl = detail.indexOf("\n");
+  if (nl < 0) {
+    return {
+      ...base,
+      summary: clip(detail, 48),
+      output: detail !== prior?.input ? detail : undefined,
+      input: prior?.input || (detail.startsWith("$ ") ? detail : base.input),
+    };
+  }
+  return {
+    ...base,
+    summary: clip(detail.slice(0, nl).trim(), 48) || base.summary,
+    input: prior?.input || base.input,
+    output: growingBodyPreview(detail.slice(nl + 1).replace(/^\n/, "")),
+  };
+}
+
+export function detailFromToolCallCard(parts: ToolCallCardParts): string | undefined {
+  if (parts.output) {
+    return parts.summary ? `${parts.summary}\n${parts.output}` : parts.output;
+  }
+  if (parts.input) return parts.input;
+  return parts.summary;
 }

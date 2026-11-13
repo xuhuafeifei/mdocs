@@ -136,18 +136,7 @@ export function createToolUiEffectsHandler(onEvent: (event: AgentStreamEvent) =>
     }
 
     if (event.toolName === "get_document") {
-      const documentId = String(details?.documentId ?? "").trim();
-      if (!documentId) return;
-      const content = String(details?.content ?? "");
-      const preview =
-        content.length > 280 ? `${content.slice(0, 280)}…` : content;
-      onEvent({
-        type: "document_card",
-        documentId,
-        title: String(details?.displayName ?? "").trim() || "未命名文档",
-        path: String(details?.relativePath ?? "").trim(),
-        preview,
-      });
+      // 正文与跳转链已在 tool_call 卡片（summary/input/output/documentId）展示，不再叠 document_card
       return;
     }
 

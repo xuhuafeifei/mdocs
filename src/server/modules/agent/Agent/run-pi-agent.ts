@@ -10,13 +10,17 @@ import type {
 } from "./stream-events";
 import { createToolUiEffectsHandler } from "./tool-ui-effects";
 import {
+  detailFromToolCallCard,
   isWriteTool,
+  toolCallCardFromArgs,
+  toolCallCardFromResult,
   toolCallDetailFromArgs,
   toolCallDetailFromResult,
   toolCallErrorDetail,
   toolCallLabel,
   toolCallPreparingDetail,
   writeToolBodyText,
+  type ToolCallCardParts,
 } from "./tool-call-ui";
 import { cancelVisitorChoices } from "./choice-pending";
 import { cancelVisitorEditorDrafts } from "./editor-draft-wait";
@@ -212,6 +216,7 @@ function bindAgentEvents(opts: {
   } = opts;
   const onToolUi = createToolUiEffectsHandler(onEvent);
   const toolStartDetail = new Map<string, string>();
+  const toolStartCard = new Map<string, ToolCallCardParts>();
   /** toolCallId → 启动参数，落盘 tool 交换时用 */
   const toolStartArgs = new Map<string, Record<string, unknown>>();
   /** contentIndex → 已推过的 preparing 卡片，避免 toolcall_delta 刷屏 */
@@ -300,8 +305,12 @@ function bindAgentEvents(opts: {
     }
 
     if (event.type === "tool_execution_start") {
-      const detail = toolCallDetailFromArgs(event.toolName, event.args);
+      const card = toolCallCardFromArgs(event.toolName, event.args);
+      const detail =
+        detailFromToolCallCard(card) ||
+        toolCallDetailFromArgs(event.toolName, event.args);
       if (detail) toolStartDetail.set(event.toolCallId, detail);
+      toolStartCard.set(event.toolCallId, card);
       if (shouldPersistToolResult(event.toolName)) {
         toolStartArgs.set(
           event.toolCallId,
@@ -315,6 +324,7 @@ function bindAgentEvents(opts: {
         label: toolCallLabel(event.toolName),
         status: "running",
         ...(detail ? { detail } : {}),
+        ...cardFields(card),
       });
       return;
     }
@@ -322,13 +332,19 @@ function bindAgentEvents(opts: {
     if (event.type === "tool_execution_end") {
       const startDetail = toolStartDetail.get(event.toolCallId);
       toolStartDetail.delete(event.toolCallId);
+      const startCard = toolStartCard.get(event.toolCallId);
+      toolStartCard.delete(event.toolCallId);
+      const card = event.isError
+        ? {
+            ...(startCard ?? {}),
+            output: toolCallErrorDetail(event.result, startDetail),
+            summary: startCard?.summary,
+          }
+        : toolCallCardFromResult(event.toolName, event.result, startCard);
       const detail = event.isError
         ? toolCallErrorDetail(event.result, startDetail)
-        : toolCallDetailFromResult(
-            event.toolName,
-            event.result,
-            startDetail,
-          );
+        : detailFromToolCallCard(card) ||
+          toolCallDetailFromResult(event.toolName, event.result, startDetail);
       const webResults =
         !event.isError && event.toolName === "web_search"
           ? webResultsFromToolResult(event.result)
@@ -340,6 +356,7 @@ function bindAgentEvents(opts: {
         label: toolCallLabel(event.toolName),
         status: event.isError ? "error" : "done",
         ...(detail ? { detail } : {}),
+        ...cardFields(card),
         ...(webResults ? { webResults } : {}),
       });
       onToolUi(event);
@@ -401,7 +418,9 @@ function emitToolCallPreparing(
     prev?.toolCallId ?? (rawId || `pending:${ame.contentIndex}`);
 
   const args = block.arguments;
-  const detail = toolCallPreparingDetail(toolName, args);
+  const card = toolCallCardFromArgs(toolName, args);
+  const detail =
+    detailFromToolCallCard(card) || toolCallPreparingDetail(toolName, args);
   const body = isWriteTool(toolName) ? writeToolBodyText(toolName, args) : "";
   // 帮写/覆写更密推送，卡片增量滚动更跟手；读工具跟入参变化推，避免停在「正在准备参数」
   const bucketSize =
@@ -438,5 +457,22 @@ function emitToolCallPreparing(
     label: toolName === "tool" ? "调用工具" : toolCallLabel(toolName),
     status: "preparing",
     ...(detail ? { detail } : {}),
+    ...cardFields(card),
   });
+}
+
+function cardFields(card: ToolCallCardParts): {
+  summary?: string;
+  input?: string;
+  output?: string;
+  documentId?: string;
+  documentTitle?: string;
+} {
+  return {
+    ...(card.summary ? { summary: card.summary } : {}),
+    ...(card.input ? { input: card.input } : {}),
+    ...(card.output ? { output: card.output } : {}),
+    ...(card.documentId ? { documentId: card.documentId } : {}),
+    ...(card.documentTitle ? { documentTitle: card.documentTitle } : {}),
+  };
 }

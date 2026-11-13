@@ -4,6 +4,8 @@ import {
   headBodyPreview,
   isWriteTool,
   streamingBodyPreview,
+  toolCallCardFromArgs,
+  toolCallCardFromResult,
   toolCallDetailFromArgs,
   toolCallDetailFromResult,
   toolCallErrorDetail,
@@ -213,6 +215,87 @@ describe("toolCallDetailFromResult", () => {
     ).toBe("目录预览");
   });
 
+  it("shows get_document content in the card (≤10k full)", () => {
+    const body = "# 标题\n\n一段正文。";
+    const detail = toolCallDetailFromResult(
+      "get_document",
+      {
+        details: {
+          displayName: "轨迹任务",
+          content: body,
+          contentTruncated: false,
+        },
+      },
+      undefined,
+    );
+    expect(detail).toContain('已读「轨迹任务」');
+    expect(detail).toContain(`${body.length} 字`);
+    expect(detail).toContain("# 标题");
+    expect(detail).toContain("一段正文。");
+    expect(detail).not.toContain("已截断");
+  });
+
+  it("truncates get_document card body over 10k chars", () => {
+    const body = "あ".repeat(10_050);
+    const detail = toolCallDetailFromResult(
+      "get_document",
+      {
+        details: {
+          displayName: "长文",
+          content: body,
+          contentTruncated: false,
+        },
+      },
+      undefined,
+    );
+    expect(detail).toContain("已截断");
+    expect(detail).toContain("10050 字");
+    // meta + newline + first 10000 + \n…
+    const output = detail!.slice(detail!.indexOf("\n") + 1);
+    expect(output.endsWith("…")).toBe(true);
+    expect(output.replace(/\n…$/, "").length).toBe(10_000);
+  });
+
+  it("shows get_document_commit content in the card", () => {
+    const detail = toolCallDetailFromResult(
+      "get_document_commit",
+      {
+        details: {
+          commitId: "abc12345-xxxx",
+          message: "修复文案",
+          content: "## 旧版\nhello",
+        },
+      },
+      undefined,
+    );
+    expect(detail).toContain("已读历史「修复文案」");
+    expect(detail).toContain("## 旧版");
+    expect(detail).toContain("hello");
+  });
+
+  it("shows get_document_lexical_lines blocks in the card", () => {
+    const detail = toolCallDetailFromResult(
+      "get_document_lexical_lines",
+      {
+        details: {
+          displayName: "笔记",
+          lineCount: 2,
+          truncated: false,
+          lines: {
+            "1": "# 标题",
+            "2": "第一段正文",
+          },
+        },
+      },
+      "documentId=abc",
+    );
+    expect(detail).toContain('已读「笔记」');
+    expect(detail).toContain("2 块");
+    expect(detail).toContain("1: # 标题");
+    expect(detail).toContain("2: 第一段正文");
+    expect(detail).not.toBe("documentId=abc");
+  });
+
   it("shows run_plugin_cli stdout/stderr", () => {
     const detail = toolCallDetailFromResult(
       "run_plugin_cli",
@@ -268,5 +351,56 @@ describe("toolCallDetailFromResult", () => {
     );
     expect(detail).toContain("scripts/a.py");
     expect(detail).toContain("print(1)");
+  });
+});
+
+describe("toolCallCardFromArgs / toolCallCardFromResult", () => {
+  it("splits get_document into input + output + document link fields", () => {
+    const prior = toolCallCardFromArgs("get_document", {
+      documentId: "doc-1",
+    });
+    expect(prior.input).toContain("documentId=doc-1");
+    expect(prior.documentId).toBe("doc-1");
+
+    const card = toolCallCardFromResult(
+      "get_document",
+      {
+        details: {
+          documentId: "doc-1",
+          displayName: "无人车",
+          content: "# 标题\n\n正文",
+        },
+      },
+      prior,
+    );
+    expect(card.documentId).toBe("doc-1");
+    expect(card.documentTitle).toBe("无人车");
+    expect(card.summary).toBe("无人车");
+    expect(card.input).toContain("documentId=doc-1");
+    expect(card.output).toContain("# 标题");
+  });
+
+  it("keeps exec command as input and stdout as output", () => {
+    const prior = toolCallCardFromArgs("exec", {
+      command: "grep",
+      args: ["-n", "foo"],
+    });
+    expect(prior.input).toBe("$ grep -n foo");
+    const card = toolCallCardFromResult(
+      "exec",
+      {
+        details: {
+          command: "grep",
+          args: ["-n", "foo"],
+          exitCode: 0,
+          stdout: "1:foo",
+          stderr: "",
+        },
+      },
+      prior,
+    );
+    expect(card.input).toBe("$ grep -n foo");
+    expect(card.output).toContain("1:foo");
+    expect(card.summary).toBe("exit 0");
   });
 });

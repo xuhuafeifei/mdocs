@@ -1415,6 +1415,11 @@ export type AgentStreamEvent =
       label: string;
       status: "preparing" | "running" | "done" | "error";
       detail?: string;
+      summary?: string;
+      input?: string;
+      output?: string;
+      documentId?: string;
+      documentTitle?: string;
       webResults?: {
         query: string;
         items: Array<{

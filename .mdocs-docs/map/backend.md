@@ -60,6 +60,7 @@
   | `src/server/agent/Agent/run-store.ts` | run meta / events JSONL / 重启 interrupted |
   | `src/server/agent/Agent/stream-events.ts` | `AgentStreamEvent` |
   | `src/server/agent/Agent/tool-ui-effects.ts` | `createToolUiEffectsHandler`（tool→SSE） |
+  | `src/server/modules/agent/Agent/tool-call-ui.ts` | 工具卡片：`ToolCallCardParts`（summary/input/output/documentId）；读文档 ≤1万字；`AgentTraceStep` 上输入下输出 + 右侧文档链 |
   | `src/server/agent/Agent/tool-deps.ts` | `ToolDeps` |
   | `src/server/agent/Agent/session-manager.ts` | `listSessions` `createSession` `openSession` `renameSession` `setSessionPinned`（`domainId` / `pinned`） |
   | `src/server/agent/Agent/tools-template.ts` | `manualTools` `accountTools` `choiceTools` `overwriteTools` `codingWriteTools` |
