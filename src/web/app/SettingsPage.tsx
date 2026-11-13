@@ -27,7 +27,6 @@ import {
 } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { TranslationKey } from "../i18n/types";
-import { isDemoMode } from "../services/client";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DraftListPage } from "./DraftListPage";
 import { listAllDrafts } from "../storage/drafts";
@@ -300,7 +299,6 @@ export function SettingsPage(props: {
   }, [autoEdit]);
 
   useEffect(() => {
-    if (isDemoMode()) return;
     let cancelled = false;
     void fetchServerSettingsApi()
       .then((s) => {
@@ -718,11 +716,6 @@ export function SettingsPage(props: {
             <span className="mdocs-settings-mobile-bar-title">{tabTitle}</span>
           </div>
         ) : null}
-        {isDemoMode() && (
-          <div style={{ padding: "8px 16px", background: "#fff3cd", borderBottom: "1px solid #ffc107", fontSize: "0.85rem", color: "#856404", flexShrink: 0 }}>
-            Demo 模式下设置功能有限，数据不会同步到服务器。
-          </div>
-        )}
         {tab === "general" ? (
           // ---- 通用设置 Tab ----
           <div className="mdocs-settings">
@@ -777,43 +770,41 @@ export function SettingsPage(props: {
               </div>
 
               {/* 单文件上传上限（服务端） */}
-              {!isDemoMode() ? (
-                <div className="mdocs-settings-card">
-                  <div className="mdocs-settings-item">
-                    <span className="mdocs-settings-item-info">
-                      <span className="mdocs-settings-card-title">{t("maxUploadSize")}</span>
-                      <span className="mdocs-settings-item-desc">{t("maxUploadSizeDesc")}</span>
-                    </span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <input
-                        type="number"
-                        min={1}
-                        max={2048}
-                        step={1}
-                        value={uploadLimitMb}
-                        onChange={(e) => setUploadLimitMb(e.target.value)}
-                        disabled={uploadLimitBusy}
-                        style={{ width: 88 }}
-                        aria-label={t("maxUploadSize")}
-                      />
-                      <span className="mdocs-settings-item-desc">MB</span>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={uploadLimitBusy}
-                        onClick={() => void handleSaveUploadLimit()}
-                      >
-                        {uploadLimitBusy ? "…" : t("maxUploadSizeSave")}
-                      </button>
-                    </span>
-                  </div>
-                  {uploadLimitMsg ? (
-                    <div className="mdocs-settings-item-desc" style={{ marginTop: 8 }}>
-                      {uploadLimitMsg}
-                    </div>
-                  ) : null}
+              <div className="mdocs-settings-card">
+                <div className="mdocs-settings-item">
+                  <span className="mdocs-settings-item-info">
+                    <span className="mdocs-settings-card-title">{t("maxUploadSize")}</span>
+                    <span className="mdocs-settings-item-desc">{t("maxUploadSizeDesc")}</span>
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="number"
+                      min={1}
+                      max={2048}
+                      step={1}
+                      value={uploadLimitMb}
+                      onChange={(e) => setUploadLimitMb(e.target.value)}
+                      disabled={uploadLimitBusy}
+                      style={{ width: 88 }}
+                      aria-label={t("maxUploadSize")}
+                    />
+                    <span className="mdocs-settings-item-desc">MB</span>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={uploadLimitBusy}
+                      onClick={() => void handleSaveUploadLimit()}
+                    >
+                      {uploadLimitBusy ? "…" : t("maxUploadSizeSave")}
+                    </button>
+                  </span>
                 </div>
-              ) : null}
+                {uploadLimitMsg ? (
+                  <div className="mdocs-settings-item-desc" style={{ marginTop: 8 }}>
+                    {uploadLimitMsg}
+                  </div>
+                ) : null}
+              </div>
 
               {/* CLI Token 管理卡片 */}
               <div className="mdocs-settings-card">

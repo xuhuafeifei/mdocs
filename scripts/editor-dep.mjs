@@ -18,7 +18,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PKG = path.join(ROOT, 'package.json');
 const VENDOR = path.join(ROOT, 'vendor/lobe-editor/package.json');
 /** vendor 不在时 published 回退版本（与最近一次本地 fork 对齐） */
-const DEFAULT_PUBLISHED_VERSION = '1.0.0-fork.40';
+const DEFAULT_PUBLISHED_VERSION = '1.0.0-fork.44';
 
 const mode = process.argv[2];
 if (mode !== 'local' && mode !== 'published') {

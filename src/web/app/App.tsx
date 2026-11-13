@@ -27,7 +27,6 @@ import {
   MDOCS_API_ERROR_EVENT,
   clearVisitorId,
   storeVisitorId,
-  isDemoMode,
 } from "../services/client";
 import { fetchDomainsSafe, pickInitialDomainId } from "../services/domainsBootstrap";
 import {
@@ -1025,15 +1024,6 @@ export function App() {
    * 浏览器自动携带 Cookie，无需 localStorage。
    */
   async function bootstrap(): Promise<void> {
-    // Demo 模式由构建参数 VITE_DEMO_MODE 决定，编译后固定
-    if (isDemoMode()) {
-      const me = await fetchMe();
-      setVisitor(me);
-      await initDomainsAndTree(me.visitorId, setDomains, setCurrentDomainId, refreshTree);
-      setPhase("ready");
-      return;
-    }
-
     try {
       // 直接尝试获取当前访客信息：
       // - 如果有 Cookie（其他端口设置的）→ 直接登录成功
@@ -2284,21 +2274,6 @@ export function App() {
   // ========== 主界面渲染 ==========
   return (
     <div className="mdocs-app-root">
-      {/* Demo Mode 提示横幅 — 在 grid 外面 */}
-      {isDemoMode() && (
-        <div className="mdocs-demo-banner">
-          <span>Demo 模式，部分功能被禁用，请勿长期存储重要数据</span>
-          <span>·</span>
-          <a
-            href="https://github.com/xuhuafeifei/mdocs"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            部署自己的实例 →
-          </a>
-        </div>
-      )}
-
       <div className="mdocs-shell" ref={shellRef}>
       {/* 根据当前视图渲染设置页或文档页 */}
       {view === "settings" ? (
@@ -2471,7 +2446,6 @@ export function App() {
               >
                 <Star size={16} strokeWidth={1.5} />
               </button>
-              {!isDemoMode() && (
               <button
                 type="button"
                 className="mdocs-sidebar-logout mdocs-tooltip"
@@ -2489,7 +2463,6 @@ export function App() {
               >
                 <LogOut size={16} strokeWidth={1.5} />
               </button>
-              )}
             </footer>
               </>
             )}
@@ -3239,84 +3212,80 @@ export function App() {
         </div>
       )}
 
-      {!isDemoMode() && (
-        <>
-          {/* 贴左时左侧已是助手面板，不再叠浮动球 */}
-          {!agentDockLayout ? (
-            <AgentFab
-              open={agentPanelOpen}
-              onToggle={() => {
-                if (agentPanelOpen) {
-                  agentPanelRef.current?.requestClose();
-                } else {
-                  setAgentPanelOpen(true);
-                }
-              }}
-              position={agentFabPos}
-              onPositionChange={setAgentFabPos}
-            />
-          ) : null}
-          <SystemPromptDialog
-            open={systemPromptOpen}
-            onClose={() => setSystemPromptOpen(false)}
-            query={systemPromptQuery}
+      {/* 贴左时左侧已是助手面板，不再叠浮动球 */}
+      {!agentDockLayout ? (
+        <AgentFab
+          open={agentPanelOpen}
+          onToggle={() => {
+            if (agentPanelOpen) {
+              agentPanelRef.current?.requestClose();
+            } else {
+              setAgentPanelOpen(true);
+            }
+          }}
+          position={agentFabPos}
+          onPositionChange={setAgentFabPos}
+        />
+      ) : null}
+      <SystemPromptDialog
+        open={systemPromptOpen}
+        onClose={() => setSystemPromptOpen(false)}
+        query={systemPromptQuery}
+      />
+      {agentPanelOpen && !agentDockLayout ? (
+        <Suspense fallback={null}>
+          <AgentChatPanel
+            ref={agentPanelRef}
+            open={agentPanelOpen}
+            onShowPromptDetail={(query) => {
+              setSystemPromptQuery(query);
+              setSystemPromptOpen(true);
+            }}
+            onClose={() => {
+              setAgentPanelOpen(false);
+              setAgentPanelFullscreen(false);
+            }}
+            visitorName={visitor?.visitorName}
+            fullscreen={isNarrow || agentPanelFullscreen}
+            onToggleFullscreen={
+              isNarrow ? undefined : () => setAgentPanelFullscreen((v) => !v)
+            }
+            onToggleDock={
+              isNarrow
+                ? undefined
+                : () => {
+                    setAgentDockedPersist(true);
+                    setAgentPanelFullscreen(false);
+                  }
+            }
+            domainId={currentDomainId || null}
+            domains={domains}
+            localizeDomainName={(name) => localizeDomainName(name, lang, t)}
+            documentId={focusedDocMeta?.documentId ?? null}
+            documentTitle={focusedDocMeta?.displayName ?? null}
+            documentPath={focusedDocMeta?.relativePath ?? null}
+            graphFileId={focus?.kind === "graph" ? `${focus.resourceId}.graph-file` : null}
+            graphLabel={focus?.kind === "graph" ? focus.name : null}
+            anchorStyle={
+              isNarrow || agentPanelFullscreen
+                ? undefined
+                : agentPanelAnchorStyle(agentFabPos)
+            }
+            onOpenDocument={(docId) => {
+              setView("docs");
+              void guardNavigate(() => navigate(`/doc/${docId}`));
+              setAgentPanelOpen(false);
+              setAgentPanelFullscreen(false);
+            }}
+            onTreeChanged={() => void refreshTree()}
+            onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
+            onDiffProposal={(payload) => void applyDiffProposal(payload)}
+            onProvideEditorDraft={provideEditorDraft}
+            onLexicalLinesSet={handleLexicalLinesSet}
+            onDiffSlotOp={handleDiffSlotOp}
           />
-          {agentPanelOpen && !agentDockLayout ? (
-            <Suspense fallback={null}>
-              <AgentChatPanel
-                ref={agentPanelRef}
-                open={agentPanelOpen}
-                onShowPromptDetail={(query) => {
-                  setSystemPromptQuery(query);
-                  setSystemPromptOpen(true);
-                }}
-                onClose={() => {
-                  setAgentPanelOpen(false);
-                  setAgentPanelFullscreen(false);
-                }}
-                visitorName={visitor?.visitorName}
-                fullscreen={isNarrow || agentPanelFullscreen}
-                onToggleFullscreen={
-                  isNarrow ? undefined : () => setAgentPanelFullscreen((v) => !v)
-                }
-                onToggleDock={
-                  isNarrow
-                    ? undefined
-                    : () => {
-                        setAgentDockedPersist(true);
-                        setAgentPanelFullscreen(false);
-                      }
-                }
-                domainId={currentDomainId || null}
-                domains={domains}
-                localizeDomainName={(name) => localizeDomainName(name, lang, t)}
-                documentId={focusedDocMeta?.documentId ?? null}
-                documentTitle={focusedDocMeta?.displayName ?? null}
-                documentPath={focusedDocMeta?.relativePath ?? null}
-                graphFileId={focus?.kind === "graph" ? `${focus.resourceId}.graph-file` : null}
-                graphLabel={focus?.kind === "graph" ? focus.name : null}
-                anchorStyle={
-                  isNarrow || agentPanelFullscreen
-                    ? undefined
-                    : agentPanelAnchorStyle(agentFabPos)
-                }
-                onOpenDocument={(docId) => {
-                  setView("docs");
-                  void guardNavigate(() => navigate(`/doc/${docId}`));
-                  setAgentPanelOpen(false);
-                  setAgentPanelFullscreen(false);
-                }}
-                onTreeChanged={() => void refreshTree()}
-                onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
-                onDiffProposal={(payload) => void applyDiffProposal(payload)}
-                onProvideEditorDraft={provideEditorDraft}
-                onLexicalLinesSet={handleLexicalLinesSet}
-                onDiffSlotOp={handleDiffSlotOp}
-              />
-            </Suspense>
-          ) : null}
-        </>
-      )}
+        </Suspense>
+      ) : null}
 
 
       <DocSearchOverlay
