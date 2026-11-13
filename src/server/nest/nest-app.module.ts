@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ServerSettingsController } from "../infra/config/server-settings.controller.js";
+import { MemesController } from "../modules/memes/controller/memes.controller.js";
 import { PluginsController } from "../modules/plugins/controller/plugins.controller.js";
 import { TreeController } from "../modules/tree/controller/tree.controller.js";
 import { CliTokensController } from "../modules/visitor/controller/cli-tokens.controller.js";
@@ -16,6 +17,7 @@ import { VisitorsController } from "../modules/visitor/controller/visitors.contr
     VisitorsController,
     CliTokensController,
     PluginsController,
+    MemesController,
   ],
 })
 export class NestAppModule {}
