@@ -4,12 +4,16 @@ import {
   Get,
   Post,
   Query,
-  Req,
   Res,
   UseGuards,
 } from "@nestjs/common";
-import type { Request, Response } from "express";
-import { NestRequireVisitorGuard } from "../../../nest/guards/nest-require-visitor.guard.js";
+import type { Response } from "express";
+import {
+  CurrentVisitor,
+  VisitorId,
+} from "../../../nest/decorators/visitor.decorators.js";
+import { RequireVisitorGuard } from "../../../nest/guards/require-visitor.guard.js";
+import type { VisitorRow } from "../../../infra/db/repositories/visitor.repo.js";
 import {
   changeVisitorPassword,
   getCurrentVisitor,
@@ -63,33 +67,36 @@ export class VisitorsController {
   }
 
   @Post("recovery-code")
-  @UseGuards(NestRequireVisitorGuard)
-  recoveryCode(@Req() req: Request) {
-    return issueRecoveryCode(req.visitor!.visitor_id);
+  @UseGuards(RequireVisitorGuard)
+  recoveryCode(@VisitorId() visitorId: string) {
+    return issueRecoveryCode(visitorId);
   }
 
   @Post("set-password")
-  @UseGuards(NestRequireVisitorGuard)
-  setPassword(@Req() req: Request, @Body() body: SetPasswordRequest) {
-    return changeVisitorPassword(req.visitor!.visitor_id, (body.password ?? "").trim());
+  @UseGuards(RequireVisitorGuard)
+  setPassword(@VisitorId() visitorId: string, @Body() body: SetPasswordRequest) {
+    return changeVisitorPassword(visitorId, (body.password ?? "").trim());
   }
 
   @Get()
-  @UseGuards(NestRequireVisitorGuard)
+  @UseGuards(RequireVisitorGuard)
   directory() {
     return listVisitorDirectory();
   }
 
   @Get("me")
-  @UseGuards(NestRequireVisitorGuard)
-  me(@Req() req: Request) {
-    return getCurrentVisitor(req.visitor!);
+  @UseGuards(RequireVisitorGuard)
+  me(@CurrentVisitor() visitor: VisitorRow) {
+    return getCurrentVisitor(visitor);
   }
 
   @Get("me/documents")
-  @UseGuards(NestRequireVisitorGuard)
-  myDocuments(@Req() req: Request, @Query() query: ListMyDocumentsRequest) {
-    return listCurrentVisitorDocuments(req.visitor!.visitor_id, {
+  @UseGuards(RequireVisitorGuard)
+  myDocuments(
+    @VisitorId() visitorId: string,
+    @Query() query: ListMyDocumentsRequest,
+  ) {
+    return listCurrentVisitorDocuments(visitorId, {
       offset: query.offset,
       limit: query.limit,
       domainId: query.domainId,

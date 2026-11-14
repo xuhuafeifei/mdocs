@@ -1,7 +1,7 @@
 import { buildApp, mountApiNotFound } from "./app.js";
 import { getConfig } from "./infra/config/index.js";
 import { useLogger } from "./infra/logger/logger.js";
-import { attachNest } from "./nest/nest-attach.js";
+import { attachNest } from "./nest/attach.js";
 
 const log = useLogger("server");
 

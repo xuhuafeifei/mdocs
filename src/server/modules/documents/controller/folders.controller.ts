@@ -6,22 +6,21 @@ import {
   HttpStatus,
   Param,
   Post,
-  Req,
   UseGuards,
 } from "@nestjs/common";
-import type { Request } from "express";
-import { NestRequireVisitorGuard } from "../../../nest/guards/nest-require-visitor.guard.js";
+import { VisitorId } from "../../../nest/decorators/visitor.decorators.js";
+import { RequireVisitorGuard } from "../../../nest/guards/require-visitor.guard.js";
 import { createFolder, deleteFolder } from "../application/folders.application.js";
 import { CreateFolderRequest } from "../request/create-folder.request.js";
 
 @Controller("api/folders")
-@UseGuards(NestRequireVisitorGuard)
+@UseGuards(RequireVisitorGuard)
 export class FoldersController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Req() req: Request, @Body() body: CreateFolderRequest) {
+  create(@VisitorId() visitorId: string, @Body() body: CreateFolderRequest) {
     return createFolder({
-      actorVisitorId: req.visitor!.visitor_id,
+      actorVisitorId: visitorId,
       name: body.name,
       parentId: body.parentId,
       domainId: body.domainId,
@@ -32,9 +31,12 @@ export class FoldersController {
 
   @Delete(":folderId")
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Req() req: Request, @Param("folderId") folderId: string): void {
+  remove(
+    @VisitorId() visitorId: string,
+    @Param("folderId") folderId: string,
+  ): void {
     deleteFolder({
-      actorVisitorId: req.visitor!.visitor_id,
+      actorVisitorId: visitorId,
       folderId,
     });
   }

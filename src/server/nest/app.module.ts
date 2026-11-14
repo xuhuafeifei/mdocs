@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ServerSettingsController } from "../infra/config/server-settings.controller.js";
 import { FoldersController } from "../modules/documents/controller/folders.controller.js";
 import { GraphController } from "../modules/documents/controller/graph.controller.js";
+import { DomainMemberTemplatesController } from "../modules/domains/controller/domain-member-templates.controller.js";
 import { DomainsController } from "../modules/domains/controller/domains.controller.js";
 import { McpServersController } from "../modules/mcp/controller/mcp-servers.controller.js";
 import { MemesController } from "../modules/memes/controller/memes.controller.js";
@@ -26,6 +27,7 @@ import { VisitorsController } from "../modules/visitor/controller/visitors.contr
     GraphController,
     FoldersController,
     DomainsController,
+    DomainMemberTemplatesController,
   ],
 })
-export class NestAppModule {}
+export class AppModule {}

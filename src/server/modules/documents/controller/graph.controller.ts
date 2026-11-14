@@ -1,6 +1,6 @@
-import { Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
-import type { Request } from "express";
-import { NestRequireVisitorGuard } from "../../../nest/guards/nest-require-visitor.guard.js";
+import { Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { VisitorId } from "../../../nest/decorators/visitor.decorators.js";
+import { RequireVisitorGuard } from "../../../nest/guards/require-visitor.guard.js";
 import {
   enqueueDomainGraphAnalyze,
   enqueueFolderGraphAnalyze,
@@ -10,7 +10,7 @@ import {
 } from "../application/graph.application.js";
 
 @Controller("api/graph")
-@UseGuards(NestRequireVisitorGuard)
+@UseGuards(RequireVisitorGuard)
 export class GraphController {
   @Get("tasks/:taskId")
   task(@Param("taskId") taskId: string) {
@@ -18,22 +18,28 @@ export class GraphController {
   }
 
   @Get("domain/:domainId")
-  domain(@Req() req: Request, @Param("domainId") domainId: string) {
-    return readDomainGraph(domainId, req.visitor?.visitor_id ?? null);
+  domain(@VisitorId() visitorId: string, @Param("domainId") domainId: string) {
+    return readDomainGraph(domainId, visitorId);
   }
 
   @Post("domain/:domainId/analyze")
-  analyzeDomain(@Req() req: Request, @Param("domainId") domainId: string) {
-    return enqueueDomainGraphAnalyze(domainId, req.visitor?.visitor_id ?? null);
+  analyzeDomain(
+    @VisitorId() visitorId: string,
+    @Param("domainId") domainId: string,
+  ) {
+    return enqueueDomainGraphAnalyze(domainId, visitorId);
   }
 
   @Get(":folderId")
-  folder(@Req() req: Request, @Param("folderId") folderId: string) {
-    return readFolderGraph(folderId, req.visitor?.visitor_id ?? null);
+  folder(@VisitorId() visitorId: string, @Param("folderId") folderId: string) {
+    return readFolderGraph(folderId, visitorId);
   }
 
   @Post(":folderId/analyze")
-  analyzeFolder(@Req() req: Request, @Param("folderId") folderId: string) {
-    return enqueueFolderGraphAnalyze(folderId, req.visitor?.visitor_id ?? null);
+  analyzeFolder(
+    @VisitorId() visitorId: string,
+    @Param("folderId") folderId: string,
+  ) {
+    return enqueueFolderGraphAnalyze(folderId, visitorId);
   }
 }

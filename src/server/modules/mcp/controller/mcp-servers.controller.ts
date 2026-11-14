@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Put, UseGuards } from "@nestjs/common";
-import { NestRequireVisitorGuard } from "../../../nest/guards/nest-require-visitor.guard.js";
+import { RequireVisitorGuard } from "../../../nest/guards/require-visitor.guard.js";
 import {
   listMcpServersPayload,
   replaceMcpServersPayload,
@@ -8,7 +8,7 @@ import {
 import { ReplaceMcpServersRequest } from "../request/replace-mcp-servers.request.js";
 
 @Controller("api/mcp-servers")
-@UseGuards(NestRequireVisitorGuard)
+@UseGuards(RequireVisitorGuard)
 export class McpServersController {
   @Get()
   list() {

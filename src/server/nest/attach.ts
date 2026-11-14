@@ -3,19 +3,22 @@
  * reflect-metadata 必须先于带装饰器的模块加载。
  */
 import "reflect-metadata";
-import type { Application } from "express";
+import type { Application, NextFunction, Request, Response } from "express";
 import { BadRequestException, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { ExpressAdapter } from "@nestjs/platform-express";
-import { NestAppModule } from "./nest-app.module.js";
-import { NestApiExceptionFilter } from "./nest-api-exception.filter.js";
-import { NestWrapDataInterceptor } from "./nest-wrap-data.interceptor.js";
+import { AppModule } from "./app.module.js";
+import { VisitorContext } from "./context/visitor.context.js";
+import { ApiExceptionFilter } from "./filters/api-exception.filter.js";
+import { WrapDataInterceptor } from "./interceptors/wrap-data.interceptor.js";
 
 export async function attachNest(server: Application): Promise<void> {
-  const app = await NestFactory.create(NestAppModule, new ExpressAdapter(server), {
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
     bodyParser: false,
     logger: ["error", "warn"],
   });
+  // Guard 早于 Interceptor：用 middleware 写入 ALS，供 Guard / @VisitorId 共用
+  app.use(bindVisitorContext);
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -29,7 +32,15 @@ export async function attachNest(server: Application): Promise<void> {
       },
     }),
   );
-  app.useGlobalInterceptors(new NestWrapDataInterceptor());
-  app.useGlobalFilters(new NestApiExceptionFilter());
+  app.useGlobalInterceptors(new WrapDataInterceptor());
+  app.useGlobalFilters(new ApiExceptionFilter());
   await app.init();
+}
+
+function bindVisitorContext(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  VisitorContext.run(req.visitor ?? null, () => next());
 }

@@ -123,7 +123,7 @@ async function startServer(): Promise<void> {
   const { useLogger } = await import("../infra/logger/logger.js");
   const { getConfig } = await import("../infra/config/index.js");
   const { buildApp, mountApiNotFound } = await import("../app.js");
-  const { attachNest } = await import("../nest/nest-attach.js");
+  const { attachNest } = await import("../nest/attach.js");
   const log = useLogger("cli-server");
   const cfg = getConfig();
   const app = buildApp();

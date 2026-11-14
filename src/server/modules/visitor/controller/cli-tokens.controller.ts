@@ -3,16 +3,13 @@ import {
   Controller,
   Delete,
   Get,
-  HttpCode,
-  HttpStatus,
   Param,
   Patch,
   Post,
-  Req,
   UseGuards,
 } from "@nestjs/common";
-import type { Request } from "express";
-import { NestRequireVisitorGuard } from "../../../nest/guards/nest-require-visitor.guard.js";
+import { VisitorId } from "../../../nest/decorators/visitor.decorators.js";
+import { RequireVisitorGuard } from "../../../nest/guards/require-visitor.guard.js";
 import {
   issueCliToken,
   listVisitorCliTokens,
@@ -22,33 +19,30 @@ import {
 import { CreateCliTokenRequest } from "../request/create-cli-token.request.js";
 import { SetCliTokenRevokedRequest } from "../request/set-cli-token-revoked.request.js";
 
-@Controller("api/cli")
-@UseGuards(NestRequireVisitorGuard)
+@Controller("api/cli-tokens")
+@UseGuards(RequireVisitorGuard)
 export class CliTokensController {
-  @Post("tokens")
-  @HttpCode(HttpStatus.CREATED)
-  create(@Req() req: Request, @Body() body: CreateCliTokenRequest) {
-    return issueCliToken(req.visitor!.visitor_id, body.name);
+  @Post()
+  create(@VisitorId() visitorId: string, @Body() body: CreateCliTokenRequest) {
+    return issueCliToken(visitorId, body.name);
   }
 
-  @Get("tokens")
-  list(@Req() req: Request) {
-    return listVisitorCliTokens(req.visitor!.visitor_id);
+  @Get()
+  list(@VisitorId() visitorId: string) {
+    return listVisitorCliTokens(visitorId);
   }
 
-  @Patch("tokens/:tokenId")
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @Patch(":tokenId")
   setRevoked(
-    @Req() req: Request,
+    @VisitorId() visitorId: string,
     @Param("tokenId") tokenId: string,
     @Body() body: SetCliTokenRevokedRequest,
   ): void {
-    updateCliTokenRevoked(req.visitor!.visitor_id, tokenId, body.revoked);
+    updateCliTokenRevoked(visitorId, tokenId, body.revoked);
   }
 
-  @Delete("tokens/:tokenId")
-  @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Req() req: Request, @Param("tokenId") tokenId: string): void {
-    removeCliToken(req.visitor!.visitor_id, tokenId);
+  @Delete(":tokenId")
+  remove(@VisitorId() visitorId: string, @Param("tokenId") tokenId: string): void {
+    removeCliToken(visitorId, tokenId);
   }
 }

@@ -7,16 +7,16 @@ import {
   Patch,
   Post,
   Query,
-  Req,
   Res,
   StreamableFile,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
-import type { Request, Response } from "express";
+import type { Response } from "express";
 import fs from "node:fs";
-import { NestRequireVisitorGuard } from "../../../nest/guards/nest-require-visitor.guard.js";
+import { VisitorId } from "../../../nest/decorators/visitor.decorators.js";
+import { RequireVisitorGuard } from "../../../nest/guards/require-visitor.guard.js";
 import {
   getSystemMemeMeta,
   listMemesForVisitor,
@@ -33,11 +33,11 @@ import { UpdateMemeRequest } from "../request/update-meme.request.js";
 import { UploadMemeRequest } from "../request/upload-meme.request.js";
 
 @Controller("api/memes")
-@UseGuards(NestRequireVisitorGuard)
+@UseGuards(RequireVisitorGuard)
 export class MemesController {
   @Get()
-  list(@Req() req: Request, @Query() query: ListMemesRequest) {
-    return listMemesForVisitor(req.visitor!.visitor_id, query.scope);
+  list(@VisitorId() visitorId: string, @Query() query: ListMemesRequest) {
+    return listMemesForVisitor(visitorId, query.scope);
   }
 
   @Get("system/meta")
@@ -50,14 +50,14 @@ export class MemesController {
     return syncSystemMemes(body.spec);
   }
 
-  /** 取图：文件流，不包 `{ data }`（见 NestWrapDataInterceptor 对 StreamableFile 豁免） */
+  /** 取图：文件流，不包 `{ data }`（见 WrapDataInterceptor 对 StreamableFile 豁免） */
   @Get("image/:id")
   image(
-    @Req() req: Request,
+    @VisitorId() visitorId: string,
     @Param("id") id: string,
     @Res({ passthrough: true }) res: Response,
   ): StreamableFile {
-    const found = resolveMemeForVisitor(req.visitor!.visitor_id, id);
+    const found = resolveMemeForVisitor(visitorId, id);
     res.setHeader("Content-Type", found.mime);
     res.setHeader("Cache-Control", "private, max-age=86400");
     return new StreamableFile(fs.createReadStream(found.filePath));
@@ -66,11 +66,11 @@ export class MemesController {
   @Post()
   @UseInterceptors(NestMemeUploadInterceptor)
   upload(
-    @Req() req: Request,
+    @VisitorId() visitorId: string,
     @UploadedFile() file: Express.Multer.File | undefined,
     @Body() body: UploadMemeRequest,
   ) {
-    return uploadTenantMeme(req.visitor!.visitor_id, file, {
+    return uploadTenantMeme(visitorId, file, {
       desc: body.desc,
       meme_name: body.meme_name,
     });
@@ -78,15 +78,15 @@ export class MemesController {
 
   @Patch(":id")
   patch(
-    @Req() req: Request,
+    @VisitorId() visitorId: string,
     @Param("id") id: string,
     @Body() body: UpdateMemeRequest,
   ) {
-    return patchTenantMeme(req.visitor!.visitor_id, id, { desc: body.desc });
+    return patchTenantMeme(visitorId, id, { desc: body.desc });
   }
 
   @Delete(":id")
-  remove(@Req() req: Request, @Param("id") id: string) {
-    return removeTenantMeme(req.visitor!.visitor_id, id);
+  remove(@VisitorId() visitorId: string, @Param("id") id: string) {
+    return removeTenantMeme(visitorId, id);
   }
 }

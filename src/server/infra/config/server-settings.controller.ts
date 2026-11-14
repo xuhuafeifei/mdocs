@@ -1,6 +1,6 @@
 /**
  * server-settings 属 infra/config，不是业务 module。
- * return 业务结果；`{ data }` 由 NestWrapDataInterceptor 包。
+ * return 业务结果；`{ data }` 由 WrapDataInterceptor 包。
  */
 import { BadRequestException, Body, Controller, Get, Put } from "@nestjs/common";
 import {

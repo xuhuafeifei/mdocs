@@ -99,9 +99,9 @@ export function canRead(
 ## 4. Guard 怎么写（必须薄）
 
 ```ts
-// nest/guards/nest-can-read-document.guard.ts
+// nest/guards/can-read-document.guard.ts
 @Injectable()
-export class NestCanReadDocumentGuard implements CanActivate {
+export class CanReadDocumentGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
     const visitorId = req.visitor?.visitor_id ?? null;
@@ -117,7 +117,7 @@ Controller：
 
 ```ts
 @Get(":documentId")
-@UseGuards(NestCanReadDocumentGuard)
+@UseGuards(CanReadDocumentGuard)
 get(@Param("documentId") documentId: string) {
   return getDocument(documentId); // application 不再重复鉴权（或再 assert 一次作防御，二选一，建议 Guard 负责 HTTP）
 }
@@ -138,7 +138,7 @@ export function getDocumentTree(domainId: string | undefined, visitorId: string 
 }
 ```
 
-HTTP：`GET /api/tree` 可加 `NestCanEnterDomainGuard`（query.domainId）；节点过滤仍在 application 调 `canRead`。
+HTTP：`GET /api/tree` 可加 `CanEnterDomainGuard`（query.domainId）；节点过滤仍在 application 调 `canRead`。
 
 ## 6. 复杂度落点
 

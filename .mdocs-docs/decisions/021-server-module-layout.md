@@ -54,11 +54,40 @@ application  ──调──►  mapper（组装 / 映射）  ──结果──
     | **Interceptor** | 前后环绕：统一 `{ data }`、日志、缓存；**不做**列表级 canRead 过滤 |
     | **Exception Filter** | 统一 `{ error: { code, message } }` |
     列表过滤、批量可见性仍在 application 里调 `access`，不塞进 Interceptor。
+  - **访客注入（禁止 controller 摸 `req.visitor`）**：
+    - Express `authMiddleware` 仍负责解析 token → `req.visitor`（全部 Express router 迁完后再做 Nest 原生 auth）。
+    - `nest/attach.ts` 用 middleware 把 `req.visitor` 写入 `VisitorContext`（ALS）；Guard 早于 Interceptor，故不用 Interceptor 写 ALS。
+    - Controller 用 `@VisitorId()` / `@OptionalVisitorId()` / `@CurrentVisitor()`；**application 显式传 `visitorId`**，禁止 import `nest/context`（modules 不依赖 nest）。
+    - 例外：cookie / 文件流仍可用 `@Res({ passthrough: true })`（Response，不是 Request 身份）。
+
+  - **`nest/` 内部目录（按管道职责；根上只留启动入口 + 组合根）**：
+
+```text
+nest/
+  attach.ts                 # 挂 Express、写 ALS、装全局 Pipe/Interceptor/Filter
+  app.module.ts             # 组合根：只注册 controller
+
+  context/                  # 请求作用域存储（ALS）；不是 AOP
+    visitor.context.ts
+  decorators/               # ParamDecorator；读 context
+    visitor.decorators.ts
+  guards/                   # RequireVisitor / CanEnterDomain / CanRead / CanWrite
+  interceptors/
+    wrap-data.interceptor.ts
+  filters/
+    api-exception.filter.ts
+  http/
+    api-envelope.ts         # ApiOk / ApiErr
+```
+
+    - 落位：Guard → `guards/`，Interceptor → `interceptors/`，Filter → `filters/`，ParamDecorator → `decorators/`，请求作用域存储 → `context/`。
+    - 进子目录后文件名不加 `nest-` 前缀；类名同理（如 `RequireVisitorGuard`）。
+    - **禁止**在 `nest/` 根堆零散文件；**禁止** `modules/*/nest/`。将来 Nest 原生 auth 再开 `middleware/`，现阶段不建空目录。
 
   - **模块内 request / response 与 controller 齐平**（面向 Web 的入参/出参形状，不是 RPC DTO，也不叫 `dto/`）：
     - 目录：`modules/<name>/controller/`、`request/`、`response/` 三者平级。
     - `request/`：HTTP body / query / path 的 **class**（`class-validator` 装饰器）；由全局 `ValidationPipe({ transform: true })` 反序列化，controller 直接 `@Query()/@Body() x: XxxRequest`，不手写 `parse*` map。
-    - `response/`：该接口返回的数据形状（可选）；controller **`return` 业务结果**，由 `nest/NestWrapDataInterceptor` 统一包 `{ data }`，禁止 `@Res()+res.json`（除非 SSE/文件流）。
+    - `response/`：该接口返回的数据形状（可选）；controller **`return` 业务结果**，由 `nest/interceptors/WrapDataInterceptor` 统一包 `{ data }`，禁止 `@Res()+res.json`（除非 SSE/文件流）。
     - controller 校验 request 后，把**已净化的字段**传给 application；application / service **不 import** `request/`、`response/`。
     - 跨模块调用走 application/service 的函数参数与返回值（领域形状），不传 HTTP request/response。
   - **`agent` 例外形态**：内部保持函数管道（run / tools / session），不硬套「每个文件都叫 application/service」。语义上它仍是 **application 级编排**：组合 documents / search / access 等模块的基础能力。对话 Agent 和以后调度器拉起的 Agent 都在 `modules/agent/`。
@@ -95,12 +124,10 @@ watch-dog（以后）──→ agent    不碰文档文件，也不被 documents
 src/server/
   main.ts
   cli/
-  nest/                 # Nest 框架装配（与 main 同级）
-    nest-attach.ts
-    nest-app.module.ts  # 组合根：只注册 controller
-    nest-wrap-data.interceptor.ts
-    nest-api-exception.filter.ts
-    nest-api-ok.ts
+  nest/                 # Nest 框架装配（与 main 同级）；内部见上文「nest/ 内部目录」
+    attach.ts
+    app.module.ts
+    context/ decorators/ guards/ interceptors/ filters/ http/
   infra/
     config/
     db/

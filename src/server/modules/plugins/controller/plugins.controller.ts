@@ -9,11 +9,10 @@ import {
   Post,
   Put,
   Query,
-  Req,
   UseGuards,
 } from "@nestjs/common";
-import type { Request } from "express";
-import { NestRequireVisitorGuard } from "../../../nest/guards/nest-require-visitor.guard.js";
+import { VisitorId } from "../../../nest/decorators/visitor.decorators.js";
+import { RequireVisitorGuard } from "../../../nest/guards/require-visitor.guard.js";
 import {
   createCustomPipeline,
   getPipelineJobStatus,
@@ -36,7 +35,7 @@ import { LegacyPluginInstallRequest } from "../request/legacy-plugin-install.req
 import { PutPipelineYamlRequest } from "../request/put-pipeline-yaml.request.js";
 
 @Controller("api/plugins")
-@UseGuards(NestRequireVisitorGuard)
+@UseGuards(RequireVisitorGuard)
 export class PluginsController {
   /** 旧 catalog（Engram 硬编码安装）；新 UI 不使用 */
   @Get()
@@ -45,8 +44,8 @@ export class PluginsController {
   }
 
   @Get("pipelines")
-  listPipelines(@Req() req: Request) {
-    return listPipelinesMarketplace(req.visitor!.visitor_id);
+  listPipelines(@VisitorId() visitorId: string) {
+    return listPipelinesMarketplace(visitorId);
   }
 
   @Get("step-definitions")
@@ -66,8 +65,11 @@ export class PluginsController {
 
   @Post("pipelines/custom")
   @HttpCode(HttpStatus.CREATED)
-  createCustom(@Req() req: Request, @Body() body: CreateCustomPipelineRequest) {
-    return createCustomPipeline(req.visitor!.visitor_id, {
+  createCustom(
+    @VisitorId() visitorId: string,
+    @Body() body: CreateCustomPipelineRequest,
+  ) {
+    return createCustomPipeline(visitorId, {
       name: body.name,
       installMode: body.installMode,
       outputs: body.outputs,
@@ -75,62 +77,57 @@ export class PluginsController {
   }
 
   @Delete("pipelines/custom/:id")
-  deleteCustom(@Req() req: Request, @Param("id") id: string) {
-    return removeCustomPipeline(req.visitor!.visitor_id, id.trim());
+  deleteCustom(@VisitorId() visitorId: string, @Param("id") id: string) {
+    return removeCustomPipeline(visitorId, id.trim());
   }
 
   @Post("pipelines/:scope/:id/install")
   @HttpCode(HttpStatus.ACCEPTED)
   installPipeline(
-    @Req() req: Request,
+    @VisitorId() visitorId: string,
     @Param("scope") scope: string,
     @Param("id") id: string,
   ) {
-    return startPipelineInstallJob(scope, id.trim(), req.visitor!.visitor_id);
+    return startPipelineInstallJob(scope, id.trim(), visitorId);
   }
 
   @Post("pipelines/:scope/:id/uninstall")
   @HttpCode(HttpStatus.ACCEPTED)
   uninstallPipeline(
-    @Req() req: Request,
+    @VisitorId() visitorId: string,
     @Param("scope") scope: string,
     @Param("id") id: string,
   ) {
-    return startPipelineUninstallJob(scope, id.trim(), req.visitor!.visitor_id);
+    return startPipelineUninstallJob(scope, id.trim(), visitorId);
   }
 
   @Get("pipelines/:scope/:id/job")
   pipelineJob(
-    @Req() req: Request,
+    @VisitorId() visitorId: string,
     @Param("scope") scope: string,
     @Param("id") id: string,
     @Query() query: GetPipelineJobRequest,
   ) {
-    return getPipelineJobStatus(
-      scope,
-      id.trim(),
-      req.visitor!.visitor_id,
-      query.action,
-    );
+    return getPipelineJobStatus(scope, id.trim(), visitorId, query.action);
   }
 
   @Get("pipelines/:scope/:id")
   getYaml(
-    @Req() req: Request,
+    @VisitorId() visitorId: string,
     @Param("scope") scope: string,
     @Param("id") id: string,
   ) {
-    return getPipelineYaml(scope, id.trim(), req.visitor!.visitor_id);
+    return getPipelineYaml(scope, id.trim(), visitorId);
   }
 
   @Put("pipelines/:scope/:id")
   putYaml(
-    @Req() req: Request,
+    @VisitorId() visitorId: string,
     @Param("scope") scope: string,
     @Param("id") id: string,
     @Body() body: PutPipelineYamlRequest,
   ) {
-    return putPipelineYaml(scope, id.trim(), body.yaml, req.visitor!.visitor_id);
+    return putPipelineYaml(scope, id.trim(), body.yaml, visitorId);
   }
 
   /** 旧 catalog 安装（兼容） */

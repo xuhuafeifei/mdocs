@@ -27,7 +27,9 @@
   | `src/server/modules/visitor/visitor.service.ts` | 注册 / 解析等薄能力 |
   | `src/server/modules/visitor/cli-token.service.ts` | CLI 签发 / 解析（包内依赖 visitor） |
   | `src/server/modules/visitor/token.ts` | 哈希 / 生成工具 |
-  | `src/server/nest/guards/nest-require-visitor.guard.ts` | 要求已解析 `req.visitor` |
+  | `src/server/nest/guards/require-visitor.guard.ts` | 要求已解析访客（VisitorContext / req.visitor） |
+  | `src/server/nest/context/visitor.context.ts` | 请求级访客 ALS；attach 写入 |
+  | `src/server/nest/decorators/visitor.decorators.ts` | `@VisitorId` / `@CurrentVisitor` |
   | `src/shared/types/visitor.ts` | 类型 |
 
 ### 访问控制（档位判定）

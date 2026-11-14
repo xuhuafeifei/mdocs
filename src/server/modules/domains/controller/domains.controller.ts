@@ -8,11 +8,10 @@ import {
   Param,
   Post,
   Put,
-  Req,
   UseGuards,
 } from "@nestjs/common";
-import type { Request } from "express";
-import { NestRequireVisitorGuard } from "../../../nest/guards/nest-require-visitor.guard.js";
+import { VisitorId } from "../../../nest/decorators/visitor.decorators.js";
+import { RequireVisitorGuard } from "../../../nest/guards/require-visitor.guard.js";
 import {
   createDomain,
   deleteDomain,
@@ -28,54 +27,54 @@ import { RenameDomainRequest } from "../request/rename-domain.request.js";
 import { ReplaceDomainMembersRequest } from "../request/replace-domain-members.request.js";
 
 @Controller("api/domains")
-@UseGuards(NestRequireVisitorGuard)
+@UseGuards(RequireVisitorGuard)
 export class DomainsController {
   @Get()
-  list(@Req() req: Request) {
-    return listVisibleDomains(req.visitor?.visitor_id ?? null);
+  list(@VisitorId() visitorId: string) {
+    return listVisibleDomains(visitorId);
   }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Req() req: Request, @Body() body: CreateDomainRequest) {
+  create(@VisitorId() visitorId: string, @Body() body: CreateDomainRequest) {
     return createDomain({
-      actorVisitorId: req.visitor!.visitor_id,
+      actorVisitorId: visitorId,
       domainName: body.domainName,
       permission: body.permission,
     });
   }
 
   @Get(":id/members")
-  members(@Req() req: Request, @Param("id") id: string) {
-    return listDomainMembersForCreator(req.visitor!.visitor_id, id);
+  members(@VisitorId() visitorId: string, @Param("id") id: string) {
+    return listDomainMembersForCreator(visitorId, id);
   }
 
   @Put(":id/members")
   replaceMembers(
-    @Req() req: Request,
+    @VisitorId() visitorId: string,
     @Param("id") id: string,
     @Body() body: ReplaceDomainMembersRequest,
   ) {
-    return replaceDomainMembersForCreator(req.visitor!.visitor_id, id, body);
+    return replaceDomainMembersForCreator(visitorId, id, body);
   }
 
   @Put(":id/permission")
   setPermission(
-    @Req() req: Request,
+    @VisitorId() visitorId: string,
     @Param("id") id: string,
     @Body() body: ChangeDomainPermissionRequest,
   ) {
-    return updateDomainPermission(req.visitor!.visitor_id, id, body.permission);
+    return updateDomainPermission(visitorId, id, body.permission);
   }
 
   @Put(":id")
   rename(
-    @Req() req: Request,
+    @VisitorId() visitorId: string,
     @Param("id") id: string,
     @Body() body: RenameDomainRequest,
   ) {
     return renameDomain({
-      actorVisitorId: req.visitor!.visitor_id,
+      actorVisitorId: visitorId,
       domainId: id,
       domainName: body.domainName,
     });
@@ -83,7 +82,7 @@ export class DomainsController {
 
   @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Req() req: Request, @Param("id") id: string): void {
-    deleteDomain(req.visitor!.visitor_id, id);
+  remove(@VisitorId() visitorId: string, @Param("id") id: string): void {
+    deleteDomain(visitorId, id);
   }
 }

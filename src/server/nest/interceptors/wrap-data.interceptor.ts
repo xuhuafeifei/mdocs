@@ -6,7 +6,7 @@ import {
   StreamableFile,
 } from "@nestjs/common";
 import { Observable, map } from "rxjs";
-import type { NestApiOk } from "./nest-api-ok.js";
+import type { ApiOk } from "../http/api-envelope.js";
 
 /**
  * controller `return` 的业务结果 → `{ data }`。
@@ -14,11 +14,11 @@ import type { NestApiOk } from "./nest-api-ok.js";
  * `StreamableFile`（取图等）原样放行，不包信封。
  */
 @Injectable()
-export class NestWrapDataInterceptor implements NestInterceptor {
+export class WrapDataInterceptor implements NestInterceptor {
   intercept(
     _context: ExecutionContext,
     next: CallHandler,
-  ): Observable<NestApiOk<unknown> | StreamableFile> {
+  ): Observable<ApiOk<unknown> | StreamableFile> {
     return next.handle().pipe(
       map((data) => (data instanceof StreamableFile ? data : { data })),
     );

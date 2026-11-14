@@ -6,7 +6,7 @@ import {
   HttpStatus,
 } from "@nestjs/common";
 import type { Response } from "express";
-import type { NestApiErr } from "./nest-api-ok.js";
+import type { ApiErr } from "../http/api-envelope.js";
 
 type CodedHttpError = {
   code: string;
@@ -20,12 +20,12 @@ type CodedHttpError = {
  * 不 import 业务模块：识别带 code/status 的 Error（如 DocumentError）即可。
  */
 @Catch()
-export class NestApiExceptionFilter implements ExceptionFilter {
+export class ApiExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const res = host.switchToHttp().getResponse<Response>();
 
     if (isCodedHttpError(exception)) {
-      const body: NestApiErr = {
+      const body: ApiErr = {
         error: {
           code: exception.code,
           message: exception.message,
@@ -39,20 +39,20 @@ export class NestApiExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const raw = exception.getResponse();
-      if (isNestApiErr(raw)) {
+      if (isApiErr(raw)) {
         res.status(status).json(raw);
         return;
       }
       const message = nestHttpMessage(raw, exception.message);
       res.status(status).json({
         error: { code: httpStatusCode(status), message },
-      } satisfies NestApiErr);
+      } satisfies ApiErr);
       return;
     }
 
     res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       error: { code: "INTERNAL", message: "internal error" },
-    } satisfies NestApiErr);
+    } satisfies ApiErr);
   }
 }
 
@@ -62,7 +62,7 @@ function isCodedHttpError(e: unknown): e is CodedHttpError {
   return typeof x.code === "string" && typeof x.status === "number";
 }
 
-function isNestApiErr(raw: unknown): raw is NestApiErr {
+function isApiErr(raw: unknown): raw is ApiErr {
   if (!raw || typeof raw !== "object") return false;
   const err = (raw as { error?: unknown }).error;
   return (

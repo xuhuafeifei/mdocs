@@ -7,7 +7,6 @@ import { getConfig } from "./infra/config/index.js";
 import { getDb } from "./infra/db/connection.js";
 import { authMiddleware } from "./modules/visitor/auth.middleware.js";
 import { buildDocumentsRouter } from "./routes/documents.routes.js";
-import { buildDomainMemberTemplatesRouter } from "./routes/domain-member-templates.routes.js";
 import { buildBookmarksRouter } from "./routes/bookmarks.routes.js";
 import { documentCommentsRouter } from "./routes/document-comments.routes.js";
 import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
@@ -81,7 +80,6 @@ export function buildApp(): Application {
   app.use("/api", authMiddleware);
   app.use("/api/assets", buildAssetsUploadRouter());
   app.use("/api/documents", buildDocumentsRouter());
-  app.use("/api/domain-member-templates", buildDomainMemberTemplatesRouter());
   app.use("/api/bookmarks", buildBookmarksRouter());
   app.use("/api/agent", buildAgentRouter());
   // 发表/删除评论：需要认证
