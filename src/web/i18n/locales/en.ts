@@ -171,6 +171,11 @@ export const en: Record<TranslationKey, string> = {
   // Settings
   settings: "Settings",
   general: "General",
+  features: "Features",
+  featuresIntro: "Optional editor behaviors. Changes apply immediately without reload.",
+  featureSelectAllSkipLeadingH1: "Select-all in body skips leading H1",
+  featureSelectAllSkipLeadingH1Desc:
+    "When you press ⌘A / Ctrl+A in the body, if the first non-empty block is an H1 (empty paragraphs before it are OK), the selection excludes that heading. Select-all inside the H1 still selects only the title.",
   settingsNavSearch: "Search settings…",
   settingsNavNoMatch: "No matches",
   language: "Language",

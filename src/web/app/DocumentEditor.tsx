@@ -54,6 +54,7 @@ import {
 } from "@lobehub/editor";
 import type { ApplyAgentDiffFn } from "./lexical-lines/agentDiff";
 import { MdocsDiffPlugin } from "./lexical-lines/MdocsDiffPlugin";
+import { SelectAllSkipLeadingH1Plugin } from "./lexical/SelectAllSkipLeadingH1Plugin";
 import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
 import { Copy, Heading1Icon, Heading2Icon, Heading3Icon, History, InfoIcon, MinusIcon, Network, SigmaIcon, Table2Icon, ShieldUser, Users, Star, Workflow } from "lucide-react";
@@ -1108,6 +1109,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       ReactBlockPlugin,
       ReactAlertPlugin,
       ReactMarkdownPlugin,
+      SelectAllSkipLeadingH1Plugin,
       MdocsDiffPlugin,
       ReactListPlugin,
       ReactLinkPlugin,
