@@ -6,6 +6,7 @@ import {
   HttpStatus,
 } from "@nestjs/common";
 import type { Response } from "express";
+import { StoragePathError } from "../../infra/storage/paths.js";
 import type { ApiErr } from "../http/api-envelope.js";
 
 type CodedHttpError = {
@@ -33,6 +34,13 @@ export class ApiExceptionFilter implements ExceptionFilter {
         },
       };
       res.status(exception.status).json(body);
+      return;
+    }
+
+    if (exception instanceof StoragePathError) {
+      res.status(HttpStatus.BAD_REQUEST).json({
+        error: { code: "INVALID_PATH", message: exception.message },
+      } satisfies ApiErr);
       return;
     }
 

@@ -1,5 +1,8 @@
 import { Module } from "@nestjs/common";
 import { ServerSettingsController } from "../infra/config/server-settings.controller.js";
+import { DocumentInvitesController } from "../modules/documents/controller/document-invites.controller.js";
+import { DocumentJobsController } from "../modules/documents/controller/document-jobs.controller.js";
+import { DocumentsController } from "../modules/documents/controller/documents.controller.js";
 import { FoldersController } from "../modules/documents/controller/folders.controller.js";
 import { GraphController } from "../modules/documents/controller/graph.controller.js";
 import { DomainMemberTemplatesController } from "../modules/domains/controller/domain-member-templates.controller.js";
@@ -26,6 +29,9 @@ import { VisitorsController } from "../modules/visitor/controller/visitors.contr
     McpServersController,
     GraphController,
     FoldersController,
+    DocumentsController,
+    DocumentJobsController,
+    DocumentInvitesController,
     DomainsController,
     DomainMemberTemplatesController,
   ],

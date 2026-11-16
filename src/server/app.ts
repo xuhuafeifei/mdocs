@@ -6,7 +6,6 @@ import cookieParser from "cookie-parser";
 import { getConfig } from "./infra/config/index.js";
 import { getDb } from "./infra/db/connection.js";
 import { authMiddleware } from "./modules/visitor/auth.middleware.js";
-import { buildDocumentsRouter } from "./routes/documents.routes.js";
 import { buildBookmarksRouter } from "./routes/bookmarks.routes.js";
 import { documentCommentsRouter } from "./routes/document-comments.routes.js";
 import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
@@ -79,7 +78,6 @@ export function buildApp(): Application {
   // 后续 /api 路由均需经过身份认证
   app.use("/api", authMiddleware);
   app.use("/api/assets", buildAssetsUploadRouter());
-  app.use("/api/documents", buildDocumentsRouter());
   app.use("/api/bookmarks", buildBookmarksRouter());
   app.use("/api/agent", buildAgentRouter());
   // 发表/删除评论：需要认证

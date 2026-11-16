@@ -33,7 +33,7 @@
   | `src/server/modules/tree/tree.application.ts` | 编排层唯一文件：`getDocumentTree` / `buildDocumentTree` / `buildFolderSubtree` |
   | `src/server/storage/file-store.ts` | `readDocument` / `writeDocument`（拟增 rename） |
   | `src/server/db/repositories/audit.repo.ts` | `insertAuditLog` `findAuditById` `listDocumentDeleteAuditsByActor` |
-  | `src/server/routes/documents.routes.ts` | `GET /deleted` `POST /restore`（须在 `/:documentId` 前） |
+  | `src/server/modules/documents/controller/documents.controller.ts` | Nest：`GET /deleted` `POST /restore` 等 CRUD / search / folder subtree |
   | `src/shared/docPath.ts` | 路径校验（`.md` / `.html` / `.json`） |
   | `src/shared/file-type-policy.ts` | file_type 政策表 + 派生查询 |
   | `src/shared/file-types.ts` | `FILE_TYPE` 常量 |
@@ -182,7 +182,7 @@
   |------|------|
   | `src/server/search/document-index-manager.ts` | 正文+标题索引；语义尽力更新；`removeIndex`（删文清 FTS+语义，分步不互相拖垮）/ `rebuildDocument` / `backfillMissingEmbeddings` |
   | `src/server/search/search.service.ts` | `SearchMode`（auto/keyword/semantic）；两路 MATCH → 可选语义近邻 → 合并 → `canReadDocument` |
-  | `src/server/routes/documents.routes.ts` | `POST /search`（mode 入参，返回 `{results, modelReady}`）；`GET /embedding-index`；`POST /embedding-rebuild` |
+  | `src/server/modules/documents/controller/documents.controller.ts` | Nest：`POST /search`；`GET /embedding-index`；`POST /embedding-rebuild` |
   | `src/server/agent/Agent/tools-documents.ts` | `searchDocumentsTool`（mode）；`listSemanticIndexTool`；`rebuildSemanticIndexTool`（可读即可索引） |
   | `src/server/search/embedding-model.ts` | 本地 GGUF 下载/load/`embedText` |
   | `src/server/search/embedding-store.ts` | chunk 写入与 cosine 近邻 |

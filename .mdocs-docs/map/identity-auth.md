@@ -53,7 +53,8 @@
   | `src/server/access/access-control.ts` | invite 叠加读/写 |
   | `src/server/access/domain-access.ts` | `resolveDomainAccess` / `full` / `viaDocumentInvites` |
   | `src/server/db/repositories/` | `document_invites` / `domain_members` 表访问 |
-  | `src/server/routes/documents.routes.ts` | `…/invites` |
+  | `src/server/modules/documents/controller/document-invites.controller.ts` | Nest：`…/invites` + `DocumentOwnerGuard` |
+  | `src/server/nest/guards/document-access.guard.ts` | DocumentRead/Edit/Delete/Owner Guard |
   | `src/server/routes/domains.routes.ts` | `…/members` |
   | `src/server/routes/graph.routes.ts` | 图谱 GET/analyze（落地门禁） |
 
