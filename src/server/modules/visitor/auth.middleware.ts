@@ -25,9 +25,21 @@ const EXEMPT_PATHS = new Set<string>([
  * @param res - Express 响应对象
  * @param next - 下一个中间件函数
  */
+/** GET /documents/:documentId/comments — 与旧 Express 前置路由一致，可不登录 */
+function isOptionalAuthPath(req: Request): boolean {
+  if (EXEMPT_PATHS.has(req.path)) return true;
+  if (
+    req.method === "GET" &&
+    /^\/documents\/[^/]+\/comments\/?$/.test(req.path)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  // 对豁免路径仍尝试解析令牌（若有），但不强制要求
-  if (EXEMPT_PATHS.has(req.path)) {
+  // 对豁免 / 可选鉴权路径仍尝试解析令牌（若有），但不强制要求
+  if (isOptionalAuthPath(req)) {
     const visitor = tryResolveVisitor(req);
     if (visitor) req.visitor = visitor;
     next();

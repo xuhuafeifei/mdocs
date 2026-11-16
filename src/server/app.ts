@@ -7,7 +7,6 @@ import { getConfig } from "./infra/config/index.js";
 import { getDb } from "./infra/db/connection.js";
 import { authMiddleware } from "./modules/visitor/auth.middleware.js";
 import { buildBookmarksRouter } from "./routes/bookmarks.routes.js";
-import { documentCommentsRouter } from "./routes/document-comments.routes.js";
 import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
 import { buildAgentRouter } from "./routes/agent.routes.js";
 import { bootstrapAgentRuns } from "./modules/agent/Agent/run-manager.js";
@@ -55,33 +54,11 @@ export function buildApp(): Application {
     serveAssetFile(req, res);
   });
 
-  // 获取评论列表：无需认证（能读文档就能看评论）
-  app.get("/api/documents/:documentId/comments", async (req, res) => {
-    const { documentId } = req.params;
-    if (!documentId) {
-      return res.status(400).json({ error: "缺少 documentId" });
-    }
-    try {
-      const { documentCommentService } = await import("./modules/documents/document-comment.service.js");
-      const comments = await documentCommentService.getCommentsByDocumentId(documentId);
-      res.json({
-        data: {
-          comments,
-          total: comments.filter((c: any) => !c.isDeleted).length,
-        },
-      });
-    } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
-    }
-  });
-
-  // 后续 /api 路由均需经过身份认证
+  // 后续 /api 路由均需经过身份认证（评论列表 GET 在 authMiddleware 内可选鉴权）
   app.use("/api", authMiddleware);
   app.use("/api/assets", buildAssetsUploadRouter());
   app.use("/api/bookmarks", buildBookmarksRouter());
   app.use("/api/agent", buildAgentRouter());
-  // 发表/删除评论：需要认证
-  app.use("/api/documents", documentCommentsRouter);
 
   // 若前端构建产物存在，则提供静态文件服务与单页应用回退
   if (fs.existsSync(cfg.webDistDir)) {

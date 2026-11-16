@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ServerSettingsController } from "../infra/config/server-settings.controller.js";
+import { DocumentCommentsController } from "../modules/documents/controller/document-comments.controller.js";
 import { DocumentInvitesController } from "../modules/documents/controller/document-invites.controller.js";
 import { DocumentJobsController } from "../modules/documents/controller/document-jobs.controller.js";
 import { DocumentsController } from "../modules/documents/controller/documents.controller.js";
@@ -32,6 +33,7 @@ import { VisitorsController } from "../modules/visitor/controller/visitors.contr
     DocumentsController,
     DocumentJobsController,
     DocumentInvitesController,
+    DocumentCommentsController,
     DomainsController,
     DomainMemberTemplatesController,
   ],
