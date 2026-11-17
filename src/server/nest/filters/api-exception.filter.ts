@@ -27,11 +27,20 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const res = host.switchToHttp().getResponse<Response>();
 
     if (isCodedHttpError(exception)) {
-      const body: ApiErr = {
+      const extra =
+        exception.details !== undefined &&
+        typeof exception.details === "object" &&
+        exception.details !== null &&
+        !Array.isArray(exception.details)
+          ? (exception.details as Record<string, unknown>)
+          : exception.details !== undefined
+            ? { details: exception.details }
+            : {};
+      const body = {
         error: {
           code: exception.code,
           message: exception.message,
-          ...(exception.details !== undefined ? { details: exception.details } : {}),
+          ...extra,
         },
       };
       res.status(exception.status).json(body);

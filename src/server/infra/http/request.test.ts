@@ -6,7 +6,6 @@ import {
   requiredQueryString,
   zodBadRequestMessage,
 } from "./request.js";
-import { mergeContextQuerySchema } from "../../routes/documents.schemas.js";
 
 function mockRes() {
   const res = {
@@ -23,6 +22,11 @@ function mockRes() {
   };
   return res;
 }
+
+const requiredQueryPairSchema = z.object({
+  localBaseCommitId: requiredQueryString,
+  remoteCommitId: requiredQueryString,
+});
 
 describe("parseWithSchema", () => {
   it("returns data on success", () => {
@@ -49,12 +53,10 @@ describe("parseWithSchema", () => {
       error: { code: "BAD_REQUEST" },
     });
   });
-});
 
-describe("mergeContextQuerySchema", () => {
-  it("requires trimmed commit ids", () => {
+  it("trims required query strings", () => {
     const res = mockRes();
-    const data = parseWithSchema(res as any, mergeContextQuerySchema, {
+    const data = parseWithSchema(res as any, requiredQueryPairSchema, {
       localBaseCommitId: "  a  ",
       remoteCommitId: "b",
     });
@@ -64,9 +66,9 @@ describe("mergeContextQuerySchema", () => {
     });
   });
 
-  it("rejects missing remoteCommitId", () => {
+  it("rejects missing required query string", () => {
     const res = mockRes();
-    const data = parseWithSchema(res as any, mergeContextQuerySchema, {
+    const data = parseWithSchema(res as any, requiredQueryPairSchema, {
       localBaseCommitId: "a",
     });
     expect(data).toBeNull();

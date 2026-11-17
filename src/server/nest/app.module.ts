@@ -1,5 +1,11 @@
 import { Module } from "@nestjs/common";
 import { ServerSettingsController } from "../infra/config/server-settings.controller.js";
+import { AgentAttachmentsController } from "../modules/agent/controller/agent-attachments.controller.js";
+import { AgentChatController } from "../modules/agent/controller/agent-chat.controller.js";
+import { AgentConfigController } from "../modules/agent/controller/agent-config.controller.js";
+import { AgentInteractionController } from "../modules/agent/controller/agent-interaction.controller.js";
+import { AgentSessionController } from "../modules/agent/controller/agent-session.controller.js";
+import { AgentSkillsController } from "../modules/agent/controller/agent-skills.controller.js";
 import { AssetsController } from "../modules/assets/controller/assets.controller.js";
 import { BookmarksController } from "../modules/bookmarks/controller/bookmarks.controller.js";
 import { DocumentCommentsController } from "../modules/documents/controller/document-comments.controller.js";
@@ -38,6 +44,12 @@ import { VisitorsController } from "../modules/visitor/controller/visitors.contr
     DocumentCommentsController,
     BookmarksController,
     AssetsController,
+    AgentAttachmentsController,
+    AgentConfigController,
+    AgentSkillsController,
+    AgentSessionController,
+    AgentInteractionController,
+    AgentChatController,
     DomainsController,
     DomainMemberTemplatesController,
   ],

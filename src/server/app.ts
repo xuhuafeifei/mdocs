@@ -6,7 +6,6 @@ import cookieParser from "cookie-parser";
 import { getConfig } from "./infra/config/index.js";
 import { getDb } from "./infra/db/connection.js";
 import { authMiddleware } from "./modules/visitor/auth.middleware.js";
-import { buildAgentRouter } from "./routes/agent.routes.js";
 import { bootstrapAgentRuns } from "./modules/agent/Agent/run-manager.js";
 import { bootstrapJobs } from "./modules/jobs/index.js";
 import { startIndexTimer } from "./modules/search/document-index-manager.js";
@@ -49,7 +48,6 @@ export function buildApp(): Application {
 
   // 后续 /api 路由均需经过身份认证（资产 GET / 评论列表 GET 在 authMiddleware 内可选鉴权）
   app.use("/api", authMiddleware);
-  app.use("/api/agent", buildAgentRouter());
 
   // 若前端构建产物存在，则提供静态文件服务与单页应用回退
   if (fs.existsSync(cfg.webDistDir)) {
