@@ -1,11 +1,11 @@
+/**
+ * 进程级引导：创建运行时目录、初始化数据库、挂后台任务。
+ * HTTP 装配（json / cookie / 静态 / Nest）见 nest/attach。
+ */
 import fs from "node:fs";
 import path from "node:path";
-import compression from "compression";
-import express, { type Application, type Response } from "express";
-import cookieParser from "cookie-parser";
 import { getConfig } from "./infra/config/index.js";
 import { getDb } from "./infra/db/connection.js";
-import { authMiddleware } from "./modules/visitor/auth.middleware.js";
 import { bootstrapAgentRuns } from "./modules/agent/Agent/run-manager.js";
 import { bootstrapJobs } from "./modules/jobs/index.js";
 import { startIndexTimer } from "./modules/search/document-index-manager.js";
@@ -13,16 +13,8 @@ import { ensureLocalEmbeddingModel } from "./modules/search/embedding-model.js";
 import { ensureSystemMemesBackground } from "./modules/memes/store.js";
 import { ensureSystemPipelinesSeeded } from "./modules/plugins/pipeline/catalog.js";
 import { ensureGlobalSoulShell } from "./modules/soul/ensure-shells.js";
-import { useLogger } from "./infra/logger/logger.js";
 
-const log = useLogger("app");
-
-/**
- * 构建并配置 Express 应用实例。
- * 包括：创建运行时目录、初始化数据库、挂载中间件与路由、配置静态文件服务。
- */
-export function buildApp(): Application {
-  const cfg = getConfig();
+export function bootstrapRuntime(): void {
   ensureRuntimeDirs();
   getDb();
   // 启动 FTS5 全文索引定时重建
@@ -35,68 +27,6 @@ export function buildApp(): Application {
   bootstrapAgentRuns();
   // Job 调度：秒级 tick 总线（scanner / executor 后续挂接）
   bootstrapJobs();
-
-  const app = express();
-  app.disable("x-powered-by");
-  app.use(express.json({ limit: "32mb" }));
-  app.use(cookieParser());
-
-  // 健康检查端点，无需认证
-  app.get("/api/health", (_req, res) => {
-    res.json({ data: { status: "ok" } });
-  });
-
-  // 后续 /api 路由均需经过身份认证（资产 GET / 评论列表 GET 在 authMiddleware 内可选鉴权）
-  app.use("/api", authMiddleware);
-
-  // 若前端构建产物存在，则提供静态文件服务与单页应用回退
-  if (fs.existsSync(cfg.webDistDir)) {
-    app.use(compression());
-
-    // 部分环境 mime 库/反代会把 .js 标成 octet-stream，浏览器拒绝 module script
-    const staticOpts = {
-      setHeaders: setWebAssetHeaders,
-    };
-
-    const assetsDir = path.join(cfg.webDistDir, "assets");
-    if (fs.existsSync(assetsDir)) {
-      app.use(
-        "/assets",
-        express.static(assetsDir, {
-          ...staticOpts,
-          maxAge: "1y",
-          immutable: true,
-        }),
-      );
-    }
-
-    app.use(express.static(cfg.webDistDir, { ...staticOpts, maxAge: 0, index: false }));
-    app.get("*", (req, res) => {
-      // 静态资源路径勿回退成 index.html（否则会触发 MIME / 模块加载错误）
-      if (looksLikeStaticAsset(req.path)) {
-        res.status(404).end();
-        return;
-      }
-      const indexHtml = path.join(cfg.webDistDir, "index.html");
-      if (fs.existsSync(indexHtml)) {
-        res.type("html");
-        res.sendFile(indexHtml);
-      } else {
-        res.status(404).end();
-      }
-    });
-  } else {
-    log.warn("web dist dir not found: %s", cfg.webDistDir);
-  }
-
-  return app;
-}
-
-/** Nest 路由注册完成后再挂。提前挂会把 Nest 的接口先答成 404。 */
-export function mountApiNotFound(app: Application): void {
-  app.use("/api", (_req, res) => {
-    res.status(404).json({ error: { code: "NOT_FOUND", message: "api not found" } });
-  });
 }
 
 /** 确保运行时所需的各目录已存在，按 0o700 权限递归创建。 */
@@ -118,37 +48,4 @@ function ensureRuntimeDirs(): void {
   }
   ensureGlobalSoulShell();
   ensureSystemPipelinesSeeded();
-}
-
-const WEB_ASSET_CONTENT_TYPE: Record<string, string> = {
-  ".js": "application/javascript; charset=UTF-8",
-  ".mjs": "application/javascript; charset=UTF-8",
-  ".css": "text/css; charset=UTF-8",
-  ".wasm": "application/wasm",
-  ".svg": "image/svg+xml",
-  ".json": "application/json; charset=UTF-8",
-  ".map": "application/json; charset=UTF-8",
-  ".html": "text/html; charset=UTF-8",
-  ".woff2": "font/woff2",
-  ".woff": "font/woff",
-  ".ttf": "font/ttf",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".ico": "image/x-icon",
-};
-
-function setWebAssetHeaders(res: Response, filePath: string): void {
-  const ext = path.extname(filePath).toLowerCase();
-  const ct = WEB_ASSET_CONTENT_TYPE[ext];
-  if (ct) res.setHeader("Content-Type", ct);
-}
-
-function looksLikeStaticAsset(urlPath: string): boolean {
-  return Object.prototype.hasOwnProperty.call(
-    WEB_ASSET_CONTENT_TYPE,
-    path.extname(urlPath).toLowerCase(),
-  );
 }

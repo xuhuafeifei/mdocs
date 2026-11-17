@@ -22,7 +22,7 @@ import { CreateDocumentCommentRequest } from "../request/create-document-comment
 
 @Controller("api/documents")
 export class DocumentCommentsController {
-  /** 列表：无需登录（authMiddleware 对该 GET 可选鉴权） */
+  /** 列表：无需登录（VisitorAuthMiddleware 对该 GET 可选鉴权） */
   @Get(":documentId/comments")
   list(@Param("documentId") documentId: string) {
     return listDocumentComments(documentId);

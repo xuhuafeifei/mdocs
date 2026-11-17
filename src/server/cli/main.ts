@@ -118,17 +118,20 @@ function printVersion(): void {
   }
 }
 
-/** 启动 HTTP 服务器。 */
+/**
+ * 启动 HTTP 服务器。
+ * 从配置中读取端口和主机地址，进程引导 → Nest 装配 → listen。
+ * 若启动失败会将错误写入日志并退出进程。
+ */
 async function startServer(): Promise<void> {
   const { useLogger } = await import("../infra/logger/logger.js");
   const { getConfig } = await import("../infra/config/index.js");
-  const { buildApp, mountApiNotFound } = await import("../app.js");
-  const { attachNest } = await import("../nest/attach.js");
+  const { bootstrapRuntime } = await import("../app.js");
+  const { createNestApp } = await import("../nest/attach.js");
   const log = useLogger("cli-server");
   const cfg = getConfig();
-  const app = buildApp();
-  await attachNest(app);
-  mountApiNotFound(app);
+  bootstrapRuntime();
+  const app = await createNestApp();
 
   process.on("uncaughtException", (err) => {
     log.error(
@@ -143,16 +146,16 @@ async function startServer(): Promise<void> {
     );
   });
 
-  const server = app.listen(cfg.port, cfg.host, () => {
-    process.stdout.write(`mdocs listening on http://${cfg.host}:${cfg.port}\n`);
-  });
-  server.on("error", (err) => {
-    log.error("server error: %s", err instanceof Error ? err.message : String(err));
-    process.stderr.write(
-      `server error: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
+  // 监听服务器错误事件，发生致命错误时记录日志并退出
+  const server = app.getHttpServer();
+  server.on("error", (err: Error) => {
+    log.error("server error: %s", err.message);
+    process.stderr.write(`server error: ${err.message}\n`);
     process.exit(1);
   });
+  // 启动监听，绑定到配置指定的 host 与 port
+  await app.listen(cfg.port, cfg.host);
+  process.stdout.write(`mdocs listening on http://${cfg.host}:${cfg.port}\n`);
 }
 
 /** 执行 `visitor list`：查询访客并以 TSV 格式输出。 */

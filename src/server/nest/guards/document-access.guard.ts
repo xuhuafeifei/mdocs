@@ -15,8 +15,8 @@ function documentIdFrom(req: Request): string {
   return documentId;
 }
 
-function visitorIdFrom(req: Request): string | null {
-  return VisitorContext.visitorId() ?? req.visitor?.visitor_id ?? null;
+function visitorIdFrom(): string | null {
+  return VisitorContext.visitorId();
 }
 
 /** params.documentId + 当前访客 → assertDocumentAccess(read) */
@@ -24,7 +24,7 @@ function visitorIdFrom(req: Request): string | null {
 export class DocumentReadGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
-    assertDocumentAccess(documentIdFrom(req), visitorIdFrom(req), "read");
+    assertDocumentAccess(documentIdFrom(req), visitorIdFrom(), "read");
     return true;
   }
 }
@@ -34,7 +34,7 @@ export class DocumentReadGuard implements CanActivate {
 export class DocumentEditGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
-    assertDocumentAccess(documentIdFrom(req), visitorIdFrom(req), "edit");
+    assertDocumentAccess(documentIdFrom(req), visitorIdFrom(), "edit");
     return true;
   }
 }
@@ -44,7 +44,7 @@ export class DocumentEditGuard implements CanActivate {
 export class DocumentDeleteGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
-    assertDocumentAccess(documentIdFrom(req), visitorIdFrom(req), "delete");
+    assertDocumentAccess(documentIdFrom(req), visitorIdFrom(), "delete");
     return true;
   }
 }
@@ -54,7 +54,7 @@ export class DocumentDeleteGuard implements CanActivate {
 export class DocumentOwnerGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
-    const visitorId = visitorIdFrom(req);
+    const visitorId = visitorIdFrom();
     if (!visitorId) {
       throw new DocumentError("UNAUTHENTICATED", "no visitor", 401);
     }

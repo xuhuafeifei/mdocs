@@ -1,24 +1,36 @@
 /**
- * 把 Nest 接到已经建好的 Express 上。不新开端口。
+ * Nest 为 HTTP 组合根：Express 仅作 platform adapter，不新开端口。
  * reflect-metadata 必须先于带装饰器的模块加载。
+ * 访客鉴权 + ALS：AppModule → VisitorAuthMiddleware。
  */
 import "reflect-metadata";
-import type { Application, NextFunction, Request, Response } from "express";
-import { BadRequestException, ValidationPipe } from "@nestjs/common";
+import cookieParser from "cookie-parser";
+import express from "express";
+import {
+  BadRequestException,
+  type INestApplication,
+  ValidationPipe,
+} from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { ExpressAdapter } from "@nestjs/platform-express";
 import { AppModule } from "./app.module.js";
-import { VisitorContext } from "./context/visitor.context.js";
 import { ApiExceptionFilter } from "./filters/api-exception.filter.js";
 import { WrapDataInterceptor } from "./interceptors/wrap-data.interceptor.js";
+import { mountApiNotFound, mountWebStatic } from "./web-static.js";
 
-export async function attachNest(server: Application): Promise<void> {
+export async function createNestApp(): Promise<INestApplication> {
+  const server = express();
+  server.disable("x-powered-by");
+
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
     bodyParser: false,
     logger: ["error", "warn"],
   });
-  // Guard 早于 Interceptor：用 middleware 写入 ALS，供 Guard / @VisitorId 共用
-  app.use(bindVisitorContext);
+
+  // 自定义 32MiB；关掉 Nest 默认 bodyParser 后自行挂
+  app.use(express.json({ limit: "32mb" }));
+  app.use(cookieParser());
+
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -35,12 +47,10 @@ export async function attachNest(server: Application): Promise<void> {
   app.useGlobalInterceptors(new WrapDataInterceptor());
   app.useGlobalFilters(new ApiExceptionFilter());
   await app.init();
-}
 
-function bindVisitorContext(
-  req: Request,
-  _res: Response,
-  next: NextFunction,
-): void {
-  VisitorContext.run(req.visitor ?? null, () => next());
+  // Nest 路由注册完成后再挂。提前挂会把 Nest 的接口先答成 404。
+  // API 未匹配 → JSON 404；再挂静态 / SPA（避免 /* 抢答 /api）
+  mountApiNotFound(server);
+  mountWebStatic(server);
+  return app;
 }

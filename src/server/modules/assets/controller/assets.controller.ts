@@ -27,7 +27,7 @@ import { ServeAssetRequest } from "../request/serve-asset.request.js";
 
 @Controller("api/assets")
 export class AssetsController {
-  /** 公开取文件（auth 对该 GET 可选鉴权） */
+  /** 公开取文件（VisitorAuthMiddleware 对该 GET 可选鉴权） */
   @Get(":assetId")
   get(
     @Param("assetId") assetId: string,

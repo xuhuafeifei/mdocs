@@ -8,8 +8,7 @@ import { VisitorContext } from "../context/visitor.context.js";
 export class CanWriteDocumentGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
-    const visitorId =
-      VisitorContext.visitorId() ?? req.visitor?.visitor_id ?? null;
+    const visitorId = VisitorContext.visitorId();
     const domainId = String(req.params.domainId ?? req.query.domainId ?? "").trim();
     const documentId = String(req.params.documentId ?? "").trim();
     assertCanWrite(visitorId, domainId, documentId);

@@ -9,8 +9,7 @@ import { VisitorContext } from "../context/visitor.context.js";
 export class CanEnterDomainGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
-    const visitorId =
-      VisitorContext.visitorId() ?? req.visitor?.visitor_id ?? null;
+    const visitorId = VisitorContext.visitorId();
     const raw = String(req.params.domainId ?? req.query.domainId ?? "").trim();
     const domainId = raw || getConfig().defaultDomainId;
     assertCanEnterDomain(visitorId, domainId);

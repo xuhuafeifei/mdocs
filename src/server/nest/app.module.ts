@@ -1,4 +1,9 @@
-import { Module } from "@nestjs/common";
+import {
+  MiddlewareConsumer,
+  Module,
+  type NestModule,
+} from "@nestjs/common";
+import { HealthController } from "../infra/config/health.controller.js";
 import { ServerSettingsController } from "../infra/config/server-settings.controller.js";
 import { AgentAttachmentsController } from "../modules/agent/controller/agent-attachments.controller.js";
 import { AgentChatController } from "../modules/agent/controller/agent-chat.controller.js";
@@ -22,13 +27,15 @@ import { PluginsController } from "../modules/plugins/controller/plugins.control
 import { TreeController } from "../modules/tree/controller/tree.controller.js";
 import { CliTokensController } from "../modules/visitor/controller/cli-tokens.controller.js";
 import { VisitorsController } from "../modules/visitor/controller/visitors.controller.js";
+import { VisitorAuthMiddleware } from "./middleware/visitor-auth.middleware.js";
 
 /**
- * Nest 组合根：只注册 controller，不含业务逻辑。
+ * Nest 组合根：只注册 controller + 全局访客鉴权 middleware。
  * 与 main 同属启动装配，不是业务 module，也不挂在 infra/http 下。
  */
 @Module({
   controllers: [
+    HealthController,
     ServerSettingsController,
     TreeController,
     VisitorsController,
@@ -54,4 +61,8 @@ import { VisitorsController } from "../modules/visitor/controller/visitors.contr
     DomainMemberTemplatesController,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(VisitorAuthMiddleware).forRoutes("*");
+  }
+}

@@ -9,7 +9,7 @@ const als = new AsyncLocalStorage<Store>();
 
 /**
  * 请求级访客上下文（ALS）。
- * 由 attach middleware 写入；decorators / guards 读取。
+ * 由 VisitorAuthMiddleware 写入；decorators / guards 读取。
  * modules/application 禁止 import（业务显式传 visitorId）。
  */
 export const VisitorContext = {
