@@ -6,6 +6,7 @@ import {
   HttpStatus,
 } from "@nestjs/common";
 import type { Response } from "express";
+import { isAssetUploadEnvelope } from "../../modules/assets/asset-upload-envelope.js";
 import { StoragePathError } from "../../infra/storage/paths.js";
 import type { ApiErr } from "../http/api-envelope.js";
 
@@ -48,6 +49,10 @@ export class ApiExceptionFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const raw = exception.getResponse();
       if (isApiErr(raw)) {
+        res.status(status).json(raw);
+        return;
+      }
+      if (isAssetUploadEnvelope(raw)) {
         res.status(status).json(raw);
         return;
       }

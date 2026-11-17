@@ -276,7 +276,7 @@
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/server/routes/assets.routes.ts` | `isAllowedAssetUpload`（恒 true）/ `createUploader` / `CONTENT_TYPE_BY_EXT` / `serveAssetFile` |
+  | `src/server/modules/assets/` | Nest：`AssetsController` / `isAllowedAssetUpload` / `serve`+upload+link-to-img |
   | `src/web/app/DocumentEditor.tsx` | `ReactFilePlugin.handleUpload` → `uploadAssetApi` |
   | `src/web/services/endpoints.ts` | `uploadAssetApi` |
 - **决策**：[`../decisions/013-asset-upload-no-type-restriction.md`](../decisions/013-asset-upload-no-type-restriction.md)（取代 `bug-fixes/asset-upload-unsupported-file-type-2026-07-31.md` 的白名单思路）

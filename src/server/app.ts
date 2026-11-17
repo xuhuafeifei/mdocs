@@ -6,8 +6,6 @@ import cookieParser from "cookie-parser";
 import { getConfig } from "./infra/config/index.js";
 import { getDb } from "./infra/db/connection.js";
 import { authMiddleware } from "./modules/visitor/auth.middleware.js";
-import { buildBookmarksRouter } from "./routes/bookmarks.routes.js";
-import { buildAssetsUploadRouter, serveAssetFile } from "./routes/assets.routes.js";
 import { buildAgentRouter } from "./routes/agent.routes.js";
 import { bootstrapAgentRuns } from "./modules/agent/Agent/run-manager.js";
 import { bootstrapJobs } from "./modules/jobs/index.js";
@@ -49,15 +47,8 @@ export function buildApp(): Application {
     res.json({ data: { status: "ok" } });
   });
 
-  // 资源文件读取端点，无需认证
-  app.get("/api/assets/:assetId", (req, res) => {
-    serveAssetFile(req, res);
-  });
-
-  // 后续 /api 路由均需经过身份认证（评论列表 GET 在 authMiddleware 内可选鉴权）
+  // 后续 /api 路由均需经过身份认证（资产 GET / 评论列表 GET 在 authMiddleware 内可选鉴权）
   app.use("/api", authMiddleware);
-  app.use("/api/assets", buildAssetsUploadRouter());
-  app.use("/api/bookmarks", buildBookmarksRouter());
   app.use("/api/agent", buildAgentRouter());
 
   // 若前端构建产物存在，则提供静态文件服务与单页应用回退

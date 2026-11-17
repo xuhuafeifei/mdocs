@@ -934,20 +934,25 @@ export async function uploadAssetApi(file: File, documentId: string): Promise<st
   });
 
   const body: unknown = await res.json();
-  const vditor = body as { code?: number; msg?: string; data?: { succMap?: Record<string, string> } };
-  if (!res.ok || vditor.code === 1) {
+  // 历史上传信封（非统一 `{ data }`）；与服务端 asset-upload-envelope 对齐
+  const envelope = body as {
+    code?: number;
+    msg?: string;
+    data?: { succMap?: Record<string, string> };
+  };
+  if (!res.ok || envelope.code === 1) {
     const err = (body as { error?: { code: string; message: string } } | null)?.error;
     throw new ApiRequestError(
       res.status,
       err?.code ?? "UPLOAD_FAILED",
-      err?.message ?? vditor.msg ?? "upload failed",
+      err?.message ?? envelope.msg ?? "upload failed",
     );
   }
 
   /**
    * 提取上传成功后的文件 URL 并返回。
    */
-  const succMap = vditor.data?.succMap ?? {};
+  const succMap = envelope.data?.succMap ?? {};
   const urls = Object.values(succMap);
   if (urls.length === 0) throw new Error("upload succeeded but no URL returned");
   return urls[0]!;

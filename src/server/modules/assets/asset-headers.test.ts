@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedAssetUpload, buildAssetResponseHeaders } from "./assets.routes.js";
+import { buildAssetResponseHeaders, isAllowedAssetUpload } from "./asset-headers.js";
 
 describe("isAllowedAssetUpload", () => {
   it("allows any file type (no restrictions)", () => {

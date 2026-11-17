@@ -25,15 +25,16 @@ const EXEMPT_PATHS = new Set<string>([
  * @param res - Express 响应对象
  * @param next - 下一个中间件函数
  */
-/** GET /documents/:documentId/comments — 与旧 Express 前置路由一致，可不登录 */
+/**
+ * 可选鉴权（有 token 则解析，无则放行）：
+ * - GET /documents/:documentId/comments
+ * - GET /assets/:assetId
+ */
 function isOptionalAuthPath(req: Request): boolean {
   if (EXEMPT_PATHS.has(req.path)) return true;
-  if (
-    req.method === "GET" &&
-    /^\/documents\/[^/]+\/comments\/?$/.test(req.path)
-  ) {
-    return true;
-  }
+  if (req.method !== "GET") return false;
+  if (/^\/documents\/[^/]+\/comments\/?$/.test(req.path)) return true;
+  if (/^\/assets\/[^/]+\/?$/.test(req.path)) return true;
   return false;
 }
 
