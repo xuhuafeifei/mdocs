@@ -13,8 +13,9 @@ export interface AuditLogs {
   created_at: string;
 }
 
-/** 表 visitor_migrations */
+/** 表 visitor_migrations；未落库时 id 为 null，insert 返回主键。 */
 export interface VisitorMigrations {
+  id: number | null;
   from_visitor_id: string;
   to_visitor_id: string;
   affected_counts_json: string;

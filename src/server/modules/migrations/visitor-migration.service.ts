@@ -182,6 +182,7 @@ export function migrateVisitor(params: {
 
     // 记录迁移日志
     insertVisitorMigration({
+      id: null,
       from_visitor_id: from.visitor_id,
       to_visitor_id: to.visitor_id,
       affected_counts_json: JSON.stringify(impact),

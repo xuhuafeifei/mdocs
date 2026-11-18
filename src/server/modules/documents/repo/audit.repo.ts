@@ -64,11 +64,12 @@ export function listDocumentDeleteAuditsByActor(
     .all(actorVisitorId, safeLimit);
 }
 
+/** 插入访客迁移记录；忽略 input.id（应为 null），返回新主键。 */
 export function insertVisitorMigration(
   input: VisitorMigrations,
   db?: Database.Database,
-): void {
-  resolveDb(db)
+): number {
+  const result = resolveDb(db)
     .prepare(
       `INSERT INTO visitor_migrations (
       from_visitor_id, to_visitor_id, affected_counts_json, executed_at
@@ -80,4 +81,5 @@ export function insertVisitorMigration(
       input.affected_counts_json,
       input.executed_at,
     );
+  return Number(result.lastInsertRowid);
 }
