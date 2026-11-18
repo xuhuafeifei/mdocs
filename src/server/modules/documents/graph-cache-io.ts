@@ -25,7 +25,7 @@ import {
   updateDocumentContent,
   type DocumentRow,
 } from "../../infra/db/repositories/document.repo";
-import { findDomainById } from "../../infra/db/repositories/domain.repo";
+import { findDomainById } from "../domains/repo/domain.repo";
 import { deleteDocumentFile, readDocument, writeDocument } from "../../infra/storage/file-store";
 import {
   ARTICLE_GRAPH_DIRNAME,
@@ -50,7 +50,7 @@ function resolveOwnerVisitorId(documentId: string, domainId: string): string {
   const db = getDb();
   const doc = findDocumentById(db, documentId);
   if (doc) return doc.owner_visitor_id;
-  const domain = findDomainById(db, domainId);
+  const domain = findDomainById(domainId, db);
   return domain?.creator_visitor_id ?? "system";
 }
 

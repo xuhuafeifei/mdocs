@@ -1,5 +1,5 @@
 import { DocumentError } from "../../access/access-control.js";
-import { findDomainByName } from "../../../infra/db/repositories/domain.repo.js";
+import { findDomainByName } from "../../domains/repo/domain.repo.js";
 import { getDb } from "../../../infra/db/connection.js";
 import { treeIncludeTypes } from "../../../../shared/file-type-policy.js";
 import {
@@ -62,7 +62,7 @@ export function listDocs(params: {
 }) {
   let domainId = params.domainId;
   if (params.domainName) {
-    const domain = findDomainByName(getDb(), params.domainName);
+    const domain = findDomainByName(params.domainName);
     if (!domain) {
       throw new DocumentError(
         "DOMAIN_NOT_FOUND",

@@ -2,7 +2,7 @@
  * 语义索引管理：列表（含上次构建时间）+ 按文档勾选重建。
  */
 import { getDb } from "../../infra/db/connection";
-import { findDomainById, listDomains } from "../../infra/db/repositories/domain.repo";
+import { findDomainById, listDomains } from "../domains/repo/domain.repo";
 import type { DocumentRow } from "../../infra/db/repositories/document.repo";
 import {
   canReadDocument,
@@ -94,7 +94,7 @@ export function listEmbeddingIndex(params: {
   for (const row of rows) {
     let domainInfo = domainCache.get(row.domain_id);
     if (!domainInfo) {
-      const domain = findDomainById(db, row.domain_id);
+      const domain = findDomainById(row.domain_id, db);
       const domainPermission = domain?.permission ?? "public";
       domainInfo = makeDomainAccessInfo(db, row.domain_id, visitorId, domainPermission);
       domainCache.set(row.domain_id, domainInfo);
@@ -191,7 +191,7 @@ export async function rebuildEmbeddingIndex(params: {
         continue;
       }
 
-      const domain = findDomainById(db, row.domain_id);
+      const domain = findDomainById(row.domain_id, db);
       const domainPermission = domain?.permission ?? "public";
       const domainInfo = makeDomainAccessInfo(
         db,

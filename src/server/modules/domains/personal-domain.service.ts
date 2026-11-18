@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { findDomainById, insertDomain } from "../../infra/db/repositories/domain.repo";
+import { findDomainById, insertDomain } from "./repo/domain.repo";
 import { personalDomainDisplayName } from "../../../shared/personalDomain";
 
 /**
@@ -13,16 +13,16 @@ import { personalDomainDisplayName } from "../../../shared/personalDomain";
  */
 export function ensurePersonalDomain(db: Database.Database, visitorId: string, visitorName: string): void {
   // 若该访客的个人域已存在，无需重复创建
-  if (findDomainById(db, visitorId)) return;
+  if (findDomainById(visitorId, db)) return;
 
   const now = new Date().toISOString();
   // 插入新的私有域记录，domainId 与 visitorId 相同
-  insertDomain(db, {
+  insertDomain({
     domainId: visitorId,
     domainName: personalDomainDisplayName(visitorName),
     creatorVisitorId: visitorId,
     createdAt: now,
     updatedAt: now,
     permission: "private",
-  });
+  }, db);
 }

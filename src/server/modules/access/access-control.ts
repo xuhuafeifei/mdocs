@@ -19,7 +19,7 @@
 
 import { getDb } from "../../infra/db/connection";
 import { findDocumentById, findDocumentInvite } from "../../infra/db/repositories/document.repo";
-import { findDomainById, getDomainMemberRole } from "../../infra/db/repositories/domain.repo";
+import { findDomainById, getDomainMemberRole } from "../domains/repo/domain.repo";
 import type { DocumentRow } from "../../infra/db/repositories/document.repo";
 import { isGraphFileType } from "../../../shared/file-types";
 import { canAccessGraph, resolveDomainAccess } from "./domain-access";
@@ -104,7 +104,7 @@ export function makeDomainAccessInfo(
   if (!visitorId) {
     return { domainPermission, isDomainMember: false, domainMemberCanWrite: false };
   }
-  const role = getDomainMemberRole(db as any, domainId, visitorId);
+  const role = getDomainMemberRole(domainId, visitorId, db as any);
   return {
     domainPermission,
     isDomainMember: role !== null,
@@ -116,7 +116,7 @@ export function makeDomainAccessInfo(
  * 获取域权限上下文（供 bookmarks 等模块使用）。
  */
 export function getDomainInfo(db: any, domainId: string, visitorId: string | null): DomainAccessInfo {
-  const domain = findDomainById(db, domainId);
+  const domain = findDomainById(domainId, db);
   const domainPermission = domain?.permission ?? "public";
   if (!visitorId || !domain) {
     return { domainPermission, isDomainMember: false, domainMemberCanWrite: false };
@@ -266,7 +266,7 @@ export function assertDocumentAccess(
   }
 
   // 读/写：需要域上下文
-  const domain = findDomainById(db, row.domain_id);
+  const domain = findDomainById(row.domain_id, db);
   const domainPermission = domain?.permission ?? "public";
   const domainInfo = makeDomainAccessInfo(db, row.domain_id, visitorId, domainPermission);
 
@@ -291,7 +291,7 @@ export function assertDocumentAccess(
  */
 export function assertGraphAccess(domainId: string, visitorId: string | null): void {
   const db = getDb();
-  const domain = findDomainById(db, domainId);
+  const domain = findDomainById(domainId, db);
   const access = resolveDomainAccess(db, domain ?? undefined, domainId, visitorId);
   if (!canAccessGraph(access)) {
     const message =

@@ -40,7 +40,7 @@ import {
   findDomainById,
   getDomainMemberRole,
   isDomainMember,
-} from "../../infra/db/repositories/domain.repo";
+} from "../domains/repo/domain.repo";
 import {
   resolveDomainAccess,
   canEnterDomainTree,
@@ -141,7 +141,7 @@ export function listDocuments(
   const effective = domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
 
-  const domain = findDomainById(db, effective);
+  const domain = findDomainById(effective, db);
   const access = resolveDomainAccess(db, domain, effective, visitorId);
   if (!canEnterDomainTree(access)) return [];
 
@@ -169,7 +169,7 @@ export function listFolderChildren(
   const folder = findDocumentById(db, folderId);
   if (!folder) return [];
 
-  const domain = findDomainById(db, folder.domain_id);
+  const domain = findDomainById(folder.domain_id, db);
   const access = resolveDomainAccess(db, domain, folder.domain_id, visitorId);
   if (!canEnterDomainTree(access)) return [];
 
@@ -279,7 +279,7 @@ export function createDocument(params: {
   const domainId = params.domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
 
-  const domainRow = findDomainById(db, domainId);
+  const domainRow = findDomainById(domainId, db);
   if (!domainRow) {
     throw new DocumentError("DOMAIN_NOT_FOUND", "工作空间不存在", 404);
   }
@@ -542,7 +542,7 @@ export function updateDocument(params: {
       ? params.content
       : normalizeDocumentContent(params.content, params.contentFormat);
 
-  const domain = findDomainById(db, row.domain_id);
+  const domain = findDomainById(row.domain_id, db);
   const domainPermission = domain?.permission ?? "public";
   const domainInfo = makeDomainAccessInfo(
     db,
@@ -1081,7 +1081,7 @@ export function restoreDocumentVersion(params: {
   const row = findDocumentById(db, params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
-  const domain = findDomainById(db, row.domain_id);
+  const domain = findDomainById(row.domain_id, db);
   const domainPermission = domain?.permission ?? "public";
   const domainInfo = makeDomainAccessInfo(
     db,
@@ -1719,9 +1719,9 @@ export function addDocumentInvite(
     throw new DocumentError("FORBIDDEN", "仅创建者可管理邀请", 403);
   }
 
-  const domain = findDomainById(db, row.domain_id);
+  const domain = findDomainById(row.domain_id, db);
 
-  if (domain && isDomainMember(db, domain.domain_id, targetVisitorId)) {
+  if (domain && isDomainMember(domain.domain_id, targetVisitorId, db)) {
     throw new DocumentError(
       "BAD_REQUEST",
       "该访客已是工作空间成员，无需邀请；邀请与工作空间成员互斥",
@@ -2049,7 +2049,7 @@ function resolveDomainMemberWriteFlag(
   actorVisitorId: string,
 ): boolean {
   if (row.owner_visitor_id === actorVisitorId) return false;
-  return getDomainMemberRole(db, row.domain_id, actorVisitorId) === "write";
+  return getDomainMemberRole(row.domain_id, actorVisitorId, db) === "write";
 }
 
 // ============================================================

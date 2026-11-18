@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "../../../infra/db/connection.js";
-import { findDomainById } from "../../../infra/db/repositories/domain.repo.js";
+import { findDomainById } from "../../domains/repo/domain.repo.js";
 import {
   countChildrenByParent,
   deleteDocument,
@@ -37,7 +37,7 @@ export function createFolder(params: {
   const domainId = params.domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
 
-  const domainRow = findDomainById(db, domainId);
+  const domainRow = findDomainById(domainId, db);
   if (!domainRow) {
     throw new DocumentError("DOMAIN_NOT_FOUND", "工作空间不存在", 404);
   }

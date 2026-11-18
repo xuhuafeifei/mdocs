@@ -11,7 +11,7 @@ import {
   listDomainMembers,
   listDomains,
   type DomainMemberRole,
-} from "../../../infra/db/repositories/domain.repo";
+} from "../../domains/repo/domain.repo";
 import {
   countDocumentsByDomain,
   listDomainIdsWithDocumentInviteForVisitor,
@@ -23,7 +23,7 @@ import { changeDomainPermission, DomainPermissionError } from "../../domains/cha
 /** 校验：域存在、restricted、且当前访客是创建者 */
 function requireRestrictedDomainAsCreator(domainId: string, actorVisitorId: string) {
   const db = getDb();
-  const domain = findDomainById(db, domainId);
+  const domain = findDomainById(domainId, db);
   if (!domain) throw new Error("domain not found");
   if (domain.creator_visitor_id !== actorVisitorId) {
     throw new Error("only the creator can manage domain members");
@@ -96,16 +96,16 @@ export function createDomainTool({ visitorId }: ToolDeps): AgentTool {
 
       const now = new Date().toISOString();
       const domainId = randomUUID();
-      insertDomain(db, {
+      insertDomain({
         domainId,
         domainName: name,
         creatorVisitorId: visitorId,
         createdAt: now,
         updatedAt: now,
         permission,
-      });
+      }, db);
       if (permission === "restricted") {
-        addDomainMember(db, domainId, visitorId, "write");
+        addDomainMember(domainId, visitorId, "write", db);
       }
       return asToolResult({
         domainId,
@@ -131,7 +131,7 @@ export function listDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
       const domainId = (params as { domainId: string }).domainId?.trim();
       if (!domainId) throw new Error("domainId is required");
       const { db, domain } = requireRestrictedDomainAsCreator(domainId, visitorId);
-      const rows = listDomainMembers(db, domainId);
+      const rows = listDomainMembers(domainId, db);
       const members = rows.map((row) => {
         const v = findVisitorById(row.visitor_id);
         if (!v) {
@@ -200,7 +200,7 @@ export function addDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
       const invalid: string[] = [];
       const added: { visitorId: string; visitorName: string; role: DomainMemberRole }[] = [];
       const alreadyMember: string[] = [];
-      const before = new Set(listDomainMemberIds(db, domainId));
+      const before = new Set(listDomainMemberIds(domainId, db));
 
       for (const vid of uniqueIds) {
         const v = findVisitorById(vid);
@@ -212,7 +212,7 @@ export function addDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
           alreadyMember.push(vid);
           continue;
         }
-        addDomainMember(db, domainId, vid, role);
+        addDomainMember(domainId, vid, role, db);
         added.push({ visitorId: vid, visitorName: v.visitor_name, role });
       }
 
@@ -220,7 +220,7 @@ export function addDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
         throw new Error(`unknown visitor ids: ${invalid.join(", ")}`);
       }
 
-      addDomainMember(db, domainId, domain.creator_visitor_id, "write");
+      addDomainMember(domainId, domain.creator_visitor_id, "write", db);
 
       return asToolResult({
         domainId,
@@ -228,7 +228,7 @@ export function addDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
         added,
         alreadyMember,
         invalidVisitorIds: invalid,
-        memberCount: listDomainMemberIds(db, domainId).length,
+        memberCount: listDomainMemberIds(domainId, db).length,
       });
     },
   };

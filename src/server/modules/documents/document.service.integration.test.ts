@@ -43,7 +43,7 @@ vi.mock("../storage/file-store.js", () => ({
 import { DocumentError, Permission } from "../access/access-control.js";
 import { createDocument, addDocumentInvite, updateDocument, moveDocument, renameDocument } from "./document.service.js";
 import { findDocumentById } from "../../infra/db/repositories/document.repo.js";
-import { findDomainById } from "../../infra/db/repositories/domain.repo.js";
+import { findDomainById } from "../domains/repo/domain.repo.js";
 
 /* ── 测试辅助：直接在数据库建文件夹 ── */
 

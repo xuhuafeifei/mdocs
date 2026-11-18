@@ -23,7 +23,7 @@ import {
   assertDocumentAccess,
   DocumentError,
 } from "./access-control.js";
-import { findDomainById } from "../../infra/db/repositories/domain.repo.js";
+import { findDomainById } from "../domains/repo/domain.repo.js";
 import type { DocumentRow } from "../../infra/db/repositories/document.repo.js";
 
 /* ── 生命周期 ── */

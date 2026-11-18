@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 import { domainPermissionChange } from "../../../shared/domainPermissionRank";
 import { getDb } from "../../infra/db/connection";
-import { findDomainById, updateDomainPermission } from "../../infra/db/repositories/domain.repo";
+import { findDomainById, updateDomainPermission } from "./repo/domain.repo";
 
 export class DomainPermissionError extends Error {
   constructor(
@@ -20,7 +20,7 @@ export function changeDomainPermission(
   next: string,
   db: Database.Database = getDb(),
 ): { domainId: string; permission: string } {
-  const domain = findDomainById(db, domainId);
+  const domain = findDomainById(domainId, db);
   if (!domain) {
     throw new DomainPermissionError("NOT_FOUND", "domain not found", 404);
   }
@@ -39,7 +39,7 @@ export function changeDomainPermission(
     );
   }
   if (change === "upgrade") {
-    updateDomainPermission(db, domainId, next);
+    updateDomainPermission(domainId, next, db);
   }
   return { domainId, permission: change === "same" ? domain.permission : next };
 }

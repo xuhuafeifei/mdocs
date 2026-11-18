@@ -20,7 +20,7 @@ import {
   listDocumentsByDomain,
   type DocumentRow,
 } from "../../infra/db/repositories/document.repo";
-import { findDomainById } from "../../infra/db/repositories/domain.repo";
+import { findDomainById } from "../domains/repo/domain.repo";
 import { buildFolderSubtree } from "../tree/tree.application.js";
 import { readDocument } from "../../infra/storage/file-store";
 import {
@@ -121,7 +121,7 @@ export async function buildDomainGraph(
   options: BuildGraphOptions = {},
 ): Promise<Graph> {
   const db = getDb();
-  const domain = findDomainById(db, domainId);
+  const domain = findDomainById(domainId, db);
   if (!domain) {
     throw new Error(`工作空间不存在：${domainId}`);
   }

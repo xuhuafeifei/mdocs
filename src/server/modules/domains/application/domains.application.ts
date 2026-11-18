@@ -10,7 +10,7 @@ import {
   replaceDomainMembers,
   updateDomainName,
   type DomainMemberRole,
-} from "../../../infra/db/repositories/domain.repo.js";
+} from "../repo/domain.repo.js";
 import {
   countDocumentsByDomain,
   listDomainIdsWithDocumentInviteForVisitor,
@@ -116,16 +116,16 @@ export function createDomain(params: {
     throw new DomainError("DOMAIN_NAME_EXISTS", "domain name already exists", 409);
   }
 
-  insertDomain(db, {
+  insertDomain({
     domainId,
     domainName,
     creatorVisitorId: params.actorVisitorId,
     createdAt: now,
     updatedAt: now,
     permission,
-  });
+  }, db);
   if (permission === "restricted") {
-    addDomainMember(db, domainId, params.actorVisitorId, "write");
+    addDomainMember(domainId, params.actorVisitorId, "write", db);
   }
 
   return {
@@ -139,7 +139,7 @@ export function createDomain(params: {
 
 export function listDomainMembersForCreator(actorVisitorId: string, domainId: string) {
   const db = getDb();
-  const domain = findDomainById(db, domainId);
+  const domain = findDomainById(domainId, db);
   if (!domain) throw new DomainError("NOT_FOUND", "domain not found", 404);
   if (domain.creator_visitor_id !== actorVisitorId) {
     throw new DomainError("FORBIDDEN", "only the creator can view domain members", 403);
@@ -152,7 +152,7 @@ export function listDomainMembersForCreator(actorVisitorId: string, domainId: st
     );
   }
 
-  const rows = listDomainMembers(db, domainId);
+  const rows = listDomainMembers(domainId, db);
   const members: {
     visitorId: string;
     visitorName: string;
@@ -198,7 +198,7 @@ export function replaceDomainMembersForCreator(
   }
 
   const db = getDb();
-  const domain = findDomainById(db, domainId);
+  const domain = findDomainById(domainId, db);
   if (!domain) throw new DomainError("NOT_FOUND", "domain not found", 404);
   if (domain.creator_visitor_id !== actorVisitorId) {
     throw new DomainError("FORBIDDEN", "only the creator can modify domain members", 403);
@@ -228,7 +228,7 @@ export function replaceDomainMembersForCreator(
     );
   }
 
-  replaceDomainMembers(db, domainId, merged, new Date().toISOString());
+  replaceDomainMembers(domainId, merged, new Date().toISOString(), db);
   return { memberCount: merged.length };
 }
 
@@ -242,7 +242,7 @@ export function renameDomain(params: {
     throw new DomainError("BAD_REQUEST", "domainName is required", 400);
   }
   const db = getDb();
-  const domain = findDomainById(db, params.domainId);
+  const domain = findDomainById(params.domainId, db);
   if (!domain) throw new DomainError("NOT_FOUND", "domain not found", 404);
   if (domain.creator_visitor_id !== params.actorVisitorId) {
     throw new DomainError("FORBIDDEN", "only the creator can modify this domain", 403);
@@ -260,7 +260,7 @@ export function renameDomain(params: {
   if (existing) {
     throw new DomainError("DOMAIN_NAME_EXISTS", "domain name already exists", 409);
   }
-  updateDomainName(db, params.domainId, domainName);
+  updateDomainName(params.domainId, domainName, db);
   return { domainId: params.domainId, domainName };
 }
 
@@ -281,7 +281,7 @@ export function updateDomainPermission(
 
 export function deleteDomain(actorVisitorId: string, domainId: string): void {
   const db = getDb();
-  const domain = findDomainById(db, domainId);
+  const domain = findDomainById(domainId, db);
   if (!domain) throw new DomainError("NOT_FOUND", "domain not found", 404);
   if (domain.creator_visitor_id !== actorVisitorId) {
     throw new DomainError("FORBIDDEN", "only the creator can delete this domain", 403);
@@ -293,5 +293,5 @@ export function deleteDomain(actorVisitorId: string, domainId: string): void {
       400,
     );
   }
-  deleteDomainRow(db, domainId);
+  deleteDomainRow(domainId, db);
 }

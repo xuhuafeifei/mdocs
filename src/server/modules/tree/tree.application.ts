@@ -10,7 +10,7 @@ import {
   listDocumentsByDomain,
   type DocumentRow,
 } from "../../infra/db/repositories/document.repo.js";
-import { findDomainById } from "../../infra/db/repositories/domain.repo.js";
+import { findDomainById } from "../domains/repo/domain.repo.js";
 import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access.js";
 import { canReadDocument, DocumentError, makeDomainAccessInfo } from "../access/access-control.js";
 import { getConfig } from "../../infra/config/index.js";
@@ -43,7 +43,7 @@ export function buildDocumentTree(
   const effective = domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
 
-  const domain = findDomainById(db, effective);
+  const domain = findDomainById(effective, db);
   const access = resolveDomainAccess(db, domain, effective, visitorId);
   if (!canEnterDomainTree(access)) return [];
 
@@ -80,7 +80,7 @@ export function buildFolderSubtree(
     throw new DocumentError("BAD_REQUEST", "不是目录", 400);
   }
 
-  const domain = findDomainById(db, folder.domain_id);
+  const domain = findDomainById(folder.domain_id, db);
   const access = resolveDomainAccess(db, domain, folder.domain_id, visitorId);
   if (!canEnterDomainTree(access)) return [];
 

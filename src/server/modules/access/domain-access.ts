@@ -11,7 +11,7 @@
  */
 
 import type Database from "better-sqlite3";
-import { isDomainMember, type DomainRow } from "../../infra/db/repositories/domain.repo";
+import { isDomainMember, type DomainRow } from "../domains/repo/domain.repo";
 import { hasDocumentInviteInDomain } from "../../infra/db/repositories/document.repo";
 
 export type DomainAccessKind = "none" | "full" | "viaDocumentInvites";
@@ -64,7 +64,7 @@ export function resolveDomainAccess(
 
   // restricted 域：仅域成员、创建者、或有文档邀请者可见
   if (domain.permission === "restricted") {
-    if (isDomainMember(db, domainId, visitorId)) return { kind: "full" };
+    if (isDomainMember(domainId, visitorId, db)) return { kind: "full" };
     if (domain.creator_visitor_id === visitorId) return { kind: "full" };
     if (hasDocInviteInDomain) return { kind: "viaDocumentInvites" };
     return { kind: "none" };

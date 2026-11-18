@@ -11,7 +11,7 @@ import {
   findDomainById,
   insertDomain,
   deleteDomainRow,
-} from "../../infra/db/repositories/domain.repo";
+} from "../domains/repo/domain.repo";
 import {
   insertAuditLog,
   insertVisitorMigration,
@@ -97,20 +97,20 @@ export function migrateVisitor(params: {
   // 在数据库事务中原子化完成所有数据迁移与日志记录
   const tx = db.transaction(() => {
     // ---- 1. 转移个人域 ----
-    const fromDomain = findDomainById(db, from.visitor_id);
+    const fromDomain = findDomainById(from.visitor_id, db);
     if (fromDomain) {
       // 确保目标访客也有个人域
-      const toDomain = findDomainById(db, to.visitor_id);
+      const toDomain = findDomainById(to.visitor_id, db);
       if (!toDomain) {
         const now = new Date().toISOString();
-        insertDomain(db, {
+        insertDomain({
           domainId: to.visitor_id,
           domainName: personalDomainDisplayName(to.visitor_name),
           creatorVisitorId: to.visitor_id,
           createdAt: now,
           updatedAt: now,
           permission: "private",
-        });
+        }, db);
       }
 
       // 将旧个人域下的文档迁移到新个人域
@@ -127,7 +127,7 @@ export function migrateVisitor(params: {
       }
 
       // 删除旧个人域
-      deleteDomainRow(db, from.visitor_id);
+      deleteDomainRow(from.visitor_id, db);
     }
 
     // ---- 2. 转移所有权 ----

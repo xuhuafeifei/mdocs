@@ -27,7 +27,7 @@ import {
 import type { Graph } from "./graph/types";
 import { getDb } from "../../infra/db/connection";
 import { findDocumentById, listDocumentsByDomain } from "../../infra/db/repositories/document.repo";
-import { findDomainById } from "../../infra/db/repositories/domain.repo";
+import { findDomainById } from "../domains/repo/domain.repo";
 import { FILE_TYPE } from "../../../shared/file-types";
 
 /* ── Payload 类型 ── */
@@ -175,7 +175,7 @@ async function runDomainGraph(
 ): Promise<void> {
   const startTime = Date.now();
   const db = getDb();
-  const domain = findDomainById(db, payload.targetId);
+  const domain = findDomainById(payload.targetId, db);
   if (!domain) {
     throw new Error(`工作空间不存在：${payload.targetId}`);
   }

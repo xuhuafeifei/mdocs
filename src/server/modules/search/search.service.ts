@@ -12,7 +12,7 @@ import type Database from "better-sqlite3";
 import { Jieba } from "@node-rs/jieba";
 import { dict } from "@node-rs/jieba/dict.js";
 import { getDb } from "../../infra/db/connection";
-import { findDomainById } from "../../infra/db/repositories/domain.repo";
+import { findDomainById } from "../domains/repo/domain.repo";
 import { canReadDocument, makeDomainAccessInfo } from "../access/access-control";
 import type { DocumentRow } from "../../infra/db/repositories/document.repo";
 import { querySemanticNeighbors } from "./embedding-store";
@@ -113,7 +113,7 @@ export async function searchDocuments(params: {
   const domainIds = Array.from(new Set(merged.map((r) => r.domain_id)));
   const domainCache = new Map<string, { permission: string } | null>();
   for (const did of domainIds) {
-    domainCache.set(did, findDomainById(db, did) ?? null);
+    domainCache.set(did, findDomainById(did, db) ?? null);
   }
 
   const results: SearchResult[] = [];
