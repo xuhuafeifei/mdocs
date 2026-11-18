@@ -105,7 +105,15 @@ export function createDomainTool({ visitorId }: ToolDeps): AgentTool {
         permission,
       }, db);
       if (permission === "restricted") {
-        addDomainMember(domainId, visitorId, "write", db);
+        addDomainMember(
+          {
+            domain_id: domainId,
+            visitor_id: visitorId,
+            joined_at: now,
+            role: "write",
+          },
+          db,
+        );
       }
       return asToolResult({
         domainId,
@@ -133,6 +141,7 @@ export function listDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
       const { db, domain } = requireRestrictedDomainAsCreator(domainId, visitorId);
       const rows = listDomainMembers(domainId, db);
       const members = rows.map((row) => {
+        const role: DomainMemberRole = row.role === "write" ? "write" : "read";
         const v = findVisitorById(row.visitor_id);
         if (!v) {
           return {
@@ -140,7 +149,7 @@ export function listDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
             visitorName: "",
             missing: true,
             disabled: false,
-            role: row.role,
+            role,
           };
         }
         return {
@@ -148,7 +157,7 @@ export function listDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
           visitorName: v.visitor_name,
           missing: false,
           disabled: v.disabled_at != null,
-          role: row.role,
+          role,
         };
       });
       return asToolResult({
@@ -212,7 +221,15 @@ export function addDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
           alreadyMember.push(vid);
           continue;
         }
-        addDomainMember(domainId, vid, role, db);
+        addDomainMember(
+          {
+            domain_id: domainId,
+            visitor_id: vid,
+            joined_at: new Date().toISOString(),
+            role,
+          },
+          db,
+        );
         added.push({ visitorId: vid, visitorName: v.visitor_name, role });
       }
 
@@ -220,7 +237,15 @@ export function addDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
         throw new Error(`unknown visitor ids: ${invalid.join(", ")}`);
       }
 
-      addDomainMember(domainId, domain.creator_visitor_id, "write", db);
+      addDomainMember(
+        {
+          domain_id: domainId,
+          visitor_id: domain.creator_visitor_id,
+          joined_at: new Date().toISOString(),
+          role: "write",
+        },
+        db,
+      );
 
       return asToolResult({
         domainId,

@@ -125,7 +125,15 @@ export function createDomain(params: {
     permission,
   }, db);
   if (permission === "restricted") {
-    addDomainMember(domainId, params.actorVisitorId, "write", db);
+    addDomainMember(
+      {
+        domain_id: domainId,
+        visitor_id: params.actorVisitorId,
+        joined_at: now,
+        role: "write",
+      },
+      db,
+    );
   }
 
   return {
@@ -161,6 +169,7 @@ export function listDomainMembersForCreator(actorVisitorId: string, domainId: st
     role: DomainMemberRole;
   }[] = [];
   for (const row of rows) {
+    const role: DomainMemberRole = row.role === "write" ? "write" : "read";
     const v = findVisitorById(row.visitor_id);
     if (!v) {
       members.push({
@@ -168,7 +177,7 @@ export function listDomainMembersForCreator(actorVisitorId: string, domainId: st
         visitorName: "",
         missing: true,
         disabled: false,
-        role: row.role,
+        role,
       });
     } else {
       members.push({
@@ -176,7 +185,7 @@ export function listDomainMembersForCreator(actorVisitorId: string, domainId: st
         visitorName: v.visitor_name,
         missing: false,
         disabled: v.disabled_at != null,
-        role: row.role,
+        role,
       });
     }
   }

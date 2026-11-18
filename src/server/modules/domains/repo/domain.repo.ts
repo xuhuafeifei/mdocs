@@ -122,24 +122,21 @@ function normalizeRole(role: DomainMemberRole | undefined): DomainMemberRole {
 }
 
 /**
- * 向指定域添加一位成员。
- * 已存在时：传入 write 可升级；传入 read 不降级。
+ * 向指定域添加一位成员（吃完整 DomainMembers）。
+ * 已存在时：传入 write 可升级；传入 read 不降级；joined_at 不覆盖。
  */
 export function addDomainMember(
-  domainId: string,
-  visitorId: string,
-  role: DomainMemberRole = "read",
+  input: DomainMembers,
   db?: Database.Database,
 ): void {
-  const now = new Date().toISOString();
-  const r = normalizeRole(role);
+  const role = normalizeRole(input.role);
   resolveDb(db)
     .prepare(
       `INSERT INTO domain_members (domain_id, visitor_id, joined_at, role) VALUES (?, ?, ?, ?)
      ON CONFLICT(domain_id, visitor_id) DO UPDATE SET
        role = CASE WHEN excluded.role = 'write' THEN 'write' ELSE domain_members.role END`,
     )
-    .run(domainId, visitorId, now, r);
+    .run(input.domain_id, input.visitor_id, input.joined_at, role);
 }
 
 /**
@@ -202,17 +199,11 @@ export function listDomainMembers(
   domainId: string,
   db?: Database.Database,
 ): DomainMembers[] {
-  const rows = resolveDb(db)
-    .prepare<string, { domain_id: string; visitor_id: string; role: string; joined_at: string }>(
+  return resolveDb(db)
+    .prepare<string, DomainMembers>(
       `SELECT domain_id, visitor_id, role, joined_at FROM domain_members WHERE domain_id = ?`,
     )
     .all(domainId);
-  return rows.map((r) => ({
-    domain_id: r.domain_id,
-    visitor_id: r.visitor_id,
-    role: r.role === "write" ? "write" : "read",
-    joined_at: r.joined_at,
-  }));
 }
 
 /**
