@@ -189,6 +189,7 @@ export function writeDomainGraphFile(domainId: string, file: DirGraphFile): void
       permission: 1,
       file_type: FILE_TYPE.GRAPH_FILE,
       parent_id: null,
+      is_dirty: 1,
     }, db);
   }
   writeDocument(domainId, filePath, content);
@@ -243,6 +244,7 @@ function upsertGraphFileContent(params: {
       permission: 1,
       file_type: GRAPH_FILE_TYPE.FILE,
       parent_id: params.parentId,
+      is_dirty: 1,
     }, db);
   }
   writeDocument(params.domainId, params.relativePath, params.content);
@@ -295,6 +297,7 @@ function ensureGraphDir(
     permission: 1,
     file_type: GRAPH_FILE_TYPE.DIR,
     parent_id: parentId,
+    is_dirty: 1,
   }, db);
 
   return findDocumentById(dirId, db)!;

@@ -45,6 +45,7 @@ export function insertMarkdownDocumentWithInitialCommit(
     permission: input.permission,
     file_type: input.fileType ?? "md",
     parent_id: input.parentId,
+    is_dirty: 1,
   }, db);
   insertCommit({
     commit_id: commitId,
@@ -73,7 +74,7 @@ export function backfillFolderDescHeadCommits(db: Database.Database): void {
     .prepare(
       `SELECT document_id, domain_id, relative_path, display_name, owner_visitor_id,
               created_by, updated_by, content_hash, head_commit_id, created_at, updated_at,
-              permission, file_type, parent_id
+              permission, file_type, parent_id, is_dirty
        FROM documents
        WHERE head_commit_id IS NULL
          AND file_type = 'md'

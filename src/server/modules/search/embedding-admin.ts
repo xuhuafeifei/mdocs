@@ -115,6 +115,7 @@ export function listEmbeddingIndex(params: {
       permission: row.permission,
       file_type: "md",
       parent_id: null,
+      is_dirty: 0,
     };
     if (!canReadDocument(docRow, visitorId, domainInfo)) continue;
 
@@ -214,6 +215,7 @@ export async function rebuildEmbeddingIndex(params: {
         permission: row.permission,
         file_type: "md",
         parent_id: null,
+        is_dirty: 0,
       };
       if (!canReadDocument(docRow, params.visitorId, domainInfo)) {
         log.info("semantic rebuild %d/%d skip %s: no read access", i + 1, ids.length, row.display_name || documentId);

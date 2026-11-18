@@ -19,6 +19,8 @@ export interface Documents {
   permission: number;
   file_type: string;
   parent_id: string | null;
+  /** 搜索索引脏标记：1=待重建 FTS；0=已索引。 */
+  is_dirty: number;
 }
 
 /** 表 document_invites */

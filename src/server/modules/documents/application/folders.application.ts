@@ -110,6 +110,7 @@ export function createFolder(params: {
       permission,
       file_type: "dir",
       parent_id: params.parentId ?? null,
+      is_dirty: 1,
     }, db);
 
     const descDocumentId = `${folderId}.folder-desc`;

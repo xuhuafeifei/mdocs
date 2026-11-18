@@ -133,6 +133,7 @@ export async function searchDocuments(params: {
       permission: row.permission,
       file_type: "md",
       parent_id: null,
+      is_dirty: 0,
     };
 
     const domain = domainCache.get(row.domain_id);

@@ -76,7 +76,7 @@ export function listDocumentsByDomain(
   return resolveDb(db).prepare<string, Documents>(
       `SELECT document_id, domain_id, relative_path, display_name, owner_visitor_id,
               created_by, updated_by, content_hash, head_commit_id, created_at, updated_at, permission,
-              file_type, parent_id
+              file_type, parent_id, is_dirty
        FROM documents WHERE domain_id = ? ORDER BY relative_path`,
     )
     .all(domainId);
@@ -134,7 +134,7 @@ export function findDocumentById(
   return resolveDb(db).prepare<string, Documents>(
       `SELECT document_id, domain_id, relative_path, display_name, owner_visitor_id,
               created_by, updated_by, content_hash, head_commit_id, created_at, updated_at, permission,
-              file_type, parent_id
+              file_type, parent_id, is_dirty
        FROM documents WHERE document_id = ?`,
     )
     .get(documentId);
@@ -159,7 +159,7 @@ export function findDocumentByPath(
   return resolveDb(db).prepare<[string, string], Documents>(
       `SELECT document_id, domain_id, relative_path, display_name, owner_visitor_id,
               created_by, updated_by, content_hash, head_commit_id, created_at, updated_at, permission,
-              file_type, parent_id
+              file_type, parent_id, is_dirty
        FROM documents WHERE domain_id = ? AND relative_path = ?`,
     )
     .get(domainId, relativePath);
@@ -179,8 +179,8 @@ export function insertDocument(
     `INSERT INTO documents
      (document_id, domain_id, relative_path, display_name, owner_visitor_id,
       created_by, updated_by, content_hash, head_commit_id, created_at, updated_at, permission,
-      file_type, parent_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      file_type, parent_id, is_dirty)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     input.document_id,
     input.domain_id,
@@ -194,8 +194,9 @@ export function insertDocument(
     input.created_at,
     input.updated_at,
     input.permission,
-    input.file_type ?? 'md',
+    input.file_type ?? "md",
     input.parent_id ?? null,
+    input.is_dirty,
   );
 }
 
@@ -438,7 +439,7 @@ export function findChildrenByParent(
   return resolveDb(db).prepare<string, Documents>(
       `SELECT document_id, domain_id, relative_path, display_name, owner_visitor_id,
               created_by, updated_by, content_hash, head_commit_id, created_at, updated_at, permission,
-              file_type, parent_id
+              file_type, parent_id, is_dirty
        FROM documents WHERE parent_id = ? ORDER BY relative_path`,
     )
     .all(parentId);

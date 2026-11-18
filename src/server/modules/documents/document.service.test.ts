@@ -41,6 +41,7 @@ function makeDoc(overrides: Partial<Documents> & { permission: number }): Docume
     updated_at: "2024-01-01T00:00:00Z",
     file_type: "md",
     parent_id: null,
+    is_dirty: 1,
     ...overrides,
   };
 }

@@ -373,6 +373,7 @@ export function createDocument(params: {
       permission,
       file_type: fileType,
       parent_id: params.parentId ?? null,
+      is_dirty: 1,
     }, db);
     insertCommit({
       commit_id: commitId,
@@ -955,6 +956,7 @@ export function restoreDocumentFromAudit(params: {
       permission: recovery.permission,
       file_type: recovery.fileType,
       parent_id: parentId,
+      is_dirty: 1,
     }, db);
     insertCommit({
       commit_id: recovery.headCommitId!,
