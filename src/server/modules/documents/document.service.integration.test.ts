@@ -19,12 +19,12 @@ const fileStoreMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
 // mock file-store：不写磁盘（记录最近一次写入正文，供 contentFormat 断言）
-vi.mock("../storage/file-store.js", () => ({
+vi.mock("../../infra/storage/file-store.js", () => ({
   writeDocument: (_domainId: string, _relativePath: string, content: string) => {
     fileStoreMocks.lastWriteContent = content;
     return { contentHash: "mock-hash", bytes: 0 };
@@ -42,7 +42,7 @@ vi.mock("../storage/file-store.js", () => ({
 
 import { DocumentError, Permission } from "../access/access-control.js";
 import { createDocument, addDocumentInvite, updateDocument, moveDocument, renameDocument } from "./document.service.js";
-import { findDocumentById } from "../../infra/db/repositories/document.repo.js";
+import { findDocumentById } from "./repo/document.repo.js";
 import { findDomainById } from "../domains/repo/domain.repo.js";
 
 /* ── 测试辅助：直接在数据库建文件夹 ── */
@@ -52,7 +52,7 @@ function createFolderInDb(domainId: string, name: string, parentId: string | nul
   const folderId = "folder-" + Math.random().toString(36).slice(2, 10);
   const now = new Date().toISOString();
   const path = parentId
-    ? `${findDocumentById(db, parentId)!.relative_path}/${name}`
+    ? `${findDocumentById(parentId, db)!.relative_path}/${name}`
     : name;
   db.prepare(
     `INSERT INTO documents (document_id, domain_id, relative_path, display_name, owner_visitor_id,
@@ -264,7 +264,7 @@ describe("createDocument 域权限校验", () => {
       parentId: folderId,
     });
     // 验证数据库中 parent_id 已设置
-    const row = findDocumentById(testDbRef.db!, doc.documentId);
+    const row = findDocumentById(doc.documentId, testDbRef.db!);
     expect(row?.parent_id).toBe(folderId);
   });
 });
@@ -399,7 +399,7 @@ describe("moveDocument", () => {
     expect(moved.parentId).toBe(folderId);
     expect(moved.relativePath).toBe("guide/a.md");
 
-    const row = findDocumentById(testDbRef.db!, doc.documentId);
+    const row = findDocumentById(doc.documentId, testDbRef.db!);
     expect(row?.parent_id).toBe(folderId);
     expect(row?.relative_path).toBe("guide/a.md");
   });
@@ -503,9 +503,9 @@ describe("moveDocument", () => {
     expect(moved.parentId).toBe(destId);
     expect(moved.relativePath).toBe("dest/src-pack");
 
-    const folderRow = findDocumentById(testDbRef.db!, srcId);
-    const nestedRow = findDocumentById(testDbRef.db!, nestedId);
-    const leafRow = findDocumentById(testDbRef.db!, leaf.documentId);
+    const folderRow = findDocumentById(srcId, testDbRef.db!);
+    const nestedRow = findDocumentById(nestedId, testDbRef.db!);
+    const leafRow = findDocumentById(leaf.documentId, testDbRef.db!);
     expect(folderRow?.parent_id).toBe(destId);
     expect(folderRow?.relative_path).toBe("dest/src-pack");
     expect(nestedRow?.relative_path).toBe("dest/src-pack/nested");

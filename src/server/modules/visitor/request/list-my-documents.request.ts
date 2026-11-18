@@ -1,20 +1,8 @@
-import { Type } from "class-transformer";
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from "class-validator";
+import { IsIn, IsOptional, IsString } from "class-validator";
+import { PageRequest } from "../../../shared/request/page.request.js";
 
-export class ListMyDocumentsRequest {
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  offset?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number;
-
+/** GET /api/visitors/me/documents */
+export class ListMyDocumentsRequest extends PageRequest {
   @IsOptional()
   @IsString()
   domainId?: string;
@@ -24,10 +12,6 @@ export class ListMyDocumentsRequest {
   creatorVisitorId?: string;
 
   @IsOptional()
-  @IsString()
+  @IsIn(["md", "html", "sheet"])
   fileType?: string;
-
-  @IsOptional()
-  @IsIn(["domain", "creator"])
-  groupBy?: "domain" | "creator";
 }

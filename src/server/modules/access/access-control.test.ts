@@ -13,7 +13,7 @@ import { applySchema } from "../../infra/db/schema.js";
 
 const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
@@ -24,7 +24,7 @@ import {
   DocumentError,
 } from "./access-control.js";
 import { findDomainById } from "../domains/repo/domain.repo.js";
-import type { DocumentRow } from "../../infra/db/repositories/document.repo.js";
+import type { Documents } from "../documents/repo/document.repo.js";
 
 /* ── 生命周期 ── */
 

@@ -14,7 +14,7 @@ import {
 import {
   countDocumentsByDomain,
   listDomainIdsWithDocumentInviteForVisitor,
-} from "../../../infra/db/repositories/document.repo.js";
+} from "../../documents/repo/document.repo.js";
 import { findVisitorById } from "../../visitor/repo/visitor.repo.js";
 import { resolveDomainAccess } from "../../access/domain-access.js";
 import {
@@ -75,7 +75,7 @@ export function listVisibleDomains(visitorId: string | null) {
   const db = getDb();
   const rows = listDomains(db);
   const documentInviteDomainIds = visitorId
-    ? new Set(listDomainIdsWithDocumentInviteForVisitor(db, visitorId))
+    ? new Set(listDomainIdsWithDocumentInviteForVisitor(visitorId, db))
     : undefined;
   const filtered = rows.filter(
     (r) =>
@@ -87,7 +87,7 @@ export function listVisibleDomains(visitorId: string | null) {
     domainName: r.domain_name,
     permission: r.permission,
     creatorVisitorId: r.creator_visitor_id,
-    docCount: countDocumentsByDomain(db, r.domain_id),
+    docCount: countDocumentsByDomain(r.domain_id, db),
   }));
 }
 
@@ -117,11 +117,11 @@ export function createDomain(params: {
   }
 
   insertDomain({
-    domainId,
-    domainName,
-    creatorVisitorId: params.actorVisitorId,
-    createdAt: now,
-    updatedAt: now,
+    domain_id: domainId,
+    domain_name: domainName,
+    creator_visitor_id: params.actorVisitorId,
+    created_at: now,
+    updated_at: now,
     permission,
   }, db);
   if (permission === "restricted") {
@@ -213,11 +213,17 @@ export function replaceDomainMembersForCreator(
 
   const byId = new Map(parsed.map((m) => [m.visitorId, m.role]));
   byId.set(domain.creator_visitor_id, "write");
-  const merged = [...byId.entries()].map(([visitorId, role]) => ({ visitorId, role }));
+  const joinedAt = new Date().toISOString();
+  const merged = [...byId.entries()].map(([visitorId, role]) => ({
+    domain_id: domainId,
+    visitor_id: visitorId,
+    joined_at: joinedAt,
+    role,
+  }));
 
   const invalid: string[] = [];
   for (const m of merged) {
-    if (!findVisitorById(m.visitorId)) invalid.push(m.visitorId);
+    if (!findVisitorById(m.visitor_id)) invalid.push(m.visitor_id);
   }
   if (invalid.length > 0) {
     throw new DomainError(
@@ -228,7 +234,7 @@ export function replaceDomainMembersForCreator(
     );
   }
 
-  replaceDomainMembers(domainId, merged, new Date().toISOString(), db);
+  replaceDomainMembers(domainId, merged, db);
   return { memberCount: merged.length };
 }
 
@@ -247,7 +253,7 @@ export function renameDomain(params: {
   if (domain.creator_visitor_id !== params.actorVisitorId) {
     throw new DomainError("FORBIDDEN", "only the creator can modify this domain", 403);
   }
-  if (countDocumentsByDomain(db, params.domainId) > 0) {
+  if (countDocumentsByDomain(params.domainId, db) > 0) {
     throw new DomainError(
       "DOMAIN_HAS_DOCUMENTS",
       "cannot modify domain with documents",
@@ -286,7 +292,7 @@ export function deleteDomain(actorVisitorId: string, domainId: string): void {
   if (domain.creator_visitor_id !== actorVisitorId) {
     throw new DomainError("FORBIDDEN", "only the creator can delete this domain", 403);
   }
-  if (countDocumentsByDomain(db, domainId) > 0) {
+  if (countDocumentsByDomain(domainId, db) > 0) {
     throw new DomainError(
       "DOMAIN_HAS_DOCUMENTS",
       "cannot delete domain with documents",

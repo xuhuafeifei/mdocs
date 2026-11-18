@@ -18,11 +18,11 @@ export function ensurePersonalDomain(db: Database.Database, visitorId: string, v
   const now = new Date().toISOString();
   // 插入新的私有域记录，domainId 与 visitorId 相同
   insertDomain({
-    domainId: visitorId,
-    domainName: personalDomainDisplayName(visitorName),
-    creatorVisitorId: visitorId,
-    createdAt: now,
-    updatedAt: now,
+    domain_id: visitorId,
+    domain_name: personalDomainDisplayName(visitorName),
+    creator_visitor_id: visitorId,
+    created_at: now,
+    updated_at: now,
     permission: "private",
   }, db);
 }

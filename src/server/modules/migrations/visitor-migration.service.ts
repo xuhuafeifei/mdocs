@@ -5,7 +5,7 @@ import { getDb } from "../../infra/db/connection";
 import {
   disableVisitor,
   findVisitorById,
-  type VisitorRow,
+  type Visitors,
 } from "../visitor/repo/visitor.repo.js";
 import {
   findDomainById,
@@ -15,7 +15,7 @@ import {
 import {
   insertAuditLog,
   insertVisitorMigration,
-} from "../../infra/db/repositories/audit.repo";
+} from "../documents/repo/audit.repo";
 import { personalDomainDisplayName } from "../../../shared/personalDomain";
 import { useLogger } from "../../infra/logger/logger";
 
@@ -34,8 +34,8 @@ export interface MigrationImpact {
 /** 访客迁移的执行结果 */
 export interface MigrationResult {
   dryRun: boolean;
-  from: VisitorRow;
-  to: VisitorRow;
+  from: Visitors;
+  to: Visitors;
   impact: MigrationImpact;
   backupPath: string | null;
 }
@@ -104,11 +104,11 @@ export function migrateVisitor(params: {
       if (!toDomain) {
         const now = new Date().toISOString();
         insertDomain({
-          domainId: to.visitor_id,
-          domainName: personalDomainDisplayName(to.visitor_name),
-          creatorVisitorId: to.visitor_id,
-          createdAt: now,
-          updatedAt: now,
+          domain_id: to.visitor_id,
+          domain_name: personalDomainDisplayName(to.visitor_name),
+          creator_visitor_id: to.visitor_id,
+          created_at: now,
+          updated_at: now,
           permission: "private",
         }, db);
       }
@@ -181,26 +181,27 @@ export function migrateVisitor(params: {
     disableVisitor(from.visitor_id, to.visitor_id, executedAt);
 
     // 记录迁移日志
-    insertVisitorMigration(db, {
-      fromVisitorId: from.visitor_id,
-      toVisitorId: to.visitor_id,
-      affectedCounts: impact as unknown as Record<string, number>,
-      executedAt,
-    });
+    insertVisitorMigration({
+      from_visitor_id: from.visitor_id,
+      to_visitor_id: to.visitor_id,
+      affected_counts_json: JSON.stringify(impact),
+      executed_at: executedAt,
+    }, db);
     // 记录审计日志
-    insertAuditLog(db, {
-      actorVisitorId: null,
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: null,
       action: "visitor.migrate",
-      targetType: "visitor",
-      targetId: from.visitor_id,
-      metadata: {
-        fromVisitorId: from.visitor_id,
-        toVisitorId: to.visitor_id,
+      target_type: "visitor",
+      target_id: from.visitor_id,
+      metadata_json: JSON.stringify({
+        from_visitor_id: from.visitor_id,
+        to_visitor_id: to.visitor_id,
         impact,
         backupPath,
-      },
-      createdAt: executedAt,
-    });
+      }),
+      created_at: executedAt,
+    }, db);
   });
   tx();
 

@@ -13,18 +13,18 @@ import { randomUUID } from "node:crypto";
 
 const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
-vi.mock("../storage/file-store.js", () => ({
+vi.mock("../../infra/storage/file-store.js", () => ({
   readDocument: () => ({ content: '{"root":{"children":[]}}', contentHash: "mock-hash" }),
   writeDocument: () => ({ contentHash: "mock-hash", bytes: 0 }),
   writeCommitBlob: () => ({ blobRef: "ab/mock", bytes: 0 }),
   deleteDocumentFile: () => {},
 }));
 
-vi.mock("../config/index.js", () => ({
+vi.mock("../../infra/config/index.js", () => ({
   getConfig: () => ({
     host: "127.0.0.1",
     port: 4000,
@@ -47,7 +47,7 @@ vi.mock("../config/index.js", () => ({
   }),
 }));
 
-vi.mock("../logger/logger.js", () => ({
+vi.mock("../../infra/logger/logger.js", () => ({
   useLogger: () => ({
     debug: () => {},
     info: () => {},
@@ -58,7 +58,7 @@ vi.mock("../logger/logger.js", () => ({
 
 import { buildGraph } from "./graph";
 import type { Graph, GraphDeps } from "./graph/types.js";
-import { findDocumentById } from "../../infra/db/repositories/document.repo.js";
+import { findDocumentById } from "./repo/document.repo.js";
 import { buildDocumentTree } from "../tree/tree.application.js";
 
 /* ── 测试辅助 ── */
@@ -70,7 +70,7 @@ function createFolder(name: string, parentId: string | null = null): string {
   const folderId = randomUUID();
   const now = new Date().toISOString();
   const parentPath = parentId
-    ? findDocumentById(db, parentId)!.relative_path
+    ? findDocumentById(parentId, db)!.relative_path
     : "";
   const folderPath = parentPath ? `${parentPath}/${name}` : name;
 
@@ -88,7 +88,7 @@ function createDoc(name: string, parentId: string | null = null, title?: string)
   const docId = randomUUID();
   const now = new Date().toISOString();
   const parentPath = parentId
-    ? findDocumentById(db, parentId)!.relative_path
+    ? findDocumentById(parentId, db)!.relative_path
     : "";
   const docPath = parentPath ? `${parentPath}/${name}` : name;
 
@@ -181,7 +181,7 @@ function createMockDeps(): GraphDeps {
     writeArticleCache: async () => {},
 
     getDocTitle: async (documentId: string) => {
-      const doc = findDocumentById(testDbRef.db!, documentId);
+      const doc = findDocumentById(documentId, testDbRef.db!);
       return doc?.display_name || "未命名";
     },
 

@@ -8,7 +8,7 @@
  * 3. x-visitor-token header（匿名用户/旧前端兼容）
  */
 import type { Request } from "express";
-import type { VisitorRow } from "../entity/visitor.entity.js";
+import type { Visitors } from "../entity/visitor.entity.js";
 import { resolveCliVisitor } from "./cli-token.service.js";
 import { resolveVisitorByToken } from "./visitor.service.js";
 
@@ -17,7 +17,7 @@ import { resolveVisitorByToken } from "./visitor.service.js";
  *
  * @returns 解析到的访客信息，全部失败则返回 null
  */
-export function resolveVisitorFromRequest(req: Request): VisitorRow | null {
+export function resolveVisitorFromRequest(req: Request): Visitors | null {
   // 方式一：Cookie（浏览器会话，最稳定）
   const cookieToken = readCookieToken(req);
   if (cookieToken) {

@@ -7,14 +7,14 @@ import {
   findDocumentById,
   findDocumentByPath,
   insertDocument,
-} from "../../../infra/db/repositories/document.repo.js";
+} from "../repo/document.repo.js";
 import { resolveDomainAccess } from "../../access/domain-access.js";
 import {
   DocumentError,
   Permission,
   validateDomainPermission,
 } from "../../access/access-control.js";
-import { insertAuditLog } from "../../../infra/db/repositories/audit.repo.js";
+import { insertAuditLog } from "../repo/audit.repo.js";
 import { folderDescPathForFolder } from "../../../../shared/folderDesc.js";
 import { normalisePathSegmentForStorage } from "../../../../shared/storagePath.js";
 import { insertMarkdownDocumentWithInitialCommit } from "../initial-commit.js";
@@ -54,7 +54,7 @@ export function createFolder(params: {
 
   let normalizedPath: string;
   if (params.parentId) {
-    const parent = findDocumentById(db, params.parentId);
+    const parent = findDocumentById(params.parentId, db);
     if (!parent || parent.file_type !== "dir") {
       throw new DocumentError("INVALID_PARENT", "父目录不存在", 404);
     }
@@ -66,7 +66,7 @@ export function createFolder(params: {
     normalizedPath = storageName;
   }
 
-  const existing = findDocumentByPath(db, domainId, normalizedPath);
+  const existing = findDocumentByPath(domainId, normalizedPath, db);
   if (existing) {
     throw new DocumentError("DOC_EXISTS", "同名目录已存在", 409);
   }
@@ -95,21 +95,22 @@ export function createFolder(params: {
   const descContent = params.description ?? `# ${name}`;
 
   const tx = db.transaction(() => {
-    insertDocument(db, {
-      documentId: folderId,
-      domainId,
-      relativePath: normalizedPath,
-      displayName: name,
-      ownerVisitorId: params.actorVisitorId,
-      createdBy: params.actorVisitorId,
-      updatedBy: params.actorVisitorId,
-      contentHash: "",
-      createdAt: now,
-      updatedAt: now,
+    insertDocument({
+      document_id: folderId,
+      domain_id: domainId,
+      relative_path: normalizedPath,
+      display_name: name,
+      owner_visitor_id: params.actorVisitorId,
+      created_by: params.actorVisitorId,
+      updated_by: params.actorVisitorId,
+      content_hash: "",
+      head_commit_id: null,
+      created_at: now,
+      updated_at: now,
       permission,
-      fileType: "dir",
-      parentId: params.parentId ?? null,
-    });
+      file_type: "dir",
+      parent_id: params.parentId ?? null,
+    }, db);
 
     const descDocumentId = `${folderId}.folder-desc`;
     insertMarkdownDocumentWithInitialCommit(db, {
@@ -127,14 +128,15 @@ export function createFolder(params: {
       parentId: folderId,
     });
 
-    insertAuditLog(db, {
-      actorVisitorId: params.actorVisitorId,
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: params.actorVisitorId,
       action: "folder.create",
-      targetType: "folder",
-      targetId: folderId,
-      metadata: { relativePath: normalizedPath },
-      createdAt: now,
-    });
+      target_type: "folder",
+      target_id: folderId,
+      metadata_json: JSON.stringify({ relativePath: normalizedPath }),
+      created_at: now,
+    }, db);
   });
   tx();
 
@@ -143,28 +145,29 @@ export function createFolder(params: {
 
 export function deleteFolder(params: { actorVisitorId: string; folderId: string }): void {
   const db = getDb();
-  const folder = findDocumentById(db, params.folderId);
+  const folder = findDocumentById(params.folderId, db);
   if (!folder) throw new DocumentError("DOC_NOT_FOUND", "目录不存在", 404);
   if (folder.file_type !== "dir") throw new DocumentError("BAD_REQUEST", "不是目录", 400);
   if (folder.owner_visitor_id !== params.actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可删除目录", 403);
   }
 
-  const childCount = countChildrenByParent(db, params.folderId);
+  const childCount = countChildrenByParent(params.folderId, db);
   if (childCount > 0) {
     throw new DocumentError("NOT_EMPTY", "目录不为空，无法删除", 409);
   }
 
   const now = new Date().toISOString();
   db.transaction(() => {
-    deleteDocument(db, params.folderId);
-    insertAuditLog(db, {
-      actorVisitorId: params.actorVisitorId,
+    deleteDocument(params.folderId, db);
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: params.actorVisitorId,
       action: "folder.delete",
-      targetType: "folder",
-      targetId: params.folderId,
-      metadata: { relativePath: folder.relative_path },
-      createdAt: now,
-    });
+      target_type: "folder",
+      target_id: params.folderId,
+      metadata_json: JSON.stringify({ relativePath: folder.relative_path }),
+      created_at: now,
+    }, db);
   })();
 }

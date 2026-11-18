@@ -5,7 +5,7 @@ import { HttpException, HttpStatus } from "@nestjs/common";
 import { getConfig } from "../../../infra/config/index.js";
 import { getMaxUploadBytes } from "../../../infra/config/server-settings.js";
 import { getDb } from "../../../infra/db/connection.js";
-import { findDocumentById } from "../../../infra/db/repositories/document.repo.js";
+import { findDocumentById } from "../../documents/repo/document.repo.js";
 import { useLogger } from "../../../infra/logger/logger.js";
 import { DocumentError } from "../../access/access-control.js";
 import { IMAGE_EXT, buildAssetResponseHeaders, isAllowedAssetUpload } from "../asset-headers.js";
@@ -41,7 +41,7 @@ function assertDocumentOwner(visitorId: string, documentId: unknown): string {
   if (typeof documentId !== "string" || !documentId.trim()) {
     throw new DocumentError("BAD_REQUEST", "documentId is required", 400);
   }
-  const row = findDocumentById(getDb(), documentId.trim());
+  const row = findDocumentById(documentId.trim());
   if (!row) {
     throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
   }

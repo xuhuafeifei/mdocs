@@ -1,21 +1,13 @@
 /**
- * cli_tokens 持久化模型。
- * 与 repo 分离：跨模块要类型时 import 本文件，不要 import repo。
+ * cli_tokens 表实体（与列一一对应）。
  */
 
-export interface CliTokenRow {
+/** 表 cli_tokens */
+export interface CliTokens {
   token_id: string;
   visitor_id: string;
   token_hash: string;
   name: string;
   revoked: number;
   created_at: string;
-}
-
-export interface InsertCliTokenInput {
-  tokenId: string;
-  visitorId: string;
-  tokenHash: string;
-  name: string;
-  createdAt: string;
 }

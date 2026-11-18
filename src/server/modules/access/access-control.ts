@@ -18,9 +18,9 @@
  */
 
 import { getDb } from "../../infra/db/connection";
-import { findDocumentById, findDocumentInvite } from "../../infra/db/repositories/document.repo";
+import { findDocumentById, findDocumentInvite } from "../documents/repo/document.repo";
 import { findDomainById, getDomainMemberRole } from "../domains/repo/domain.repo";
-import type { DocumentRow } from "../../infra/db/repositories/document.repo";
+import type { Documents } from "../documents/repo/document.repo";
 import { isGraphFileType } from "../../../shared/file-types";
 import { canAccessGraph, resolveDomainAccess } from "./domain-access";
 // ============================================================
@@ -136,7 +136,7 @@ export function getDomainInfo(db: any, domainId: string, visitorId: string | nul
  * 勿再让业务拼 Row / DomainAccessInfo。见 ADR 022 重构 TODO。
  */
 export function canReadDocument(
-  row: DocumentRow,
+  row: Documents,
   visitorId: string | null | undefined,
   domainInfo: DomainAccessInfo,
 ): boolean {
@@ -158,18 +158,18 @@ export function canReadDocument(
       if (domainInfo.isDomainMember) return true;
     }
     // 非成员靠 invite
-    return !!findDocumentInvite(getDb(), row.document_id, visitorId);
+    return !!findDocumentInvite(row.document_id, visitorId);
   }
 
   // private 域：按五档实际语义
   if (row.permission === Permission.PRIVATE) {
     // 仅创建者（已在第 1 步判断过），其他人靠 invite
-    return !!findDocumentInvite(getDb(), row.document_id, visitorId);
+    return !!findDocumentInvite(row.document_id, visitorId);
   }
   if (row.permission <= Permission.DOMAIN_WRITE) {
     // domain_read / domain_write：private 域只有创建者一名成员
     // 不是创建者，且不是成员 → 靠 invite
-    return !!findDocumentInvite(getDb(), row.document_id, visitorId);
+    return !!findDocumentInvite(row.document_id, visitorId);
   }
   // public_read / public_write：任何人可读
   return true;
@@ -185,7 +185,7 @@ export function canReadDocument(
  * @deprecated 新代码用 `canWrite(visitorId, domainId, documentId)`（access.ts）。见 ADR 022 重构 TODO。
  */
 export function canEditDocument(
-  row: DocumentRow,
+  row: Documents,
   visitorId: string | null | undefined,
   domainInfo: DomainAccessInfo,
 ): boolean {
@@ -201,7 +201,7 @@ export function canEditDocument(
     // - 4 (public_write) 任何人可写
     // - 3 (public_read) 仅创建者可写（已在前面处理）或靠 invite(edit)
     if (row.permission === Permission.PUBLIC_WRITE) return true;
-    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
+    const invite = findDocumentInvite(row.document_id, visitorId);
     return invite?.permission === "edit";
   }
 
@@ -213,25 +213,25 @@ export function canEditDocument(
     ) {
       return true;
     }
-    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
+    const invite = findDocumentInvite(row.document_id, visitorId);
     return invite?.permission === "edit";
   }
 
   // private 域：按五档实际语义
   if (row.permission === Permission.PRIVATE) {
     // 仅创建者可写，或靠 invite
-    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
+    const invite = findDocumentInvite(row.document_id, visitorId);
     return invite?.permission === "edit";
   }
   if (row.permission === Permission.DOMAIN_READ || row.permission === Permission.DOMAIN_WRITE) {
     // 成员 write 可写；否则靠 invite
     if (domainInfo.domainMemberCanWrite) return true;
-    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
+    const invite = findDocumentInvite(row.document_id, visitorId);
     return invite?.permission === "edit";
   }
   if (row.permission === Permission.PUBLIC_READ) {
     // public_read：仅创建者可写，或靠 invite
-    const invite = findDocumentInvite(getDb(), row.document_id, visitorId);
+    const invite = findDocumentInvite(row.document_id, visitorId);
     return invite?.permission === "edit";
   }
   // public_write：任何人可写
@@ -252,7 +252,7 @@ export function assertDocumentAccess(
   action: "read" | "edit" | "delete",
 ): void {
   const db = getDb();
-  const row = findDocumentById(db, documentId);
+  const row = findDocumentById(documentId, db);
   if (!row) {
     throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   }
@@ -310,7 +310,7 @@ export function assertDocumentOwner(documentId: string, visitorId: string | null
     throw new DocumentError("UNAUTHENTICATED", "no visitor", 401);
   }
   const db = getDb();
-  const row = findDocumentById(db, documentId);
+  const row = findDocumentById(documentId, db);
   if (!row) {
     throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   }

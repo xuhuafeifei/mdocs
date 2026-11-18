@@ -2,8 +2,8 @@
  * 根据「当前待发正文」相对「最近一次非 auto commit」的增量，用访客默认模型生成短 message。
  */
 import { getDb } from "../../infra/db/connection";
-import { findDocumentById } from "../../infra/db/repositories/document.repo";
-import { findLatestNonAutoCommit } from "../../infra/db/repositories/commit.repo";
+import { findDocumentById } from "./repo/document.repo";
+import { findLatestNonAutoCommit } from "./repo/commit.repo";
 import { DocumentError } from "../access/access-control";
 import { readCommitBlob } from "../../infra/storage/file-store";
 import { getVisitorAgentConfig } from "../agent/Config/config";
@@ -76,7 +76,7 @@ export async function suggestCommitMessage(params: {
   contentFormat?: "markdown" | "lexical";
 }): Promise<{ message: string; baseCommitId: string | null }> {
   const db = getDb();
-  const row = findDocumentById(db, params.documentId);
+  const row = findDocumentById(params.documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
   const cfg = getVisitorAgentConfig(params.actorVisitorId);
@@ -84,7 +84,7 @@ export async function suggestCommitMessage(params: {
     throw new DocumentError("BAD_REQUEST", "未配置默认模型或 API Key，无法生成发布说明", 400);
   }
 
-  const base = findLatestNonAutoCommit(db, params.documentId);
+  const base = findLatestNonAutoCommit(params.documentId, db);
   let baseText = "";
   if (base) {
     try {

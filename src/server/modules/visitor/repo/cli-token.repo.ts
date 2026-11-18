@@ -1,41 +1,49 @@
 /**
  * cli_tokens 表访问。SQL 只活在本文件。
  * DB 默认内部 getDb()；可选末参 `db?` 仅单测注入。
+ * 入参/返回均为表实体（缺列传 null）。
  */
 import type Database from "better-sqlite3";
 import { resolveDb } from "../../../infra/db/resolve-db.js";
-import type { CliTokenRow, InsertCliTokenInput } from "../entity/cli-token.entity.js";
+import type { CliTokens } from "../entity/cli-token.entity.js";
 
-export type { CliTokenRow, InsertCliTokenInput } from "../entity/cli-token.entity.js";
+export type { CliTokens } from "../entity/cli-token.entity.js";
 
 export function insertCliToken(
-  input: InsertCliTokenInput,
+  input: CliTokens,
   db?: Database.Database,
 ): void {
   resolveDb(db)
     .prepare(
       `INSERT INTO cli_tokens (token_id, visitor_id, token_hash, name, revoked, created_at)
-     VALUES (?, ?, ?, ?, 0, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?)`,
     )
-    .run(input.tokenId, input.visitorId, input.tokenHash, input.name, input.createdAt);
+    .run(
+      input.token_id,
+      input.visitor_id,
+      input.token_hash,
+      input.name,
+      input.revoked,
+      input.created_at,
+    );
 }
 
 export function findCliTokenByHash(
   tokenHash: string,
   db?: Database.Database,
-): CliTokenRow | undefined {
+): CliTokens | undefined {
   return resolveDb(db)
     .prepare(`SELECT * FROM cli_tokens WHERE token_hash = ?`)
-    .get(tokenHash) as CliTokenRow | undefined;
+    .get(tokenHash) as CliTokens | undefined;
 }
 
 export function listCliTokensByVisitor(
   visitorId: string,
   db?: Database.Database,
-): CliTokenRow[] {
+): CliTokens[] {
   return resolveDb(db)
     .prepare(`SELECT * FROM cli_tokens WHERE visitor_id = ? ORDER BY created_at DESC`)
-    .all(visitorId) as CliTokenRow[];
+    .all(visitorId) as CliTokens[];
 }
 
 export function revokeCliToken(tokenId: string, db?: Database.Database): void {

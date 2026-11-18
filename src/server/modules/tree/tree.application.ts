@@ -8,8 +8,8 @@ import {
   findChildrenByParent,
   findDocumentById,
   listDocumentsByDomain,
-  type DocumentRow,
-} from "../../infra/db/repositories/document.repo.js";
+  type Documents,
+} from "../documents/repo/document.repo.js";
 import { findDomainById } from "../domains/repo/domain.repo.js";
 import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access.js";
 import { canReadDocument, DocumentError, makeDomainAccessInfo } from "../access/access-control.js";
@@ -50,7 +50,7 @@ export function buildDocumentTree(
   const domainPermission = domain?.permission ?? "public";
   const domainInfo = makeDomainAccessInfo(db, effective, visitorId, domainPermission);
 
-  const rows = listDocumentsByDomain(db, effective);
+  const rows = listDocumentsByDomain(effective, db);
   const filtered = rows.filter((r) => canReadDocument(r, visitorId ?? null, domainInfo));
 
   const typedRows = options?.includeTypes
@@ -72,7 +72,7 @@ export function buildFolderSubtree(
   options?: { includeTypes?: string[] },
 ): FolderSubtreeNode[] {
   const db = getDb();
-  const folder = findDocumentById(db, folderId);
+  const folder = findDocumentById(folderId, db);
   if (!folder) {
     throw new DocumentError("DOC_NOT_FOUND", "目录不存在", 404);
   }
@@ -104,15 +104,15 @@ export function buildFolderSubtree(
   return projectSubtree(full);
 }
 
-function collectDescendants(folderId: string): DocumentRow[] {
+function collectDescendants(folderId: string): Documents[] {
   const db = getDb();
-  const out: DocumentRow[] = [];
-  const queue = [...findChildrenByParent(db, folderId)];
+  const out: Documents[] = [];
+  const queue = [...findChildrenByParent(folderId, db)];
   while (queue.length > 0) {
     const row = queue.shift()!;
     out.push(row);
     if (row.file_type === "dir") {
-      queue.push(...findChildrenByParent(db, row.document_id));
+      queue.push(...findChildrenByParent(row.document_id, db));
     }
   }
   return out;
@@ -149,7 +149,7 @@ function projectSubtree(nodes: TreeNode[]): FolderSubtreeNode[] {
  * 3. 将文件夹挂在各自的父文件夹下
  * 4. 对根节点和子节点递归排序
  */
-function buildTreeFromRows(rows: DocumentRow[], visitorId: string | null): TreeNode[] {
+function buildTreeFromRows(rows: Documents[], visitorId: string | null): TreeNode[] {
   const roots: TreeNode[] = [];
   const folderById = new Map<string, TreeFolderNode>();
   // 记录已添加到 roots 的文件夹 ID，避免重复
@@ -249,7 +249,7 @@ function buildTreeFromRows(rows: DocumentRow[], visitorId: string | null): TreeN
   return roots;
 }
 
-function deriveFolderName(row: DocumentRow): string {
+function deriveFolderName(row: Documents): string {
   const t = row.display_name.trim();
   if (t) return t;
   return row.relative_path.split("/").pop() ?? row.relative_path;

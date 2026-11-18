@@ -5,7 +5,7 @@ import {
   listBookmarksByVisitor,
   removeBookmark,
 } from "../../../infra/db/repositories/bookmark.repo.js";
-import { findDocumentById } from "../../../infra/db/repositories/document.repo.js";
+import { findDocumentById } from "../../documents/repo/document.repo.js";
 import {
   DocumentError,
   canReadDocument,
@@ -19,7 +19,7 @@ export function listBookmarks(visitorId: string) {
   // 过滤掉无权限访问的文档；已删除的收藏保留（方便取消收藏）
   return bookmarks.filter((bookmark) => {
     if (bookmark.isDeleted) return true;
-    const doc = findDocumentById(db, bookmark.documentId);
+    const doc = findDocumentById(bookmark.documentId, db);
     if (!doc) return true;
     const domainInfo = getDomainInfo(db, doc.domain_id, visitorId);
     return canReadDocument(doc, visitorId, domainInfo);
@@ -28,7 +28,7 @@ export function listBookmarks(visitorId: string) {
 
 function assertCanReadBookmarkTarget(visitorId: string, documentId: string): void {
   const db = getDb();
-  const doc = findDocumentById(db, documentId);
+  const doc = findDocumentById(documentId, db);
   if (!doc) {
     throw new DocumentError("DOC_NOT_FOUND", "document not found", 404);
   }

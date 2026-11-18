@@ -32,3 +32,4 @@
 | 020 | [Job 文件与后台调度分开](./020-job-file-vs-watchdog.md) | accepted | Job 文件归文档；调度暂名 watch-dog；Agent 一律放 `agent/`。本次不搬代码 |
 | 021 | [server 模块目录与调用方向](./021-server-module-layout.md) | accepted | `infra` / `modules` / `nest`；分层与 DB·事务规矩；调用只允许从上往下 |
 | 022 | [access id 门面 + Guard](./022-access-id-facade-and-guards.md) | accepted | `canRead(visitorId, domainId, documentId)`；Guard 薄适配；规则只在 access |
+| 023 | [Entity / Row / Request / Response](./023-entity-row-request-response.md) | accepted | 不用 VO/DTO；repo 只 SQL；分页在 Request；我的文章去掉 groupBy |

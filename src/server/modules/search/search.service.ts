@@ -14,7 +14,7 @@ import { dict } from "@node-rs/jieba/dict.js";
 import { getDb } from "../../infra/db/connection";
 import { findDomainById } from "../domains/repo/domain.repo";
 import { canReadDocument, makeDomainAccessInfo } from "../access/access-control";
-import type { DocumentRow } from "../../infra/db/repositories/document.repo";
+import type { Documents } from "../documents/repo/document.repo";
 import { querySemanticNeighbors } from "./embedding-store";
 
 /** 与索引写入侧一致：查询也先 jieba，再交给 FTS5 */
@@ -118,7 +118,7 @@ export async function searchDocuments(params: {
 
   const results: SearchResult[] = [];
   for (const row of merged) {
-    const docRow: DocumentRow = {
+    const docRow: Documents = {
       document_id: row.document_id,
       domain_id: row.domain_id,
       relative_path: row.relative_path,

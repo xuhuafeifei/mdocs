@@ -6,11 +6,11 @@ import { AUTO_PUBLISH_MESSAGE } from "../../../shared/publish-meta.js";
 
 const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
-vi.mock("../storage/file-store.js", () => {
+vi.mock("../../infra/storage/file-store.js", () => {
   const blobs = new Map<string, string>();
   let last = "";
   return {

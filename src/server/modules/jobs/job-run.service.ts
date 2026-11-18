@@ -1,6 +1,6 @@
 import { DocumentError } from "../access/access-control";
 import { getDb } from "../../infra/db/connection";
-import { findDocumentById } from "../../infra/db/repositories/document.repo";
+import { findDocumentById } from "../documents/repo/document.repo";
 import { FILE_TYPE } from "../../../shared/file-types";
 import { readDocument } from "../../infra/storage/file-store";
 import { parseJobFileContent } from "./job-file";
@@ -22,7 +22,7 @@ import {
 } from "./running-repo";
 
 function loadJobRow(documentId: string) {
-  const row = findDocumentById(getDb(), documentId);
+  const row = findDocumentById(documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.file_type !== FILE_TYPE.JOB) {
     throw new DocumentError("BAD_REQUEST", "文档不是 Job 类型", 400);

@@ -3,10 +3,10 @@ import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import { applySchema } from "../../infra/db/schema.js";
 import { backfillFolderDescHeadCommits } from "./initial-commit.js";
-import { findDocumentById } from "../../infra/db/repositories/document.repo.js";
-import { findCommitById } from "../../infra/db/repositories/commit.repo.js";
+import { findDocumentById } from "./repo/document.repo.js";
+import { findCommitById } from "./repo/commit.repo.js";
 
-vi.mock("../storage/file-store.js", () => ({
+vi.mock("../../infra/storage/file-store.js", () => ({
   readDocument: () => ({ content: "# Legacy", contentHash: "legacy-hash" }),
   writeCommitBlob: () => ({ blobRef: "ab/legacy", bytes: 8 }),
   writeDocument: () => ({ contentHash: "mock-hash", bytes: 0 }),
@@ -37,8 +37,8 @@ describe("backfillFolderDescHeadCommits", () => {
   });
 
   it("为无 head 的 ___desc___.md 补 commit", () => {
-    const row = findDocumentById(db, descId);
+    const row = findDocumentById(descId, db);
     expect(row?.head_commit_id).toBeTruthy();
-    expect(findCommitById(db, row!.head_commit_id!)).toBeTruthy();
+    expect(findCommitById(row!.head_commit_id!, db)).toBeTruthy();
   });
 });

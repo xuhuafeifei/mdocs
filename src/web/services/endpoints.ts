@@ -1198,7 +1198,6 @@ export interface PaginatedResult<T> {
   total: number;
   offset: number;
   limit: number;
-  groups?: { key: string; items: T[] }[];
 }
 
 export interface MyDocumentsQuery {
@@ -1208,7 +1207,6 @@ export interface MyDocumentsQuery {
   creatorVisitorId?: string;
   /** md | html | sheet；不传则不限类型 */
   fileType?: string;
-  groupBy?: "domain" | "creator";
 }
 
 /**
@@ -1224,7 +1222,6 @@ export function fetchMyDocumentsApi(query: MyDocumentsQuery = {}): Promise<Pagin
   if (query.domainId) params.set("domainId", query.domainId);
   if (query.creatorVisitorId) params.set("creatorVisitorId", query.creatorVisitorId);
   if (query.fileType) params.set("fileType", query.fileType);
-  if (query.groupBy) params.set("groupBy", query.groupBy);
   return api<PaginatedResult<MyDocument>>(`/api/visitors/me/documents?${params}`);
 }
 

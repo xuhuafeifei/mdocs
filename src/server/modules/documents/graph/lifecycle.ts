@@ -3,8 +3,8 @@
  * 主链路只 schedule；隐藏文件 IO 全在本模块 + graph.service 导出函数。
  */
 import { getDb } from "../../../infra/db/connection";
-import { findDocumentById } from "../../../infra/db/repositories/document.repo";
-import { findCommitById } from "../../../infra/db/repositories/commit.repo";
+import { findDocumentById } from "../repo/document.repo";
+import { findCommitById } from "../repo/commit.repo";
 import { readCommitBlob, readDocument } from "../../../infra/storage/file-store";
 import { extractPlainTextFromLexical } from "../lexical-text";
 import {
@@ -42,7 +42,7 @@ export async function markAncestorsDirty(params: {
       file.meta.dirty = true;
       writeDirGraphFile(p, file);
     }
-    const row = findDocumentById(db, p);
+    const row = findDocumentById(p, db);
     p = row?.parent_id ?? null;
   }
   const domainFile = readDomainGraphFile(params.domainId);
@@ -119,7 +119,7 @@ export async function onFolderDeleted(params: {
 
 function readCurrentLexical(documentId: string): string | null {
   const db = getDb();
-  const doc = findDocumentById(db, documentId);
+  const doc = findDocumentById(documentId, db);
   if (!doc) return null;
   try {
     return readDocument(doc.domain_id, doc.relative_path).content;
@@ -130,7 +130,7 @@ function readCurrentLexical(documentId: string): string | null {
 
 function readLexicalAtCommit(documentId: string, commitId: string): string | null {
   const db = getDb();
-  const commit = findCommitById(db, commitId);
+  const commit = findCommitById(commitId, db);
   if (!commit || commit.document_id !== documentId) return null;
   try {
     return readCommitBlob(commit.blob_ref);

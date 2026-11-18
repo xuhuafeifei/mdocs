@@ -3,7 +3,7 @@
  * 行级函数仍在 access-control.ts / domain-access.ts，供本文件与迁移期旧调用方使用。
  */
 import { getDb } from "../../infra/db/connection.js";
-import { findDocumentById } from "../../infra/db/repositories/document.repo.js";
+import { findDocumentById } from "../documents/repo/document.repo.js";
 import { findDomainById } from "../domains/repo/domain.repo.js";
 import {
   DocumentError,
@@ -55,7 +55,7 @@ export function assertCanRead(
   documentId: string,
 ): void {
   const db = getDb();
-  const row = findDocumentById(db, documentId);
+  const row = findDocumentById(documentId, db);
   if (!row || row.domain_id !== domainId) {
     throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   }
@@ -80,7 +80,7 @@ export function assertCanWrite(
   documentId: string,
 ): void {
   const db = getDb();
-  const row = findDocumentById(db, documentId);
+  const row = findDocumentById(documentId, db);
   if (!row || row.domain_id !== domainId) {
     throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   }
@@ -102,7 +102,7 @@ export function assertCanWrite(
 function loadDocInDomain(visitorId: string | null, domainId: string, documentId: string) {
   if (!canEnterDomain(visitorId, domainId)) return null;
   const db = getDb();
-  const row = findDocumentById(db, documentId);
+  const row = findDocumentById(documentId, db);
   if (!row || row.domain_id !== domainId) return null;
   const domain = findDomainById(domainId, db);
   const domainInfo = makeDomainAccessInfo(

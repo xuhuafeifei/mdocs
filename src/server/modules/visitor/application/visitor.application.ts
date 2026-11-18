@@ -1,13 +1,16 @@
-import type { VisitorRow } from "../entity/visitor.entity.js";
+import type { Visitors } from "../entity/visitor.entity.js";
 import { listActiveVisitorsDirectory } from "../repo/visitor.repo.js";
 import {
-  listDocumentsByVisitor,
-  type MyDocumentsQuery,
-  type PaginatedDocuments,
-} from "../../../infra/db/repositories/document.repo";
+  countDocumentsByOwner,
+  listDocumentsByOwner,
+  type DocumentsOwnerFilters,
+} from "../../documents/repo/document.repo";
+import { toMyDocumentResponse } from "../../documents/mapper/my-document.mapper.js";
+import type { MyDocumentsPageResponse } from "../../documents/response/my-document.response.js";
 import { getDb } from "../../../infra/db/connection";
 import { ensurePersonalDomain } from "../../domains/personal-domain.service";
 import type { VisitorDirectoryEntry, VisitorPublic } from "../../../../shared/types/visitor";
+import type { PageParams } from "../../../shared/request/page.params.js";
 import {
   findActiveVisitorByName,
   generateRecoveryCode,
@@ -18,6 +21,24 @@ import {
   toPublic,
   VisitorError,
 } from "../service/visitor.service.js";
+
+const MY_DOC_FILE_TYPES = new Set(["md", "html", "sheet"]);
+
+/** 「我的文章」筛选条件（分页由入口校验后单独传入 PageParams）。 */
+export type ListMyDocumentsQuery = {
+  domainId?: string;
+  creatorVisitorId?: string;
+  fileType?: string;
+};
+
+function resolveOwnerFilters(query: ListMyDocumentsQuery): DocumentsOwnerFilters {
+  const fileTypeRaw = query.fileType?.trim() || "";
+  return {
+    domainId: query.domainId?.trim() || null,
+    creatorVisitorId: query.creatorVisitorId?.trim() || null,
+    fileType: MY_DOC_FILE_TYPES.has(fileTypeRaw) ? fileTypeRaw : null,
+  };
+}
 
 /** 注册：返回公开信息 + 明文 token（仅 cookie）+ 恢复码 */
 export function registerVisitorAccount(
@@ -85,14 +106,27 @@ export function listVisitorDirectory(): { visitors: VisitorDirectoryEntry[] } {
   };
 }
 
-export function getCurrentVisitor(row: VisitorRow): { visitor: VisitorPublic } {
+export function getCurrentVisitor(row: Visitors): { visitor: VisitorPublic } {
   ensurePersonalDomain(getDb(), row.visitor_id, row.visitor_name);
   return { visitor: toPublic(row) };
 }
 
+/**
+ * 当前访客拥有的文档分页列表。
+ * page 须已由入口校验（HTTP：ValidationPipe；Agent：resolvePageParams）。
+ */
 export function listCurrentVisitorDocuments(
   visitorId: string,
-  query: MyDocumentsQuery,
-): PaginatedDocuments {
-  return listDocumentsByVisitor(getDb(), visitorId, query);
+  query: ListMyDocumentsQuery,
+  page: PageParams,
+): MyDocumentsPageResponse {
+  const filters = resolveOwnerFilters(query);
+  const total = countDocumentsByOwner(visitorId, filters);
+  const rows = listDocumentsByOwner(visitorId, filters, page);
+  return {
+    items: rows.map(toMyDocumentResponse),
+    total,
+    offset: page.offset,
+    limit: page.limit,
+  };
 }

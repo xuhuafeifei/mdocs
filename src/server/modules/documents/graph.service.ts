@@ -18,8 +18,8 @@ import { getDb } from "../../infra/db/connection";
 import {
   findDocumentById,
   listDocumentsByDomain,
-  type DocumentRow,
-} from "../../infra/db/repositories/document.repo";
+  type Documents,
+} from "./repo/document.repo";
 import { findDomainById } from "../domains/repo/domain.repo";
 import { buildFolderSubtree } from "../tree/tree.application.js";
 import { readDocument } from "../../infra/storage/file-store";
@@ -75,7 +75,7 @@ export async function buildGraphByDocId(
   options: BuildGraphOptions = {},
 ): Promise<Graph> {
   const db = getDb();
-  const doc = findDocumentById(db, docId);
+  const doc = findDocumentById(docId, db);
   if (!doc) {
     throw new Error(`文档不存在：${docId}`);
   }
@@ -130,7 +130,7 @@ export async function buildDomainGraph(
 
   console.log(`[Graph] 开始构建域级图谱，domainId: ${domainId}`);
 
-  const allDocs = listDocumentsByDomain(db, domainId);
+  const allDocs = listDocumentsByDomain(domainId, db);
   const topLevelDocs = allDocs.filter((d) => {
     if (d.parent_id) return false;
     if (d.file_type === FILE_TYPE.GRAPH_FILE || d.file_type === FILE_TYPE.GRAPH_DIR) {
@@ -180,7 +180,7 @@ export async function buildDomainGraph(
  * - 普通文章（md）：构造 document 节点
  * - 其他类型：抛错（不应该出现在图谱构建中）
  */
-function buildTreeNodeForDoc(doc: DocumentRow, visitorId?: string): TreeNode {
+function buildTreeNodeForDoc(doc: Documents, visitorId?: string): TreeNode {
   const db = getDb();
   let folderDoc = doc;
 
@@ -189,7 +189,7 @@ function buildTreeNodeForDoc(doc: DocumentRow, visitorId?: string): TreeNode {
     if (!doc.parent_id) {
       throw new Error(`目录描述文件没有父目录：${doc.document_id}`);
     }
-    const parent = findDocumentById(db, doc.parent_id);
+    const parent = findDocumentById(doc.parent_id, db);
     if (!parent) {
       throw new Error(`父目录不存在：${doc.parent_id}`);
     }
@@ -309,14 +309,14 @@ function createGraphDeps(
      * 目前文件存的是 Lexical JSON，先做简易纯文本提取。
      */
     readMarkdown: async (documentId: string) => {
-      const doc = findDocumentById(db, documentId);
+      const doc = findDocumentById(documentId, db);
       if (!doc) throw new Error(`文档不存在：${documentId}`);
       const { content } = readDocument(domainId, doc.relative_path);
       return extractTextFromLexical(content);
     },
 
     getCurrentCommitId: async (documentId: string) => {
-      const doc = findDocumentById(db, documentId);
+      const doc = findDocumentById(documentId, db);
       if (!doc) throw new Error(`文档不存在：${documentId}`);
       return doc.head_commit_id ?? "";
     },
@@ -328,7 +328,7 @@ function createGraphDeps(
     },
 
     getDocTitle: async (documentId: string) => {
-      const doc = findDocumentById(db, documentId);
+      const doc = findDocumentById(documentId, db);
       if (!doc) return documentId;
       return doc.display_name || doc.relative_path.split("/").pop() || documentId;
     },

@@ -11,8 +11,8 @@
  */
 
 import type Database from "better-sqlite3";
-import { isDomainMember, type DomainRow } from "../domains/repo/domain.repo";
-import { hasDocumentInviteInDomain } from "../../infra/db/repositories/document.repo";
+import { isDomainMember, type Domains } from "../domains/repo/domain.repo";
+import { hasDocumentInviteInDomain } from "../documents/repo/document.repo";
 
 export type DomainAccessKind = "none" | "full" | "viaDocumentInvites";
 
@@ -32,13 +32,13 @@ export interface ResolveDomainAccessOptions {
 /**
  * 解析访客对该域的入口级别。
  *
- * @deprecated 签名脏（db + DomainRow + options）。新代码用 `canEnterDomain(visitorId, domainId)`（access.ts）。
+ * @deprecated 签名脏（db + Domains + options）。新代码用 `canEnterDomain(visitorId, domainId)`（access.ts）。
  * 重构：经 domains/documents **service** 查，不直打 repo；批量用 `canEnterDomains`，删掉 Options。
  * 见 `.mdocs-docs/decisions/022-access-id-facade-and-guards.md` 重构 TODO。
  */
 export function resolveDomainAccess(
   db: Database.Database,
-  domain: DomainRow | undefined,
+  domain: Domains | undefined,
   domainId: string,
   visitorId: string | null | undefined,
   options?: ResolveDomainAccessOptions,
@@ -52,7 +52,7 @@ export function resolveDomainAccess(
   // 查一下该访客在域内是否有文档邀请
   const hasDocInviteInDomain = options?.documentInviteDomainIds
     ? options.documentInviteDomainIds.has(domainId)
-    : hasDocumentInviteInDomain(db, domainId, visitorId);
+    : hasDocumentInviteInDomain(domainId, visitorId, db);
 
   // private 域：仅域主（domain_id === visitorId）、创建者、或有文档邀请者可见
   if (domain.permission === "private") {

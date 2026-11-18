@@ -17,11 +17,11 @@ const fileStoreMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
-vi.mock("../storage/file-store.js", () => ({
+vi.mock("../../infra/storage/file-store.js", () => ({
   writeDocument: (_domainId: string, _relativePath: string, content: string) => {
     fileStoreMocks.lastWriteContent = content;
     const hash = createHash("sha256").update(content).digest("hex");
@@ -57,7 +57,7 @@ import {
   restoreDocumentVersion,
   updateDocument,
 } from "./document.service.js";
-import { listParentCommitIds } from "../../infra/db/repositories/commit.repo.js";
+import { listParentCommitIds } from "./repo/commit.repo.js";
 import { getDb } from "../../infra/db/connection.js";
 
 const OWNER = "owner-ver-1";
@@ -94,7 +94,7 @@ describe("document version restore", () => {
       fileName: "ver.md",
       displayName: "ver",
       content: '{"root":{"children":[{"type":"paragraph","children":[{"type":"text","text":"v1"}]}]}}',
-      permission: Permission.PUBLIC_EDIT,
+      permission: Permission.PUBLIC_WRITE,
     });
 
     const v2Content =
@@ -125,7 +125,7 @@ describe("document version restore", () => {
     expect(restored.headCommitId).not.toBe(updated.headCommitId);
     expect(fileStoreMocks.lastWriteContent).toContain("v1");
 
-    const parents = listParentCommitIds(getDb(), restored.headCommitId!);
+    const parents = listParentCommitIds(restored.headCommitId!);
     expect(parents).toEqual([updated.headCommitId]);
 
     const again = listDocumentCommits(created.documentId);
@@ -143,7 +143,7 @@ describe("document version restore", () => {
       fileName: "idem.md",
       displayName: "idem",
       content: '{"root":{"children":[{"type":"paragraph","children":[]}]}}',
-      permission: Permission.PUBLIC_EDIT,
+      permission: Permission.PUBLIC_WRITE,
     });
     const before = listDocumentCommits(created.documentId).length;
     const out = restoreDocumentVersion({

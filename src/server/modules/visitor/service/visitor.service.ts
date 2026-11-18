@@ -1,8 +1,8 @@
 import { getDb } from "../../../infra/db/connection";
 import { runInTransaction } from "../../../infra/db/transaction.js";
-import { insertAuditLog } from "../../../infra/db/repositories/audit.repo";
+import { insertAuditLog } from "../../documents/repo/audit.repo";
 import { ensurePersonalDomain } from "../../domains/personal-domain.service";
-import type { VisitorRow } from "../entity/visitor.entity.js";
+import type { Visitors } from "../entity/visitor.entity.js";
 import {
   clearRecoveryCodeAndTouch,
   existsActiveVisitorName,
@@ -79,33 +79,37 @@ export function registerVisitor(visitorName: string, password?: string): Registe
   // 在事务中插入访客记录（含恢复码哈希和密码哈希）、创建会话、创建个人域并记录审计日志
   runInTransaction(() => {
     insertVisitor({
-      visitorId,
-      visitorName: trimmed,
-      visitorTokenHash: tokenHash,
-      recoveryCodeHash,
-      passwordHash,
-      createdAt,
+      visitor_id: visitorId,
+      visitor_name: trimmed,
+      visitor_token_hash: tokenHash,
+      recovery_code_hash: recoveryCodeHash,
+      password_hash: passwordHash ?? null,
+      created_at: createdAt,
+      last_seen_at: null,
+      disabled_at: null,
+      merged_into_visitor_id: null,
     });
     // 同时创建会话记录（新架构）
     insertSession({
-      sessionId: newSessionId(),
-      visitorId,
-      tokenHash,
-      deviceName: "New Device",
-      createdAt,
-      lastSeenAt: createdAt,
+      session_id: newSessionId(),
+      visitor_id: visitorId,
+      token_hash: tokenHash,
+      device_name: "New Device",
+      created_at: createdAt,
+      last_seen_at: createdAt,
     });
     // domains / audit 尚未迁 repo 签名，事务内仍用单例 getDb()
     const db = getDb();
     ensurePersonalDomain(db, visitorId, trimmed);
-    insertAuditLog(db, {
-      actorVisitorId: visitorId,
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: visitorId,
       action: "visitor.register",
-      targetType: "visitor",
-      targetId: visitorId,
-      metadata: { visitorName: trimmed },
-      createdAt,
-    });
+      target_type: "visitor",
+      target_id: visitorId,
+      metadata_json: JSON.stringify({ visitorName: trimmed }),
+      created_at: createdAt,
+    }, db);
   });
 
   log.info("registered visitor %s", visitorId);
@@ -133,7 +137,7 @@ export function registerVisitor(visitorName: string, password?: string): Registe
  * @param rawToken - 原始访客令牌
  * @returns 访客数据库记录，解析失败时返回 null
  */
-export function resolveVisitorByToken(rawToken: string): VisitorRow | null {
+export function resolveVisitorByToken(rawToken: string): Visitors | null {
   const tokenHash = hashVisitorToken(rawToken);
 
   // 优先查 session 表
@@ -162,12 +166,12 @@ export function resolveVisitorByToken(rawToken: string): VisitorRow | null {
   // 找到旧 token → 迁移到 session 表
   const now = new Date().toISOString();
   insertSession({
-    sessionId: newSessionId(),
-    visitorId: row.visitor_id,
-    tokenHash: tokenHash,
-    deviceName: "Migrated Device",
-    createdAt: now,
-    lastSeenAt: now,
+    session_id: newSessionId(),
+    visitor_id: row.visitor_id,
+    token_hash: tokenHash,
+    device_name: "Migrated Device",
+    created_at: now,
+    last_seen_at: now,
   });
 
   // 更新 visitor 最后活跃时间
@@ -181,7 +185,7 @@ export function resolveVisitorByToken(rawToken: string): VisitorRow | null {
  * @param visitorId - 访客 ID
  * @returns 访客数据库记录，不存在时返回 null
  */
-export function getVisitorById(visitorId: string): VisitorRow | null {
+export function getVisitorById(visitorId: string): Visitors | null {
   return findVisitorById(visitorId) ?? null;
 }
 
@@ -191,7 +195,7 @@ export function getVisitorById(visitorId: string): VisitorRow | null {
  * @param filter - 过滤条件："all"（全部，默认）、"active"（仅启用）、"disabled"（仅禁用）
  * @returns 访客数据库记录数组
  */
-export function listAllVisitors(filter: "all" | "active" | "disabled" = "all"): VisitorRow[] {
+export function listAllVisitors(filter: "all" | "active" | "disabled" = "all"): Visitors[] {
   return listVisitors(filter);
 }
 
@@ -217,21 +221,22 @@ export function recoverVisitor(recoveryCode: string): RegisteredVisitor | null {
     clearRecoveryCodeAndTouch(row.visitor_id, now);
     // 创建新会话（多设备同时在线）
     insertSession({
-      sessionId: newSessionId(),
-      visitorId: row.visitor_id,
-      tokenHash,
-      deviceName: "Recovered Device",
-      createdAt: now,
-      lastSeenAt: now,
+      session_id: newSessionId(),
+      visitor_id: row.visitor_id,
+      token_hash: tokenHash,
+      device_name: "Recovered Device",
+      created_at: now,
+      last_seen_at: now,
     });
     // 审计日志
-    insertAuditLog(getDb(), {
-      actorVisitorId: row.visitor_id,
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: row.visitor_id,
       action: "visitor.recover",
-      targetType: "visitor",
-      targetId: row.visitor_id,
-      metadata: {},
-      createdAt: now,
+      target_type: "visitor",
+      target_id: row.visitor_id,
+      metadata_json: JSON.stringify({}),
+      created_at: now,
     });
   });
 
@@ -253,7 +258,7 @@ export function recoverVisitor(recoveryCode: string): RegisteredVisitor | null {
  * @param row - 访客数据库行
  * @returns 访客公开信息对象
  */
-export function toPublic(row: VisitorRow): VisitorPublic {
+export function toPublic(row: Visitors): VisitorPublic {
   return {
     visitorId: row.visitor_id,
     visitorName: row.visitor_name,
@@ -277,13 +282,14 @@ export function generateRecoveryCode(visitorId: string): string {
 
   runInTransaction(() => {
     updateRecoveryCodeHash(visitorId, codeHash);
-    insertAuditLog(getDb(), {
-      actorVisitorId: visitorId,
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: visitorId,
       action: "visitor.generate-recovery-code",
-      targetType: "visitor",
-      targetId: visitorId,
-      metadata: {},
-      createdAt: now,
+      target_type: "visitor",
+      target_id: visitorId,
+      metadata_json: JSON.stringify({}),
+      created_at: now,
     });
   });
 
@@ -312,7 +318,7 @@ export class VisitorValidationError extends VisitorError {
 }
 
 /** 按名查未停用访客（登录编排用） */
-export function findActiveVisitorByName(visitorName: string): VisitorRow | null {
+export function findActiveVisitorByName(visitorName: string): Visitors | null {
   const trimmed = visitorName.trim();
   if (!trimmed) return null;
   return findVisitorByName(trimmed) ?? null;
@@ -346,21 +352,22 @@ export function loginWithPassword(visitorName: string, password: string): Regist
 
   runInTransaction(() => {
     insertSession({
-      sessionId: newSessionId(),
-      visitorId: row.visitor_id,
-      tokenHash,
-      deviceName: "Password Login",
-      createdAt: now,
-      lastSeenAt: now,
+      session_id: newSessionId(),
+      visitor_id: row.visitor_id,
+      token_hash: tokenHash,
+      device_name: "Password Login",
+      created_at: now,
+      last_seen_at: now,
     });
     updateVisitorLastSeen(row.visitor_id, now);
-    insertAuditLog(getDb(), {
-      actorVisitorId: row.visitor_id,
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: row.visitor_id,
       action: "visitor.login-password",
-      targetType: "visitor",
-      targetId: row.visitor_id,
-      metadata: {},
-      createdAt: now,
+      target_type: "visitor",
+      target_id: row.visitor_id,
+      metadata_json: JSON.stringify({}),
+      created_at: now,
     });
   });
 
@@ -385,13 +392,14 @@ export function setVisitorPassword(visitorId: string, password: string): void {
 
   runInTransaction(() => {
     updatePasswordHashAndLastSeen(visitorId, passwordHash ?? null, now);
-    insertAuditLog(getDb(), {
-      actorVisitorId: visitorId,
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: visitorId,
       action: "visitor.set-password",
-      targetType: "visitor",
-      targetId: visitorId,
-      metadata: {},
-      createdAt: now,
+      target_type: "visitor",
+      target_id: visitorId,
+      metadata_json: JSON.stringify({}),
+      created_at: now,
     });
   });
 

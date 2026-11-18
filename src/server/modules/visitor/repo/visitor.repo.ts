@@ -1,45 +1,46 @@
 /**
  * visitors / visitor_sessions 表访问。SQL 只活在本文件。
  * DB 默认内部 getDb()；可选末参 `db?` 仅单测注入。
+ * 入参/返回均为表实体（缺列传 null）。
  */
 import type Database from "better-sqlite3";
 import { resolveDb } from "../../../infra/db/resolve-db.js";
 import type {
-  InsertSessionInput,
-  InsertVisitorInput,
-  VisitorDirectoryRow,
-  VisitorRow,
-  VisitorSessionRow,
+  VisitorDirectory,
+  Visitors,
+  VisitorSessions,
 } from "../entity/visitor.entity.js";
 
 export type {
-  InsertSessionInput,
-  InsertVisitorInput,
-  VisitorDirectoryRow,
-  VisitorRow,
-  VisitorSessionRow,
+  VisitorDirectory,
+  Visitors,
+  VisitorSessions,
 } from "../entity/visitor.entity.js";
 
 /**
  * 插入一条新的访客记录。
  */
 export function insertVisitor(
-  input: InsertVisitorInput,
+  input: Visitors,
   db?: Database.Database,
 ): void {
   resolveDb(db)
     .prepare(
       `INSERT INTO visitors (
-      visitor_id, visitor_name, visitor_token_hash, recovery_code_hash, password_hash, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?)`,
+      visitor_id, visitor_name, visitor_token_hash, recovery_code_hash, password_hash,
+      created_at, last_seen_at, disabled_at, merged_into_visitor_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
-      input.visitorId,
-      input.visitorName,
-      input.visitorTokenHash,
-      input.recoveryCodeHash ?? null,
-      input.passwordHash ?? null,
-      input.createdAt,
+      input.visitor_id,
+      input.visitor_name,
+      input.visitor_token_hash,
+      input.recovery_code_hash,
+      input.password_hash,
+      input.created_at,
+      input.last_seen_at,
+      input.disabled_at,
+      input.merged_into_visitor_id,
     );
 }
 
@@ -49,9 +50,9 @@ export function insertVisitor(
 export function findVisitorByTokenHash(
   tokenHash: string,
   db?: Database.Database,
-): VisitorRow | undefined {
+): Visitors | undefined {
   return resolveDb(db)
-    .prepare<string, VisitorRow>(
+    .prepare<string, Visitors>(
       `SELECT * FROM visitors WHERE visitor_token_hash = ?`,
     )
     .get(tokenHash);
@@ -63,9 +64,9 @@ export function findVisitorByTokenHash(
 export function findVisitorById(
   visitorId: string,
   db?: Database.Database,
-): VisitorRow | undefined {
+): Visitors | undefined {
   return resolveDb(db)
-    .prepare<string, VisitorRow>(`SELECT * FROM visitors WHERE visitor_id = ?`)
+    .prepare<string, Visitors>(`SELECT * FROM visitors WHERE visitor_id = ?`)
     .get(visitorId);
 }
 
@@ -76,9 +77,9 @@ export function findVisitorById(
 export function findVisitorByName(
   visitorName: string,
   db?: Database.Database,
-): VisitorRow | undefined {
+): Visitors | undefined {
   return resolveDb(db)
-    .prepare<string, VisitorRow>(
+    .prepare<string, Visitors>(
       `SELECT * FROM visitors WHERE visitor_name = ? AND disabled_at IS NULL`,
     )
     .get(visitorName);
@@ -134,7 +135,7 @@ export function disableVisitor(
 export function listVisitors(
   filter: "all" | "active" | "disabled" = "all",
   db?: Database.Database,
-): VisitorRow[] {
+): Visitors[] {
   let sql = `SELECT * FROM visitors`;
   if (filter === "active") {
     sql += ` WHERE disabled_at IS NULL`;
@@ -142,7 +143,7 @@ export function listVisitors(
     sql += ` WHERE disabled_at IS NOT NULL`;
   }
   sql += ` ORDER BY created_at DESC`;
-  return resolveDb(db).prepare<[], VisitorRow>(sql).all();
+  return resolveDb(db).prepare<[], Visitors>(sql).all();
 }
 
 /**
@@ -151,9 +152,9 @@ export function listVisitors(
 export function findVisitorByRecoveryCodeHash(
   recoveryCodeHash: string,
   db?: Database.Database,
-): VisitorRow | undefined {
+): Visitors | undefined {
   return resolveDb(db)
-    .prepare<string, VisitorRow>(
+    .prepare<string, Visitors>(
       `SELECT * FROM visitors WHERE recovery_code_hash = ? AND disabled_at IS NULL`,
     )
     .get(recoveryCodeHash);
@@ -206,9 +207,9 @@ export function updatePasswordHashAndLastSeen(
 /** 目录用：未停用访客，按显示名排序 */
 export function listActiveVisitorsDirectory(
   db?: Database.Database,
-): VisitorDirectoryRow[] {
+): VisitorDirectory[] {
   return resolveDb(db)
-    .prepare<[], VisitorDirectoryRow>(
+    .prepare<[], VisitorDirectory>(
       `SELECT visitor_id, visitor_name FROM visitors
        WHERE disabled_at IS NULL
        ORDER BY visitor_name COLLATE NOCASE`,
@@ -217,7 +218,7 @@ export function listActiveVisitorsDirectory(
 }
 
 export function insertSession(
-  input: InsertSessionInput,
+  input: VisitorSessions,
   db?: Database.Database,
 ): void {
   resolveDb(db)
@@ -227,12 +228,12 @@ export function insertSession(
     ) VALUES (?, ?, ?, ?, ?, ?)`,
     )
     .run(
-      input.sessionId,
-      input.visitorId,
-      input.tokenHash,
-      input.deviceName ?? null,
-      input.createdAt,
-      input.lastSeenAt,
+      input.session_id,
+      input.visitor_id,
+      input.token_hash,
+      input.device_name,
+      input.created_at,
+      input.last_seen_at,
     );
 }
 
@@ -243,9 +244,9 @@ export function insertSession(
 export function findSessionByTokenHash(
   tokenHash: string,
   db?: Database.Database,
-): (VisitorSessionRow & VisitorRow) | undefined {
+): (VisitorSessions & Visitors) | undefined {
   return resolveDb(db)
-    .prepare<string, VisitorSessionRow & VisitorRow>(
+    .prepare<string, VisitorSessions & Visitors>(
       `SELECT vs.*, v.*
        FROM visitor_sessions vs
        JOIN visitors v ON vs.visitor_id = v.visitor_id

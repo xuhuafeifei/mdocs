@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import Database from "better-sqlite3";
 import { applySchema } from "../../infra/db/schema.js";
-import { insertCommit, insertCommitParent } from "../../infra/db/repositories/commit.repo.js";
+import { insertCommit, insertCommitParent } from "./repo/commit.repo.js";
 import { isAncestorOf, assertMergeFork, findMergeBaseCommitId } from "./commit-graph.js";
 import { DocumentError } from "../access/access-control.js";
 
@@ -30,17 +30,19 @@ describe("commit-graph", () => {
       [c, "hc"],
       [d, "hd"],
     ] as const) {
-      insertCommit(db, {
-        commitId: id,
-        documentId: DOC,
-        contentHash: hash,
-        blobRef: `${hash}/blob`,
-        authorVisitorId: "v1",
-        createdAt: now,
-      });
+      insertCommit({
+        commit_id: id,
+        document_id: DOC,
+        content_hash: hash,
+        blob_ref: `${hash}/blob`,
+        author_visitor_id: "v1",
+        created_at: now,
+        message: "",
+        source: "manual",
+      }, db);
     }
-    insertCommitParent(db, { childCommitId: c, parentCommitId: a });
-    insertCommitParent(db, { childCommitId: d, parentCommitId: c });
+    insertCommitParent({ child_commit_id: c, parent_commit_id: a }, db);
+    insertCommitParent({ child_commit_id: d, parent_commit_id: c }, db);
     db.prepare(`UPDATE documents SET head_commit_id = ? WHERE document_id = ?`).run(d, DOC);
   });
 

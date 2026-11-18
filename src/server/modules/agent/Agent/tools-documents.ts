@@ -2,10 +2,9 @@ import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { TreeNode } from "../../../../shared/types/tree";
 import { getDb } from "../../../infra/db/connection";
-import {
-  findDocumentById,
-  listDocumentsByVisitor,
-} from "../../../infra/db/repositories/document.repo";
+import { findDocumentById } from "../../documents/repo/document.repo";
+import { listCurrentVisitorDocuments } from "../../visitor/application/visitor.application.js";
+import { resolvePageParams } from "../../../shared/request/page.params.js";
 import { assertDocumentAccess, DocumentError } from "../../access/access-control";
 import {
   createDocument,
@@ -190,7 +189,7 @@ export function queryMyDocumentsTool({ visitorId }: ToolDeps): AgentTool {
     name: "query_my_documents",
     label: "查询我的文章",
     description:
-      "列出当前访客创建的文档（与设置页「我的文章」同一接口）。可按 domainId、creatorVisitorId、fileType（md/html/sheet）筛选，按 domain/creator 分组；用 offset/limit 翻页。要全文检索可读文档请用 search_documents。",
+      "列出当前访客创建的文档（与设置页「我的文章」同一接口）。可按 domainId、creatorVisitorId、fileType（md/html/sheet）筛选；用 offset/limit 翻页。要全文检索可读文档请用 search_documents。",
     parameters: Type.Object({
       domainId: Type.Optional(Type.String({ description: "只看该工作空间，不传则全部" })),
       creatorVisitorId: Type.Optional(
@@ -201,38 +200,37 @@ export function queryMyDocumentsTool({ visitorId }: ToolDeps): AgentTool {
           description: "只看该文件类型；不传则不限",
         }),
       ),
-      groupBy: Type.Optional(
-        Type.Union([Type.Literal("domain"), Type.Literal("creator")], {
-          description: "按工作空间或创建者分组（仅当前页），不传则平铺",
+      offset: Type.Optional(
+        Type.Integer({ minimum: 0, description: "分页偏移，默认 0；非法直接失败" }),
+      ),
+      limit: Type.Optional(
+        Type.Integer({
+          minimum: 1,
+          maximum: 100,
+          description: "每页条数，默认 20，最大 100；非法直接失败",
         }),
       ),
-      offset: Type.Optional(Type.Number({ description: "分页偏移，默认 0" })),
-      limit: Type.Optional(Type.Number({ description: "每页条数，默认 20，最大 100" })),
     }),
     execute: async (_id, params) => {
-      const { domainId, creatorVisitorId, fileType, groupBy, offset, limit } = params as {
+      const { domainId, creatorVisitorId, fileType, offset, limit } = params as {
         domainId?: string;
         creatorVisitorId?: string;
         fileType?: "md" | "html" | "sheet";
-        groupBy?: "domain" | "creator";
         offset?: number;
         limit?: number;
       };
-      const result = listDocumentsByVisitor(getDb(), visitorId, {
-        offset: Math.max(Math.floor(offset ?? 0), 0),
-        limit: Math.min(Math.max(Math.floor(limit ?? 20), 1), 100),
-        domainId,
-        creatorVisitorId,
-        fileType,
-        groupBy,
-      });
+      const page = resolvePageParams({ offset, limit });
+      const result = listCurrentVisitorDocuments(
+        visitorId,
+        { domainId, creatorVisitorId, fileType },
+        page,
+      );
       return asToolResult({
         total: result.total,
         offset: result.offset,
         limit: result.limit,
         hasMore: result.offset + result.items.length < result.total,
         documents: result.items,
-        ...(result.groups ? { groups: result.groups } : {}),
       });
     },
   };
@@ -383,7 +381,7 @@ export function getDocumentCommitTool({ visitorId }: ToolDeps): AgentTool {
         rawFormat === "json" ? "json" : rawFormat === "text" ? "text" : "md";
       try {
         assertDocumentAccess(documentId, visitorId, "read");
-        const row = findDocumentById(getDb(), documentId);
+        const row = findDocumentById(documentId);
         if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
         const detail = getDocumentCommit(documentId, commitId);
         let content = formatDocumentBodyContent(

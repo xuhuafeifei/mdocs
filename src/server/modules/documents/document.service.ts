@@ -15,14 +15,14 @@ import {
   updateDocumentContent,
   updateDocumentHeadCommit,
   updateDocumentLocation,
-  type DocumentRow,
-} from "../../infra/db/repositories/document.repo";
+  type Documents,
+} from "./repo/document.repo";
 import {
   insertCommit,
   insertCommitParent,
   findCommitById,
   listCommitsByDocument as listCommitRowsByDocument,
-} from "../../infra/db/repositories/commit.repo";
+} from "./repo/commit.repo";
 import {
   AUTO_PUBLISH_MESSAGE,
   isPublishSource,
@@ -57,7 +57,7 @@ import {
   findAuditById,
   insertAuditLog,
   listDocumentDeleteAuditsByActor,
-} from "../../infra/db/repositories/audit.repo";
+} from "./repo/audit.repo";
 import {
   deleteDocumentFile,
   readCommitBlob,
@@ -148,7 +148,7 @@ export function listDocuments(
   const domainPermission = domain?.permission ?? "public";
   const domainInfo = makeDomainAccessInfo(db, effective, visitorId, domainPermission);
 
-  const rows = listDocumentsByDomain(db, effective);
+  const rows = listDocumentsByDomain(effective, db);
   const filtered = rows.filter((r) =>
     canReadDocument(r, visitorId ?? null, domainInfo),
   );
@@ -166,7 +166,7 @@ export function listFolderChildren(
   const db = getDb();
 
   // 先查文件夹本身，确认存在且有权限
-  const folder = findDocumentById(db, folderId);
+  const folder = findDocumentById(folderId, db);
   if (!folder) return [];
 
   const domain = findDomainById(folder.domain_id, db);
@@ -187,7 +187,7 @@ export function listFolderChildren(
   }
 
   // 查询所有直接子节点
-  const children = findChildrenByParent(db, folderId);
+  const children = findChildrenByParent(folderId, db);
   const filtered = children.filter((r) =>
     canReadDocument(r, visitorId ?? null, domainInfo),
   );
@@ -302,7 +302,7 @@ export function createDocument(params: {
     relativePath = normalizedFileName;
   } else {
     // 有 parentId，找到父节点路径并拼接
-    const parentDoc = findDocumentById(db, params.parentId);
+    const parentDoc = findDocumentById(params.parentId, db);
     if (!parentDoc || parentDoc.file_type !== "dir") {
       throw new DocumentError(
         "INVALID_PARENT",
@@ -317,7 +317,7 @@ export function createDocument(params: {
     relativePath = parentPath + normalizedFileName;
   }
 
-  const existing = findDocumentByPath(db, domainId, relativePath);
+  const existing = findDocumentByPath(domainId, relativePath, db);
   if (existing) {
     throw new DocumentError("DOC_EXISTS", "文档已存在", 409);
   }
@@ -358,38 +358,41 @@ export function createDocument(params: {
   const blob = writeCommitBlob(write.contentHash, content);
 
   const tx = db.transaction(() => {
-    insertDocument(db, {
-      documentId,
-      domainId,
-      relativePath,
-      displayName,
-      ownerVisitorId: params.actorVisitorId,
-      createdBy: params.actorVisitorId,
-      updatedBy: params.actorVisitorId,
-      contentHash: write.contentHash,
-      headCommitId: commitId,
-      createdAt: now,
-      updatedAt: now,
+    insertDocument({
+      document_id: documentId,
+      domain_id: domainId,
+      relative_path: relativePath,
+      display_name: displayName,
+      owner_visitor_id: params.actorVisitorId,
+      created_by: params.actorVisitorId,
+      updated_by: params.actorVisitorId,
+      content_hash: write.contentHash,
+      head_commit_id: commitId,
+      created_at: now,
+      updated_at: now,
       permission,
-      fileType,
-      parentId: params.parentId ?? null,
-    });
-    insertCommit(db, {
-      commitId,
-      documentId,
-      contentHash: write.contentHash,
-      blobRef: blob.blobRef,
-      authorVisitorId: params.actorVisitorId,
-      createdAt: now,
-    });
-    insertAuditLog(db, {
-      actorVisitorId: params.actorVisitorId,
+      file_type: fileType,
+      parent_id: params.parentId ?? null,
+    }, db);
+    insertCommit({
+      commit_id: commitId,
+      document_id: documentId,
+      content_hash: write.contentHash,
+      blob_ref: blob.blobRef,
+      author_visitor_id: params.actorVisitorId,
+      created_at: now,
+      message: "",
+      source: "manual",
+    }, db);
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: params.actorVisitorId,
       action: "document.create",
-      targetType: "document",
-      targetId: documentId,
-      metadata: { relativePath, bytes: write.bytes },
-      createdAt: now,
-    });
+      target_type: "document",
+      target_id: documentId,
+      metadata_json: JSON.stringify({ relativePath, bytes: write.bytes }),
+      created_at: now,
+    }, db);
   });
   tx();
 
@@ -448,7 +451,7 @@ export function getDocument(
   visitorId?: string | null,
   format?: "json" | "text" | "md",
 ): DocumentDetail {
-  const row = findDocumentById(getDb(), documentId);
+  const row = findDocumentById(documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   const { content, contentHash } = readDocument(
     row.domain_id,
@@ -525,7 +528,7 @@ export function updateDocument(params: {
   source?: PublishSource | string;
 }): DocumentDetail {
   const db = getDb();
-  const row = findDocumentById(db, params.documentId);
+  const row = findDocumentById(params.documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
   // html 等 raw：不走 markdown→Lexical
@@ -618,45 +621,42 @@ export function updateDocument(params: {
   const blob = writeCommitBlob(write.contentHash, content);
 
   const tx = db.transaction(() => {
-    updateDocumentContent(db, {
-      documentId: row.document_id,
-      displayName,
-      contentHash: write.contentHash,
-      updatedBy: params.actorVisitorId,
-      updatedAt: now,
-      permission: params.permission,
-    });
-    insertCommit(db, {
-      commitId,
-      documentId: row.document_id,
-      contentHash: write.contentHash,
-      blobRef: blob.blobRef,
-      authorVisitorId: params.actorVisitorId,
-      createdAt: now,
+    updateDocumentContent({...row,
+      display_name: displayName,
+      content_hash: write.contentHash,
+      updated_by: params.actorVisitorId,
+      updated_at: now,
+      permission: params.permission ?? row.permission,}, db);
+    insertCommit({
+      commit_id: commitId,
+      document_id: row.document_id,
+      content_hash: write.contentHash,
+      blob_ref: blob.blobRef,
+      author_visitor_id: params.actorVisitorId,
+      created_at: now,
       message: publishMeta.message,
       source: publishMeta.source,
-    });
+    }, db);
     // 有上一版 head 时挂一条父边（fast-forward）
     if (row.head_commit_id) {
-      insertCommitParent(db, {
-        childCommitId: commitId,
-        parentCommitId: row.head_commit_id,
-      });
+      insertCommitParent({
+        child_commit_id: commitId,
+        parent_commit_id: row.head_commit_id,
+      }, db);
     }
-    updateDocumentHeadCommit(db, {
-      documentId: row.document_id,
-      headCommitId: commitId,
-      updatedBy: params.actorVisitorId,
-      updatedAt: now,
-    });
-    insertAuditLog(db, {
-      actorVisitorId: params.actorVisitorId,
+    updateDocumentHeadCommit({...row,
+      head_commit_id: commitId,
+      updated_by: params.actorVisitorId,
+      updated_at: now,}, db);
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: params.actorVisitorId,
       action: "document.update",
-      targetType: "document",
-      targetId: row.document_id,
-      metadata: { bytes: write.bytes },
-      createdAt: now,
-    });
+      target_type: "document",
+      target_id: row.document_id,
+      metadata_json: JSON.stringify({ bytes: write.bytes }),
+      created_at: now,
+    }, db);
   });
   tx();
 
@@ -715,12 +715,12 @@ export type DocumentDeleteRecovery = {
 
 function buildDeleteRecovery(
   db: ReturnType<typeof getDb>,
-  row: DocumentRow,
+  row: Documents,
 ): DocumentDeleteRecovery {
   let blobRef: string | null = null;
   let contentHash = row.content_hash;
   if (row.head_commit_id) {
-    const commit = findCommitById(db, row.head_commit_id);
+    const commit = findCommitById(row.head_commit_id, db);
     if (commit) {
       blobRef = commit.blob_ref;
       contentHash = commit.content_hash;
@@ -774,7 +774,7 @@ export function removeDocument(params: {
   documentId: string;
 }): void {
   const db = getDb();
-  const row = findDocumentById(db, params.documentId);
+  const row = findDocumentById(params.documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== params.actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可删除此文档", 403);
@@ -790,15 +790,16 @@ export function removeDocument(params: {
     if (row.file_type === FILE_TYPE.JOB) {
       deleteJobRuntimeByJobId(row.document_id, db);
     }
-    deleteDocument(db, row.document_id);
-    insertAuditLog(db, {
-      actorVisitorId: params.actorVisitorId,
+    deleteDocument(row.document_id, db);
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: params.actorVisitorId,
       action: "document.delete",
-      targetType: "document",
-      targetId: row.document_id,
-      metadata: { relativePath: row.relative_path, recovery },
-      createdAt: now,
-    });
+      target_type: "document",
+      target_id: row.document_id,
+      metadata_json: JSON.stringify({ relativePath: row.relative_path, recovery }),
+      created_at: now,
+    }, db);
   });
   tx();
   deleteDocumentFile(row.domain_id, row.relative_path);
@@ -826,11 +827,8 @@ export function listDeletedDocuments(params: {
   limit?: number;
 }): DeletedDocumentListItem[] {
   const db = getDb();
-  const rows = listDocumentDeleteAuditsByActor(
-    db,
-    params.actorVisitorId,
-    params.limit ?? 50,
-  );
+  const rows = listDocumentDeleteAuditsByActor(params.actorVisitorId,
+    params.limit ?? 50, db);
   const out: DeletedDocumentListItem[] = [];
   for (const row of rows) {
     let meta: Record<string, unknown> = {};
@@ -842,10 +840,12 @@ export function listDeletedDocuments(params: {
     const recovery = parseDeleteRecovery(meta.recovery);
     if (!recovery) continue;
     if (recovery.ownerVisitorId !== params.actorVisitorId) continue;
+    const auditId = row.id;
+    if (auditId == null) continue;
     const relativePath =
       typeof meta.relativePath === "string" ? meta.relativePath : recovery.displayName;
     out.push({
-      auditId: row.id,
+      auditId,
       documentId: row.target_id ?? "",
       deletedAt: row.created_at,
       relativePath,
@@ -870,7 +870,7 @@ export function restoreDocumentFromAudit(params: {
   auditId: number;
 }): DocumentDetail {
   const db = getDb();
-  const audit = findAuditById(db, params.auditId);
+  const audit = findAuditById(params.auditId, db);
   if (!audit || audit.action !== "document.delete") {
     throw new DocumentError("AUDIT_NOT_FOUND", "删除审计不存在", 404);
   }
@@ -907,10 +907,10 @@ export function restoreDocumentFromAudit(params: {
     throw new DocumentError("NOT_RESTORABLE", "目录节点本期不支持恢复", 400);
   }
 
-  if (findDocumentById(db, documentId)) {
+  if (findDocumentById(documentId, db)) {
     throw new DocumentError("DOC_EXISTS", "文档已存在，无法恢复到同一 documentId", 409);
   }
-  const pathTaken = findDocumentByPath(db, recovery.domainId, relativePath);
+  const pathTaken = findDocumentByPath(recovery.domainId, relativePath, db);
   if (pathTaken) {
     throw new DocumentError(
       "PATH_EXISTS",
@@ -932,7 +932,7 @@ export function restoreDocumentFromAudit(params: {
   }
 
   const parentId =
-    recovery.parentId && findDocumentById(db, recovery.parentId)
+    recovery.parentId && findDocumentById(recovery.parentId, db)
       ? recovery.parentId
       : null;
 
@@ -940,48 +940,51 @@ export function restoreDocumentFromAudit(params: {
   const write = writeDocument(recovery.domainId, relativePath, content);
 
   const tx = db.transaction(() => {
-    insertDocument(db, {
-      documentId,
-      domainId: recovery.domainId,
-      relativePath,
-      displayName: recovery.displayName,
-      ownerVisitorId: recovery.ownerVisitorId,
-      createdBy: recovery.createdBy,
-      updatedBy: params.actorVisitorId,
-      contentHash: write.contentHash,
-      headCommitId: recovery.headCommitId!,
-      createdAt: recovery.createdAt,
-      updatedAt: now,
+    insertDocument({
+      document_id: documentId,
+      domain_id: recovery.domainId,
+      relative_path: relativePath,
+      display_name: recovery.displayName,
+      owner_visitor_id: recovery.ownerVisitorId,
+      created_by: recovery.createdBy,
+      updated_by: params.actorVisitorId,
+      content_hash: write.contentHash,
+      head_commit_id: recovery.headCommitId!,
+      created_at: recovery.createdAt,
+      updated_at: now,
       permission: recovery.permission,
-      fileType: recovery.fileType,
-      parentId,
-    });
-    insertCommit(db, {
-      commitId: recovery.headCommitId!,
-      documentId,
-      contentHash: write.contentHash,
-      blobRef: recovery.blobRef!,
-      authorVisitorId: recovery.ownerVisitorId,
-      createdAt: recovery.updatedAt,
-    });
-    insertAuditLog(db, {
-      actorVisitorId: params.actorVisitorId,
+      file_type: recovery.fileType,
+      parent_id: parentId,
+    }, db);
+    insertCommit({
+      commit_id: recovery.headCommitId!,
+      document_id: documentId,
+      content_hash: write.contentHash,
+      blob_ref: recovery.blobRef!,
+      author_visitor_id: recovery.ownerVisitorId,
+      created_at: recovery.updatedAt,
+      message: "",
+      source: "manual",
+    }, db);
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: params.actorVisitorId,
       action: "document.restore",
-      targetType: "document",
-      targetId: documentId,
-      metadata: {
+      target_type: "document",
+      target_id: documentId,
+      metadata_json: JSON.stringify({
         auditId: params.auditId,
         relativePath,
         headCommitId: recovery.headCommitId,
-      },
-      createdAt: now,
-    });
+      }),
+      created_at: now,
+    }, db);
   });
   tx();
 
   scheduleFtsIfNeeded(recovery.fileType, documentId);
 
-  const row = findDocumentById(db, documentId)!;
+  const row = findDocumentById(documentId, db)!;
   return buildDocumentDetail(row, {
     displayName: row.display_name,
     content,
@@ -1018,10 +1021,10 @@ function commitSourceOf(c: { source?: string | null }): PublishSource {
 
 export function listDocumentCommits(documentId: string): DocumentCommitSummary[] {
   const db = getDb();
-  const row = findDocumentById(db, documentId);
+  const row = findDocumentById(documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   const head = row.head_commit_id;
-  const commits = listCommitRowsByDocument(db, documentId);
+  const commits = listCommitRowsByDocument(documentId, db);
   return commits.map((c) => {
     const author = findVisitorById(c.author_visitor_id);
     return {
@@ -1042,9 +1045,9 @@ export function getDocumentCommit(
   commitId: string,
 ): DocumentCommitDetail {
   const db = getDb();
-  const row = findDocumentById(db, documentId);
+  const row = findDocumentById(documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
-  const commit = findCommitById(db, commitId);
+  const commit = findCommitById(commitId, db);
   if (!commit || commit.document_id !== documentId) {
     throw new DocumentError("COMMIT_NOT_FOUND", "版本不存在", 404);
   }
@@ -1078,7 +1081,7 @@ export function restoreDocumentVersion(params: {
   commitId: string;
 }): DocumentDetail {
   const db = getDb();
-  const row = findDocumentById(db, params.documentId);
+  const row = findDocumentById(params.documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
   const domain = findDomainById(row.domain_id, db);
@@ -1093,7 +1096,7 @@ export function restoreDocumentVersion(params: {
     throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
   }
 
-  const source = findCommitById(db, params.commitId);
+  const source = findCommitById(params.commitId, db);
   if (!source || source.document_id !== params.documentId) {
     throw new DocumentError("COMMIT_NOT_FOUND", "版本不存在", 404);
   }
@@ -1119,47 +1122,44 @@ export function restoreDocumentVersion(params: {
   const previousHead = row.head_commit_id;
 
   const tx = db.transaction(() => {
-    updateDocumentContent(db, {
-      documentId: row.document_id,
-      displayName: row.display_name,
-      contentHash: write.contentHash,
-      updatedBy: params.actorVisitorId,
-      updatedAt: now,
-    });
-    insertCommit(db, {
-      commitId: newCommitId,
-      documentId: row.document_id,
-      contentHash: write.contentHash,
-      blobRef: blob.blobRef,
-      authorVisitorId: params.actorVisitorId,
-      createdAt: now,
+    updateDocumentContent({...row,
+      display_name: row.display_name,
+      content_hash: write.contentHash,
+      updated_by: params.actorVisitorId,
+      updated_at: now,}, db);
+    insertCommit({
+      commit_id: newCommitId,
+      document_id: row.document_id,
+      content_hash: write.contentHash,
+      blob_ref: blob.blobRef,
+      author_visitor_id: params.actorVisitorId,
+      created_at: now,
       message: "",
       source: "manual",
-    });
+    }, db);
     if (previousHead) {
-      insertCommitParent(db, {
-        childCommitId: newCommitId,
-        parentCommitId: previousHead,
-      });
+      insertCommitParent({
+        child_commit_id: newCommitId,
+        parent_commit_id: previousHead,
+      }, db);
     }
-    updateDocumentHeadCommit(db, {
-      documentId: row.document_id,
-      headCommitId: newCommitId,
-      updatedBy: params.actorVisitorId,
-      updatedAt: now,
-    });
-    insertAuditLog(db, {
-      actorVisitorId: params.actorVisitorId,
+    updateDocumentHeadCommit({...row,
+      head_commit_id: newCommitId,
+      updated_by: params.actorVisitorId,
+      updated_at: now,}, db);
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: params.actorVisitorId,
       action: "document.restore_version",
-      targetType: "document",
-      targetId: row.document_id,
-      metadata: {
+      target_type: "document",
+      target_id: row.document_id,
+      metadata_json: JSON.stringify({
         fromCommitId: source.commit_id,
         newCommitId,
         previousHeadCommitId: previousHead,
-      },
-      createdAt: now,
-    });
+      }),
+      created_at: now,
+    }, db);
   });
   tx();
 
@@ -1206,7 +1206,7 @@ export function moveDocument(params: {
   parentId: string | null;
 }): DocumentDetail {
   const db = getDb();
-  const row = findDocumentById(db, params.documentId);
+  const row = findDocumentById(params.documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== params.actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可移动此文件", 403);
@@ -1234,7 +1234,7 @@ export function moveDocument(params: {
     newParentId = null;
     newRelativePath = baseName;
   } else {
-    const parentDoc = findDocumentById(db, targetParent);
+    const parentDoc = findDocumentById(targetParent, db);
     if (!parentDoc || parentDoc.file_type !== "dir") {
       throw new DocumentError(
         "INVALID_PARENT",
@@ -1252,7 +1252,7 @@ export function moveDocument(params: {
     newRelativePath = `${parentPath}/${baseName}`;
   }
 
-  const existing = findDocumentByPath(db, row.domain_id, newRelativePath);
+  const existing = findDocumentByPath(row.domain_id, newRelativePath, db);
   if (existing && existing.document_id !== row.document_id) {
     throw new DocumentError("DOC_EXISTS", "目标位置已存在同名文档", 409);
   }
@@ -1273,25 +1273,24 @@ export function moveDocument(params: {
 
   try {
     const tx = db.transaction(() => {
-      updateDocumentLocation(db, {
-        documentId: row.document_id,
-        parentId: newParentId,
-        relativePath: newRelativePath,
-        updatedBy: params.actorVisitorId,
-        updatedAt: now,
-      });
-      insertAuditLog(db, {
-        actorVisitorId: params.actorVisitorId,
+      updateDocumentLocation({...row,
+      parent_id: newParentId,
+        relative_path: newRelativePath,
+        updated_by: params.actorVisitorId,
+        updated_at: now,}, db);
+      insertAuditLog({
+        id: null,
+        actor_visitor_id: params.actorVisitorId,
         action: "document.move",
-        targetType: "document",
-        targetId: row.document_id,
-        metadata: {
+        target_type: "document",
+        target_id: row.document_id,
+        metadata_json: JSON.stringify({
           fromRelativePath: oldPath,
           toRelativePath: newRelativePath,
           parentId: newParentId,
-        },
-        createdAt: now,
-      });
+        }),
+        created_at: now,
+      }, db);
     });
     tx();
   } catch (err) {
@@ -1328,7 +1327,7 @@ function moveFolder(params: {
   parentId: string | null;
 }): DocumentDetail {
   const db = getDb();
-  const folder = findDocumentById(db, params.documentId);
+  const folder = findDocumentById(params.documentId, db);
   if (!folder || folder.file_type !== FILE_TYPE.FOLDER) {
     throw new DocumentError("DOC_NOT_FOUND", "目录不存在", 404);
   }
@@ -1354,7 +1353,7 @@ function moveFolder(params: {
     newParentId = null;
     newFolderPath = baseName;
   } else {
-    const parentDoc = findDocumentById(db, targetParent);
+    const parentDoc = findDocumentById(targetParent, db);
     if (!parentDoc || parentDoc.file_type !== "dir") {
       throw new DocumentError(
         "INVALID_PARENT",
@@ -1380,7 +1379,7 @@ function moveFolder(params: {
 
   const oldFolderPath = folder.relative_path;
   const oldPrefix = `${oldFolderPath}/`;
-  const descendants = listDocumentsByPathPrefix(db, folder.domain_id, oldPrefix);
+  const descendants = listDocumentsByPathPrefix(folder.domain_id, oldPrefix, db);
   const subtree = [folder, ...descendants];
 
   const notOwned = subtree.filter((d) => d.owner_visitor_id !== params.actorVisitorId);
@@ -1395,7 +1394,7 @@ function moveFolder(params: {
   const graphDocs = descendants.filter((d) => isGraphFileType(d.file_type));
   const movingDocs = subtree.filter((d) => !isGraphFileType(d.file_type));
 
-  type MovePlan = { row: DocumentRow; newPath: string; newParentId: string | null };
+  type MovePlan = { row: Documents; newPath: string; newParentId: string | null };
   const plans: MovePlan[] = movingDocs.map((doc) => {
     if (doc.document_id === folder.document_id) {
       return { row: doc, newPath: newFolderPath, newParentId };
@@ -1410,7 +1409,7 @@ function moveFolder(params: {
 
   const movingIds = new Set(plans.map((p) => p.row.document_id));
   for (const plan of plans) {
-    const existing = findDocumentByPath(db, folder.domain_id, plan.newPath);
+    const existing = findDocumentByPath(folder.domain_id, plan.newPath, db);
     if (existing && !movingIds.has(existing.document_id)) {
       throw new DocumentError("DOC_EXISTS", "目标位置已存在同名文档", 409);
     }
@@ -1445,43 +1444,43 @@ function moveFolder(params: {
   try {
     const tx = db.transaction(() => {
       for (const g of graphDocs) {
-        deleteDocument(db, g.document_id);
-        insertAuditLog(db, {
-          actorVisitorId: params.actorVisitorId,
+        deleteDocument(g.document_id, db);
+        insertAuditLog({
+          id: null,
+          actor_visitor_id: params.actorVisitorId,
           action: "document.delete",
-          targetType: "document",
-          targetId: g.document_id,
-          metadata: {
+          target_type: "document",
+          target_id: g.document_id,
+          metadata_json: JSON.stringify({
             relativePath: g.relative_path,
             viaFolderMove: true,
             reason: "graph-hidden-on-folder-move",
-          },
-          createdAt: now,
-        });
+          }),
+          created_at: now,
+        }, db);
       }
       for (const plan of plans) {
-        updateDocumentLocation(db, {
-          documentId: plan.row.document_id,
-          parentId: plan.newParentId,
-          relativePath: plan.newPath,
-          updatedBy: params.actorVisitorId,
-          updatedAt: now,
-        });
+        updateDocumentLocation({...plan.row,
+      parent_id: plan.newParentId,
+          relative_path: plan.newPath,
+          updated_by: params.actorVisitorId,
+          updated_at: now,}, db);
       }
-      insertAuditLog(db, {
-        actorVisitorId: params.actorVisitorId,
+      insertAuditLog({
+        id: null,
+        actor_visitor_id: params.actorVisitorId,
         action: "folder.move",
-        targetType: "folder",
-        targetId: folder.document_id,
-        metadata: {
+        target_type: "folder",
+        target_id: folder.document_id,
+        metadata_json: JSON.stringify({
           fromRelativePath: oldFolderPath,
           toRelativePath: newFolderPath,
           parentId: newParentId,
           movedCount: plans.length,
           deletedGraphCount: graphDocs.length,
-        },
-        createdAt: now,
-      });
+        }),
+        created_at: now,
+      }, db);
     });
     tx();
   } catch (err) {
@@ -1516,7 +1515,7 @@ function moveFolder(params: {
     );
   }
 
-  const updated = findDocumentById(db, params.documentId)!;
+  const updated = findDocumentById(params.documentId, db)!;
   return {
     ...rowToSummary(updated),
     content: "",
@@ -1535,7 +1534,7 @@ export function renameDocument(params: {
   fileName: string;
 }): DocumentDetail {
   const db = getDb();
-  const row = findDocumentById(db, params.documentId);
+  const row = findDocumentById(params.documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== params.actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可重命名此文件", 403);
@@ -1556,7 +1555,7 @@ export function renameDocument(params: {
     return getDocument(params.documentId, params.actorVisitorId);
   }
 
-  const existing = findDocumentByPath(db, row.domain_id, newRelativePath);
+  const existing = findDocumentByPath(row.domain_id, newRelativePath, db);
   if (existing && existing.document_id !== row.document_id) {
     throw new DocumentError("DOC_EXISTS", "目标位置已存在同名文档", 409);
   }
@@ -1573,24 +1572,23 @@ export function renameDocument(params: {
 
   try {
     const tx = db.transaction(() => {
-      updateDocumentLocation(db, {
-        documentId: row.document_id,
-        parentId: row.parent_id ?? null,
-        relativePath: newRelativePath,
-        updatedBy: params.actorVisitorId,
-        updatedAt: now,
-      });
-      insertAuditLog(db, {
-        actorVisitorId: params.actorVisitorId,
+      updateDocumentLocation({...row,
+      parent_id: row.parent_id ?? null,
+        relative_path: newRelativePath,
+        updated_by: params.actorVisitorId,
+        updated_at: now,}, db);
+      insertAuditLog({
+        id: null,
+        actor_visitor_id: params.actorVisitorId,
         action: "document.rename",
-        targetType: "document",
-        targetId: row.document_id,
-        metadata: {
+        target_type: "document",
+        target_id: row.document_id,
+        metadata_json: JSON.stringify({
           fromRelativePath: oldPath,
           toRelativePath: newRelativePath,
-        },
-        createdAt: now,
-      });
+        }),
+        created_at: now,
+      }, db);
     });
     tx();
   } catch (err) {
@@ -1616,7 +1614,7 @@ export function removeFolder(params: {
   folderDocumentId: string;
 }): { deletedCount: number } {
   const db = getDb();
-  let folder = findDocumentById(db, params.folderDocumentId);
+  let folder = findDocumentById(params.folderDocumentId, db);
   if (!folder) throw new DocumentError("DOC_NOT_FOUND", "目录不存在", 404);
 
   // 选中目录时打开的是隐藏描述文件。类型现为 folder_desc，旧数据仍可能是 md。
@@ -1624,7 +1622,7 @@ export function removeFolder(params: {
     if (!folder.parent_id) {
       throw new DocumentError("BAD_REQUEST", "描述文档无父目录", 400);
     }
-    folder = findDocumentById(db, folder.parent_id);
+    folder = findDocumentById(folder.parent_id, db);
     if (!folder || folder.file_type !== "dir") {
       throw new DocumentError("DOC_NOT_FOUND", "父目录不存在", 404);
     }
@@ -1641,7 +1639,7 @@ export function removeFolder(params: {
   const pathPrefix = `${folder.relative_path}/`;
 
   // 找出该目录下所有文档（包括子目录、描述文档、普通文档）
-  const allDocs = listDocumentsByPathPrefix(db, folder.domain_id, pathPrefix);
+  const allDocs = listDocumentsByPathPrefix(folder.domain_id, pathPrefix, db);
 
   // 加上目录本身
   const allToDelete = [...allDocs, folder];
@@ -1666,20 +1664,21 @@ export function removeFolder(params: {
   const tx = db.transaction(() => {
     for (const doc of allToDelete) {
       const recovery = buildDeleteRecovery(db, doc);
-      deleteDocument(db, doc.document_id);
+      deleteDocument(doc.document_id, db);
       deletedIds.push(doc.document_id);
-      insertAuditLog(db, {
-        actorVisitorId: params.actorVisitorId,
+      insertAuditLog({
+        id: null,
+        actor_visitor_id: params.actorVisitorId,
         action: doc.file_type === "dir" ? "folder.delete" : "document.delete",
-        targetType: doc.file_type === "dir" ? "folder" : "document",
-        targetId: doc.document_id,
-        metadata: {
+        target_type: doc.file_type === "dir" ? "folder" : "document",
+        target_id: doc.document_id,
+        metadata_json: JSON.stringify({
           relativePath: doc.relative_path,
           viaFolderDelete: true,
           recovery,
-        },
-        createdAt: now,
-      });
+        }),
+        created_at: now,
+      }, db);
     }
   });
   tx();
@@ -1713,7 +1712,7 @@ export function addDocumentInvite(
   targetPermission: string,
 ): void {
   const db = getDb();
-  const row = findDocumentById(db, documentId);
+  const row = findDocumentById(documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可管理邀请", 403);
@@ -1729,7 +1728,7 @@ export function addDocumentInvite(
     );
   }
 
-  insertDocumentInvite(db, documentId, targetVisitorId, targetPermission);
+  insertDocumentInvite(documentId, targetVisitorId, targetPermission, db);
 }
 
 export function removeDocumentInvite(
@@ -1738,19 +1737,19 @@ export function removeDocumentInvite(
   targetVisitorId: string,
 ): void {
   const db = getDb();
-  const row = findDocumentById(db, documentId);
+  const row = findDocumentById(documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可管理邀请", 403);
   }
-  deleteDocumentInvite(db, documentId, targetVisitorId);
+  deleteDocumentInvite(documentId, targetVisitorId, db);
 }
 
 export function getDocumentInvites(
   documentId: string,
 ): { visitorId: string; permission: string }[] {
   const db = getDb();
-  const rows = listDocumentInvites(db, documentId);
+  const rows = listDocumentInvites(documentId, db);
   return rows.map((r) => ({
     visitorId: r.visitor_id,
     permission: r.permission,
@@ -1763,7 +1762,7 @@ export function getDocumentInvites(
 
 // --- 版本提交与冲突 ---
 
-function rowToSummary(row: DocumentRow): DocumentSummary {
+function rowToSummary(row: Documents): DocumentSummary {
   return {
     documentId: row.document_id,
     domainId: row.domain_id,
@@ -1782,7 +1781,7 @@ function rowToSummary(row: DocumentRow): DocumentSummary {
 
 /** 组装 API 返回的 DocumentDetail，并带上最新 headCommitId。 */
 function buildDocumentDetail(
-  row: DocumentRow,
+  row: Documents,
   overrides: {
     displayName: string;
     content: string;
@@ -1813,7 +1812,7 @@ function buildDocumentDetail(
  * details 供前端对照合并：当前 head、服务端工作区正文。
  */
 function throwVersionConflict(
-  row: DocumentRow,
+  row: Documents,
   serverContent: string,
   serverContentHash: string,
 ): never {
@@ -1830,7 +1829,7 @@ function throwVersionConflict(
  */
 function assertNoVersionConflict(
   db: ReturnType<typeof getDb>,
-  row: DocumentRow,
+  row: Documents,
   localBaseCommitId: string | undefined,
 ): void {
   // 客户端没传 localBase：旧版前端或未启用冲突检测，直接放行（不进行冲突校验）
@@ -1863,7 +1862,7 @@ function assertNoVersionConflict(
  * 3. 事务：插 r_local + merge 节点与边，更新 documents.head_commit_id
  */
 function publishMergeDocument(params: {
-  row: DocumentRow;
+  row: Documents;
   actorVisitorId: string;
   content: string;
   displayName: string;
@@ -1919,70 +1918,67 @@ function publishMergeDocument(params: {
   const tx = db.transaction(() => {
     // 本地支尖端（此前仅存在于浏览器，此处首次落库）
     // 保存r_local
-    insertCommit(db, {
-      commitId: localCommitId,
-      documentId: row.document_id,
-      contentHash: localHash,
-      blobRef: localWrite.blobRef,
-      authorVisitorId: actorVisitorId,
-      createdAt: now,
+    insertCommit({
+      commit_id: localCommitId,
+      document_id: row.document_id,
+      content_hash: localHash,
+      blob_ref: localWrite.blobRef,
+      author_visitor_id: actorVisitorId,
+      created_at: now,
       message,
       source,
-    });
-    insertCommitParent(db, {
-      childCommitId: localCommitId,
-      parentCommitId: params.localBaseCommitId,
-    });
+    }, db);
+    insertCommitParent({
+      child_commit_id: localCommitId,
+      parent_commit_id: params.localBaseCommitId,
+    }, db);
 
-    updateDocumentContent(db, {
-      documentId: row.document_id,
-      displayName,
-      contentHash: write.contentHash,
-      updatedBy: actorVisitorId,
-      updatedAt: now,
-      permission: params.permission,
-    });
+    updateDocumentContent({...row,
+      display_name: displayName,
+      content_hash: write.contentHash,
+      updated_by: actorVisitorId,
+      updated_at: now,
+      permission: params.permission ?? row.permission,}, db);
     // merge 节点：双父 = 远端 head + r_local
-    insertCommit(db, {
-      commitId: mergeCommitId,
-      documentId: row.document_id,
-      contentHash: write.contentHash,
-      blobRef: mergeBlob.blobRef,
-      authorVisitorId: actorVisitorId,
-      createdAt: now,
+    insertCommit({
+      commit_id: mergeCommitId,
+      document_id: row.document_id,
+      content_hash: write.contentHash,
+      blob_ref: mergeBlob.blobRef,
+      author_visitor_id: actorVisitorId,
+      created_at: now,
       message,
       source,
-    });
+    }, db);
     // merge node 拥有两个 parent, r_local 和 远端head
     // 这里存储的是远端head
-    insertCommitParent(db, {
-      childCommitId: mergeCommitId,
-      parentCommitId: params.remoteCommitId,
-    });
+    insertCommitParent({
+      child_commit_id: mergeCommitId,
+      parent_commit_id: params.remoteCommitId,
+    }, db);
     // 这里存储的是r_local
-    insertCommitParent(db, {
-      childCommitId: mergeCommitId,
-      parentCommitId: localCommitId,
-    });
-    updateDocumentHeadCommit(db, {
-      documentId: row.document_id,
-      headCommitId: mergeCommitId,
-      updatedBy: actorVisitorId,
-      updatedAt: now,
-    });
-    insertAuditLog(db, {
-      actorVisitorId,
+    insertCommitParent({
+      child_commit_id: mergeCommitId,
+      parent_commit_id: localCommitId,
+    }, db);
+    updateDocumentHeadCommit({...row,
+      head_commit_id: mergeCommitId,
+      updated_by: actorVisitorId,
+      updated_at: now,}, db);
+    insertAuditLog({
+      id: null,
+      actor_visitor_id: actorVisitorId,
       action: "document.merge",
-      targetType: "document",
-      targetId: row.document_id,
-      metadata: {
+      target_type: "document",
+      target_id: row.document_id,
+      metadata_json: JSON.stringify({
         localBaseCommitId: params.localBaseCommitId,
         remoteCommitId: params.remoteCommitId,
         localCommitId,
         mergeCommitId,
-      },
-      createdAt: now,
-    });
+      }),
+      created_at: now,
+    }, db);
   });
   tx();
 
@@ -2035,17 +2031,17 @@ function normalizeDocumentContent(
 
 function resolveInvitedEditFlag(
   db: ReturnType<typeof getDb>,
-  row: DocumentRow,
+  row: Documents,
   actorVisitorId: string,
 ): boolean {
   if (row.owner_visitor_id === actorVisitorId) return false;
-  const invite = findDocumentInvite(db, row.document_id, actorVisitorId);
+  const invite = findDocumentInvite(row.document_id, actorVisitorId, db);
   return invite?.permission === "edit";
 }
 
 function resolveDomainMemberWriteFlag(
   db: ReturnType<typeof getDb>,
-  row: DocumentRow,
+  row: Documents,
   actorVisitorId: string,
 ): boolean {
   if (row.owner_visitor_id === actorVisitorId) return false;
@@ -2066,7 +2062,7 @@ export function getDocumentSyncStatus(
   documentId: string,
   localBaseCommitId: string | undefined,
 ): DocumentSyncStatus {
-  const row = findDocumentById(getDb(), documentId);
+  const row = findDocumentById(documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   const head = row.head_commit_id;
   if (!localBaseCommitId || !head) {
@@ -2091,7 +2087,7 @@ export function getDocumentMergeContext(
   localBaseCommitId: string,
   remoteCommitId: string,
 ): DocumentMergeContext {
-  const row = findDocumentById(getDb(), documentId);
+  const row = findDocumentById(documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
   const db = getDb();
@@ -2105,7 +2101,7 @@ export function getDocumentMergeContext(
     return { mode: "two_way", mergeBaseCommitId: null, mergeBaseContent: null };
   }
 
-  const baseCommit = findCommitById(db, mergeBaseCommitId);
+  const baseCommit = findCommitById(mergeBaseCommitId, db);
   if (!baseCommit) {
     return { mode: "two_way", mergeBaseCommitId: null, mergeBaseContent: null };
   }

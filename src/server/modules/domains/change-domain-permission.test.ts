@@ -1,7 +1,10 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { applySchema } from "../../infra/db/schema.js";
-import { listDocumentsByVisitor } from "../../infra/db/repositories/document.repo.js";
+import {
+  countDocumentsByOwner,
+  listDocumentsByOwner,
+} from "../documents/repo/document.repo.js";
 import { changeDomainPermission, DomainPermissionError } from "./change-domain-permission.js";
 
 function seed() {
@@ -29,6 +32,12 @@ function seed() {
   return db;
 }
 
+const emptyFilters = {
+  domainId: null as string | null,
+  creatorVisitorId: null as string | null,
+  fileType: null as string | null,
+};
+
 describe("changeDomainPermission", () => {
   it("upgrades a domain that already has documents and rejects a downgrade", () => {
     const db = seed();
@@ -37,28 +46,36 @@ describe("changeDomainPermission", () => {
   });
 });
 
-describe("listDocumentsByVisitor filters", () => {
-  it("filters by domain and groups when asked", () => {
+describe("listDocumentsByOwner filters", () => {
+  it("filters by domain", () => {
     const db = seed();
-    const page = listDocumentsByVisitor(db, "owner", { domainId: "d1", groupBy: "domain" });
-    expect(page.total).toBe(1);
-    expect(page.items[0]?.documentId).toBe("doc-a");
-    expect(page.groups?.[0]?.key).toBe("d1");
-    const all = listDocumentsByVisitor(db, "owner", {});
-    expect(all.total).toBe(2);
-    expect(all.groups).toBeUndefined();
+    const filters = { ...emptyFilters, domainId: "d1" };
+    expect(countDocumentsByOwner("owner", filters, db)).toBe(1);
+    const rows = listDocumentsByOwner("owner", filters, { offset: 0, limit: 20 }, db);
+    expect(rows[0]?.document_id).toBe("doc-a");
+    expect(countDocumentsByOwner("owner", emptyFilters, db)).toBe(2);
   });
 
   it("filters by fileType md vs sheet", () => {
     const db = seed();
     db.prepare(`UPDATE documents SET file_type = 'sheet' WHERE document_id = 'doc-b'`).run();
-    const sheets = listDocumentsByVisitor(db, "owner", { fileType: "sheet" });
-    expect(sheets.total).toBe(1);
-    expect(sheets.items[0]?.documentId).toBe("doc-b");
-    expect(sheets.items[0]?.fileType).toBe("sheet");
-    const mds = listDocumentsByVisitor(db, "owner", { fileType: "md" });
-    expect(mds.total).toBe(1);
-    expect(mds.items[0]?.documentId).toBe("doc-a");
-    expect(mds.items[0]?.fileType).toBe("md");
+    const sheets = listDocumentsByOwner(
+      "owner",
+      { ...emptyFilters, fileType: "sheet" },
+      { offset: 0, limit: 20 },
+      db,
+    );
+    expect(sheets).toHaveLength(1);
+    expect(sheets[0]?.document_id).toBe("doc-b");
+    expect(sheets[0]?.file_type).toBe("sheet");
+    const mds = listDocumentsByOwner(
+      "owner",
+      { ...emptyFilters, fileType: "md" },
+      { offset: 0, limit: 20 },
+      db,
+    );
+    expect(mds).toHaveLength(1);
+    expect(mds[0]?.document_id).toBe("doc-a");
+    expect(mds[0]?.file_type).toBe("md");
   });
 });

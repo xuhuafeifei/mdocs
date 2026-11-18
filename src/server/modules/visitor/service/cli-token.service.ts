@@ -9,7 +9,7 @@ import {
 } from "../repo/cli-token.repo.js";
 import { hashVisitorToken } from "./token.js";
 import { findVisitorById } from "../repo/visitor.repo.js";
-import type { VisitorRow } from "../entity/visitor.entity.js";
+import type { Visitors } from "../entity/visitor.entity.js";
 import { VisitorError } from "./visitor.service.js";
 
 export interface CliTokenSummary {
@@ -35,11 +35,12 @@ export function createCliToken(params: {
   const tokenId = randomUUID();
 
   insertCliToken({
-    tokenId,
-    visitorId: params.visitorId,
-    tokenHash,
+    token_id: tokenId,
+    visitor_id: params.visitorId,
+    token_hash: tokenHash,
     name,
-    createdAt: now,
+    revoked: 0,
+    created_at: now,
   });
 
   return { tokenId, token: rawToken, name, createdAt: now };
@@ -89,7 +90,7 @@ export function deleteCliToken(visitorId: string, tokenId: string): void {
  * 通过原始 CLI token 解析对应的访客信息。
  * revoked=1 或行已删 → null。
  */
-export function resolveCliVisitor(rawToken: string): VisitorRow | null {
+export function resolveCliVisitor(rawToken: string): Visitors | null {
   const tokenHash = hashVisitorToken(rawToken);
 
   const cliToken = findCliTokenByHash(tokenHash);

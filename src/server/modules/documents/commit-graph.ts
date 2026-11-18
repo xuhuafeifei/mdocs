@@ -5,7 +5,7 @@
  */
 import type Database from "better-sqlite3";
 import { DocumentError } from "../access/access-control";
-import { findCommitById, listParentCommitIds } from "../../infra/db/repositories/commit.repo";
+import { findCommitById, listParentCommitIds } from "./repo/commit.repo";
 
 /**
  * 判断 ancestorId 是否位于 nodeId 的祖先链上（含「自身」）。
@@ -21,7 +21,7 @@ export function isAncestorOf(
   const queue = [nodeId];
   while (queue.length > 0) {
     const cur = queue.shift()!;
-    const parents = listParentCommitIds(db, cur);
+    const parents = listParentCommitIds(cur, db);
     for (const p of parents) {
       if (p === ancestorId) return true;
       if (!visited.has(p)) {
@@ -39,7 +39,7 @@ export function assertCommitBelongsToDocument(
   commitId: string,
   documentId: string,
 ): void {
-  const row = findCommitById(db, commitId);
+  const row = findCommitById(commitId, db);
   if (!row || row.document_id !== documentId) {
     throw new DocumentError("INVALID_COMMIT", "提交节点不存在或不属于该文档", 400);
   }
@@ -64,7 +64,7 @@ export function findMergeBaseCommitId(
     const cur = queueA.shift()!;
     if (ancestorsOfA.has(cur)) continue;
     ancestorsOfA.add(cur);
-    for (const p of listParentCommitIds(db, cur)) {
+    for (const p of listParentCommitIds(cur, db)) {
       queueA.push(p);
     }
   }
@@ -76,7 +76,7 @@ export function findMergeBaseCommitId(
     if (ancestorsOfA.has(cur)) return cur;
     if (visitedB.has(cur)) continue;
     visitedB.add(cur);
-    for (const p of listParentCommitIds(db, cur)) {
+    for (const p of listParentCommitIds(cur, db)) {
       queueB.push(p);
     }
   }

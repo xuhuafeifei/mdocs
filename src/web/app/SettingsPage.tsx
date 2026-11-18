@@ -299,8 +299,6 @@ export function SettingsPage(props: {
   const [myDocDomainId, setMyDocDomainId] = useState("");
   const [myDocCreatorId, setMyDocCreatorId] = useState("");
   const [myDocFileType, setMyDocFileType] = useState<"" | "md" | "html" | "sheet">("");
-  const [myDocGroupBy, setMyDocGroupBy] = useState<"" | "domain" | "creator">("");
-  const [myDocGroups, setMyDocGroups] = useState<{ key: string; items: MyDocument[] }[] | null>(null);
   const [visitorOptions, setVisitorOptions] = useState<VisitorDirectoryEntry[]>([]);
   const myDocSearchSeq = useRef(0);
   const MY_DOC_PAGE_SIZE = 20;
@@ -394,7 +392,7 @@ export function SettingsPage(props: {
         if (mountedRef.current) setVisitorOptions(rows);
       }).catch(() => {});
     }
-  }, [tab, myDocDomainId, myDocCreatorId, myDocFileType, myDocGroupBy]);
+  }, [tab, myDocDomainId, myDocCreatorId, myDocFileType]);
 
   /**
    * 我的文章搜索：防抖 300ms 接 POST /search。
@@ -495,11 +493,9 @@ export function SettingsPage(props: {
         domainId: myDocDomainId || undefined,
         creatorVisitorId: myDocCreatorId || undefined,
         fileType: myDocFileType || undefined,
-        groupBy: myDocGroupBy || undefined,
       });
       if (!mountedRef.current) return;
       setMyDocuments(result.items);
-      setMyDocGroups(result.groups ?? null);
       setMyDocTotal(result.total);
       setMyDocPage(page);
       setMyDocJump(String(page + 1));
@@ -1198,18 +1194,6 @@ export function SettingsPage(props: {
                     ))}
                   </select>
                 )}
-                {!myDocSearchActive && (
-                  <select
-                    className="mdocs-my-docs-select"
-                    value={myDocGroupBy}
-                    aria-label={t("myDocumentsGroupBy")}
-                    onChange={(e) => setMyDocGroupBy(e.target.value as "" | "domain" | "creator")}
-                  >
-                    <option value="">{t("myDocumentsGroupNone")}</option>
-                    <option value="domain">{t("myDocumentsGroupDomain")}</option>
-                    <option value="creator">{t("myDocumentsGroupCreator")}</option>
-                  </select>
-                )}
               </div>
               {myDocumentsLoading && !myDocSearchActive ? (
                 <div className="mdocs-my-docs-empty">{t("loading")}</div>
@@ -1289,17 +1273,7 @@ export function SettingsPage(props: {
                         </tr>
                       </thead>
                       <tbody>
-                        {(myDocGroups ?? [{ key: "", items: myDocuments }]).flatMap((group) => {
-                          const header = group.key ? (
-                            <tr key={`group-${group.key}`} className="mdocs-my-docs-group">
-                              <td colSpan={7}>
-                                {myDocGroupBy === "domain"
-                                  ? (domainNameMap.get(group.key) || group.key)
-                                  : (group.items[0]?.creatorName || group.key)}
-                              </td>
-                            </tr>
-                          ) : null;
-                          const rows = group.items.map((doc) => (
+                        {myDocuments.map((doc) => (
                           <tr key={doc.documentId}>
                             <td className="mdocs-my-docs-title" onClick={() => props.onOpenDocument(doc.documentId)}>
                               {doc.displayName || doc.relativePath || "Untitled"}
@@ -1326,9 +1300,7 @@ export function SettingsPage(props: {
                               </button>
                             </td>
                           </tr>
-                          ));
-                          return header ? [header, ...rows] : rows;
-                        })}
+                        ))}
                       </tbody>
                     </table>
                     </div>

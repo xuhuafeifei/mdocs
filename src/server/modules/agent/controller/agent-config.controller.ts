@@ -8,7 +8,7 @@ import {
   Put,
   UseGuards,
 } from "@nestjs/common";
-import type { VisitorRow } from "../../visitor/entity/visitor.entity.js";
+import type { Visitors } from "../../visitor/entity/visitor.entity.js";
 import {
   CurrentVisitor,
   VisitorId,
@@ -43,7 +43,7 @@ export class AgentConfigController {
 
   @Put("config")
   putConfig(
-    @CurrentVisitor() visitor: VisitorRow,
+    @CurrentVisitor() visitor: Visitors,
     @Body() body: Record<string, unknown>,
   ) {
     return upsertConfig(visitor.visitor_id, visitor.visitor_name, body ?? {});

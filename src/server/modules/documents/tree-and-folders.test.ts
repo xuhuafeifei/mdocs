@@ -65,10 +65,10 @@ vi.mock("../../infra/logger/logger.js", () => ({
 import { buildDocumentTree, buildFolderSubtree } from "../tree/tree.application.js";
 import { createDocument, removeFolder } from "./document.service.js";
 import { DocumentError } from "../access/access-control.js";
-import { findDocumentById, countChildrenByParent, listDocumentsByPathPrefix } from "../../infra/db/repositories/document.repo.js";
+import { findDocumentById, countChildrenByParent, listDocumentsByPathPrefix } from "./repo/document.repo.js";
 import { FOLDER_DESC_FILENAME } from "../../../shared/folderDesc.js";
 import type { FolderSubtreeNode } from "../../../shared/types/tree.js";
-import { findCommitById } from "../../infra/db/repositories/commit.repo.js";
+import { findCommitById } from "./repo/commit.repo.js";
 import { getDb } from "../../infra/db/connection.js";
 import {
   createFolder as createFolderApi,
@@ -96,7 +96,7 @@ function createFolder(name: string, domainId: string = "default", parentId: stri
   const folderId = randomUUID();
   const now = new Date().toISOString();
   const folderPath = parentId
-    ? `${(findDocumentById(db, parentId)!.relative_path)}/${name}`
+    ? `${(findDocumentById(parentId, db)!.relative_path)}/${name}`
     : name;
 
   db.prepare(
@@ -362,7 +362,7 @@ describe("folders.application createFolder", () => {
       .prepare(`SELECT head_commit_id FROM documents WHERE relative_path = ?`)
       .get(`new-folder/${FOLDER_DESC_FILENAME}`) as { head_commit_id: string | null };
     expect(desc.head_commit_id).toBeTruthy();
-    expect(findCommitById(getDb(), desc.head_commit_id!)).toBeTruthy();
+    expect(findCommitById(desc.head_commit_id!)).toBeTruthy();
   });
 
   it("创建子目录", () => {
@@ -401,7 +401,7 @@ describe("folders.application deleteFolder", () => {
   it("删除空目录成功", () => {
     const folderId = createFolder("to-delete");
     deleteFolderApi({ actorVisitorId: OWNER, folderId });
-    const row = findDocumentById(getDb(), folderId);
+    const row = findDocumentById(folderId);
     expect(row).toBeUndefined();
   });
 
@@ -435,20 +435,20 @@ describe("folders.application deleteFolder", () => {
 describe("countChildrenByParent", () => {
   it("空文件夹返回 0", () => {
     const folderId = createFolder("empty");
-    expect(countChildrenByParent(getDb(), folderId)).toBe(0);
+    expect(countChildrenByParent(folderId)).toBe(0);
   });
 
   it("有子文档返回正确数量", () => {
     const folderId = createFolder("with-content");
     createDoc("with-content/a.md", "a", "default", folderId);
     createDoc("with-content/b.md", "b", "default", folderId);
-    expect(countChildrenByParent(getDb(), folderId)).toBe(2);
+    expect(countChildrenByParent(folderId)).toBe(2);
   });
 
   it("有子文件夹也计数", () => {
     const folderId = createFolder("with-subfolder");
     createFolder("sub", "default", folderId);
-    expect(countChildrenByParent(getDb(), folderId)).toBe(1);
+    expect(countChildrenByParent(folderId)).toBe(1);
   });
 });
 
@@ -461,7 +461,7 @@ describe("removeFolder 递归删除目录", () => {
     const folderId = createFolder("empty-folder");
     const result = removeFolder({ actorVisitorId: OWNER, folderDocumentId: folderId });
     expect(result.deletedCount).toBe(1);
-    expect(findDocumentById(getDb(), folderId)).toBeUndefined();
+    expect(findDocumentById(folderId)).toBeUndefined();
   });
 
   it("删除含文档的目录：目录和所有文档都被删除", () => {
@@ -473,9 +473,9 @@ describe("removeFolder 递归删除目录", () => {
 
     // 删除数量：目录本身 + 2篇文档 = 3
     expect(result.deletedCount).toBe(3);
-    expect(findDocumentById(getDb(), folderId)).toBeUndefined();
-    expect(findDocumentById(getDb(), doc1.documentId)).toBeUndefined();
-    expect(findDocumentById(getDb(), doc2.documentId)).toBeUndefined();
+    expect(findDocumentById(folderId)).toBeUndefined();
+    expect(findDocumentById(doc1.documentId)).toBeUndefined();
+    expect(findDocumentById(doc2.documentId)).toBeUndefined();
   });
 
   it("删除嵌套目录：所有层级的目录和文档都被删除", () => {
@@ -488,8 +488,8 @@ describe("removeFolder 递归删除目录", () => {
 
     // 删除数量：parent目录 + child目录 + 2篇文档 = 4
     expect(result.deletedCount).toBe(4);
-    expect(findDocumentById(getDb(), parentId)).toBeUndefined();
-    expect(findDocumentById(getDb(), childId)).toBeUndefined();
+    expect(findDocumentById(parentId)).toBeUndefined();
+    expect(findDocumentById(childId)).toBeUndefined();
   });
 
   it("删除目录时也删除 ___desc___.md 描述文档", () => {
@@ -497,21 +497,21 @@ describe("removeFolder 递归删除目录", () => {
     createDoc("with-desc/doc.md", "content", "default", folderId);
 
     // 确认 desc 文档存在
-    const allDocs = listDocumentsByPathPrefix(getDb(), "default", "with-desc/");
+    const allDocs = listDocumentsByPathPrefix("default", "with-desc/");
     expect(allDocs.length).toBeGreaterThanOrEqual(2); // desc.md + doc.md
 
     const result = removeFolder({ actorVisitorId: OWNER, folderDocumentId: folderId });
 
     // 目录本身 + desc.md + doc.md = 3
     expect(result.deletedCount).toBe(3);
-    const afterDelete = listDocumentsByPathPrefix(getDb(), "default", "with-desc/");
+    const afterDelete = listDocumentsByPathPrefix("default", "with-desc/");
     expect(afterDelete).toHaveLength(0);
   });
 
   it("删除时传入 ___desc___.md 的 ID：自动找到父目录并删除", () => {
     const folderId = createFolder("test-folder", "default", null, "folder description");
     // 找到 desc 文档的 ID
-    const descDoc = listDocumentsByPathPrefix(getDb(), "default", "test-folder/").find(
+    const descDoc = listDocumentsByPathPrefix("default", "test-folder/").find(
       (d) => d.relative_path.endsWith("/___desc___.md"),
     );
     expect(descDoc).toBeDefined();
@@ -519,12 +519,12 @@ describe("removeFolder 递归删除目录", () => {
     // 传 desc 文档的 ID，应该也能正常删除整个目录
     const result = removeFolder({ actorVisitorId: OWNER, folderDocumentId: descDoc!.document_id });
     expect(result.deletedCount).toBe(2); // 目录本身 + desc.md
-    expect(findDocumentById(getDb(), folderId)).toBeUndefined();
+    expect(findDocumentById(folderId)).toBeUndefined();
   });
 
   it("删除时传入 folder_desc 类型的描述文档 ID：找到父目录", () => {
     const folderId = createFolder("typed-desc", "default", null, "folder description");
-    const descDoc = listDocumentsByPathPrefix(getDb(), "default", "typed-desc/").find(
+    const descDoc = listDocumentsByPathPrefix("default", "typed-desc/").find(
       (d) => d.relative_path.endsWith("/___desc___.md"),
     );
     expect(descDoc).toBeDefined();
@@ -532,7 +532,7 @@ describe("removeFolder 递归删除目录", () => {
 
     const result = removeFolder({ actorVisitorId: OWNER, folderDocumentId: descDoc!.document_id });
     expect(result.deletedCount).toBe(2);
-    expect(findDocumentById(getDb(), folderId)).toBeUndefined();
+    expect(findDocumentById(folderId)).toBeUndefined();
   });
 
   it("非创建者删除目录：抛出 403", () => {

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { insertCommit } from "../../infra/db/repositories/commit.repo";
-import { insertDocument, updateDocumentContent, updateDocumentHeadCommit } from "../../infra/db/repositories/document.repo";
+import { insertCommit } from "./repo/commit.repo";
+import { insertDocument, updateDocumentContent, updateDocumentHeadCommit } from "./repo/document.repo";
+import type { Documents } from "./entity/document.entity.js";
 import { readDocument, writeCommitBlob, writeDocument } from "../../infra/storage/file-store";
 import { FOLDER_DESC_FILENAME } from "../../../shared/folderDesc";
 
@@ -29,30 +30,32 @@ export function insertMarkdownDocumentWithInitialCommit(
   const commitId = randomUUID();
   const blob = writeCommitBlob(write.contentHash, input.content);
 
-  insertDocument(db, {
-    documentId: input.documentId,
-    domainId: input.domainId,
-    relativePath: input.relativePath,
-    displayName: input.displayName,
-    ownerVisitorId: input.ownerVisitorId,
-    createdBy: input.actorVisitorId,
-    updatedBy: input.actorVisitorId,
-    contentHash: write.contentHash,
-    headCommitId: commitId,
-    createdAt: input.createdAt,
-    updatedAt: input.updatedAt,
+  insertDocument({
+    document_id: input.documentId,
+    domain_id: input.domainId,
+    relative_path: input.relativePath,
+    display_name: input.displayName,
+    owner_visitor_id: input.ownerVisitorId,
+    created_by: input.actorVisitorId,
+    updated_by: input.actorVisitorId,
+    content_hash: write.contentHash,
+    head_commit_id: commitId,
+    created_at: input.createdAt,
+    updated_at: input.updatedAt,
     permission: input.permission,
-    fileType: input.fileType ?? "md",
-    parentId: input.parentId,
-  });
-  insertCommit(db, {
-    commitId,
-    documentId: input.documentId,
-    contentHash: write.contentHash,
-    blobRef: blob.blobRef,
-    authorVisitorId: input.actorVisitorId,
-    createdAt: input.createdAt,
-  });
+    file_type: input.fileType ?? "md",
+    parent_id: input.parentId,
+  }, db);
+  insertCommit({
+    commit_id: commitId,
+    document_id: input.documentId,
+    content_hash: write.contentHash,
+    blob_ref: blob.blobRef,
+    author_visitor_id: input.actorVisitorId,
+    created_at: input.createdAt,
+    message: "",
+    source: "manual",
+  }, db);
 
   return { commitId, contentHash: write.contentHash };
 }
@@ -68,22 +71,15 @@ function isFolderDescRelativePath(relativePath: string): boolean {
 export function backfillFolderDescHeadCommits(db: Database.Database): void {
   const rows = db
     .prepare(
-      `SELECT document_id, domain_id, relative_path, display_name, owner_visitor_id, updated_by, updated_at, permission
+      `SELECT document_id, domain_id, relative_path, display_name, owner_visitor_id,
+              created_by, updated_by, content_hash, head_commit_id, created_at, updated_at,
+              permission, file_type, parent_id
        FROM documents
        WHERE head_commit_id IS NULL
          AND file_type = 'md'
          AND (relative_path = ? OR relative_path LIKE ?)`,
     )
-    .all(FOLDER_DESC_FILENAME, `%/${FOLDER_DESC_FILENAME}`) as {
-    document_id: string;
-    domain_id: string;
-    relative_path: string;
-    display_name: string;
-    owner_visitor_id: string;
-    updated_by: string;
-    updated_at: string;
-    permission: number;
-  }[];
+    .all(FOLDER_DESC_FILENAME, `%/${FOLDER_DESC_FILENAME}`) as Documents[];
 
   for (const row of rows) {
     if (!isFolderDescRelativePath(row.relative_path)) continue;
@@ -99,27 +95,25 @@ export function backfillFolderDescHeadCommits(db: Database.Database): void {
     const blob = writeCommitBlob(contentHash, content);
     const now = row.updated_at;
 
-    insertCommit(db, {
-      commitId,
-      documentId: row.document_id,
-      contentHash,
-      blobRef: blob.blobRef,
-      authorVisitorId: row.owner_visitor_id,
-      createdAt: now,
-    });
-    updateDocumentContent(db, {
-      documentId: row.document_id,
-      displayName: row.display_name,
-      contentHash,
-      updatedBy: row.updated_by,
-      updatedAt: now,
-      permission: row.permission,
-    });
-    updateDocumentHeadCommit(db, {
-      documentId: row.document_id,
-      headCommitId: commitId,
-      updatedBy: row.updated_by,
-      updatedAt: now,
-    });
+    insertCommit({
+      commit_id: commitId,
+      document_id: row.document_id,
+      content_hash: contentHash,
+      blob_ref: blob.blobRef,
+      author_visitor_id: row.owner_visitor_id,
+      created_at: now,
+      message: "",
+      source: "manual",
+    }, db);
+    updateDocumentContent({
+      ...row,
+      content_hash: contentHash,
+      updated_at: now,
+    }, db);
+    updateDocumentHeadCommit({
+      ...row,
+      head_commit_id: commitId,
+      updated_at: now,
+    }, db);
   }
 }

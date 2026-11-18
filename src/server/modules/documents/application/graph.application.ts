@@ -1,7 +1,7 @@
 import { getVisitorAgentConfig } from "../../agent/Config/config.js";
 import { assertGraphAccess, DocumentError } from "../../access/access-control.js";
 import { getDb } from "../../../infra/db/connection.js";
-import { findDocumentById } from "../../../infra/db/repositories/document.repo.js";
+import { findDocumentById } from "../repo/document.repo.js";
 import { taskQueue } from "../../../infra/task-queue/index.js";
 import { FILE_TYPE } from "../../../../shared/file-types.js";
 import {
@@ -88,7 +88,7 @@ export function enqueueDomainGraphAnalyze(domainId: string, visitorId: string | 
 }
 
 export function readFolderGraph(folderId: string, visitorId: string | null) {
-  const folder = findDocumentById(getDb(), folderId);
+  const folder = findDocumentById(folderId);
   if (!folder) {
     throw new GraphError("NOT_FOUND", "目录不存在", 404);
   }
@@ -101,7 +101,7 @@ export function readFolderGraph(folderId: string, visitorId: string | null) {
 }
 
 export function enqueueFolderGraphAnalyze(folderId: string, visitorId: string | null) {
-  const folder = findDocumentById(getDb(), folderId);
+  const folder = findDocumentById(folderId);
   if (!folder) {
     throw new GraphError("NOT_FOUND", "目录不存在", 404);
   }

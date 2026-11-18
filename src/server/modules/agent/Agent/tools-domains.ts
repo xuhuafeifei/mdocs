@@ -15,7 +15,7 @@ import {
 import {
   countDocumentsByDomain,
   listDomainIdsWithDocumentInviteForVisitor,
-} from "../../../infra/db/repositories/document.repo";
+} from "../../documents/repo/document.repo";
 import { findVisitorById } from "../../visitor/repo/visitor.repo.js";
 import { asToolResult, type ToolDeps } from "./tool-deps";
 import { changeDomainPermission, DomainPermissionError } from "../../domains/change-domain-permission";
@@ -44,7 +44,7 @@ export function listDomainsTool({ visitorId }: ToolDeps): AgentTool {
       const db = getDb();
       const rows = listDomains(db);
       const invitedDomainIds = new Set(
-        listDomainIdsWithDocumentInviteForVisitor(db, visitorId),
+        listDomainIdsWithDocumentInviteForVisitor(visitorId, db),
       );
       const domains = rows
         .filter(
@@ -58,7 +58,7 @@ export function listDomainsTool({ visitorId }: ToolDeps): AgentTool {
           domainName: r.domain_name,
           permission: r.permission,
           creatorVisitorId: r.creator_visitor_id,
-          docCount: countDocumentsByDomain(db, r.domain_id),
+          docCount: countDocumentsByDomain(r.domain_id, db),
         }));
       return asToolResult({ domains });
     },
@@ -97,11 +97,11 @@ export function createDomainTool({ visitorId }: ToolDeps): AgentTool {
       const now = new Date().toISOString();
       const domainId = randomUUID();
       insertDomain({
-        domainId,
-        domainName: name,
-        creatorVisitorId: visitorId,
-        createdAt: now,
-        updatedAt: now,
+        domain_id: domainId,
+        domain_name: name,
+        creator_visitor_id: visitorId,
+        created_at: now,
+        updated_at: now,
         permission,
       }, db);
       if (permission === "restricted") {

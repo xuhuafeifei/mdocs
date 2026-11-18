@@ -13,7 +13,7 @@ import {
   VisitorId,
 } from "../../../nest/decorators/visitor.decorators.js";
 import { RequireVisitorGuard } from "../../../nest/guards/require-visitor.guard.js";
-import type { VisitorRow } from "../entity/visitor.entity.js";
+import type { Visitors } from "../entity/visitor.entity.js";
 import {
   changeVisitorPassword,
   getCurrentVisitor,
@@ -86,7 +86,7 @@ export class VisitorsController {
 
   @Get("me")
   @UseGuards(RequireVisitorGuard)
-  me(@CurrentVisitor() visitor: VisitorRow) {
+  me(@CurrentVisitor() visitor: Visitors) {
     return getCurrentVisitor(visitor);
   }
 
@@ -96,14 +96,15 @@ export class VisitorsController {
     @VisitorId() visitorId: string,
     @Query() query: ListMyDocumentsRequest,
   ) {
-    return listCurrentVisitorDocuments(visitorId, {
-      offset: query.offset,
-      limit: query.limit,
-      domainId: query.domainId,
-      creatorVisitorId: query.creatorVisitorId,
-      fileType: query.fileType,
-      groupBy: query.groupBy,
-    });
+    return listCurrentVisitorDocuments(
+      visitorId,
+      {
+        domainId: query.domainId,
+        creatorVisitorId: query.creatorVisitorId,
+        fileType: query.fileType,
+      },
+      { offset: query.offset, limit: query.limit },
+    );
   }
 
   @Post("logout")

@@ -17,11 +17,11 @@ const fileStoreMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
-vi.mock("../storage/file-store.js", () => ({
+vi.mock("../../infra/storage/file-store.js", () => ({
   writeDocument: (_domainId: string, _relativePath: string, content: string) => {
     fileStoreMocks.lastWriteContent = content;
     const hash = createHash("sha256").update(content).digest("hex");
@@ -56,7 +56,7 @@ import {
   removeDocument,
   restoreDocumentFromAudit,
 } from "./document.service.js";
-import { findDocumentById } from "../../infra/db/repositories/document.repo.js";
+import { findDocumentById } from "./repo/document.repo.js";
 
 const OWNER = "owner-recovery-1";
 const OTHER = "other-recovery-1";
@@ -95,7 +95,7 @@ describe("document delete recovery", () => {
     const head = created.headCommitId!;
 
     removeDocument({ actorVisitorId: OWNER, documentId: docId });
-    expect(findDocumentById(testDbRef.db!, docId)).toBeUndefined();
+    expect(findDocumentById(docId, testDbRef.db!)).toBeUndefined();
 
     const deleted = listDeletedDocuments({ actorVisitorId: OWNER });
     expect(deleted).toHaveLength(1);

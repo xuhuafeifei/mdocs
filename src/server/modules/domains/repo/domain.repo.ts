@@ -1,34 +1,31 @@
 /**
  * domains / domain_members 表访问。SQL 只活在本文件。
  * DB 默认内部 getDb()；可选末参 `db?` 仅单测注入。
+ * 入参/返回均为表实体（缺列传 null）。
  */
 import type Database from "better-sqlite3";
 import { resolveDb } from "../../../infra/db/resolve-db.js";
 import type {
   DomainMemberRole,
-  DomainMemberRow,
-  DomainRow,
-  InsertDomainInput,
-  ReplaceDomainMemberInput,
+  DomainMembers,
+  Domains,
 } from "../entity/domain.entity.js";
 
 export type {
   DomainMemberRole,
-  DomainMemberRow,
-  DomainRow,
-  InsertDomainInput,
-  ReplaceDomainMemberInput,
+  DomainMembers,
+  Domains,
 } from "../entity/domain.entity.js";
 
 /**
  * 列出所有域，按 domain_id 排序。
  */
-export function listDomains(db?: Database.Database): DomainRow[] {
+export function listDomains(db?: Database.Database): Domains[] {
   return resolveDb(db)
     .prepare(
       `SELECT domain_id, domain_name, creator_visitor_id, created_at, updated_at, permission FROM domains ORDER BY domain_id`,
     )
-    .all() as DomainRow[];
+    .all() as Domains[];
 }
 
 /**
@@ -38,9 +35,9 @@ export function listDomains(db?: Database.Database): DomainRow[] {
 export function findDomainById(
   domainId: string,
   db?: Database.Database,
-): DomainRow | undefined {
+): Domains | undefined {
   return resolveDb(db)
-    .prepare<string, DomainRow>(
+    .prepare<string, Domains>(
       `SELECT domain_id, domain_name, creator_visitor_id, created_at, updated_at, permission FROM domains WHERE domain_id = ?`,
     )
     .get(domainId);
@@ -53,9 +50,9 @@ export function findDomainById(
 export function findDomainByName(
   domainName: string,
   db?: Database.Database,
-): DomainRow | undefined {
+): Domains | undefined {
   return resolveDb(db)
-    .prepare<string, DomainRow>(
+    .prepare<string, Domains>(
       `SELECT domain_id, domain_name, creator_visitor_id, created_at, updated_at, permission FROM domains WHERE domain_name = ?`,
     )
     .get(domainName);
@@ -63,10 +60,9 @@ export function findDomainByName(
 
 /**
  * 插入一条新的域记录。
- * permission 未提供时默认为 public。
  */
 export function insertDomain(
-  input: InsertDomainInput,
+  input: Domains,
   db?: Database.Database,
 ): void {
   resolveDb(db)
@@ -74,12 +70,12 @@ export function insertDomain(
       `INSERT INTO domains (domain_id, domain_name, creator_visitor_id, created_at, updated_at, permission) VALUES (?, ?, ?, ?, ?, ?)`,
     )
     .run(
-      input.domainId,
-      input.domainName,
-      input.creatorVisitorId,
-      input.createdAt,
-      input.updatedAt,
-      input.permission ?? "public",
+      input.domain_id,
+      input.domain_name,
+      input.creator_visitor_id,
+      input.created_at,
+      input.updated_at,
+      input.permission,
     );
 }
 
@@ -205,13 +201,14 @@ export function listDomainMemberIds(
 export function listDomainMembers(
   domainId: string,
   db?: Database.Database,
-): DomainMemberRow[] {
+): DomainMembers[] {
   const rows = resolveDb(db)
-    .prepare<string, { visitor_id: string; role: string; joined_at: string }>(
-      `SELECT visitor_id, role, joined_at FROM domain_members WHERE domain_id = ?`,
+    .prepare<string, { domain_id: string; visitor_id: string; role: string; joined_at: string }>(
+      `SELECT domain_id, visitor_id, role, joined_at FROM domain_members WHERE domain_id = ?`,
     )
     .all(domainId);
   return rows.map((r) => ({
+    domain_id: r.domain_id,
     visitor_id: r.visitor_id,
     role: r.role === "write" ? "write" : "read",
     joined_at: r.joined_at,
@@ -219,13 +216,12 @@ export function listDomainMembers(
 }
 
 /**
- * 替换域成员表（先删后插）；调用方保证列表已校验。
+ * 替换域成员表（先删后插）；调用方传入完整 DomainMembers 行。
  * 整个操作在单个事务中完成。
  */
 export function replaceDomainMembers(
   domainId: string,
-  members: ReplaceDomainMemberInput[],
-  joinedAt: string,
+  members: DomainMembers[],
   db?: Database.Database,
 ): void {
   const conn = resolveDb(db);
@@ -235,7 +231,7 @@ export function replaceDomainMembers(
       `INSERT INTO domain_members (domain_id, visitor_id, joined_at, role) VALUES (?, ?, ?, ?)`,
     );
     for (const m of members) {
-      ins.run(domainId, m.visitorId, joinedAt, normalizeRole(m.role));
+      ins.run(m.domain_id, m.visitor_id, m.joined_at, normalizeRole(m.role));
     }
   });
   tx();

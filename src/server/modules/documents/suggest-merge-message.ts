@@ -2,7 +2,7 @@
  * 合并发布说明：根据 local / remote / merged（可选 base）用默认模型生成短 message。
  */
 import { getDb } from "../../infra/db/connection";
-import { findDocumentById } from "../../infra/db/repositories/document.repo";
+import { findDocumentById } from "./repo/document.repo";
 import { DocumentError } from "../access/access-control";
 import { getVisitorAgentConfig } from "../agent/Config/config";
 import { PUBLISH_MESSAGE_MAX_LENGTH } from "../../../shared/publish-meta";
@@ -50,7 +50,7 @@ export async function suggestMergeMessage(params: {
   contentFormat?: "markdown" | "lexical" | "plain";
 }): Promise<{ message: string }> {
   const db = getDb();
-  const row = findDocumentById(db, params.documentId);
+  const row = findDocumentById(params.documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
   const cfg = getVisitorAgentConfig(params.actorVisitorId);

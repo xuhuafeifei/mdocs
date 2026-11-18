@@ -1,5 +1,5 @@
 import { createParamDecorator } from "@nestjs/common";
-import type { VisitorRow } from "../../modules/visitor/entity/visitor.entity.js";
+import type { Visitors } from "../../modules/visitor/entity/visitor.entity.js";
 import { VisitorError } from "../../modules/visitor/service/visitor.service.js";
 import { VisitorContext } from "../context/visitor.context.js";
 
@@ -20,8 +20,8 @@ export const OptionalVisitorId = createParamDecorator((): string | null => {
   return VisitorContext.visitorId();
 });
 
-/** 注入完整 VisitorRow；无访客时 401 */
-export const CurrentVisitor = createParamDecorator((): VisitorRow => {
+/** 注入完整 Visitors；无访客时 401 */
+export const CurrentVisitor = createParamDecorator((): Visitors => {
   const visitor = VisitorContext.visitor();
   if (!visitor) {
     throw new VisitorError("UNAUTHENTICATED", "no visitor", 401);

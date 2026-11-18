@@ -3,7 +3,7 @@
  */
 import { getDb } from "../../infra/db/connection";
 import { findDomainById, listDomains } from "../domains/repo/domain.repo";
-import type { DocumentRow } from "../../infra/db/repositories/document.repo";
+import type { Documents } from "../documents/repo/document.repo";
 import {
   canReadDocument,
   makeDomainAccessInfo,
@@ -11,7 +11,7 @@ import {
 } from "../access/access-control";
 import { resolveDomainAccess } from "../access/domain-access";
 import { readDocument } from "../../infra/storage/file-store";
-import { listDomainIdsWithDocumentInviteForVisitor } from "../../infra/db/repositories/document.repo";
+import { listDomainIdsWithDocumentInviteForVisitor } from "../documents/repo/document.repo";
 import { useLogger } from "../../infra/logger/logger";
 import { isEmbeddingReady } from "./embedding-model";
 import { upsertDocumentEmbeddings } from "./embedding-store";
@@ -41,7 +41,7 @@ export function listEmbeddingIndex(params: {
   const visitorId = params.visitorId;
 
   const documentInviteDomainIds =
-    visitorId ? new Set(listDomainIdsWithDocumentInviteForVisitor(db, visitorId)) : undefined;
+    visitorId ? new Set(listDomainIdsWithDocumentInviteForVisitor(visitorId, db)) : undefined;
 
   const allDomains = listDomains(db);
   const visibleDomains = allDomains.filter(
@@ -100,7 +100,7 @@ export function listEmbeddingIndex(params: {
       domainCache.set(row.domain_id, domainInfo);
     }
 
-    const docRow: DocumentRow = {
+    const docRow: Documents = {
       document_id: row.document_id,
       domain_id: row.domain_id,
       relative_path: row.relative_path,
@@ -199,7 +199,7 @@ export async function rebuildEmbeddingIndex(params: {
         params.visitorId,
         domainPermission,
       );
-      const docRow: DocumentRow = {
+      const docRow: Documents = {
         document_id: row.document_id,
         domain_id: row.domain_id,
         relative_path: row.relative_path,

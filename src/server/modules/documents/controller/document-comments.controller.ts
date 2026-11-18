@@ -7,7 +7,7 @@ import {
   Post,
   UseGuards,
 } from "@nestjs/common";
-import type { VisitorRow } from "../../visitor/entity/visitor.entity.js";
+import type { Visitors } from "../../visitor/entity/visitor.entity.js";
 import {
   CurrentVisitor,
   VisitorId,
@@ -31,7 +31,7 @@ export class DocumentCommentsController {
   @Post(":documentId/comments")
   @UseGuards(RequireVisitorGuard)
   create(
-    @CurrentVisitor() visitor: VisitorRow,
+    @CurrentVisitor() visitor: Visitors,
     @Param("documentId") documentId: string,
     @Body() body: CreateDocumentCommentRequest,
   ) {

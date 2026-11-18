@@ -7,7 +7,7 @@
  * 3. 与无冲突原文拼回完整正文
  */
 import { getDb } from "../../infra/db/connection";
-import { findDocumentById } from "../../infra/db/repositories/document.repo";
+import { findDocumentById } from "./repo/document.repo";
 import { DocumentError } from "../access/access-control";
 import { getVisitorAgentConfig } from "../agent/Config/config";
 import { canAiMerge } from "../../../shared/file-type-policy";
@@ -160,7 +160,7 @@ export async function suggestMergeResolutions(params: {
   conflictMarkdown: string;
 }): Promise<{ mergedMarkdown: string }> {
   const db = getDb();
-  const row = findDocumentById(db, params.documentId);
+  const row = findDocumentById(params.documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (!canAiMerge(row.file_type)) {
     throw new DocumentError("BAD_REQUEST", "该文件类型不支持 AI 行级合并", 400);
