@@ -1,15 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { randomBytes } from "node:crypto";
-import { getDb } from "../../infra/db/connection";
 import {
   insertCliToken,
   findCliTokenByHash,
   listCliTokensByVisitor,
   setCliTokenRevoked as setCliTokenRevokedRow,
   deleteCliTokenRow,
-} from "../../infra/db/repositories/cli-token.repo";
-import { hashVisitorToken } from "./token";
-import { findVisitorById, type VisitorRow } from "../../infra/db/repositories/visitor.repo";
+} from "../repo/cli-token.repo.js";
+import { hashVisitorToken } from "./token.js";
+import { findVisitorById } from "../repo/visitor.repo.js";
+import type { VisitorRow } from "../entity/visitor.entity.js";
 import { VisitorError } from "./visitor.service.js";
 
 export interface CliTokenSummary {
@@ -34,8 +34,7 @@ export function createCliToken(params: {
   const name = params.name?.trim() || "cli-token";
   const tokenId = randomUUID();
 
-  const db = getDb();
-  insertCliToken(db, {
+  insertCliToken({
     tokenId,
     visitorId: params.visitorId,
     tokenHash,
@@ -48,8 +47,7 @@ export function createCliToken(params: {
 
 /** 列出指定访客的所有 CLI Token（含已停用；不含已硬删）。 */
 export function listCliTokens(visitorId: string): CliTokenSummary[] {
-  const db = getDb();
-  const rows = listCliTokensByVisitor(db, visitorId);
+  const rows = listCliTokensByVisitor(visitorId);
   return rows.map((r) => ({
     tokenId: r.token_id,
     name: r.name,
@@ -66,11 +64,10 @@ export function setCliTokenRevoked(
   tokenId: string,
   revoked: boolean,
 ): void {
-  const db = getDb();
-  const rows = listCliTokensByVisitor(db, visitorId);
+  const rows = listCliTokensByVisitor(visitorId);
   const token = rows.find((r) => r.token_id === tokenId);
   if (!token) throw new VisitorError("NOT_FOUND", "CLI token not found", 404);
-  setCliTokenRevokedRow(db, tokenId, revoked);
+  setCliTokenRevokedRow(tokenId, revoked);
 }
 
 /**
@@ -82,11 +79,10 @@ export function revokeCliToken(visitorId: string, tokenId: string): void {
 
 /** 硬删除 Token 行；旧明文永久失效。 */
 export function deleteCliToken(visitorId: string, tokenId: string): void {
-  const db = getDb();
-  const rows = listCliTokensByVisitor(db, visitorId);
+  const rows = listCliTokensByVisitor(visitorId);
   const token = rows.find((r) => r.token_id === tokenId);
   if (!token) throw new VisitorError("NOT_FOUND", "CLI token not found", 404);
-  deleteCliTokenRow(db, tokenId);
+  deleteCliTokenRow(tokenId);
 }
 
 /**
@@ -95,12 +91,11 @@ export function deleteCliToken(visitorId: string, tokenId: string): void {
  */
 export function resolveCliVisitor(rawToken: string): VisitorRow | null {
   const tokenHash = hashVisitorToken(rawToken);
-  const db = getDb();
 
-  const cliToken = findCliTokenByHash(db, tokenHash);
+  const cliToken = findCliTokenByHash(tokenHash);
   if (!cliToken || cliToken.revoked === 1) return null;
 
-  const visitor = findVisitorById(db, cliToken.visitor_id);
+  const visitor = findVisitorById(cliToken.visitor_id);
   if (!visitor || visitor.disabled_at) return null;
 
   return visitor;

@@ -15,7 +15,7 @@ import {
   countDocumentsByDomain,
   listDomainIdsWithDocumentInviteForVisitor,
 } from "../../../infra/db/repositories/document.repo.js";
-import { findVisitorById } from "../../../infra/db/repositories/visitor.repo.js";
+import { findVisitorById } from "../../visitor/repo/visitor.repo.js";
 import { resolveDomainAccess } from "../../access/domain-access.js";
 import {
   changeDomainPermission,
@@ -161,7 +161,7 @@ export function listDomainMembersForCreator(actorVisitorId: string, domainId: st
     role: DomainMemberRole;
   }[] = [];
   for (const row of rows) {
-    const v = findVisitorById(db, row.visitor_id);
+    const v = findVisitorById(row.visitor_id);
     if (!v) {
       members.push({
         visitorId: row.visitor_id,
@@ -217,7 +217,7 @@ export function replaceDomainMembersForCreator(
 
   const invalid: string[] = [];
   for (const m of merged) {
-    if (!findVisitorById(db, m.visitorId)) invalid.push(m.visitorId);
+    if (!findVisitorById(m.visitorId)) invalid.push(m.visitorId);
   }
   if (invalid.length > 0) {
     throw new DomainError(

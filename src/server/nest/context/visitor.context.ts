@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { VisitorRow } from "../../infra/db/repositories/visitor.repo.js";
+import type { VisitorRow } from "../../modules/visitor/entity/visitor.entity.js";
 
 type Store = {
   visitor: VisitorRow | null;

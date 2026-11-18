@@ -1,6 +1,6 @@
 import { createParamDecorator } from "@nestjs/common";
-import type { VisitorRow } from "../../infra/db/repositories/visitor.repo.js";
-import { VisitorError } from "../../modules/visitor/visitor.service.js";
+import type { VisitorRow } from "../../modules/visitor/entity/visitor.entity.js";
+import { VisitorError } from "../../modules/visitor/service/visitor.service.js";
 import { VisitorContext } from "../context/visitor.context.js";
 
 /** 注入当前访客 ID；无访客时 401（配合 RequireVisitorGuard） */

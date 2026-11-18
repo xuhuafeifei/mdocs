@@ -35,7 +35,7 @@ import {
   findMergeBaseCommitId,
   isAncestorOf,
 } from "./commit-graph";
-import { findVisitorById } from "../../infra/db/repositories/visitor.repo";
+import { findVisitorById } from "../visitor/repo/visitor.repo.js";
 import {
   findDomainById,
   getDomainMemberRole,
@@ -1023,7 +1023,7 @@ export function listDocumentCommits(documentId: string): DocumentCommitSummary[]
   const head = row.head_commit_id;
   const commits = listCommitRowsByDocument(db, documentId);
   return commits.map((c) => {
-    const author = findVisitorById(db, c.author_visitor_id);
+    const author = findVisitorById(c.author_visitor_id);
     return {
       commitId: c.commit_id,
       createdAt: c.created_at,
@@ -1054,7 +1054,7 @@ export function getDocumentCommit(
   } catch {
     throw new DocumentError("BLOB_MISSING", "该版本正文不可读", 409);
   }
-  const author = findVisitorById(db, commit.author_visitor_id);
+  const author = findVisitorById(commit.author_visitor_id);
   return {
     commitId: commit.commit_id,
     createdAt: commit.created_at,

@@ -7,7 +7,7 @@ import {
   Post,
   UseGuards,
 } from "@nestjs/common";
-import type { VisitorRow } from "../../../infra/db/repositories/visitor.repo.js";
+import type { VisitorRow } from "../../visitor/entity/visitor.entity.js";
 import {
   CurrentVisitor,
   VisitorId,

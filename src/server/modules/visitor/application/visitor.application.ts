@@ -1,5 +1,5 @@
-import type { VisitorRow } from "../../../infra/db/repositories/visitor.repo";
-import { listActiveVisitorsDirectory } from "../../../infra/db/repositories/visitor.repo";
+import type { VisitorRow } from "../entity/visitor.entity.js";
+import { listActiveVisitorsDirectory } from "../repo/visitor.repo.js";
 import {
   listDocumentsByVisitor,
   type MyDocumentsQuery,
@@ -17,7 +17,7 @@ import {
   setVisitorPassword,
   toPublic,
   VisitorError,
-} from "../visitor.service";
+} from "../service/visitor.service.js";
 
 /** 注册：返回公开信息 + 明文 token（仅 cookie）+ 恢复码 */
 export function registerVisitorAccount(
@@ -76,7 +76,7 @@ export function changeVisitorPassword(visitorId: string, password: string): { ok
 }
 
 export function listVisitorDirectory(): { visitors: VisitorDirectoryEntry[] } {
-  const rows = listActiveVisitorsDirectory(getDb());
+  const rows = listActiveVisitorsDirectory();
   return {
     visitors: rows.map((r) => ({
       visitorId: r.visitor_id,

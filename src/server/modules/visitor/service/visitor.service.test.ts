@@ -8,17 +8,17 @@
  */
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import Database from "better-sqlite3";
-import { applySchema } from "../../infra/db/schema.js";
+import { applySchema } from "../../../infra/db/schema.js";
 
 /* ── Mock 基础设施 ── */
 
 const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
-vi.mock("../domains/personal-domain.service.js", () => ({
+vi.mock("../../domains/personal-domain.service.js", () => ({
   ensurePersonalDomain: () => {},
 }));
 
@@ -34,6 +34,7 @@ beforeAll(() => {
 
 afterEach(() => {
   const db = testDbRef.db!;
+  db.exec("DELETE FROM visitor_sessions");
   db.exec("DELETE FROM visitors");
   db.exec("DELETE FROM audit_logs");
 });

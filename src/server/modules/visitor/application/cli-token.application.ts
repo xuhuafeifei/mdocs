@@ -4,7 +4,7 @@ import {
   listCliTokens,
   setCliTokenRevoked,
   type CliTokenSummary,
-} from "../cli-token.service.js";
+} from "../service/cli-token.service.js";
 
 /** 签发 CLI Token（明文仅返回一次） */
 export function issueCliToken(

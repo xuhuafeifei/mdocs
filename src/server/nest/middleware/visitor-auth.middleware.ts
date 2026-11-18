@@ -14,8 +14,8 @@ import type { NextFunction, Request, Response } from "express";
 import {
   requestHasAuthCredential,
   resolveVisitorFromRequest,
-} from "../../modules/visitor/resolve-request-visitor.js";
-import { VisitorError } from "../../modules/visitor/visitor.service.js";
+} from "../../modules/visitor/service/resolve-request-visitor.js";
+import { VisitorError } from "../../modules/visitor/service/visitor.service.js";
 import { VisitorContext } from "../context/visitor.context.js";
 
 /** 无需身份认证即可访问的路径白名单（相对 /api，与旧 Express mount 一致） */

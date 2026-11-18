@@ -1,5 +1,11 @@
-import { getDb } from "../../infra/db/connection";
+import { getDb } from "../../../infra/db/connection";
+import { runInTransaction } from "../../../infra/db/transaction.js";
+import { insertAuditLog } from "../../../infra/db/repositories/audit.repo";
+import { ensurePersonalDomain } from "../../domains/personal-domain.service";
+import type { VisitorRow } from "../entity/visitor.entity.js";
 import {
+  clearRecoveryCodeAndTouch,
+  existsActiveVisitorName,
   findVisitorById,
   findVisitorByName,
   findVisitorByRecoveryCodeHash,
@@ -8,13 +14,11 @@ import {
   insertVisitor,
   insertSession,
   listVisitors,
+  updatePasswordHashAndLastSeen,
   updateRecoveryCodeHash,
   updateSessionLastSeen,
   updateVisitorLastSeen,
-  type VisitorRow,
-} from "../../infra/db/repositories/visitor.repo";
-import { insertAuditLog } from "../../infra/db/repositories/audit.repo";
-import { ensurePersonalDomain } from "../domains/personal-domain.service";
+} from "../repo/visitor.repo.js";
 import {
   hashPassword,
   hashRecoveryCode,
@@ -24,9 +28,9 @@ import {
   newVisitorId,
   newVisitorToken,
   verifyPassword,
-} from "./token";
-import { useLogger } from "../../infra/logger/logger";
-import type { VisitorPublic } from "../../../shared/types/visitor";
+} from "./token.js";
+import { useLogger } from "../../../infra/logger/logger";
+import type { VisitorPublic } from "../../../../shared/types/visitor";
 
 const log = useLogger("visitor");
 
@@ -59,14 +63,8 @@ export function registerVisitor(visitorName: string, password?: string): Registe
     throw new VisitorValidationError("password must be at least 4 characters");
   }
 
-  const db = getDb();
   // 检查名称是否已被占用（仅检查未被禁用的访客）
-  const existingByName = db
-    .prepare<string, { c: number }>(
-      `SELECT 1 AS c FROM visitors WHERE visitor_name = ? AND disabled_at IS NULL`,
-    )
-    .get(trimmed);
-  if (existingByName) {
+  if (existsActiveVisitorName(trimmed)) {
     throw new VisitorValidationError("visitor name is already taken");
   }
   // 生成访客唯一标识、原始令牌、恢复码及其哈希
@@ -79,8 +77,8 @@ export function registerVisitor(visitorName: string, password?: string): Registe
   const createdAt = new Date().toISOString();
 
   // 在事务中插入访客记录（含恢复码哈希和密码哈希）、创建会话、创建个人域并记录审计日志
-  const tx = db.transaction(() => {
-    insertVisitor(db, {
+  runInTransaction(() => {
+    insertVisitor({
       visitorId,
       visitorName: trimmed,
       visitorTokenHash: tokenHash,
@@ -89,7 +87,7 @@ export function registerVisitor(visitorName: string, password?: string): Registe
       createdAt,
     });
     // 同时创建会话记录（新架构）
-    insertSession(db, {
+    insertSession({
       sessionId: newSessionId(),
       visitorId,
       tokenHash,
@@ -97,6 +95,8 @@ export function registerVisitor(visitorName: string, password?: string): Registe
       createdAt,
       lastSeenAt: createdAt,
     });
+    // domains / audit 尚未迁 repo 签名，事务内仍用单例 getDb()
+    const db = getDb();
     ensurePersonalDomain(db, visitorId, trimmed);
     insertAuditLog(db, {
       actorVisitorId: visitorId,
@@ -107,7 +107,6 @@ export function registerVisitor(visitorName: string, password?: string): Registe
       createdAt,
     });
   });
-  tx();
 
   log.info("registered visitor %s", visitorId);
   return {
@@ -136,13 +135,12 @@ export function registerVisitor(visitorName: string, password?: string): Registe
  */
 export function resolveVisitorByToken(rawToken: string): VisitorRow | null {
   const tokenHash = hashVisitorToken(rawToken);
-  const db = getDb();
 
   // 优先查 session 表
-  const session = findSessionByTokenHash(db, tokenHash);
+  const session = findSessionByTokenHash(tokenHash);
   if (session) {
     // 更新 session 最后活跃时间
-    updateSessionLastSeen(db, session.session_id, new Date().toISOString());
+    updateSessionLastSeen(session.session_id, new Date().toISOString());
     return {
       visitor_id: session.visitor_id,
       visitor_name: session.visitor_name,
@@ -157,13 +155,13 @@ export function resolveVisitorByToken(rawToken: string): VisitorRow | null {
   }
 
   // 向后兼容：查旧的 visitors.visitor_token_hash
-  const row = findVisitorByTokenHash(db, tokenHash);
+  const row = findVisitorByTokenHash(tokenHash);
   if (!row) return null;
   if (row.disabled_at) return null;
 
   // 找到旧 token → 迁移到 session 表
   const now = new Date().toISOString();
-  insertSession(db, {
+  insertSession({
     sessionId: newSessionId(),
     visitorId: row.visitor_id,
     tokenHash: tokenHash,
@@ -173,7 +171,7 @@ export function resolveVisitorByToken(rawToken: string): VisitorRow | null {
   });
 
   // 更新 visitor 最后活跃时间
-  updateVisitorLastSeen(db, row.visitor_id, now);
+  updateVisitorLastSeen(row.visitor_id, now);
   return row;
 }
 
@@ -184,8 +182,7 @@ export function resolveVisitorByToken(rawToken: string): VisitorRow | null {
  * @returns 访客数据库记录，不存在时返回 null
  */
 export function getVisitorById(visitorId: string): VisitorRow | null {
-  const row = findVisitorById(getDb(), visitorId);
-  return row ?? null;
+  return findVisitorById(visitorId) ?? null;
 }
 
 /**
@@ -195,7 +192,7 @@ export function getVisitorById(visitorId: string): VisitorRow | null {
  * @returns 访客数据库记录数组
  */
 export function listAllVisitors(filter: "all" | "active" | "disabled" = "all"): VisitorRow[] {
-  return listVisitors(getDb(), filter);
+  return listVisitors(filter);
 }
 
 /**
@@ -206,9 +203,8 @@ export function listAllVisitors(filter: "all" | "active" | "disabled" = "all"): 
  * @returns 新的身份信息（访客 + 新 Token），若恢复码无效则返回 null
  */
 export function recoverVisitor(recoveryCode: string): RegisteredVisitor | null {
-  const db = getDb();
   const codeHash = hashRecoveryCode(recoveryCode);
-  const row = findVisitorByRecoveryCodeHash(db, codeHash);
+  const row = findVisitorByRecoveryCodeHash(codeHash);
   if (!row) return null;
 
   // 生成新 Token，创建新会话（不影响旧会话）
@@ -216,13 +212,11 @@ export function recoverVisitor(recoveryCode: string): RegisteredVisitor | null {
   const tokenHash = hashVisitorToken(rawToken);
   const now = new Date().toISOString();
 
-  const tx = db.transaction(() => {
+  runInTransaction(() => {
     // 清除恢复码（一次性使用）
-    db.prepare(
-      `UPDATE visitors SET last_seen_at = ?, recovery_code_hash = NULL WHERE visitor_id = ?`,
-    ).run(now, row.visitor_id);
+    clearRecoveryCodeAndTouch(row.visitor_id, now);
     // 创建新会话（多设备同时在线）
-    insertSession(db, {
+    insertSession({
       sessionId: newSessionId(),
       visitorId: row.visitor_id,
       tokenHash,
@@ -231,7 +225,7 @@ export function recoverVisitor(recoveryCode: string): RegisteredVisitor | null {
       lastSeenAt: now,
     });
     // 审计日志
-    insertAuditLog(db, {
+    insertAuditLog(getDb(), {
       actorVisitorId: row.visitor_id,
       action: "visitor.recover",
       targetType: "visitor",
@@ -240,7 +234,6 @@ export function recoverVisitor(recoveryCode: string): RegisteredVisitor | null {
       createdAt: now,
     });
   });
-  tx();
 
   log.info("recovered visitor %s via recovery code", row.visitor_id);
   return {
@@ -278,14 +271,13 @@ export function toPublic(row: VisitorRow): VisitorPublic {
  * @returns 新的恢复码字符串
  */
 export function generateRecoveryCode(visitorId: string): string {
-  const db = getDb();
   const recoveryCode = newRecoveryCode();
   const codeHash = hashRecoveryCode(recoveryCode);
   const now = new Date().toISOString();
 
-  const tx = db.transaction(() => {
-    updateRecoveryCodeHash(db, visitorId, codeHash);
-    insertAuditLog(db, {
+  runInTransaction(() => {
+    updateRecoveryCodeHash(visitorId, codeHash);
+    insertAuditLog(getDb(), {
       actorVisitorId: visitorId,
       action: "visitor.generate-recovery-code",
       targetType: "visitor",
@@ -294,7 +286,6 @@ export function generateRecoveryCode(visitorId: string): string {
       createdAt: now,
     });
   });
-  tx();
 
   log.info("generated new recovery code for visitor %s", visitorId);
   return recoveryCode;
@@ -324,7 +315,7 @@ export class VisitorValidationError extends VisitorError {
 export function findActiveVisitorByName(visitorName: string): VisitorRow | null {
   const trimmed = visitorName.trim();
   if (!trimmed) return null;
-  return findVisitorByName(getDb(), trimmed) ?? null;
+  return findVisitorByName(trimmed) ?? null;
 }
 
 /**
@@ -339,8 +330,7 @@ export function loginWithPassword(visitorName: string, password: string): Regist
   const trimmed = visitorName.trim();
   if (!trimmed || !password) return null;
 
-  const db = getDb();
-  const row = findVisitorByName(db, trimmed);
+  const row = findVisitorByName(trimmed);
   if (!row) return null;
 
   // 该访客未设置密码，不能使用密码登录
@@ -354,8 +344,8 @@ export function loginWithPassword(visitorName: string, password: string): Regist
   const tokenHash = hashVisitorToken(rawToken);
   const now = new Date().toISOString();
 
-  const tx = db.transaction(() => {
-    insertSession(db, {
+  runInTransaction(() => {
+    insertSession({
       sessionId: newSessionId(),
       visitorId: row.visitor_id,
       tokenHash,
@@ -363,8 +353,8 @@ export function loginWithPassword(visitorName: string, password: string): Regist
       createdAt: now,
       lastSeenAt: now,
     });
-    updateVisitorLastSeen(db, row.visitor_id, now);
-    insertAuditLog(db, {
+    updateVisitorLastSeen(row.visitor_id, now);
+    insertAuditLog(getDb(), {
       actorVisitorId: row.visitor_id,
       action: "visitor.login-password",
       targetType: "visitor",
@@ -373,7 +363,6 @@ export function loginWithPassword(visitorName: string, password: string): Regist
       createdAt: now,
     });
   });
-  tx();
 
   log.info("visitor %s logged in with password", row.visitor_id);
   return {
@@ -391,15 +380,12 @@ export function loginWithPassword(visitorName: string, password: string): Regist
  * @param password - 新密码
  */
 export function setVisitorPassword(visitorId: string, password: string): void {
-  const db = getDb();
   const passwordHash = password ? hashPassword(password) : undefined;
   const now = new Date().toISOString();
 
-  const tx = db.transaction(() => {
-    db.prepare(
-      `UPDATE visitors SET password_hash = ?, last_seen_at = ? WHERE visitor_id = ?`,
-    ).run(passwordHash, now, visitorId);
-    insertAuditLog(db, {
+  runInTransaction(() => {
+    updatePasswordHashAndLastSeen(visitorId, passwordHash ?? null, now);
+    insertAuditLog(getDb(), {
       actorVisitorId: visitorId,
       action: "visitor.set-password",
       targetType: "visitor",
@@ -408,7 +394,6 @@ export function setVisitorPassword(visitorId: string, password: string): void {
       createdAt: now,
     });
   });
-  tx();
 
   log.info("visitor %s set password", visitorId);
 }

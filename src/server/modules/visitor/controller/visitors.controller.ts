@@ -13,7 +13,7 @@ import {
   VisitorId,
 } from "../../../nest/decorators/visitor.decorators.js";
 import { RequireVisitorGuard } from "../../../nest/guards/require-visitor.guard.js";
-import type { VisitorRow } from "../../../infra/db/repositories/visitor.repo.js";
+import type { VisitorRow } from "../entity/visitor.entity.js";
 import {
   changeVisitorPassword,
   getCurrentVisitor,

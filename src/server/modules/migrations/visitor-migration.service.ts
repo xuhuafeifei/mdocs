@@ -6,7 +6,7 @@ import {
   disableVisitor,
   findVisitorById,
   type VisitorRow,
-} from "../../infra/db/repositories/visitor.repo";
+} from "../visitor/repo/visitor.repo.js";
 import {
   findDomainById,
   insertDomain,
@@ -65,8 +65,8 @@ export function migrateVisitor(params: {
 }): MigrationResult {
   const db = getDb();
   // 查询源访客和目标访客
-  const from = findVisitorById(db, params.fromVisitorId);
-  const to = findVisitorById(db, params.toVisitorId);
+  const from = findVisitorById(params.fromVisitorId);
+  const to = findVisitorById(params.toVisitorId);
 
   // 校验双方访客是否存在且状态合法
   if (!from) throw new MigrationError("FROM_NOT_FOUND", `from visitor ${params.fromVisitorId} not found`);
@@ -178,7 +178,7 @@ export function migrateVisitor(params: {
     );
 
     // 禁用源访客并标记其合并目标
-    disableVisitor(db, from.visitor_id, to.visitor_id, executedAt);
+    disableVisitor(from.visitor_id, to.visitor_id, executedAt);
 
     // 记录迁移日志
     insertVisitorMigration(db, {

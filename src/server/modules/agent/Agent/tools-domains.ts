@@ -16,7 +16,7 @@ import {
   countDocumentsByDomain,
   listDomainIdsWithDocumentInviteForVisitor,
 } from "../../../infra/db/repositories/document.repo";
-import { findVisitorById } from "../../../infra/db/repositories/visitor.repo";
+import { findVisitorById } from "../../visitor/repo/visitor.repo.js";
 import { asToolResult, type ToolDeps } from "./tool-deps";
 import { changeDomainPermission, DomainPermissionError } from "../../domains/change-domain-permission";
 
@@ -133,7 +133,7 @@ export function listDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
       const { db, domain } = requireRestrictedDomainAsCreator(domainId, visitorId);
       const rows = listDomainMembers(db, domainId);
       const members = rows.map((row) => {
-        const v = findVisitorById(db, row.visitor_id);
+        const v = findVisitorById(row.visitor_id);
         if (!v) {
           return {
             visitorId: row.visitor_id,
@@ -203,7 +203,7 @@ export function addDomainMembersTool({ visitorId }: ToolDeps): AgentTool {
       const before = new Set(listDomainMemberIds(db, domainId));
 
       for (const vid of uniqueIds) {
-        const v = findVisitorById(db, vid);
+        const v = findVisitorById(vid);
         if (!v) {
           invalid.push(vid);
           continue;

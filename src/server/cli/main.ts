@@ -160,7 +160,7 @@ async function startServer(): Promise<void> {
 
 /** 执行 `visitor list`：查询访客并以 TSV 格式输出。 */
 async function runVisitorList(flags: Flags): Promise<void> {
-  const { listAllVisitors } = await import("../modules/visitor/visitor.service.js");
+  const { listAllVisitors } = await import("../modules/visitor/service/visitor.service.js");
   let filter: "all" | "active" | "disabled" = "active";
   if (flags.all === true) filter = "all";
   if (flags.disabled === true) filter = "disabled";
@@ -180,16 +180,14 @@ async function runVisitorList(flags: Flags): Promise<void> {
 async function resolveVisitor(
   ident: string,
 ): Promise<{ visitorId: string; visitorName: string }> {
-  const { getDb } = await import("../infra/db/connection.js");
   const { findVisitorById, findVisitorByName } = await import(
-    "../infra/db/repositories/visitor.repo.js"
+    "../modules/visitor/repo/visitor.repo.js"
   );
   const { MigrationError } = await import(
     "../modules/migrations/visitor-migration.service.js"
   );
-  const db = getDb();
-  let row = findVisitorById(db, ident);
-  if (!row) row = findVisitorByName(db, ident);
+  let row = findVisitorById(ident);
+  if (!row) row = findVisitorByName(ident);
   if (!row) {
     throw new MigrationError(
       "NOT_FOUND",

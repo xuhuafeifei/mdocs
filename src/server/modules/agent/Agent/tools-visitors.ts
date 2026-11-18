@@ -1,7 +1,6 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getDb } from "../../../infra/db/connection";
-import { listActiveVisitorsDirectory } from "../../../infra/db/repositories/visitor.repo";
+import { listActiveVisitorsDirectory } from "../../visitor/repo/visitor.repo.js";
 import { asToolResult, type ToolDeps } from "./tool-deps";
 
 export function listVisitorsTool({ visitorId }: ToolDeps): AgentTool {
@@ -12,7 +11,7 @@ export function listVisitorsTool({ visitorId }: ToolDeps): AgentTool {
       "列出系统中全部活跃访客（潜在可邀请成员），返回 visitorId / visitorName；当前用户会标 isMe=true。用于回答「有哪些人可以邀请进工作空间/文档」。",
     parameters: Type.Object({}),
     execute: async () => {
-      const rows = listActiveVisitorsDirectory(getDb());
+      const rows = listActiveVisitorsDirectory();
       const visitors = rows.map((r) => ({
         visitorId: r.visitor_id,
         visitorName: r.visitor_name,

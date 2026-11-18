@@ -61,7 +61,8 @@ export function mountWebStatic(server: Application): void {
   server.use(
     express.static(cfg.webDistDir, { ...staticOpts, maxAge: 0, index: false }),
   );
-  server.get("*", (req, res) => {
+  // Express 5：裸 `*` 非法，须命名通配（含根路径用 `{*splat}`）
+  server.get("/{*splat}", (req, res) => {
     // 静态资源路径勿回退成 index.html（否则会触发 MIME / 模块加载错误）
     if (looksLikeStaticAsset(req.path)) {
       res.status(404).end();

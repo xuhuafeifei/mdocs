@@ -8,7 +8,7 @@
  * 3. x-visitor-token header（匿名用户/旧前端兼容）
  */
 import type { Request } from "express";
-import type { VisitorRow } from "../../infra/db/repositories/visitor.repo.js";
+import type { VisitorRow } from "../entity/visitor.entity.js";
 import { resolveCliVisitor } from "./cli-token.service.js";
 import { resolveVisitorByToken } from "./visitor.service.js";
 
