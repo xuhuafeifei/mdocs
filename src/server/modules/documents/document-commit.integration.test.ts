@@ -92,7 +92,14 @@ describe("updateDocument 版本冲突", () => {
       content: '{"v":1}',
       domainId: "default",
     });
-    insertDocumentInvite(created.documentId, INVITED_EDITOR, "edit", testDbRef.db!);
+    insertDocumentInvite(
+      {
+        document_id: created.documentId,
+        visitor_id: INVITED_EDITOR,
+        permission: "edit",
+      },
+      testDbRef.db!,
+    );
 
     const updated = updateDocument({
       actorVisitorId: INVITED_EDITOR,
@@ -301,7 +308,14 @@ describe("updateDocument merge 发布", () => {
       content: '{"base":true}',
       domainId: "default",
     });
-    insertDocumentInvite(created.documentId, INVITED_EDITOR, "edit", testDbRef.db!);
+    insertDocumentInvite(
+      {
+        document_id: created.documentId,
+        visitor_id: INVITED_EDITOR,
+        permission: "edit",
+      },
+      testDbRef.db!,
+    );
     const base = created.headCommitId!;
     const remote = updateDocument({
       actorVisitorId: OWNER,

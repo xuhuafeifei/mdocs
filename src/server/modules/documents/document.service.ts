@@ -1730,7 +1730,14 @@ export function addDocumentInvite(
     );
   }
 
-  insertDocumentInvite(documentId, targetVisitorId, targetPermission, db);
+  insertDocumentInvite(
+    {
+      document_id: documentId,
+      visitor_id: targetVisitorId,
+      permission: targetPermission,
+    },
+    db,
+  );
 }
 
 export function removeDocumentInvite(

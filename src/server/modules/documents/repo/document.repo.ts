@@ -321,22 +321,15 @@ export function findDocumentInvite(
  * 使用 SQLite 的 ON CONFLICT ... DO UPDATE：
  * 如果 (document_id, visitor_id) 组合已存在，则覆盖 permission 字段；
  * 不存在则插入新记录。
- *
- * @param db - better-sqlite3 数据库实例
- * @param documentId - 文档 ID
- * @param visitorId - 被邀请的访客 ID
- * @param permission - 授予的权限（read / edit）
  */
 export function insertDocumentInvite(
-  documentId: string,
-  visitorId: string,
-  permission: string,
+  input: DocumentInvites,
   db?: Database.Database,
 ): void {
   resolveDb(db).prepare(
     `INSERT INTO document_invites (document_id, visitor_id, permission) VALUES (?, ?, ?)
      ON CONFLICT(document_id, visitor_id) DO UPDATE SET permission = excluded.permission`,
-  ).run(documentId, visitorId, permission);
+  ).run(input.document_id, input.visitor_id, input.permission);
 }
 
 /**
