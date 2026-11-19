@@ -187,12 +187,12 @@ export async function runOnboardingChat(params: {
           hasMcpTools: mcpBundle.tools.length > 0,
           hasWebTools: cfg.kind === "deepseek" && Boolean(cfg.apiKey),
           soulSection: (
-            await import("../../soul/load-for-agent")
+            await import("../../soul/load-for-agent.js")
           ).loadSoulPromptSection(visitorId),
           skillMetaSection: (
-            await import("./skill-meta-prompt")
+            await import("./skill-meta-prompt.js")
           ).buildSkillMetaSection(visitorId),
-          memeCatalogSection: (await import("../../memes/prompt")).buildMemeCatalogSection(
+          memeCatalogSection: (await import("../../memes/prompt.js")).buildMemeCatalogSection(
             visitorId,
           ),
         },
@@ -203,7 +203,7 @@ export async function runOnboardingChat(params: {
       kind: sessionKind,
     });
 
-    const { maybeCompactBeforeChat } = await import("./context-compact");
+    const { maybeCompactBeforeChat } = await import("./context-compact.js");
     await maybeCompactBeforeChat({
       visitorId,
       kind: sessionKind,
