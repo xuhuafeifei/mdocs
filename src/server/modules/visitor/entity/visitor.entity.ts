@@ -1,6 +1,6 @@
 /**
  * visitors / visitor_sessions 表实体（与列一一对应）。
- * VisitorDirectory 等是查询投影，不是表实体。
+ * VisitorDirectoryRow 等是查询投影，不是表实体。
  */
 
 /** 表 visitors */
@@ -27,7 +27,7 @@ export interface VisitorSessions {
 }
 
 /** 查询投影：目录列表（非表） */
-export interface VisitorDirectory {
+export interface VisitorDirectoryRow {
   visitor_id: string;
   visitor_name: string;
 }

@@ -6,13 +6,13 @@
 import type Database from "better-sqlite3";
 import { resolveDb } from "../../../infra/db/resolve-db.js";
 import type {
-  VisitorDirectory,
+  VisitorDirectoryRow,
   Visitors,
   VisitorSessions,
 } from "../entity/visitor.entity.js";
 
 export type {
-  VisitorDirectory,
+  VisitorDirectoryRow,
   Visitors,
   VisitorSessions,
 } from "../entity/visitor.entity.js";
@@ -207,9 +207,9 @@ export function updatePasswordHashAndLastSeen(
 /** 目录用：未停用访客，按显示名排序 */
 export function listActiveVisitorsDirectory(
   db?: Database.Database,
-): VisitorDirectory[] {
+): VisitorDirectoryRow[] {
   return resolveDb(db)
-    .prepare<[], VisitorDirectory>(
+    .prepare<[], VisitorDirectoryRow>(
       `SELECT visitor_id, visitor_name FROM visitors
        WHERE disabled_at IS NULL
        ORDER BY visitor_name COLLATE NOCASE`,
