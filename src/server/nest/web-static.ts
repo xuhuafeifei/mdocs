@@ -1,6 +1,8 @@
 /**
  * 生产态前端静态资源 + SPA fallback。
- * 必须在 Nest API 路由注册之后挂到同一 Express 实例，避免 /* 抢答 /api。
+ *
+ * Nest 对未匹配路由会直接 404（不 next），所以静态/SPA 必须挂在 Nest 之前；
+ * SPA 对 `/api` 调用 next()，把 API 交给后面的 Nest。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -62,7 +64,12 @@ export function mountWebStatic(server: Application): void {
     express.static(cfg.webDistDir, { ...staticOpts, maxAge: 0, index: false }),
   );
   // Express 5：裸 `*` 非法，须命名通配（含根路径用 `{*splat}`）
-  server.get("/{*splat}", (req, res) => {
+  server.get("/{*splat}", (req, res, next) => {
+    // API 交给后续 Nest；勿在此处吞掉
+    if (req.path === "/api" || req.path.startsWith("/api/")) {
+      next();
+      return;
+    }
     // 静态资源路径勿回退成 index.html（否则会触发 MIME / 模块加载错误）
     if (looksLikeStaticAsset(req.path)) {
       res.status(404).end();

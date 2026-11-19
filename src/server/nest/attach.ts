@@ -22,6 +22,9 @@ export async function createNestApp(): Promise<INestApplication> {
   const server = express();
   server.disable("x-powered-by");
 
+  // Nest 未匹配路由不 next，静态/SPA 必须先挂；SPA 对 /api 放行
+  mountWebStatic(server);
+
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
     bodyParser: false,
     logger: ["error", "warn"],
@@ -48,9 +51,7 @@ export async function createNestApp(): Promise<INestApplication> {
   app.useGlobalFilters(new ApiExceptionFilter());
   await app.init();
 
-  // Nest 路由注册完成后再挂。提前挂会把 Nest 的接口先答成 404。
-  // API 未匹配 → JSON 404；再挂静态 / SPA（避免 /* 抢答 /api）
+  // API 未匹配 → JSON 404（静态已在 Nest 之前挂好）
   mountApiNotFound(server);
-  mountWebStatic(server);
   return app;
 }
