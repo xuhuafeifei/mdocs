@@ -17,6 +17,26 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:4000",
         changeOrigin: true,
+        // Agent SSE：关掉代理缓冲，否则本地看起来像「没有流式」
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyReq, req) => {
+            const url = req.url || "";
+            if (
+              url.includes("/api/agent/chat") ||
+              url.includes("/api/agent/runs/")
+            ) {
+              proxyReq.setHeader("Accept", "text/event-stream");
+            }
+          });
+          proxy.on("proxyRes", (proxyRes, req, res) => {
+            const ct = String(proxyRes.headers["content-type"] || "");
+            if (!ct.includes("text/event-stream")) return;
+            // http-proxy 默认可能拼 chunk；关掉压缩相关头干扰
+            delete proxyRes.headers["content-length"];
+            res.setHeader("Cache-Control", "no-cache, no-transform");
+            res.setHeader("X-Accel-Buffering", "no");
+          });
+        },
       },
     },
     // Transform the shell early so first paint isn't waiting on random discovery order.

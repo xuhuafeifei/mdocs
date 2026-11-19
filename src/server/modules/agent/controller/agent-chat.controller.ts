@@ -20,7 +20,10 @@ import {
 } from "../application/agent.application.js";
 
 function writeSse(res: Response, event: AgentStreamEvent) {
-  if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
+  if (res.writableEnded) return;
+  res.write(`data: ${JSON.stringify(event)}\n\n`);
+  // compression / 部分代理会缓冲 write；有 flush 就推一把
+  (res as Response & { flush?: () => void }).flush?.();
 }
 
 @Controller("api/agent")
@@ -36,8 +39,9 @@ export class AgentChatController {
     const started = await startChat(visitorId, body ?? {});
 
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.setHeader("X-Agent-Run-Id", started.run.runId);
     res.flushHeaders?.();
 
@@ -76,8 +80,9 @@ export class AgentChatController {
     runGet(visitorId, runId);
 
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.setHeader("X-Agent-Run-Id", runId);
     res.flushHeaders?.();
 

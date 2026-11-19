@@ -41,7 +41,22 @@ export function mountWebStatic(server: Application): void {
     return;
   }
 
-  server.use(compression());
+  // 全局压缩会缓冲 SSE（Agent chat / run stream），必须排除
+  server.use(
+    compression({
+      filter: (req, res) => {
+        const pathName = String(req.path || "");
+        if (pathName.startsWith("/api/agent/")) return false;
+        const accept = String(req.headers.accept || "");
+        if (accept.includes("text/event-stream")) return false;
+        const type = res.getHeader("Content-Type");
+        if (typeof type === "string" && type.includes("text/event-stream")) {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+    }),
+  );
 
   // 部分环境 mime 库/反代会把 .js 标成 octet-stream，浏览器拒绝 module script
   const staticOpts = {

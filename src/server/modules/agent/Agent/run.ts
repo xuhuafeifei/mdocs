@@ -174,7 +174,7 @@ export async function runOnboardingChat(params: {
 
   const mcpBundle = pipelineMode
     ? { tools: [] as typeof nativeTools, close: async () => undefined }
-    : await (await import("../../mcp/mcp-client")).loadMcpAgentTools(visitorId);
+    : await (await import("../../mcp/mcp-client.js")).loadMcpAgentTools(visitorId);
   const tools = [...nativeTools, ...mcpBundle.tools];
   const systemPrompt = pipelineMode
     ? buildSystemPrompt(mode, null, {
