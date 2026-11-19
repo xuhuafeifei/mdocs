@@ -8283,7 +8283,8 @@ strong.label {
   }
 
   .mdocs-layout--reader .mdocs-editor-scroll-host,
-  .mdocs-layout--reader .mdocs-sheet-scroll {
+  .mdocs-layout--reader .mdocs-sheet-scroll,
+  .mdocs-layout--reader .mdocs-html-editor-preview {
     touch-action: pan-x pan-y;
   }
 
