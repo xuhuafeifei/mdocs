@@ -1,48 +1,77 @@
+import type Database from "better-sqlite3";
 import { DocumentError } from "../../access/access-control.js";
-import { documentCommentService } from "../document-comment.service.js";
+import { findDocumentById } from "../repo/document.repo.js";
+import {
+  findDocumentCommentById,
+  insertDocumentComment,
+  listCommentsByDocumentId,
+  markDocumentCommentDeleted,
+} from "../repo/document-comment.repo.js";
+import {
+  toDocumentCommentResponse,
+  toDocumentComments,
+  type NewDocumentCommentInput,
+} from "../mapper/document-comment.mapper.js";
+import type { DocumentCommentResponse } from "../response/document-comment.response.js";
 
-function asBadRequest(err: unknown): never {
-  const message = err instanceof Error ? err.message : String(err);
-  throw new DocumentError("BAD_REQUEST", message, 400);
-}
+const REPLY_DEPTH_MESSAGE = "只能回复根评论，不支持更深层级嵌套";
+const EMPTY_CONTENT_MESSAGE = "评论内容不能为空";
+const CONTENT_TOO_LONG_MESSAGE = "评论内容不能超过 512 个字符";
+const MISSING_COMMENT_MESSAGE = "评论不存在";
+const DELETE_FORBIDDEN_MESSAGE = "只能删除自己的评论或文档下的评论";
 
-export async function listDocumentComments(documentId: string) {
-  const comments = await documentCommentService.getCommentsByDocumentId(documentId);
+export function listDocumentComments(
+  documentId: string,
+  db?: Database.Database,
+): { comments: DocumentCommentResponse[]; total: number } {
+  const comments = listCommentsByDocumentId(documentId, db).map(toDocumentCommentResponse);
   return {
     comments,
-    total: comments.filter((c) => !c.isDeleted).length,
+    total: comments.filter((comment) => !comment.isDeleted).length,
   };
 }
 
-export async function createDocumentComment(params: {
-  documentId: string;
-  visitorId: string;
-  visitorName: string;
-  content: string;
-  parentId?: string | null;
-  replyToVisitorId?: string | null;
-  replyToVisitorName?: string | null;
-}) {
-  try {
-    return await documentCommentService.createComment({
-      documentId: params.documentId,
-      visitorId: params.visitorId,
-      visitorName: params.visitorName,
-      parentId: params.parentId ?? null,
-      replyToVisitorId: params.replyToVisitorId ?? null,
-      replyToVisitorName: params.replyToVisitorName ?? null,
-      content: params.content,
-    });
-  } catch (err) {
-    asBadRequest(err);
+export function createDocumentComment(
+  params: NewDocumentCommentInput,
+  db?: Database.Database,
+): DocumentCommentResponse {
+  if (!params.content.trim()) {
+    throw new DocumentError("BAD_REQUEST", EMPTY_CONTENT_MESSAGE, 400);
   }
+  if (params.content.length > 512) {
+    throw new DocumentError("BAD_REQUEST", CONTENT_TOO_LONG_MESSAGE, 400);
+  }
+
+  const parentId = params.parentId ?? null;
+  if (parentId) {
+    const parent = findDocumentCommentById(parentId, db);
+    if (!parent || parent.parent_id != null) {
+      throw new DocumentError("BAD_REQUEST", REPLY_DEPTH_MESSAGE, 400);
+    }
+  }
+
+  const row = toDocumentComments(params);
+  insertDocumentComment(row, db);
+  return toDocumentCommentResponse(row);
 }
 
-export async function deleteDocumentComment(commentId: string, visitorId: string) {
-  try {
-    const success = await documentCommentService.deleteComment(commentId, visitorId);
-    return { success };
-  } catch (err) {
-    asBadRequest(err);
+export function deleteDocumentComment(
+  commentId: string,
+  visitorId: string,
+  db?: Database.Database,
+): { success: boolean } {
+  const comment = findDocumentCommentById(commentId, db);
+  if (!comment) {
+    throw new DocumentError("BAD_REQUEST", MISSING_COMMENT_MESSAGE, 400);
   }
+
+  const doc = findDocumentById(comment.document_id, db);
+  const isDocOwner = doc?.owner_visitor_id === visitorId;
+  const isCommentAuthor = comment.visitor_id === visitorId;
+  if (!isCommentAuthor && !isDocOwner) {
+    throw new DocumentError("BAD_REQUEST", DELETE_FORBIDDEN_MESSAGE, 400);
+  }
+
+  const success = markDocumentCommentDeleted(commentId, new Date().toISOString(), db);
+  return { success };
 }

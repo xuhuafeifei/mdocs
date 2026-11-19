@@ -22,6 +22,18 @@
   | `src/server/db/schema.ts` | 表定义 |
   | `src/server/db/repositories/` | 各 repo |
 
+### 文档评论
+
+- **关键词**：`document_comments` `DocumentComments` `comment`
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/server/modules/documents/entity/document-comment.entity.ts` | `DocumentComments` |
+  | `src/server/modules/documents/repo/document-comment.repo.ts` | `insertDocumentComment` `findDocumentCommentById` `listCommentsByDocumentId` |
+  | `src/server/modules/documents/mapper/document-comment.mapper.ts` | `toDocumentComments` `toDocumentCommentResponse` |
+  | `src/server/modules/documents/application/document-comments.application.ts` | `listDocumentComments` `createDocumentComment` `deleteDocumentComment` |
+  | `src/server/modules/documents/controller/document-comments.controller.ts` | Nest `GET/POST/DELETE /api/documents/:documentId/comments` |
+
 ### 文档 / 树 / 存储
 
 - **关键词**：`document` `tree` `file-store` `relativePath` `parent_id` `move` `folder subtree`
