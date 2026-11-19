@@ -63,7 +63,8 @@ import { VisitorAuthMiddleware } from "./middleware/visitor-auth.middleware.js";
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    // Express 5 / path-to-regexp v8：通配须命名；`{*splat}` 含根路径
-    consumer.apply(VisitorAuthMiddleware).forRoutes("{*splat}");
+    // 只拦 /api；静态页与 /assets 走 Express static，不能进访客鉴权
+    // Express 5 / path-to-regexp v8：通配须命名
+    consumer.apply(VisitorAuthMiddleware).forRoutes("api", "api/{*splat}");
   }
 }
