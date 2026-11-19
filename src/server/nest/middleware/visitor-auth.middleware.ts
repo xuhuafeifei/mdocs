@@ -32,7 +32,7 @@ export class VisitorAuthMiddleware implements NestMiddleware {
     const path = apiRelativePath(req);
 
     // 对豁免 / 可选鉴权路径仍尝试解析令牌（若有），但不强制要求
-    if (isOptionalAuth(req.method, path)) {
+    if (isOptionalAuth(req.method, path, req)) {
       const visitor = resolveVisitorFromRequest(req);
       VisitorContext.run(visitor, () => next());
       return;
@@ -62,9 +62,14 @@ export class VisitorAuthMiddleware implements NestMiddleware {
 }
 
 function apiRelativePath(req: Request): string {
-  const raw = req.path || "";
+  // Nest/Express 5 下 path / baseUrl / originalUrl 组合不总一致，取最稳的相对 /api 路径
+  const raw = String(req.path || req.url || "").split("?")[0] || "";
   if (raw === "/api") return "/";
   if (raw.startsWith("/api/")) return raw.slice(4);
+  const base = String(req.baseUrl || "");
+  if (base === "/api" || base.startsWith("/api/")) {
+    return raw.startsWith("/") ? raw : `/${raw}`;
+  }
   return raw;
 }
 
@@ -74,8 +79,13 @@ function apiRelativePath(req: Request): string {
  * - GET /documents/:documentId/comments
  * - GET /assets/:assetId
  */
-function isOptionalAuth(method: string, path: string): boolean {
+function isOptionalAuth(method: string, path: string, req?: Request): boolean {
   if (EXEMPT_PATHS.has(path)) return true;
+  // 兜底：originalUrl 直接命中健康检查（避免 path/baseUrl 组合漂移）
+  const originalPath = String(req?.originalUrl ?? "").split("?")[0] || "";
+  if (originalPath === "/api/health" || originalPath.endsWith("/api/health")) {
+    return true;
+  }
   if (method !== "GET") return false;
   if (/^\/documents\/[^/]+\/comments\/?$/.test(path)) return true;
   if (/^\/assets\/[^/]+\/?$/.test(path)) return true;

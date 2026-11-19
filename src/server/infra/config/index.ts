@@ -2,10 +2,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** 编译后位于 dist/server/config/，前端构建产物在 dist/web/ */
+/** 编译后位于 dist/server/infra/config/，前端构建产物在 dist/web/ */
 const defaultWebDistDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../../web",
+  "../../../web",
 );
 
 /** 应用配置对象，包含服务运行所需的全部路径与参数。 */
