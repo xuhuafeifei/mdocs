@@ -6,6 +6,7 @@
 
 | 夹 | 入口 |
 |----|------|
+| [sticky-notes](./sticky-notes/需求分析.md) | **讨论中**：私人速记便签（无工作空间、无目录）。只记功能，设计契约未写 |
 | [agent-chat-ui-polish](./agent-chat-ui-polish/设计契约.md) | **已同意 / 已落地**：智能助手壳视觉抛光（Lobe Chat 气质，CSS-first）— [需求分析](./agent-chat-ui-polish/需求分析.md) · [代码索引](./agent-chat-ui-polish/代码索引.md) |
 | [search-query-modes](./search-query-modes/设计契约.md) | **已实现**：搜索模式入参（关键词/语义/默认）+ 我的文章表格接查询 + 语义索引 Agent 工具（查询/构建/状态）；可读即可索引 — [代码索引](./search-query-modes/代码索引.md) |
 | [search-title-index](./search-title-index/设计契约.md) | **已实现**：标题独立 FTS + 先标题后正文合并；权限仍业务层；侧栏/⌘K 浮层 |
