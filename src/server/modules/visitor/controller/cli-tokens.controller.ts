@@ -19,7 +19,7 @@ import {
 import { CreateCliTokenRequest } from "../request/create-cli-token.request.js";
 import { SetCliTokenRevokedRequest } from "../request/set-cli-token-revoked.request.js";
 
-@Controller("api/cli-tokens")
+@Controller("api/cli/tokens")
 @UseGuards(RequireVisitorGuard)
 export class CliTokensController {
   @Post()
