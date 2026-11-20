@@ -1,16 +1,46 @@
 import { useLogger } from "../../infra/logger/logger";
+import { runInTransaction } from "../../infra/db/transaction.js";
 import { runJobAgent } from "./agent/run-job-agent";
 import type { JobFileConfig } from "./job-file";
 import {
-  appendJobRunningData,
-  finishJobRun,
+  finishJobRunningDetail,
   hasActiveJobRun,
-  insertJobRun,
+  insertJobRunningData,
+  insertJobRunningDetail,
   JOB_STATUS,
   type JobTrigger,
-} from "./running-repo";
+} from "./repo/job-running.repo.js";
 
 const log = useLogger("jobs.executor");
+
+function finishRun(
+  jobRunningId: number,
+  status: typeof JOB_STATUS.done | typeof JOB_STATUS.failed,
+  failedReason: string | null,
+): void {
+  finishJobRunningDetail(jobRunningId, status, new Date().toISOString(), failedReason);
+}
+
+function appendJobPoints(
+  jobId: string,
+  jobRunningId: number,
+  points: Array<{ x: string; y: number }>,
+): void {
+  if (points.length === 0) return;
+  const createdAt = new Date().toISOString();
+  runInTransaction(() => {
+    for (const point of points) {
+      insertJobRunningData({
+        id: null,
+        job_id: jobId,
+        job_running_id: jobRunningId,
+        x: point.x,
+        y: point.y,
+        created_at: createdAt,
+      });
+    }
+  });
+}
 
 export const JOB_RUN_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -60,7 +90,15 @@ async function runExecuteJob(params: ExecuteJobParams): Promise<void> {
 
   let jobRunningId: number;
   try {
-    jobRunningId = insertJobRun({ jobId, trigger });
+    jobRunningId = insertJobRunningDetail({
+      id: null,
+      job_id: jobId,
+      status: JOB_STATUS.running,
+      start_time: new Date().toISOString(),
+      end_time: null,
+      failed_reason: null,
+      trigger,
+    });
   } catch (err) {
     log.error(
       "insert run failed jobId=%s: %s",
@@ -91,7 +129,7 @@ async function runExecuteJob(params: ExecuteJobParams): Promise<void> {
           if (ac.signal.aborted) {
             throw new Error("job run aborted; reject append");
           }
-          appendJobRunningData({ jobId, jobRunningId, points });
+          appendJobPoints(jobId, jobRunningId, points);
           log.info(
             "%s append_data n=%d sample=%s",
             tag,
@@ -108,35 +146,27 @@ async function runExecuteJob(params: ExecuteJobParams): Promise<void> {
     });
 
     if (ac.signal.aborted) {
-      finishJobRun({
-        jobRunningId,
-        status: JOB_STATUS.failed,
-        failedReason: "timeout or cancelled",
-      });
+      finishRun(jobRunningId, JOB_STATUS.failed, "timeout or cancelled");
       log.warn("%s status=failed reason=timeout_or_cancelled", tag);
       return;
     }
 
     if (!result.ok) {
       const reason = result.errorMessage ?? "agent failed";
-      finishJobRun({
-        jobRunningId,
-        status: JOB_STATUS.failed,
-        failedReason: reason,
-      });
+      finishRun(jobRunningId, JOB_STATUS.failed, reason);
       log.warn("%s status=failed reason=%s", tag, reason);
       return;
     }
 
-    finishJobRun({ jobRunningId, status: JOB_STATUS.done });
+    finishRun(jobRunningId, JOB_STATUS.done, null);
     log.info("%s status=done", tag);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    finishJobRun({
+    finishRun(
       jobRunningId,
-      status: JOB_STATUS.failed,
-      failedReason: ac.signal.aborted ? "timeout or cancelled" : msg,
-    });
+      JOB_STATUS.failed,
+      ac.signal.aborted ? "timeout or cancelled" : msg,
+    );
     log.error(
       "%s status=failed exception=%s",
       tag,

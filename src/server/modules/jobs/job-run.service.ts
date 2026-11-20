@@ -1,5 +1,4 @@
 import { DocumentError } from "../access/access-control";
-import { getDb } from "../../infra/db/connection";
 import { findDocumentById } from "../documents/repo/document.repo";
 import { FILE_TYPE } from "../../../shared/file-types";
 import { readDocument } from "../../infra/storage/file-store";
@@ -8,18 +7,19 @@ import {
   cancelJobRun as abortInflightRun,
   enqueueJobExecution,
 } from "./executor";
+import { toJobRuntimePoint, toJobRuntimeRun } from "./mapper/job-running.mapper.js";
 import {
   clearJobRunningData,
   deleteJobRunningDataByIds,
-  findJobRunById,
+  findJobRunningDetailById,
   hasActiveJobRun,
   JOB_STATUS,
   listJobRunningData,
-  listJobRuns,
-  markJobRunFailedIfActive,
-  type JobRunningDataRow,
-  type JobRunningDetailRow,
-} from "./running-repo";
+  listJobRunningDetails,
+  markJobRunningDetailFailedIfActive,
+  type JobRunningData,
+  type JobRunningDetail,
+} from "./repo/job-running.repo.js";
 
 function loadJobRow(documentId: string) {
   const row = findDocumentById(documentId);
@@ -30,12 +30,12 @@ function loadJobRow(documentId: string) {
   return row;
 }
 
-export function getJobRuns(documentId: string, limit?: number): JobRunningDetailRow[] {
+export function getJobRuns(documentId: string, limit?: number): JobRunningDetail[] {
   loadJobRow(documentId);
-  return listJobRuns(documentId, limit);
+  return listJobRunningDetails(documentId, limit);
 }
 
-export function getJobData(documentId: string, limit?: number): JobRunningDataRow[] {
+export function getJobData(documentId: string, limit?: number): JobRunningData[] {
   loadJobRow(documentId);
   return listJobRunningData(documentId, limit);
 }
@@ -65,28 +65,15 @@ export function getJobRuntimeSnapshot(documentId: string): {
 } {
   loadJobRow(documentId);
   const pointRows = listJobRunningData(documentId, JOB_READ_POINTS_LIMIT + 1);
-  const runRows = listJobRuns(documentId, JOB_READ_RUNS_LIMIT + 1);
+  const runRows = listJobRunningDetails(documentId, JOB_READ_RUNS_LIMIT + 1);
   const pointsTruncated = pointRows.length > JOB_READ_POINTS_LIMIT;
   const runsTruncated = runRows.length > JOB_READ_RUNS_LIMIT;
   const points = (pointsTruncated
     ? pointRows.slice(-JOB_READ_POINTS_LIMIT)
     : pointRows
-  ).map((p) => ({
-    id: p.id,
-    x: p.x,
-    y: p.y,
-    jobRunningId: p.job_running_id,
-    createdAt: p.created_at,
-  }));
+  ).map(toJobRuntimePoint);
   const runs = (runsTruncated ? runRows.slice(0, JOB_READ_RUNS_LIMIT) : runRows).map(
-    (r) => ({
-      id: r.id,
-      status: r.status,
-      trigger: r.trigger,
-      startTime: r.start_time,
-      endTime: r.end_time,
-      failedReason: r.failed_reason,
-    }),
+    toJobRuntimeRun,
   );
   return { points, runs, pointsTruncated, runsTruncated };
 }
@@ -147,7 +134,7 @@ export function deleteJobData(params: {
     throw new DocumentError("BAD_REQUEST", "请指定要删除的数据点", 400);
   }
   return {
-    deleted: deleteJobRunningDataByIds({ jobId: params.documentId, ids }),
+    deleted: deleteJobRunningDataByIds(params.documentId, ids),
   };
 }
 
@@ -184,7 +171,7 @@ export function cancelJobRunForDocument(params: {
   jobRunningId: number;
 }): { cancelled: boolean } {
   loadJobRow(params.documentId);
-  const run = findJobRunById(params.jobRunningId);
+  const run = findJobRunningDetailById(params.jobRunningId);
   if (!run || run.job_id !== params.documentId) {
     throw new DocumentError("NOT_FOUND", "运行记录不存在", 404);
   }
@@ -195,7 +182,11 @@ export function cancelJobRunForDocument(params: {
     return { cancelled: false };
   }
   const aborted = abortInflightRun(params.jobRunningId);
-  markJobRunFailedIfActive(params.jobRunningId, "user cancelled");
+  markJobRunningDetailFailedIfActive(
+    params.jobRunningId,
+    new Date().toISOString(),
+    "user cancelled",
+  );
   return { cancelled: aborted || true };
 }
 

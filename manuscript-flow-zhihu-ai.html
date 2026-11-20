@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>文流 · 知乎×AI · 左右对照</title>
+  <style>
+    :root {
+      --bg: #efebe4; --panel: #fffcf7; --ink: #1c1917; --muted: #78716c;
+      --line: #e7e5e4; --warn: #9a3412; --warn-bg: #fffbeb; --warn-border: #f59e0b;
+      --link: #ea580c; --new: #1d4ed8; --new-soft: #dbeafe; --hl: #fef3c7;
+      --theme: #0f766e; --t-claim: #b91c1c; --t-support: #1d4ed8; --t-example: #7c3aed;
+      --t-desc: #57534e; --t-feel: #c2410c; --t-close: #0f766e; --t-frag: #a8a29e;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Songti SC", "Noto Serif SC", Georgia, serif;
+      color: var(--ink); background: var(--bg);
+      display: flex; flex-direction: column;
+    }
+    header {
+      flex: 0 0 auto; padding: 10px 16px; border-bottom: 1px solid var(--line);
+      background: var(--panel); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    header h1 { margin: 0; font-size: 0.95rem; }
+    header p { margin: 0; color: var(--muted); font-size: 0.78rem; }
+    .panel-toggles { margin-left: auto; display: flex; gap: 6px; }
+    .panel-toggles button {
+      border: 1px solid var(--line); background: #fff; border-radius: 999px;
+      padding: 4px 10px; font-size: 0.72rem; cursor: pointer;
+    }
+    .panel-toggles button.active { background: #1c1917; border-color: #1c1917; color: #fff; }
+    .panel-toggles button:disabled { opacity: 0.35; cursor: not-allowed; }
+    .notes {
+      width: 100%; font-size: 0.72rem; color: #7c2d12; background: var(--warn-bg);
+      border: 1px solid var(--warn-border); border-radius: 8px; padding: 8px 10px; line-height: 1.45;
+    }
+    .notes strong { color: var(--warn); }
+    .panels {
+      flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr;
+      gap: 1px; background: #d6d3d1;
+    }
+    .panels.hide-old, .panels.hide-new { grid-template-columns: 1fr; }
+    .panels.hide-old .panel.old, .panels.hide-new .panel.new { display: none; }
+    .panel { min-height: 0; overflow: hidden; background: var(--panel); display: flex; flex-direction: column; }
+    .panel-head {
+      flex: 0 0 auto; padding: 8px 12px; border-bottom: 1px solid var(--line);
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    .panel-head .tag {
+      display: inline-block; font-size: 0.65rem; padding: 1px 6px;
+      border-radius: 999px; margin-bottom: 3px;
+    }
+    .panel.old .tag { background: #ffedd5; color: #9a3412; }
+    .panel.new .tag { background: var(--new-soft); color: var(--new); }
+    .panel-head h2 { margin: 0; font-size: 0.9rem; }
+    .panel-head .sub { margin: 2px 0 0; font-size: 0.72rem; color: var(--muted); }
+    .body-toolbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      margin: 0 0 8px; font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    .body-toolbar .col-label { margin: 0; }
+    .copy-btn {
+      border: 1px solid #93c5fd; background: #eff6ff; color: #1d4ed8;
+      border-radius: 999px; padding: 4px 12px; font-size: 0.72rem; cursor: pointer;
+      white-space: nowrap;
+    }
+    .copy-btn:hover { background: #dbeafe; }
+    .copy-btn.ok { background: #ecfdf5; border-color: #6ee7b7; color: #047857; }
+    .copy-btn.err { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+    .article-frame {
+      border: 1.5px solid #93c5fd; border-radius: 10px; padding: 12px 12px 8px;
+      background: #fff; min-height: 40vh;
+    }
+    .panel-split {
+      flex: 1; min-height: 0; display: grid;
+      grid-template-columns: minmax(280px, 46%) 1fr;
+    }
+    .col-tree, .col-body { min-width: 0; min-height: 0; overflow: auto; }
+    .col-tree { border-right: 1px solid var(--line); padding: 8px; background: #fff; }
+    .panel.new .col-tree { background: #f8fbff; }
+    .col-body { padding: 8px 12px 36px; }
+    .col-label {
+      font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.65rem;
+      letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px 2px;
+    }
+    .graph-wrap { position: relative; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    .panel.new .graph-wrap { border-color: #bfdbfe; }
+    .graph-svg { position: absolute; left: 0; top: 0; pointer-events: none; }
+    .edge { fill: none; stroke: #44403c; stroke-width: 1.5; }
+    .edge.broken { stroke: #a8a29e; stroke-dasharray: 5 4; }
+    .cluster-label {
+      position: absolute; font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 0.68rem; color: var(--muted); z-index: 1;
+    }
+    .cluster-label.warn { color: var(--warn); }
+    .cluster-label.ok { color: var(--theme); }
+    .node {
+      position: absolute; width: 124px; min-height: 60px; margin-left: -62px; margin-top: -30px;
+      border-radius: 10px; border: 1.5px solid #292524; background: #fff; cursor: pointer;
+      padding: 7px 8px; font-family: ui-sans-serif, system-ui, sans-serif; z-index: 2;
+      text-align: left; display: flex; flex-direction: column; gap: 2px;
+    }
+    .node.theme-node { width: 140px; margin-left: -70px; background: #ecfdf5; border-color: var(--theme); }
+    .node.has-issue { border-color: var(--warn); background: #fff7ed; }
+    .node.selected { background: #ffedd5; border-color: var(--warn); box-shadow: 0 0 0 3px #ffedd5; z-index: 4; }
+    .panel.new .node.selected { background: var(--new-soft); border-color: var(--new); box-shadow: 0 0 0 3px var(--new-soft); }
+    .node.related { box-shadow: 0 0 0 2px #fed7aa; border-color: var(--link); }
+    .node .type { font-size: 0.55rem; width: fit-content; padding: 0 4px; border-radius: 999px; border: 1px solid currentColor; }
+    .node .label { font-size: 0.7rem; font-weight: 700; line-height: 1.25; }
+    .node .dot { position: absolute; top: 5px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: #ea580c; }
+    .callout {
+      position: absolute; width: 200px; padding: 8px 10px; border-radius: 6px;
+      border: 1.5px solid var(--warn-border); background: var(--warn-bg); color: #7c2d12;
+      font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.7rem; line-height: 1.4;
+      z-index: 5; display: none; box-shadow: 0 4px 12px rgba(0,0,0,.06);
+    }
+    .callout.note { border-color: #93c5fd; background: #eff6ff; color: #1e3a8a; }
+    .callout.visible { display: block; }
+    .callout .k { font-size: 0.58rem; text-transform: uppercase; opacity: .75; margin-bottom: 3px; }
+    .callout .title { font-weight: 700; margin-bottom: 4px; }
+    .article-title { margin: 0 0 8px; font-size: 1.05rem; font-weight: 700; }
+    .draft-hint { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.72rem; color: var(--muted); margin: 0 0 10px; }
+    .section {
+      margin: 0 0 8px; padding: 9px 11px; border-radius: 8px;
+      border: 1px solid var(--line); background: #fff; scroll-margin-top: 12px;
+    }
+    .section.active { background: var(--hl); border-color: #f59e0b; box-shadow: inset 3px 0 0 #f59e0b; }
+    .panel.new .section.active { background: #eff6ff; border-color: #93c5fd; box-shadow: inset 3px 0 0 var(--new); }
+    .section-label {
+      font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.66rem; color: var(--muted);
+      margin-bottom: 6px; display: flex; justify-content: space-between; gap: 6px;
+    }
+    .section-editor {
+      display: block; width: 100%; min-height: 3em; border: none; outline: none; resize: vertical;
+      background: transparent; font: inherit; font-size: 0.9rem; line-height: 1.65; padding: 0;
+      field-sizing: content;
+    }
+    .readonly p { margin: 0 0 0.65em; font-size: 0.9rem; line-height: 1.65; }
+    .readonly p:last-child { margin-bottom: 0; }
+    @media (max-width: 860px) {
+      .panels { grid-template-columns: 1fr; }
+      .panel-split { grid-template-columns: 1fr; }
+      .col-tree { border-right: none; border-bottom: 1px solid var(--line); max-height: 42vh; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>文流 · 知乎×AI · 左右对照</h1>
+    <p>左：原文诊断 · 右：改结构后的稿 · 各 Panel 内树|文分栏 · 纯内存</p>
+    <div class="panel-toggles">
+      <button type="button" id="toggle-old" class="active">原文 Panel</button>
+      <button type="button" id="toggle-new" class="active">优化 Panel</button>
+    </div>
+    <div class="notes">
+      <strong>本轮结构调整（推理链保持）：</strong>
+      平庸的正确 → 有洞见的偏见 → 为何 AI 给不出 → 仍要问人。
+      在此之上补回 A 的现场感与自我怀疑；敏感/极冲表述只作「锐利会被磨平」的机制旁证，不背书。
+      右栏蓝框内可改；「复制全文」复制的是框里当前文本（含你的修改）。
+    </div>
+  </header>
+
+  <div class="panels" id="panels">
+    <section class="panel old">
+      <div class="panel-head">
+        <span class="tag">原文 · 只读</span>
+        <h2>旧结构：多坨并置 + 承诺漂移</h2>
+        <p class="sub">两案同工 · 主梁偏晚 · 收束漂到「总结者宝贵」</p>
+      </div>
+      <div class="panel-split">
+        <div class="col-tree">
+          <p class="col-label">结构树</p>
+          <div class="graph-wrap" id="graph-old"><svg class="graph-svg" id="svg-old"></svg><div class="callout" id="callout-old"></div></div>
+        </div>
+        <div class="col-body">
+          <p class="col-label">正文</p>
+          <h3 class="article-title">有了 AI，为什么我们还要去知乎上提问？</h3>
+          <div id="body-old" class="readonly"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel new">
+      <div class="panel-head">
+        <span class="tag">优化稿 · 可编辑</span>
+        <h2>新结构：保留推理链 · 补回现场感与诚实</h2>
+        <p class="sub">平庸→偏见→为何给不出→仍问人 · 偏见仍是偏见</p>
+      </div>
+      <div class="panel-split">
+        <div class="col-tree">
+          <p class="col-label">结构树</p>
+          <div class="graph-wrap" id="graph-new"><svg class="graph-svg" id="svg-new"></svg><div class="callout note" id="callout-new"></div></div>
+        </div>
+        <div class="col-body">
+          <div class="body-toolbar">
+            <p class="col-label">正文框 · 可编辑</p>
+            <button type="button" class="copy-btn" id="copy-full-article">复制全文</button>
+          </div>
+          <div class="article-frame" id="article-frame">
+            <h3 class="article-title" id="article-title" contenteditable="true">有了 AI，为什么我们还要去知乎上提问？</h3>
+            <p class="draft-hint">改蓝框内任意段落后再点复制；空一行分段；刷新即丢。</p>
+            <div id="body-new"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const TYPE_LABEL = {
+      claim: "观点", support: "支撑", example: "例证", desc: "描述",
+      feel: "感受", close: "收束", frag: "碎片", theme: "主题"
+    };
+    const TYPE_COLOR = {
+      claim: "var(--t-claim)", support: "var(--t-support)", example: "var(--t-example)",
+      desc: "var(--t-desc)", feel: "var(--t-feel)", close: "var(--t-close)",
+      frag: "var(--t-frag)", theme: "var(--theme)"
+    };
+
+    const oldData = {
+      clusters: [
+        { id: "c1", title: "案1 镜像", x: 0 },
+        { id: "c2", title: "案2 同工", x: 1, warn: true },
+        { id: "c3", title: "主梁偏晚", x: 2, warn: true },
+        { id: "c4", title: "收束漂移", x: 3, warn: true }
+      ],
+      nodes: [
+        { id: "a1", cluster: "c1", type: "example", label: "失业离婚提问", title: "案1提问",
+          paragraphs: ["我在知乎上看到一个问题，为什么男人超过一年没工作，女性提出离婚的概率高达百分之 80%。"] },
+        { id: "a2", cluster: "c1", type: "claim", label: "镜像观点", title: "犀利观点",
+          paragraphs: ["男性之于女性出轨和女性之于男性不工作，是镜像问题。男性焦虑亲子关系；女性焦虑供给中断。"] },
+        { id: "a3", cluster: "c1", type: "feel", label: "眼前一亮", title: "作者感受",
+          paragraphs: ["这个观点让我眼前一亮……虽称不上醍醐灌顶，也是很有意思的一个观点。"] },
+        { id: "a4", cluster: "c1", type: "support", label: "AI 乏善可陈", title: "对照 AI",
+          issue: { title: "对照未举证", problem: "疏离、平庸主要靠外链，文内几乎不展示 AI 说了什么。" },
+          paragraphs: ["丢给 AI……覆盖方方面面，却乏善可陈……疏离感很强。"] },
+        { id: "b1", cluster: "c2", type: "example", label: "女权供给权", title: "案2观点",
+          issue: { title: "与案1同工", problem: "又是「人给出震撼观点」，未升级论证。" },
+          paragraphs: ["女权的核心不在于维护女性的权力，而在于维护女性供给男性的权力。"] },
+        { id: "b2", cluster: "c2", type: "support", label: "烧烤摊/武大", title: "例证跳跃",
+          issue: { title: "证明链未走完", problem: "定义→个案→懂得都懂，武大段对局外人是空节点。" },
+          paragraphs: ["烧烤摊店主……攻击丈夫。武汉大学，懂得都懂。"] },
+        { id: "b3", cluster: "c2", type: "claim", label: "AI both sides", title: "训练压制",
+          paragraphs: ["AI 压制旗帜鲜明的观点……both sides……精致包装的大白话。"] },
+        { id: "c1n", cluster: "c3", type: "claim", label: "平庸 vs 偏见", title: "核心对比",
+          issue: { title: "主梁迟到", problem: "最硬的句子在个案堆完之后才出现。" },
+          paragraphs: ["AI 给的是正确的平庸，而人类提供的是有洞见的偏见。"] },
+        { id: "c2n", cluster: "c3", type: "support", label: "不紧扣却闪光", title: "改框架",
+          issue: { title: "未撑成主因", problem: "本可回答标题，却只闪一下就滑走。" },
+          paragraphs: ["真的能紧扣知乎问题吗？非也。……框架能让你重新看一遍；AI 挑不出错，读完什么也没变。"] },
+        { id: "d1", cluster: "c4", type: "claim", label: "≈ F=ma", title: "另开线",
+          issue: { title: "另开主题", problem: "认识论新线，偏离「为什么去知乎」。" },
+          paragraphs: ["观点像物理公式……说不清为什么成立。"] },
+        { id: "d2", cluster: "c4", type: "close", label: "总结者宝贵", title: "承诺漂移",
+          issue: { title: "三层承诺", problem: "知乎→问人→总结者珍贵。" },
+          paragraphs: ["绝大部分人没有这样的总结能力，因此那些人才显得宝贵。"] }
+      ],
+      edges: [
+        { from: "a1", to: "a2" }, { from: "a2", to: "a3" }, { from: "a3", to: "a4" },
+        { from: "b1", to: "b2" }, { from: "b2", to: "b3" },
+        { from: "a4", to: "b1", broken: true }, { from: "b3", to: "c1n", broken: true },
+        { from: "c1n", to: "c2n" }, { from: "c2n", to: "d1", broken: true }, { from: "d1", to: "d2" }
+      ]
+    };
+
+    const newData = {
+      clusters: [
+        { id: "t0", title: "已聚合 · 单主题串行", x: 0 }
+      ],
+      nodes: [
+        {
+          id: "n0", cluster: "t0", type: "theme", label: "要洞见，不要无错的平庸",
+          title: "开篇立梁",
+          note: "先回答标题方向：去知乎不是求标准答案，是求能改框架的人话。",
+          paragraphs: [
+            "有了 AI，为什么我们还要去知乎上提问？",
+            "因为我们真正稀缺的，往往不是「覆盖面更全」的正确，而是能把一堆模糊印象突然串起来的那一下——哪怕它带偏见，哪怕它并不完美紧扣题面。",
+            "可以说：AI 擅长给出正确的平庸；人偶尔能给出有洞见的偏见。知乎值得问，多半是为后者。"
+          ]
+        },
+        {
+          id: "n1", cluster: "t0", type: "example", label: "案1：失业离婚",
+          title: "现场：知乎一问",
+          note: "用一个完整现场带出对比，不再平行再塞第二案当主角。",
+          paragraphs: [
+            "我在知乎上看到一个问题：为什么男人超过一年没工作，女性提出离婚的概率高达百分之八十。",
+            "底下有个观点非常犀利：男性之于女性出轨，和女性之于男性不工作，是镜像问题。男性焦虑亲子关系——需要确认自己抚养的后代携带的是自己的基因；女性焦虑供给中断——怀孕、哺育阶段异常脆弱，对供给断裂格外敏感。"
+          ]
+        },
+        {
+          id: "n2", cluster: "t0", type: "feel", label: "串联旧印象",
+          title: "它改了我的框架",
+          note: "感受块：说明「洞见」的体验是框架更新，不是信息增量。",
+          paragraphs: [
+            "这个角度我以前没见过，却把我脑子里一些零散印象一下子串了起来。称不上醍醐灌顶，但足够有意思：读完之后，这件事在我眼里的形状变了。"
+          ]
+        },
+        {
+          id: "n3", cluster: "t0", type: "support", label: "同一题丢给 AI",
+          title: "对照：正确却疏离",
+          note: "AI 对照仍可点到为止；重点不是外链，而是体验差：紧扣、全面、不动人。",
+          paragraphs: [
+            "我把同一问题丢给 AI。它的回答方方面面都覆盖到了，却乏善可陈：紧扣题目，疏离感很强，像一份写得很稳的申论提纲——挑不出硬伤，也点燃不了任何新的理解。"
+          ]
+        },
+        {
+          id: "n4", cluster: "t0", type: "claim", label: "不紧扣，却更有用",
+          title: "主因：改框架 > 答对题",
+          note: "全文回答标题的主句。承认「非也紧扣」，并把它立成优势而非瑕疵。",
+          paragraphs: [
+            "平心而论，那位博主的观点真的能紧扣知乎原题吗？非也。",
+            "可它偏偏在这个问题下闪着异彩。人给你的答案可能是错的，或并不严格切题，但它的框架能让你把这件事重新看一遍；AI 给你的答案通常挑不出错，你读完，什么也没变。",
+            "这才是有了 AI 之后，我们仍要去知乎向人提问的理由：不是迷信「人一定对」，而是需要那种能改你看世界方式的偏见。"
+          ]
+        },
+        {
+          id: "n5", cluster: "t0", type: "support", label: "案2降级：机制旁证",
+          title: "为何 AI 给不出这种偏见",
+          note: "原案2不再与案1并列。只保留「训练要求 both sides」+ 一个轻例，说明旗帜鲜明的洞见会被磨平。",
+          paragraphs: [
+            "这类洞见为什么难从 AI 嘴里原样出来？受训练与产品约束，一旦碰到复杂、敏感的社会议题，模型会被推着给出 both sides、各种角度——听起来周全，实则常常是精致包装的大白话。旗帜鲜明、甚至刺耳的那一刀，恰恰是它被要求收起来的部分。",
+            "所以你会在知乎上看到有人把女权解释成「维护的是女性供给男性的权力」这种极冲的表述，也能看到情感博主从无数哭闹与谩骂里炼出的「镜像」；同一类问题丢给 AI，更容易得到大明官场式的车轱辘话。不是它读得少，是它被训成了不敢把刀磨太尖。"
+          ]
+        },
+        {
+          id: "n6", cluster: "t0", type: "support", label: "经验来处",
+          title: "洞见从哭声里来",
+          note: "保留原文最动人的对比：读万卷离婚文案 ≠ 听过一次哭泣。服务主梁，不另开认识论。",
+          paragraphs: [
+            "提出镜像观点的人是情感博主。他面对过无数哭丧着脸的男女，听过尖锐的指责从耳边掠过，才凝出那一句。",
+            "AI 可能读过数万篇离婚故事，吞过无数哲人的句子，却没有聆听过任何一位悲伤之人的哭泣。它给你的是正确的平庸；人偶尔能给你有洞见的偏见——这偏见未必科学，却常常来自真实社会的 case。"
+          ]
+        },
+        {
+          id: "n7", cluster: "t0", type: "close", label: "收束：仍去知乎",
+          title: "钉回标题",
+          note: "不谈 F=ma，不谈「总结者珍贵」另题。一句话收在知乎/问人。",
+          paragraphs: [
+            "因此，有了 AI，我们仍要去知乎提问。不是因为平台神秘，而是因为那里还站着会把刀亮出来的人：他们的答案可能偏、可能不切题，但有时能让你把问题看新。",
+            "AI 可以继续当你的百科与提纲；当你需要被一种有风险的洞见击中时，去问人。"
+          ]
+        }
+      ],
+      edges: [
+        { from: "n0", to: "n1" },
+        { from: "n1", to: "n2" },
+        { from: "n2", to: "n3" },
+        { from: "n3", to: "n4" },
+        { from: "n4", to: "n5" },
+        { from: "n5", to: "n6" },
+        { from: "n6", to: "n7" }
+      ]
+    };
+
+    function layoutGraph(data) {
+      const COL_W = 160, ROW_H = 86, PAD_X = 48, PAD_Y = 46, gap = 32;
+      const byC = {};
+      for (const n of data.nodes) (byC[n.cluster] ||= []).push(n);
+      const pos = {}, labels = [];
+      let x0 = PAD_X, maxY = 0;
+      for (const c of data.clusters) {
+        const members = byC[c.id] || [];
+        labels.push({ text: c.title, x: x0, y: 14, warn: !!c.warn });
+        members.forEach((n, i) => {
+          pos[n.id] = { x: x0 + 62, y: PAD_Y + i * ROW_H };
+          maxY = Math.max(maxY, PAD_Y + i * ROW_H);
+        });
+        x0 += COL_W + gap;
+      }
+      return { pos, labels, width: Math.max(320, x0 + PAD_X), height: maxY + PAD_Y + 40 };
+    }
+
+    function createPanel({ graphEl, svgEl, calloutEl, bodyEl, data, editable, panelName, mode }) {
+      const byId = Object.fromEntries(data.nodes.map((n) => [n.id, n]));
+      let box = layoutGraph(data);
+      let activeId = data.nodes[0].id;
+
+      function escapeHtml(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+      function toText(ps) { return ps.join("\n\n"); }
+      function fromText(t) {
+        return t.replace(/\r\n/g, "\n").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+      }
+      function autosize(ta) {
+        ta.style.height = "auto";
+        ta.style.height = Math.max(56, ta.scrollHeight) + "px";
+      }
+
+      function draw() {
+        box = layoutGraph(data);
+        graphEl.style.width = box.width + "px";
+        graphEl.style.height = box.height + "px";
+        svgEl.setAttribute("width", box.width);
+        svgEl.setAttribute("height", box.height);
+        svgEl.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
+        svgEl.innerHTML = "";
+        graphEl.querySelectorAll(".cluster-label,.node").forEach((el) => el.remove());
+
+        for (const lb of box.labels) {
+          const el = document.createElement("div");
+          el.className = "cluster-label" + (lb.warn ? " warn" : " ok");
+          el.style.left = lb.x + "px";
+          el.style.top = lb.y + "px";
+          el.textContent = lb.text;
+          graphEl.appendChild(el);
+        }
+        for (const e of data.edges) {
+          const a = box.pos[e.from], b = box.pos[e.to];
+          if (!a || !b) continue;
+          const midY = (a.y + b.y) / 2;
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          path.setAttribute("d", Math.abs(a.x - b.x) < 8
+            ? `M ${a.x} ${a.y} L ${b.x} ${b.y}`
+            : `M ${a.x} ${a.y} L ${a.x} ${midY} L ${b.x} ${midY} L ${b.x} ${b.y}`);
+          path.setAttribute("class", "edge" + (e.broken ? " broken" : ""));
+          svgEl.appendChild(path);
+        }
+        for (const n of data.nodes) {
+          const p = box.pos[n.id];
+          const el = document.createElement("button");
+          el.type = "button";
+          el.className = "node"
+            + (n.type === "theme" ? " theme-node" : "")
+            + (n.issue ? " has-issue" : "");
+          el.dataset.id = n.id;
+          el.style.left = p.x + "px";
+          el.style.top = p.y + "px";
+          el.innerHTML = `
+            ${n.issue ? '<span class="dot"></span>' : ""}
+            <span class="type" style="color:${TYPE_COLOR[n.type]}">${TYPE_LABEL[n.type]}</span>
+            <span class="label">${n.label}</span>`;
+          el.addEventListener("click", () => select(n.id));
+          graphEl.appendChild(el);
+        }
+      }
+
+      function renderBody() {
+        if (editable) {
+          bodyEl.innerHTML = data.nodes.map((n) => `
+            <article class="section" id="${panelName}-${n.id}" data-id="${n.id}">
+              <div class="section-label"><span>${n.title}</span><span style="color:${TYPE_COLOR[n.type]}">${TYPE_LABEL[n.type]}</span></div>
+              <textarea class="section-editor" data-id="${n.id}">${escapeHtml(toText(n.paragraphs))}</textarea>
+            </article>`).join("");
+          bodyEl.querySelectorAll(".section-editor").forEach((ta) => {
+            autosize(ta);
+            ta.addEventListener("input", () => { byId[ta.dataset.id].paragraphs = fromText(ta.value); autosize(ta); });
+            ta.addEventListener("focus", () => select(ta.dataset.id, { scroll: false }));
+          });
+        } else {
+          bodyEl.innerHTML = data.nodes.map((n) => `
+            <article class="section" id="${panelName}-${n.id}" data-id="${n.id}">
+              <div class="section-label"><span>${n.title}</span><span style="color:${TYPE_COLOR[n.type]}">${TYPE_LABEL[n.type]}</span></div>
+              ${n.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("")}
+            </article>`).join("");
+          bodyEl.querySelectorAll(".section").forEach((sec) => {
+            sec.style.cursor = "pointer";
+            sec.addEventListener("click", () => select(sec.dataset.id));
+          });
+        }
+      }
+
+      function placeCallout(node) {
+        if (!calloutEl) return;
+        const p = box.pos[node.id];
+        if (!p) return;
+        if (mode === "issue" && node.issue) {
+          calloutEl.className = "callout visible";
+          calloutEl.innerHTML = `<div class="k">结构问题</div><div class="title">${node.issue.title}</div><div>${node.issue.problem}</div>`;
+        } else if (node.note) {
+          calloutEl.className = "callout note visible";
+          calloutEl.innerHTML = `<div class="k">${TYPE_LABEL[node.type]} · 结构说明</div><div class="title">${node.title}</div><div>${node.note}</div>`;
+        } else {
+          calloutEl.classList.remove("visible");
+          return;
+        }
+        let left = p.x + 70, top = p.y - 20;
+        if (left + 200 > box.width) left = p.x - 70 - 200;
+        if (left < 8) left = 8;
+        calloutEl.style.left = left + "px";
+        calloutEl.style.top = Math.max(8, top) + "px";
+      }
+
+      function select(id, opt = {}) {
+        const { scroll = true } = opt;
+        activeId = id;
+        const node = byId[id];
+        const related = new Set([id]);
+        for (const e of data.edges) {
+          if (e.from === id) related.add(e.to);
+          if (e.to === id) related.add(e.from);
+        }
+        graphEl.querySelectorAll(".node").forEach((el) => {
+          el.classList.toggle("selected", el.dataset.id === id);
+          el.classList.toggle("related", related.has(el.dataset.id) && el.dataset.id !== id);
+        });
+        bodyEl.querySelectorAll(".section").forEach((el) => {
+          el.classList.toggle("active", el.dataset.id === id);
+        });
+        placeCallout(node);
+        if (scroll) document.getElementById(`${panelName}-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+
+      function layout() {
+        draw();
+        select(activeId, { scroll: false });
+      }
+
+      draw();
+      renderBody();
+      select(activeId, { scroll: false });
+      return { layout };
+    }
+
+    const oldCtrl = createPanel({
+      graphEl: document.getElementById("graph-old"),
+      svgEl: document.getElementById("svg-old"),
+      calloutEl: document.getElementById("callout-old"),
+      bodyEl: document.getElementById("body-old"),
+      data: oldData, editable: false, panelName: "old", mode: "issue"
+    });
+    const newCtrl = createPanel({
+      graphEl: document.getElementById("graph-new"),
+      svgEl: document.getElementById("svg-new"),
+      calloutEl: document.getElementById("callout-new"),
+      bodyEl: document.getElementById("body-new"),
+      data: newData, editable: true, panelName: "new", mode: "note"
+    });
+
+    window.addEventListener("resize", () => { oldCtrl.layout(); newCtrl.layout(); });
+
+    (function () {
+      const panels = document.getElementById("panels");
+      const btnOld = document.getElementById("toggle-old");
+      const btnNew = document.getElementById("toggle-new");
+      let showOld = true, showNew = true;
+      function sync() {
+        panels.classList.toggle("hide-old", !showOld);
+        panels.classList.toggle("hide-new", !showNew);
+        btnOld.classList.toggle("active", showOld);
+        btnNew.classList.toggle("active", showNew);
+        btnOld.disabled = showOld && !showNew;
+        btnNew.disabled = showNew && !showOld;
+        requestAnimationFrame(() => { oldCtrl.layout(); newCtrl.layout(); });
+      }
+      btnOld.addEventListener("click", () => { if (!(showOld && !showNew)) { showOld = !showOld; sync(); } });
+      btnNew.addEventListener("click", () => { if (!(showNew && !showOld)) { showNew = !showNew; sync(); } });
+    })();
+  </script>
+</body>
+</html>

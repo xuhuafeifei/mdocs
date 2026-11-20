@@ -90,7 +90,10 @@ import { isFolderDescPath } from "../../../shared/folderDesc";
 import { getPolicy } from "../../../shared/file-type-policy";
 import { ensureJobFileContent } from "../jobs/job-file";
 import { getJobRuntimeSnapshot } from "../jobs/job-run.service";
-import { deleteJobRuntimeByJobId } from "../jobs/running-repo";
+import {
+  deleteJobRunningDataByJobId,
+  deleteJobRunningDetailByJobId,
+} from "../jobs/repo/job-running.repo.js";
 import {
   onArticleDeleted,
   onArticleMoved,
@@ -789,7 +792,8 @@ export function removeDocument(params: {
   const recovery = buildDeleteRecovery(db, row);
   const tx = db.transaction(() => {
     if (row.file_type === FILE_TYPE.JOB) {
-      deleteJobRuntimeByJobId(row.document_id, db);
+      deleteJobRunningDataByJobId(row.document_id);
+      deleteJobRunningDetailByJobId(row.document_id);
     }
     deleteDocument(row.document_id, db);
     insertAuditLog({

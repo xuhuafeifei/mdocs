@@ -35,6 +35,17 @@
   | `src/server/modules/agent/Config/config.ts` | `rowToConfig`（表行 → 驼峰配置） |
   | `src/server/modules/agent/attachments/store.ts` | `rowToMeta` |
 
+### Job 运行流水
+
+- **关键词**：`job_running_detail` `job_running_data` `JobRunningDetail` `JobRunningData`
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/server/modules/jobs/entity/job-running.entity.ts` | `JobRunningDetail` `JobRunningData` |
+  | `src/server/modules/jobs/repo/job-running.repo.ts` | `insertJobRunningDetail` `insertJobRunningData` |
+  | `src/server/modules/jobs/mapper/job-running.mapper.ts` | `toJobRuntimePoint` `toJobRuntimeRun` |
+  | `src/server/modules/jobs/executor.ts` | `appendJobPoints`（`runInTransaction`） |
+
 ### 文档评论
 
 - **关键词**：`document_comments` `DocumentComments` `comment`

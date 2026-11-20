@@ -6,7 +6,7 @@ import { isCronDueAt } from "./cron";
 import { jobBus, JOBS_TICK, type JobsTickPayload } from "./events";
 import { parseJobFileContent } from "./job-file";
 import { enqueueJobExecution } from "./executor";
-import { hasActiveJobRun, hasJobRunInSecond } from "./running-repo";
+import { hasActiveJobRun, hasJobRunStartedBetween } from "./repo/job-running.repo.js";
 
 const log = useLogger("jobs.scanner");
 
@@ -73,7 +73,16 @@ function considerJob(row: JobDocRow, atMs: number): void {
   if (!cfg.cron) return;
   if (cfg.jobType !== "agent") return;
   if (!isCronDueAt(cfg.cron, atMs)) return;
-  if (hasJobRunInSecond(row.document_id, atMs)) return;
+  const secStartMs = Math.floor(atMs / 1000) * 1000;
+  if (
+    hasJobRunStartedBetween(
+      row.document_id,
+      new Date(secStartMs).toISOString(),
+      new Date(secStartMs + 1000).toISOString(),
+    )
+  ) {
+    return;
+  }
   if (hasActiveJobRun(row.document_id)) return;
 
   log.info(
