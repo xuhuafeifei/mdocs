@@ -97,7 +97,6 @@ import { installAssetLinkDownloads } from "./assetLinkDownload";
 import { FILE_TYPE } from "../../shared/file-types";
 import { EditorPaneHost } from "./EditorPaneHost";
 import type { ApplyAgentDiffFn } from "./lexical-lines/agentDiff";
-import { batchRangesToProposedState } from "./lexical-lines/batchSlotRangesApply";
 import type { RecentDocTabsProps } from "./RecentDocTabs";
 import {
   clearSecondaryRecentDocTabs,
@@ -724,36 +723,10 @@ export function App() {
         window.setTimeout(() => setMessage(null), 2000);
         return;
       }
-      void runDiffOnOpenDocument(payload.documentId, (liveDocumentId) => {
-        // 必须用 live 编辑器 toJSON，不能用 React 里可能漂移的 editorContent；
-        // 否则 LCS 会把未改块也判成 modify，整篇红绿。
-        const liveJson =
-          exportLexicalJsonRef.current?.() ??
-          editorContentRef.current?.content ??
-          null;
-        if (!liveJson) {
-          setAlertMessage("编辑器未就绪，Diff 未写入");
-          return false;
-        }
-        try {
-          const built = batchRangesToProposedState(liveJson, ranges);
-          if (!built.ok) {
-            setAlertMessage(built.error);
-            return false;
-          }
-          applyAgentDiffWithToast({
-            op: "overwrite_all_state",
-            state: built.state,
-          });
-          return true;
-        } catch (err) {
-          setAlertMessage(
-            err instanceof Error
-              ? `${err.message}（目标文档 ${liveDocumentId}）`
-              : "批量 slot 提案合成失败",
-          );
-          return false;
-        }
+      void runDiffOnOpenDocument(payload.documentId, () => {
+        // 只对改动区间打 hunk，不跑整篇 LCS（否则未改块也会成对红绿）。
+        applyAgentDiffWithToast({ op: "batch_update_slots", ranges });
+        return true;
       });
       return;
     }
@@ -1162,8 +1135,9 @@ export function App() {
 
   /**
    * publish 成功后：删草稿 + GET 拉新 meta。
-   * 若仍打开本篇：更新 head / 清「未保存」；当服务端正文与刚发布内容一致时不 bump contentRevision，
-   * 避免 editor.setDocument 整棵重挂导致视口跳动。
+   * 若仍打开本篇：更新 head / 清「未保存」。
+   * 服务端正文已与刚发布内容一致时不 bump contentRevision（避免 live setDocument 视口跳动），
+   * 但仍须把 editorContent 同步成服务端正文——否则进出设置卸载再挂载会喂回过期的 React 态。
    */
   async function finalizeAfterPublish(
     docId: string,
@@ -1182,9 +1156,17 @@ export function App() {
         prev?.documentId === docId && prev.content === doc.content;
 
       if (serverMatchesPublished || serverMatchesLoaded) {
-        // Keep DOM: do not change `content` in editorContent (that prop alone would setDocument).
-        if (prev?.documentId === docId && prev.displayName !== doc.displayName) {
-          setEditorContent({ ...prev, displayName: doc.displayName });
+        // 不 bump revision → DocumentEditor 不会对仍挂载的实例 setDocument；
+        // 但 content 必须对齐，供卸载后再挂载（设置往返）使用。
+        if (
+          prev?.documentId === docId &&
+          (prev.content !== doc.content || prev.displayName !== doc.displayName)
+        ) {
+          setEditorContent({
+            documentId: docId,
+            content: doc.content,
+            displayName: doc.displayName,
+          });
         }
       } else {
         loadEditorFromServer(doc);
@@ -1204,8 +1186,15 @@ export function App() {
           displayName: doc.displayName,
         });
         setSecondaryRevision((r) => r + 1);
-      } else if (prev && prev.displayName !== doc.displayName) {
-        setSecondaryContent({ ...prev, displayName: doc.displayName });
+      } else if (
+        prev &&
+        (prev.content !== doc.content || prev.displayName !== doc.displayName)
+      ) {
+        setSecondaryContent({
+          documentId: docId,
+          content: doc.content,
+          displayName: doc.displayName,
+        });
       }
     }
     return doc;

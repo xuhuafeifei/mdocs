@@ -152,7 +152,7 @@
 ### 智能助手按块提案（DiffHunk）
 
 - **关键词**：`md_format_lexical` `get_document_lexical_lines` `set_document_lexical_lines` `update_slot` `insert_after_slot` `remove_slot` `batch_update_slots` `overwrite_all` `lexical_lines_set` `diff_slot_op` `MdocsDiffPlugin` `ReactDiffPlugin` `updateSlot` `insertAfterSlot` `removeSlot` `overwriteAll` `assertCanPublish` `Accept` `Reject` `nodesEqual` `plainTextOf` `computeLexicalDiffRows`
-- **结论**：帮写不动；normal 助手试点；提案不写盘；单槽走 `diff_slot_op` → Lobe slot API；多段连续不相交区间走 `batch_update_slots`（span 替换合成 MD → 一次 `overwriteAll`）；多门牌/旧协议走 `lexical_lines_set` → `proposalToMarkdown` → `overwriteAll`。`overwriteAll` 双源 JSON（编辑器 toJSON vs MD 再解析）用 canonicalize + 同类型纯文本 equal，避免假 Diff；同 hunk 红绿贴紧、异 hunk 留距。
+- **结论**：帮写不动；normal 助手试点；提案不写盘；单槽走 `diff_slot_op` → Lobe slot API；多段连续不相交区间走 `batch_update_slots` → `applyBatchSlotRanges`（只对改动区间打 hunk，不跑整篇 LCS）；多门牌/旧协议走 `lexical_lines_set` → `proposalToMarkdown` → `overwriteAll`。`overwriteAll` 旧边用 `exportNodeToJSON`（与 getDocument 同源）+ canonicalize / 纯文本 equal；同 hunk 红绿贴紧、异 hunk 留距。
 - **定位**：
   | 路径 | 符号 |
   |------|------|

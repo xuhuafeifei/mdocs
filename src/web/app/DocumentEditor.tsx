@@ -45,6 +45,7 @@ import {
   enUS,
   zhCN,
   useOutlineVisibility,
+  applyBatchSlotRanges,
   assertCanPublish,
   insertAfterSlot,
   overwriteAll,
@@ -686,6 +687,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
         if (op.op === "overwrite_all") result = overwriteAll(lexical, op.markdown);
         else if (op.op === "overwrite_all_state") {
           result = overwriteAllFromState(lexical, op.state);
+        } else if (op.op === "batch_update_slots") {
+          result = applyBatchSlotRanges(lexical, op.ranges);
         } else if (op.op === "update_slot") {
           result = updateSlot(lexical, op.slot, op.markdown);
         } else if (op.op === "insert_after_slot") {
