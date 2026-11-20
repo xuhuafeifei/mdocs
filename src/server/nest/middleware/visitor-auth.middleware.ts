@@ -61,15 +61,27 @@ export class VisitorAuthMiddleware implements NestMiddleware {
   }
 }
 
-function apiRelativePath(req: Request): string {
-  // Nest/Express 5 下 path / baseUrl / originalUrl 组合不总一致，取最稳的相对 /api 路径
-  const raw = String(req.path || req.url || "").split("?")[0] || "";
-  if (raw === "/api") return "/";
-  if (raw.startsWith("/api/")) return raw.slice(4);
+export function apiRelativePath(req: Request): string {
+  // Nest middleware 挂载后，Express 的 path、baseUrl 和 originalUrl 组合会随路由匹配层变化。
+  // 优先使用完整请求路径，确保注册、登录和恢复接口始终能转换成同一种 API 相对路径。
+  const candidates = [req.originalUrl, req.url, req.path];
+  for (const candidate of candidates) {
+    const raw = String(candidate || "").split("?")[0] || "";
+    const normalized = stripApiPrefix(raw);
+    if (normalized !== raw || raw.startsWith("/")) {
+      return normalized;
+    }
+  }
   const base = String(req.baseUrl || "");
   if (base === "/api" || base.startsWith("/api/")) {
-    return raw.startsWith("/") ? raw : `/${raw}`;
+    return stripApiPrefix(String(req.path || req.url || ""));
   }
+  return String(req.path || req.url || "").split("?")[0] || "";
+}
+
+function stripApiPrefix(raw: string): string {
+  if (raw === "/api") return "/";
+  if (raw.startsWith("/api/")) return raw.slice(4);
   return raw;
 }
 
