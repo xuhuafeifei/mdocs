@@ -1,14 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { getConfig } from "../../../infra/config";
-import { getDb } from "../../../infra/db/connection";
 import {
   deleteExpiredStagingAttachments,
   findAgentAttachmentById,
   findAgentAttachmentsByIds,
   insertAgentAttachment,
   persistAgentAttachments,
-  type AgentAttachmentRow,
-} from "../../../infra/db/repositories/agent-attachment.repo";
+  type AgentAttachments,
+} from "../repo/agent-attachment.repo.js";
 import { assertUploadAllowed } from "./capabilities";
 import { putObject, readObject } from "./object-fs";
 import {
@@ -35,7 +34,7 @@ function mimeGuess(name: string, fallback?: string): string {
   return fallback?.trim() || "application/octet-stream";
 }
 
-function rowToMeta(row: AgentAttachmentRow): AssetMeta {
+function rowToMeta(row: AgentAttachments): AssetMeta {
   return {
     id: row.attachment_id,
     sessionId: row.session_id,
@@ -85,10 +84,7 @@ export function getAttachmentStore(): AttachmentStore {
 
 export function createAttachmentStore(deps: {
   objectsDir: string;
-  db?: ReturnType<typeof getDb>;
 }): AttachmentStore {
-  const db = () => deps.db ?? getDb();
-
   const store: AttachmentStore = {
     async saveStaging(input) {
       const name = input.name.trim() || "file";
@@ -99,7 +95,7 @@ export function createAttachmentStore(deps: {
       const sha256 = await putObject(deps.objectsDir, input.data);
       const now = new Date().toISOString();
       const id = randomUUID();
-      const row: AgentAttachmentRow = {
+      const row: AgentAttachments = {
         attachment_id: id,
         owner_visitor_id: input.visitorId,
         session_id: input.sessionId,
@@ -111,14 +107,13 @@ export function createAttachmentStore(deps: {
         created_at: now,
         persisted_at: null,
       };
-      insertAgentAttachment(db(), row);
+      insertAgentAttachment(row);
       return rowToMeta(row);
     },
 
     async persist(input) {
       if (input.ids.length === 0) return [];
       const found = findAgentAttachmentsByIds(
-        db(),
         input.visitorId,
         input.sessionId,
         input.ids,
@@ -137,7 +132,6 @@ export function createAttachmentStore(deps: {
         .map((r) => r.attachment_id);
       if (stagingIds.length > 0) {
         persistAgentAttachments(
-          db(),
           input.visitorId,
           input.sessionId,
           stagingIds,
@@ -145,7 +139,6 @@ export function createAttachmentStore(deps: {
         );
       }
       const again = findAgentAttachmentsByIds(
-        db(),
         input.visitorId,
         input.sessionId,
         input.ids,
@@ -157,7 +150,7 @@ export function createAttachmentStore(deps: {
     },
 
     async read(input) {
-      const row = findAgentAttachmentById(db(), input.id);
+      const row = findAgentAttachmentById(input.id);
       if (!row || row.owner_visitor_id !== input.visitorId) {
         throw new Error("attachment_not_found");
       }
@@ -167,7 +160,7 @@ export function createAttachmentStore(deps: {
 
     async purgeExpiredStaging(ttlMs = STAGING_TTL_MS) {
       const cutoff = new Date(Date.now() - ttlMs).toISOString();
-      const ids = deleteExpiredStagingAttachments(db(), cutoff);
+      const ids = deleteExpiredStagingAttachments(cutoff);
       return ids.length;
     },
   };

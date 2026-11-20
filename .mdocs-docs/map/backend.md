@@ -22,6 +22,19 @@
   | `src/server/db/schema.ts` | 表定义 |
   | `src/server/db/repositories/` | 各 repo |
 
+### Agent 配置 / 附件
+
+- **关键词**：`agent_model_configs` `agent_attachments`
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/server/modules/agent/entity/agent-model-config.entity.ts` | `AgentModelConfigs` |
+  | `src/server/modules/agent/repo/agent-model-config.repo.ts` | `insertAgentModelConfig` `findAgentModelConfigById` |
+  | `src/server/modules/agent/entity/agent-attachment.entity.ts` | `AgentAttachments` |
+  | `src/server/modules/agent/repo/agent-attachment.repo.ts` | `insertAgentAttachment` `persistAgentAttachments` |
+  | `src/server/modules/agent/Config/config.ts` | `rowToConfig`（表行 → 驼峰配置） |
+  | `src/server/modules/agent/attachments/store.ts` | `rowToMeta` |
+
 ### 文档评论
 
 - **关键词**：`document_comments` `DocumentComments` `comment`
@@ -99,8 +112,8 @@
   | `src/web/app/AgentUserSkillsPanel.tsx` | 私人 skill CRUD |
   | `src/web/app/AgentSkillRefPicker.tsx` | 对话引用 skill |
   | `src/web/app/AgentChatPanel.tsx` | 历史列表 / 「+」新建 |
-  | `src/server/db/repositories/agent-user-skill.repo.ts` | `listAgentUserSkillsByOwner` |
-  | `src/server/agent/Agent/user-skills.ts` | `resolveSkillExpandBlocks` `formatSkillExpandBlock` |
+  | `src/server/modules/plugins/skill-fs.ts` | `writeSkillFs` `listSkillsFs`（`tenant/{vid}/skills/<name>/SKILL.md`） |
+  | `src/server/modules/agent/Agent/user-skills.ts` | `listUserSkills` `resolveSkillExpandBlocks` |
   | `src/server/agent/Agent/hydrate-messages.ts` | `hydrateSessionMessagesToPi`（含落盘 tool 交换） |
   | `src/server/agent/Agent/session-tool-persist.ts` | `get_document` / `web_search` / `web_fetch` → jsonl `role:tool`；API 仍只回 user/assistant |
 - **需求**：[`../requirements/user-agent-skills/`](../requirements/user-agent-skills/)（已同意）

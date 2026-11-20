@@ -10,7 +10,6 @@ import {
 import {
   toDocumentCommentResponse,
   toDocumentComments,
-  type NewDocumentCommentInput,
 } from "../mapper/document-comment.mapper.js";
 import type { DocumentCommentResponse } from "../response/document-comment.response.js";
 
@@ -32,7 +31,15 @@ export function listDocumentComments(
 }
 
 export function createDocumentComment(
-  params: NewDocumentCommentInput,
+  params: {
+    documentId: string;
+    visitorId: string;
+    visitorName: string;
+    content: string;
+    parentId?: string | null;
+    replyToVisitorId?: string | null;
+    replyToVisitorName?: string | null;
+  },
   db?: Database.Database,
 ): DocumentCommentResponse {
   if (!params.content.trim()) {

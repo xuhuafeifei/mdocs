@@ -2,8 +2,8 @@ import { randomUUID } from "crypto";
 import type { DocumentComments } from "../entity/document-comment.entity.js";
 import type { DocumentCommentResponse } from "../response/document-comment.response.js";
 
-/** 创建评论的进参（驼峰）。 */
-export type NewDocumentCommentInput = {
+/** 进参 → 待插入的表行。补 comment_id、时间、is_deleted。 */
+export function toDocumentComments(input: {
   documentId: string;
   visitorId: string;
   visitorName: string;
@@ -11,10 +11,7 @@ export type NewDocumentCommentInput = {
   parentId?: string | null;
   replyToVisitorId?: string | null;
   replyToVisitorName?: string | null;
-};
-
-/** 进参 → 待插入的表行。补 comment_id、时间、is_deleted。 */
-export function toDocumentComments(input: NewDocumentCommentInput): DocumentComments {
+}): DocumentComments {
   const now = new Date().toISOString();
   return {
     comment_id: randomUUID(),

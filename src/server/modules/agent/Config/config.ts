@@ -2,18 +2,20 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { getDb } from "../../../infra/db/connection";
+import { runInTransaction } from "../../../infra/db/transaction.js";
 import {
+  clearAgentModelConfigDefaults,
   countAgentModelConfigsByOwner,
   deleteAgentModelConfig,
   findAgentModelConfigById,
   findDefaultAgentModelConfigByOwner,
   insertAgentModelConfig,
   listAgentModelConfigsByOwner,
-  setDefaultAgentModelConfig,
+  listAgentModelConfigsWithApiKey,
+  markAgentModelConfigDefault,
   updateAgentModelConfig,
-  type AgentModelConfigRow,
-} from "../../../infra/db/repositories/agent-model-config.repo";
+  type AgentModelConfigs,
+} from "../repo/agent-model-config.repo.js";
 import {
   deleteAgentApiKey,
   getAgentApiKey,
@@ -156,6 +158,16 @@ function resolveConfigName(name: string | undefined, visitorName: string, kind: 
   return kind === "custom" ? `${visitorName}的自定义配置` : `${visitorName}的 ds 配置`;
 }
 
+/** 同一访客只留一条默认配置：先清再标。找不到目标行则整段回滚。 */
+function assignDefaultAgentModelConfig(ownerVisitorId: string, configId: string): void {
+  const updatedAt = new Date().toISOString();
+  runInTransaction(() => {
+    clearAgentModelConfigDefaults(ownerVisitorId);
+    const marked = markAgentModelConfigDefault(configId, ownerVisitorId, updatedAt);
+    if (!marked) throw new Error("config_not_found");
+  });
+}
+
 export function maskApiKey(apiKey: string): string {
   return apiKey.length <= 4 ? "…" : `…${apiKey.slice(-4)}`;
 }
@@ -169,7 +181,7 @@ function parseCompat(raw: string | null): AgentCompat | null {
   }
 }
 
-function rowToConfig(row: AgentModelConfigRow): VisitorAgentConfig | null {
+function rowToConfig(row: AgentModelConfigs): VisitorAgentConfig | null {
   if (!row.base_url) return null;
   const apiKey = getAgentApiKey(row.id) ?? "";
   if (!apiKey && !row.api_key) return null;
@@ -206,13 +218,7 @@ function migrateApiKeysFromDbIfNeeded(): void {
   apiKeysMigrated = true;
 
   try {
-    const db = getDb();
-    const rows = db
-      .prepare(
-        `SELECT id, api_key FROM agent_model_configs
-         WHERE api_key IS NOT NULL AND api_key != ''`,
-      )
-      .all() as Array<{ id: string; api_key: string }>;
+    const rows = listAgentModelConfigsWithApiKey();
     if (rows.length === 0) return;
 
     const existing = readAllAgentApiKeys();
@@ -234,13 +240,13 @@ function migrateApiKeysFromDbIfNeeded(): void {
 
 export function getVisitorAgentConfig(visitorId: string): VisitorAgentConfig | null {
   migrateApiKeysFromDbIfNeeded();
-  const row = findDefaultAgentModelConfigByOwner(getDb(), visitorId);
+  const row = findDefaultAgentModelConfigByOwner(visitorId);
   return row ? rowToConfig(row) : null;
 }
 
 export function listVisitorAgentConfigs(visitorId: string): PublicAgentConfig[] {
   migrateApiKeysFromDbIfNeeded();
-  return listAgentModelConfigsByOwner(getDb(), visitorId)
+  return listAgentModelConfigsByOwner(visitorId)
     .map((row) => rowToConfig(row))
     .filter((cfg): cfg is VisitorAgentConfig => cfg !== null)
     .map(toPublicAgentConfig);
@@ -259,7 +265,7 @@ function buildConfigRow(input: {
   ownerVisitorId: string;
   visitorName: string;
   id: string;
-  existing: AgentModelConfigRow | null;
+  existing: AgentModelConfigs | null;
   kind?: string;
   modelId?: string;
   name?: string;
@@ -270,7 +276,7 @@ function buildConfigRow(input: {
   baseUrl?: string;
   apiType?: string;
   isDefault: boolean;
-}): AgentModelConfigRow {
+}): AgentModelConfigs {
   const existing = input.existing;
 
   const kind: AgentConfigKind = input.kind === "custom" ? "custom" : "deepseek";
@@ -367,14 +373,13 @@ export function upsertVisitorAgentConfig(input: {
   baseUrl?: string;
   apiType?: string;
 }): VisitorAgentConfig {
-  const db = getDb();
   let existing = input.id
-    ? findAgentModelConfigById(db, input.id, input.ownerVisitorId)
+    ? findAgentModelConfigById(input.id, input.ownerVisitorId)
     : null;
   if (input.id && !existing) throw new Error("config_not_found");
   // 不带 id 且没重填 key：视为更新当前默认配置（设置页常见“只改超时/档位”）。
   if (!input.id && !existing && !input.apiKey?.trim()) {
-    existing = findDefaultAgentModelConfigByOwner(db, input.ownerVisitorId);
+    existing = findDefaultAgentModelConfigByOwner(input.ownerVisitorId);
   }
 
   // apiKey 校验：新建必须传，更新可选（不传就保留原有）
@@ -389,7 +394,7 @@ export function upsertVisitorAgentConfig(input: {
   }
   if (!apiKeyToSave) throw new Error("api_key_required");
 
-  const total = countAgentModelConfigsByOwner(db, input.ownerVisitorId);
+  const total = countAgentModelConfigsByOwner(input.ownerVisitorId);
   const makeDefault =
     input.isDefault === true ||
     (!input.id && total === 0) ||
@@ -404,19 +409,19 @@ export function upsertVisitorAgentConfig(input: {
 
   if (existing) {
     row.is_default = makeDefault ? 1 : 0;
-    updateAgentModelConfig(db, row);
+    updateAgentModelConfig(row);
   } else {
-    insertAgentModelConfig(db, row);
+    insertAgentModelConfig(row);
   }
 
   if (makeDefault) {
-    setDefaultAgentModelConfig(db, input.ownerVisitorId, row.id);
+    assignDefaultAgentModelConfig(input.ownerVisitorId, row.id);
   }
 
   // apiKey 存 secrets 文件
   setAgentApiKey(row.id, apiKeyToSave);
 
-  return rowToConfig(findAgentModelConfigById(db, row.id, input.ownerVisitorId)!)!;
+  return rowToConfig(findAgentModelConfigById(row.id, input.ownerVisitorId)!)!;
 }
 
 /** 只改当前默认配置的思考档位（给 Agent tool 用） */
@@ -424,25 +429,23 @@ export function setDefaultThinkingLevel(
   ownerVisitorId: string,
   levelRaw: string,
 ): PublicAgentConfig {
-  const db = getDb();
-  const row = findDefaultAgentModelConfigByOwner(db, ownerVisitorId);
+  const row = findDefaultAgentModelConfigByOwner(ownerVisitorId);
   if (!row) throw new Error("config_not_found");
   const level = normalizeThinkingLevel(levelRaw);
-  const next: AgentModelConfigRow = {
+  const next: AgentModelConfigs = {
     ...row,
     thinking_level: level,
     updated_at: new Date().toISOString(),
   };
-  updateAgentModelConfig(db, next);
-  const cfg = rowToConfig(findAgentModelConfigById(db, row.id, ownerVisitorId)!);
+  updateAgentModelConfig(next);
+  const cfg = rowToConfig(findAgentModelConfigById(row.id, ownerVisitorId)!);
   if (!cfg) throw new Error("config_not_found");
   return toPublicAgentConfig(cfg);
 }
 
 export function setVisitorDefaultAgentConfig(ownerVisitorId: string, configId: string): PublicAgentConfig {
-  const db = getDb();
-  setDefaultAgentModelConfig(db, ownerVisitorId, configId);
-  const cfg = findAgentModelConfigById(db, configId, ownerVisitorId);
+  assignDefaultAgentModelConfig(ownerVisitorId, configId);
+  const cfg = findAgentModelConfigById(configId, ownerVisitorId);
   if (!cfg) throw new Error("config_not_found");
   const parsed = rowToConfig(cfg);
   if (!parsed) throw new Error("config_not_found");
@@ -450,19 +453,18 @@ export function setVisitorDefaultAgentConfig(ownerVisitorId: string, configId: s
 }
 
 export function deleteVisitorAgentConfig(ownerVisitorId: string, configId: string): void {
-  const db = getDb();
-  const existing = findAgentModelConfigById(db, configId, ownerVisitorId);
+  const existing = findAgentModelConfigById(configId, ownerVisitorId);
   if (!existing) throw new Error("config_not_found");
 
   const wasDefault = existing.is_default === 1;
-  deleteAgentModelConfig(db, configId, ownerVisitorId);
+  deleteAgentModelConfig(configId, ownerVisitorId);
   deleteAgentApiKey(configId);
 
   if (!wasDefault) return;
 
-  const next = listAgentModelConfigsByOwner(db, ownerVisitorId)[0];
+  const next = listAgentModelConfigsByOwner(ownerVisitorId)[0];
   if (next) {
-    setDefaultAgentModelConfig(db, ownerVisitorId, next.id);
+    assignDefaultAgentModelConfig(ownerVisitorId, next.id);
   }
 }
 

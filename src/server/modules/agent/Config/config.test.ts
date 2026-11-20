@@ -11,7 +11,7 @@ import {
 
 const testDbRef: { db: Database.Database } = { db: null! };
 
-vi.mock("../../db/connection.js", () => ({
+vi.mock("../../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
