@@ -505,6 +505,7 @@ export function App() {
       setAgentPanelOpen(false);
       setAgentPanelFullscreen(false);
     }
+    window.dispatchEvent(new Event("mdocs:agent-entry-hidden"));
   }
 
   function setAgentDockSidePersist(side: AgentDockSide | null): void {
@@ -1636,10 +1637,21 @@ export function App() {
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
-      if (!(ev.metaKey || ev.ctrlKey) || ev.key.toLowerCase() !== "k") return;
-      // 输入框内仍允许唤起（覆盖浏览器默认）
-      ev.preventDefault();
-      setDocSearchOpen(true);
+      if (!(ev.metaKey || ev.ctrlKey) || ev.altKey || ev.shiftKey) return;
+      const key = ev.key.toLowerCase();
+      if (key === "k") {
+        // 输入框内仍允许唤起（覆盖浏览器默认）
+        ev.preventDefault();
+        setDocSearchOpen(true);
+        return;
+      }
+      // ⌘Y / Ctrl+Y：切换隐藏 AI 入口
+      if (key === "y") {
+        ev.preventDefault();
+        applyAgentEntryHidden(
+          localStorage.getItem("mdocs.agentEntryHidden") !== "true",
+        );
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

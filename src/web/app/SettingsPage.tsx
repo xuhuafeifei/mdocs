@@ -341,6 +341,15 @@ export function SettingsPage(props: {
     onAgentEntryHiddenChange?.(next);
   }
 
+  // ⌘Y / Ctrl+Y 等在 App 侧切换时，同步本页开关显示
+  useEffect(() => {
+    const sync = () => {
+      setAgentEntryHidden(getBool("mdocs.agentEntryHidden", false));
+    };
+    window.addEventListener("mdocs:agent-entry-hidden", sync);
+    return () => window.removeEventListener("mdocs:agent-entry-hidden", sync);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     void fetchServerSettingsApi()
