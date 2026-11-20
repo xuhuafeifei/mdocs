@@ -46,6 +46,16 @@
   | `src/server/modules/jobs/mapper/job-running.mapper.ts` | `toJobRuntimePoint` `toJobRuntimeRun` |
   | `src/server/modules/jobs/executor.ts` | `appendJobPoints`（`runInTransaction`） |
 
+### 文档附件（编辑器 assets）
+
+- **关键词**：`attachments` `Attachments` `files/assets`
+- **定位**：
+  | 路径 | 符号 |
+  |------|------|
+  | `src/server/modules/assets/entity/attachment.entity.ts` | `Attachments` |
+  | `src/server/modules/assets/repo/attachment.repo.ts` | `insertAttachment` `reassignAttachmentsOwner` |
+  | `src/server/modules/migrations/visitor-migration.service.ts` | 改主人 / 计数走 repo |
+
 ### 文档评论
 
 - **关键词**：`document_comments` `DocumentComments` `comment`

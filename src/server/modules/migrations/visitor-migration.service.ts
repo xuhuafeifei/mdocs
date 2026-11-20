@@ -16,6 +16,10 @@ import {
   insertAuditLog,
   insertVisitorMigration,
 } from "../documents/repo/audit.repo";
+import {
+  countAttachmentsByOwner,
+  reassignAttachmentsOwner,
+} from "../assets/repo/attachment.repo.js";
 import { personalDomainDisplayName } from "../../../shared/personalDomain";
 import { useLogger } from "../../infra/logger/logger";
 
@@ -143,10 +147,7 @@ export function migrateVisitor(params: {
       to.visitor_id,
       from.visitor_id,
     );
-    db.prepare(`UPDATE attachments SET owner_visitor_id = ? WHERE owner_visitor_id = ?`).run(
-      to.visitor_id,
-      from.visitor_id,
-    );
+    reassignAttachmentsOwner(from.visitor_id, to.visitor_id, db);
 
     // ---- 3. 转移域创建者身份 ----
     db.prepare(`UPDATE domains SET creator_visitor_id = ? WHERE creator_visitor_id = ?`).run(
@@ -259,7 +260,7 @@ function computeImpact(db: ReturnType<typeof getDb>, fromVisitorId: string): Mig
     documents_owner: one(`SELECT COUNT(*) AS c FROM documents WHERE owner_visitor_id = ?`),
     documents_created_by: one(`SELECT COUNT(*) AS c FROM documents WHERE created_by = ?`),
     documents_updated_by: one(`SELECT COUNT(*) AS c FROM documents WHERE updated_by = ?`),
-    attachments_owner: one(`SELECT COUNT(*) AS c FROM attachments WHERE owner_visitor_id = ?`),
+    attachments_owner: countAttachmentsByOwner(fromVisitorId, db),
     personal_domain_docs: one(`SELECT COUNT(*) AS c FROM documents WHERE domain_id = ?`),
     personal_domain_files_moved: hasPersonalDomainDir(fromVisitorId) ? countFilesInPersonalDomain(fromVisitorId) : 0,
   };
