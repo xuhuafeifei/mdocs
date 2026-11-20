@@ -43,12 +43,15 @@ export function saveAgentPanelWidth(width: number): void {
   }
 }
 
-/** PC 贴左栏：独立于浮窗宽度 */
+/** PC 贴边栏：独立于浮窗宽度（左右共用） */
 export const AGENT_DOCK_WIDTH_DEFAULT = 360;
 export const AGENT_DOCK_WIDTH_MIN = 280;
 export const AGENT_DOCK_WIDTH_MAX = 560;
 const AGENT_DOCK_WIDTH_KEY = "mdocs.agentDockWidth";
 const AGENT_DOCKED_KEY = "mdocs.agentDocked";
+const AGENT_DOCK_SIDE_KEY = "mdocs.agentDockSide";
+
+export type AgentDockSide = "left" | "right";
 
 export function clampAgentDockWidth(width: number): number {
   const viewportCap =
@@ -82,20 +85,40 @@ export function saveAgentDockWidth(width: number): void {
   }
 }
 
-export function loadAgentDocked(): boolean {
+/** 贴边偏好：left / right；null = 浮窗。兼容旧 mdocs.agentDocked=true → left */
+export function loadAgentDockSide(): AgentDockSide | null {
   try {
-    return localStorage.getItem(AGENT_DOCKED_KEY) === "true";
+    const side = localStorage.getItem(AGENT_DOCK_SIDE_KEY);
+    if (side === "left" || side === "right") return side;
+    if (localStorage.getItem(AGENT_DOCKED_KEY) === "true") return "left";
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-export function saveAgentDocked(docked: boolean): void {
+export function saveAgentDockSide(side: AgentDockSide | null): void {
   try {
-    localStorage.setItem(AGENT_DOCKED_KEY, docked ? "true" : "false");
+    if (side === "left" || side === "right") {
+      localStorage.setItem(AGENT_DOCK_SIDE_KEY, side);
+      localStorage.setItem(AGENT_DOCKED_KEY, "true");
+    } else {
+      localStorage.removeItem(AGENT_DOCK_SIDE_KEY);
+      localStorage.setItem(AGENT_DOCKED_KEY, "false");
+    }
   } catch {
     /* ignore */
   }
+}
+
+/** @deprecated 用 loadAgentDockSide；保留给旧调用 */
+export function loadAgentDocked(): boolean {
+  return loadAgentDockSide() != null;
+}
+
+/** @deprecated 用 saveAgentDockSide */
+export function saveAgentDocked(docked: boolean): void {
+  saveAgentDockSide(docked ? "left" : null);
 }
 
 /** 贴左时右侧覆盖目录是否展开 */

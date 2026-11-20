@@ -61,7 +61,7 @@
   transition: width 0.2s ease-out;
 }
 
-/* PC 智能助手贴左：替换文档树，右缘可拖宽 */
+/* PC 智能助手贴左/贴右：挤占列，贴边可拖宽 */
 .mdocs-agent-dock {
   --mdocs-agent-dock-width: 360px;
   background: #fff;
@@ -79,10 +79,15 @@
   position: relative;
 }
 
+.mdocs-agent-dock--right {
+  border-right: none;
+  border-left: 1px solid var(--mdocs-border);
+}
+
 .mdocs-agent-dock .mdocs-agent-panel--embedded {
   flex: 1 1 0;
   min-height: 0;
-  /* 贴左列已有右边框，面板不再叠边 */
+  /* 贴边列已有边框，面板不再叠边 */
   border: none;
   box-shadow: none;
 }

@@ -209,17 +209,17 @@
 - **定位**：`SettingsPage.tsx` · `App.tsx`（`applyAgentEntryHidden`）· `tools-hide-entry.ts`
 - **需求**：[`../requirements/hide-agent-entry/`](../requirements/hide-agent-entry/)
 
-### Agent PC 贴左
+### Agent PC 贴左 / 贴右
 
-- **关键词**：`agentDocked` `mdocs-agent-dock` `mdocs-tree-rail` `agentTreeRailOpen` `贴左` `浮窗` `挤占目录`
-- **结论**：仅 PC；贴左时左列助手、中间正文、右侧 `.mdocs-tree-rail` 纯目录；浮窗时目录回左完整侧栏；右缘拖宽；贴左开文不关面板。
+- **关键词**：`agentDockSide` `mdocs.agentDockSide` `mdocs-agent-dock` `mdocs-tree-rail` `贴左` `贴右` `浮窗`
+- **结论**：仅 PC；贴左=助手左+右侧 tree-rail；贴右=左侧完整侧栏+助手右；浮窗双钮；左右互斥；开文不关面板。
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/web/app/App.tsx` | `agentDockLayout` `renderSidebarDocumentTree` |
-  | `src/web/app/AgentFab.tsx` | `loadAgentDocked` / `clampAgentDockWidth` |
-  | `src/web/app/AgentChatPanel.tsx` | `docked` / `onToggleDock` |
-  | `src/web/app/App.css` | `.mdocs-tree-rail` |
+  | `src/web/app/App.tsx` | `agentDockLayoutLeft` / `agentDockLayoutRight` |
+  | `src/web/app/AgentFab.tsx` | `loadAgentDockSide` / `clampAgentDockWidth` |
+  | `src/web/app/AgentChatPanel.tsx` | `dockSide` / `onSetDockSide` |
+  | `src/web/app/App.css` | `.mdocs-agent-dock--right` `.mdocs-tree-rail` |
 - **需求**：[`../requirements/agent-dock-left/`](../requirements/agent-dock-left/)
 
 ### 智能助手 UI 抛光（Lobe 气质）

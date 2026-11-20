@@ -52,13 +52,14 @@ import { DomainSelect } from "./DomainSelect";
 import {
   AgentFab,
   agentPanelAnchorStyle,
-  loadAgentDocked,
+  loadAgentDockSide,
   loadAgentDockWidth,
   loadAgentTreeRailOpen,
-  saveAgentDocked,
+  saveAgentDockSide,
   saveAgentDockWidth,
   saveAgentTreeRailOpen,
   useAgentFabPosition,
+  type AgentDockSide,
 } from "./AgentFab";
 import { SystemPromptDialog, type SystemPromptDialogQuery } from "./SystemPromptDialog";
 import { MessageDialog } from "./MessageDialog";
@@ -473,10 +474,12 @@ export function App() {
     layoutRef: mobileNavLayoutRef,
   });
 
-  // ---- 上手助手浮层 / PC 贴左 ----
+  // ---- 上手助手浮层 / PC 贴左·贴右 ----
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const [agentPanelFullscreen, setAgentPanelFullscreen] = useState(false);
-  const [agentDocked, setAgentDocked] = useState(() => loadAgentDocked());
+  const [agentDockSide, setAgentDockSide] = useState<AgentDockSide | null>(
+    () => loadAgentDockSide(),
+  );
   const [agentDockWidth, setAgentDockWidth] = useState(() => loadAgentDockWidth());
   const [agentTreeRailOpen, setAgentTreeRailOpen] = useState(() => loadAgentTreeRailOpen());
   const [agentFabPos, setAgentFabPos] = useAgentFabPosition();
@@ -487,8 +490,13 @@ export function App() {
   const [systemPromptOpen, setSystemPromptOpen] = useState(false);
   const [systemPromptQuery, setSystemPromptQuery] = useState<SystemPromptDialogQuery>({});
   const agentPanelRef = useRef<AgentChatPanelHandle | null>(null);
-  /** PC 且偏好贴左且面板打开 → 左列替换文档树 */
-  const agentDockLayout = agentDocked && agentPanelOpen && !isNarrow;
+  /** PC 贴左且面板打开 → 左列替换文档树 */
+  const agentDockLayoutLeft =
+    agentDockSide === "left" && agentPanelOpen && !isNarrow;
+  /** PC 贴右且面板打开 → 右列助手，左侧完整侧栏保留 */
+  const agentDockLayoutRight =
+    agentDockSide === "right" && agentPanelOpen && !isNarrow;
+  const agentDockLayout = agentDockLayoutLeft || agentDockLayoutRight;
 
   function applyAgentEntryHidden(hidden: boolean): void {
     localStorage.setItem("mdocs.agentEntryHidden", String(hidden));
@@ -499,10 +507,10 @@ export function App() {
     }
   }
 
-  function setAgentDockedPersist(next: boolean): void {
-    setAgentDocked(next);
-    saveAgentDocked(next);
-    if (next) setAgentPanelFullscreen(false);
+  function setAgentDockSidePersist(side: AgentDockSide | null): void {
+    setAgentDockSide(side);
+    saveAgentDockSide(side);
+    if (side) setAgentPanelFullscreen(false);
   }
 
   function setAgentDockWidthPersist(width: number): void {
@@ -2317,7 +2325,7 @@ export function App() {
           {/* ========== 左侧：文档树，或 PC 贴左助手 ========== */}
           <aside
             className={
-              agentDockLayout
+              agentDockLayoutLeft
                 ? "mdocs-agent-dock"
                 : "mdocs-sidebar" +
                   (isNarrow
@@ -2329,14 +2337,14 @@ export function App() {
                       : "")
             }
             style={
-              agentDockLayout
+              agentDockLayoutLeft
                 ? ({
                     ["--mdocs-agent-dock-width" as string]: `${agentDockWidth}px`,
                   } as CSSProperties)
                 : undefined
             }
           >
-            {agentDockLayout ? (
+            {agentDockLayoutLeft ? (
               <Suspense fallback={null}>
                 <AgentChatPanel
                   ref={agentPanelRef}
@@ -2352,9 +2360,10 @@ export function App() {
                   visitorName={visitor?.visitorName}
                   embedded
                   docked
+                  dockSide="left"
                   dockWidth={agentDockWidth}
                   onDockWidthChange={setAgentDockWidthPersist}
-                  onToggleDock={() => setAgentDockedPersist(false)}
+                  onSetDockSide={setAgentDockSidePersist}
                   domainId={currentDomainId || null}
                   domains={domains}
                   localizeDomainName={(name) => localizeDomainName(name, lang, t)}
@@ -2813,7 +2822,7 @@ export function App() {
           </main>
 
           {/* 贴左助手时：右侧挤占式目录（可收起；仅新建文章/目录，无搜索/图谱） */}
-          {agentDockLayout ? (
+          {agentDockLayoutLeft ? (
             <aside
               className={
                 "mdocs-tree-rail" + (agentTreeRailOpen ? " is-open" : " is-closed")
@@ -2845,6 +2854,59 @@ export function App() {
               >
                 目录
               </button>
+            </aside>
+          ) : null}
+
+          {/* PC 贴右助手：左侧完整侧栏保留，助手挤占右侧 */}
+          {agentDockLayoutRight ? (
+            <aside
+              className="mdocs-agent-dock mdocs-agent-dock--right"
+              style={
+                {
+                  ["--mdocs-agent-dock-width" as string]: `${agentDockWidth}px`,
+                } as CSSProperties
+              }
+            >
+              <Suspense fallback={null}>
+                <AgentChatPanel
+                  ref={agentPanelRef}
+                  open={agentPanelOpen}
+                  onShowPromptDetail={(query) => {
+                    setSystemPromptQuery(query);
+                    setSystemPromptOpen(true);
+                  }}
+                  onClose={() => {
+                    setAgentPanelOpen(false);
+                    setAgentPanelFullscreen(false);
+                  }}
+                  visitorName={visitor?.visitorName}
+                  embedded
+                  docked
+                  dockSide="right"
+                  dockWidth={agentDockWidth}
+                  onDockWidthChange={setAgentDockWidthPersist}
+                  onSetDockSide={setAgentDockSidePersist}
+                  domainId={currentDomainId || null}
+                  domains={domains}
+                  localizeDomainName={(name) => localizeDomainName(name, lang, t)}
+                  documentId={focusedDocMeta?.documentId ?? null}
+                  documentTitle={focusedDocMeta?.displayName ?? null}
+                  documentPath={focusedDocMeta?.relativePath ?? null}
+                  graphFileId={focus?.kind === "graph" ? `${focus.resourceId}.graph-file` : null}
+                  graphLabel={focus?.kind === "graph" ? focus.name : null}
+                  onOpenDocument={(docId) => {
+                    setView("docs");
+                    void guardNavigate(() => navigate(`/doc/${docId}`));
+                  }}
+                  onTreeChanged={() => void refreshTree()}
+                  onAgentEntryHidden={() => applyAgentEntryHidden(true)}
+                  onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
+                  onDiffProposal={(payload) => void applyDiffProposal(payload)}
+                  onProvideEditorDraft={provideEditorDraft}
+                  onLexicalLinesSet={handleLexicalLinesSet}
+                  onDiffSlotOp={handleDiffSlotOp}
+                />
+              </Suspense>
             </aside>
           ) : null}
 
@@ -3265,14 +3327,7 @@ export function App() {
             onToggleFullscreen={
               isNarrow ? undefined : () => setAgentPanelFullscreen((v) => !v)
             }
-            onToggleDock={
-              isNarrow
-                ? undefined
-                : () => {
-                    setAgentDockedPersist(true);
-                    setAgentPanelFullscreen(false);
-                  }
-            }
+            onSetDockSide={isNarrow ? undefined : setAgentDockSidePersist}
             domainId={currentDomainId || null}
             domains={domains}
             localizeDomainName={(name) => localizeDomainName(name, lang, t)}
