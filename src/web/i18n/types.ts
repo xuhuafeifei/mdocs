@@ -343,6 +343,8 @@ export type TranslationKey =
   | "edit"
   | "autoEdit"
   | "autoEditDesc"
+  | "hideAgentEntry"
+  | "hideAgentEntryDesc"
   | "maxUploadSize"
   | "maxUploadSizeDesc"
   | "maxUploadSizeSave"

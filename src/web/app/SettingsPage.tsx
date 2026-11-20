@@ -124,7 +124,7 @@ const SETTINGS_NAV: Array<{
   keywords: string[];
   Icon: LucideIcon;
 }> = [
-  { id: "general", labelKey: "general", keywords: ["设置", "语言", "settings", "language"], Icon: Settings2 },
+  { id: "general", labelKey: "general", keywords: ["设置", "语言", "settings", "language", "ai", "助手", "隐藏"], Icon: Settings2 },
   {
     id: "features",
     labelKey: "features",
@@ -149,9 +149,11 @@ export function SettingsPage(props: {
   onPublishDraft: (docId: string) => void;
   onOpenDocument: (docId: string) => void;
   onRecoverDraft?: (draft: any) => void;
+  /** 隐藏 AI 入口变更（App 同步 FAB / 关面板） */
+  onAgentEntryHiddenChange?: (hidden: boolean) => void;
 }) {
   const { t, lang, setLang } = useI18n();
-  const { onBack, onPublishDraft } = props;
+  const { onBack, onPublishDraft, onAgentEntryHiddenChange } = props;
   const isNarrow = useIsNarrowViewport();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavLayoutRef = useRef<HTMLDivElement>(null);
@@ -177,6 +179,11 @@ export function SettingsPage(props: {
 
   // ---- 自动编辑开关（打开文档时自动进入编辑模式） ----
   const [autoEdit, setAutoEdit] = useState(() => getBool("mdocs.autoEdit", true));
+
+  // ---- 隐藏 AI 入口（右下角浮球） ----
+  const [agentEntryHidden, setAgentEntryHidden] = useState(() =>
+    getBool("mdocs.agentEntryHidden", false),
+  );
 
   const [editorFeatures, setEditorFeatures] = useState(() =>
     Object.fromEntries(EDITOR_FEATURE_TOGGLES.map((f) => [f.id, f.load()])) as Record<
@@ -326,6 +333,13 @@ export function SettingsPage(props: {
   useEffect(() => {
     localStorage.setItem("mdocs.autoEdit", String(autoEdit));
   }, [autoEdit]);
+
+  function toggleAgentEntryHidden(): void {
+    const next = !agentEntryHidden;
+    setAgentEntryHidden(next);
+    localStorage.setItem("mdocs.agentEntryHidden", String(next));
+    onAgentEntryHiddenChange?.(next);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -790,6 +804,25 @@ export function SettingsPage(props: {
                     role="switch"
                     aria-checked={autoEdit}
                     onClick={() => setAutoEdit((v) => !v)}
+                  >
+                    <span className="mdocs-toggle-knob" />
+                  </button>
+                </label>
+              </div>
+
+              {/* 隐藏 AI 入口 */}
+              <div className="mdocs-settings-card">
+                <label className="mdocs-settings-item">
+                  <span className="mdocs-settings-item-info">
+                    <span className="mdocs-settings-card-title">{t("hideAgentEntry")}</span>
+                    <span className="mdocs-settings-item-desc">{t("hideAgentEntryDesc")}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className={"mdocs-toggle" + (agentEntryHidden ? " active" : "")}
+                    role="switch"
+                    aria-checked={agentEntryHidden}
+                    onClick={toggleAgentEntryHidden}
                   >
                     <span className="mdocs-toggle-knob" />
                   </button>

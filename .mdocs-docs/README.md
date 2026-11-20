@@ -36,6 +36,7 @@
 
 | 需求夹 | 说明 |
 |--------|------|
+| `hide-agent-entry` | **已同意 / 已实现**：通用设置隐藏 AI 入口 + `hide_agent_entry` tool（localStorage）— [需求分析](./requirements/hide-agent-entry/需求分析.md) · [设计契约](./requirements/hide-agent-entry/设计契约.md) · [代码索引](./requirements/hide-agent-entry/代码索引.md) |
 | `sticky-notes` | **讨论中**：私人速记便签。只记功能判断，设计契约未写 — [需求分析](./requirements/sticky-notes/需求分析.md) |
 | `entity-table-alignment` | **进行中**：Entity ↔ 表对齐核对（先 A 列）— [核对清单](./requirements/entity-table-alignment/核对清单.md) |
 | `domain-member-role` | **已同意 / 已实现**：受限域成员 `read`/`write` 角色（默认只读；写需文档 `domain_write`）— [需求分析](./requirements/domain-member-role/需求分析.md) · [设计契约](./requirements/domain-member-role/设计契约.md) · [代码索引](./requirements/domain-member-role/代码索引.md) |

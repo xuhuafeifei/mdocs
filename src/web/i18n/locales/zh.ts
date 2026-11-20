@@ -349,6 +349,8 @@ export const zh: Record<TranslationKey, string> = {
   edit: "编辑",
   autoEdit: "自动编辑",
   autoEditDesc: "打开文档时自动进入编辑模式",
+  hideAgentEntry: "隐藏 AI 入口",
+  hideAgentEntryDesc: "隐藏右下角智能助手浮球；可在此重新打开。助手也可应你要求自行关闭入口。",
   maxUploadSize: "单文件上传上限",
   maxUploadSizeDesc: "编辑器与助手附件共用；助手读图另有 6MB 硬顶（且不超过本上限）。保存后立即生效（单位 MB）",
   maxUploadSizeSave: "保存",

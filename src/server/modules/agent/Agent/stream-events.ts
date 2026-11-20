@@ -101,6 +101,8 @@ export type AgentStreamEvent =
   | { type: "context_compacted"; percent: number; used: number; limit: number }
   /** 账号工具改了文档树结构，前端应 re-fetch tree */
   | { type: "tree_changed"; reason: string }
+  /** 隐藏本机 AI 入口（前端写 localStorage 并关面板） */
+  | { type: "agent_entry_hidden" }
   /** AI 覆写文档成功，前端若打开该文档应拉取最新内容 */
   | {
       type: "document_overwritten";

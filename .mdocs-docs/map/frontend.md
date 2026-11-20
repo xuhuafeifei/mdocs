@@ -202,6 +202,13 @@
 - **结论**：`status=open` 的选择卡 / Skill 表单提到输入框上方 `.mdocs-agent-interaction-dock`；出卡时 `forceScrollToBottom`；时间线只留「已置顶」提示。超时 120s。
 - **定位**：`src/web/app/AgentChatPanel.tsx` · `collectOpenInteractions` / `forceScrollToBottom`
 
+### 隐藏 AI 入口
+
+- **关键词**：`hideAgentEntry` `mdocs.agentEntryHidden` `hide_agent_entry` `agent_entry_hidden`
+- **结论**：通用设置开关 + 单向 tool；偏好只在 localStorage；恢复仅设置；不藏帮写。
+- **定位**：`SettingsPage.tsx` · `App.tsx`（`applyAgentEntryHidden`）· `tools-hide-entry.ts`
+- **需求**：[`../requirements/hide-agent-entry/`](../requirements/hide-agent-entry/)
+
 ### Agent PC 贴左
 
 - **关键词**：`agentDocked` `mdocs-agent-dock` `mdocs-tree-rail` `agentTreeRailOpen` `贴左` `浮窗` `挤占目录`

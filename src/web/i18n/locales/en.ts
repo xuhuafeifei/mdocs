@@ -352,6 +352,9 @@ export const en: Record<TranslationKey, string> = {
   edit: "Edit",
   autoEdit: "Auto Edit",
   autoEditDesc: "Automatically enter edit mode when opening a document",
+  hideAgentEntry: "Hide AI entry",
+  hideAgentEntryDesc:
+    "Hide the floating assistant button. Turn this off to show it again. The assistant can also hide itself when you ask.",
   maxUploadSize: "Max upload size",
   maxUploadSizeDesc: "Shared by editor and agent attachments; agent image reads are capped at 6MB and this limit. Applies immediately (MB)",
   maxUploadSizeSave: "Save",

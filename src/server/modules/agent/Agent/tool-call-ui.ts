@@ -33,6 +33,7 @@ const TOOL_LABELS: Record<string, string> = {
   overwrite_all: "整篇 Diff 提案",
   get_now: "获取当前时间",
   set_thinking_level: "设置思考强度",
+  hide_agent_entry: "隐藏 AI 入口",
   mdocs_manual_content: "查阅手册",
   sheet_get_schema: "读取表格结构",
   sheet_list_rows: "列出表格行",

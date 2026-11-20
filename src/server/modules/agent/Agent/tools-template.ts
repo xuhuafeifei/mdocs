@@ -45,6 +45,7 @@ import { pluginCliTools } from "./tools-plugin-cli";
 import { userSkillTools } from "./tools-user-skills";
 import { getNowTool } from "./tools-time";
 import { setThinkingLevelTool } from "./tools-thinking";
+import { hideAgentEntryTool } from "./tools-hide-entry";
 import { readAttachmentTool } from "../attachments/tools-read-attachment";
 import { deepseekWebTools } from "./tools-web";
 import { pipelineTools } from "./tools-pipeline";
@@ -60,6 +61,7 @@ export function utilityTools(deps: ToolDeps): AgentTool[] {
   return [
     getNowTool(),
     setThinkingLevelTool(deps),
+    hideAgentEntryTool(deps),
     readAttachmentTool(deps),
     ...deepseekWebTools(deps),
   ];

@@ -480,11 +480,24 @@ export function App() {
   const [agentDockWidth, setAgentDockWidth] = useState(() => loadAgentDockWidth());
   const [agentTreeRailOpen, setAgentTreeRailOpen] = useState(() => loadAgentTreeRailOpen());
   const [agentFabPos, setAgentFabPos] = useAgentFabPosition();
+  /** 隐藏右下角 AI 入口（设置 / hide_agent_entry tool → localStorage） */
+  const [agentEntryHidden, setAgentEntryHidden] = useState(
+    () => localStorage.getItem("mdocs.agentEntryHidden") === "true",
+  );
   const [systemPromptOpen, setSystemPromptOpen] = useState(false);
   const [systemPromptQuery, setSystemPromptQuery] = useState<SystemPromptDialogQuery>({});
   const agentPanelRef = useRef<AgentChatPanelHandle | null>(null);
   /** PC 且偏好贴左且面板打开 → 左列替换文档树 */
   const agentDockLayout = agentDocked && agentPanelOpen && !isNarrow;
+
+  function applyAgentEntryHidden(hidden: boolean): void {
+    localStorage.setItem("mdocs.agentEntryHidden", String(hidden));
+    setAgentEntryHidden(hidden);
+    if (hidden) {
+      setAgentPanelOpen(false);
+      setAgentPanelFullscreen(false);
+    }
+  }
 
   function setAgentDockedPersist(next: boolean): void {
     setAgentDocked(next);
@@ -2283,6 +2296,7 @@ export function App() {
             onPublishDraft={publishDraftFromList}
             onOpenDocument={openDocument}
             onRecoverDraft={() => void refreshTree()}
+            onAgentEntryHiddenChange={applyAgentEntryHidden}
           />
         </Suspense>
       ) : (
@@ -2354,6 +2368,7 @@ export function App() {
                     void guardNavigate(() => navigate(`/doc/${docId}`));
                   }}
                   onTreeChanged={() => void refreshTree()}
+                  onAgentEntryHidden={() => applyAgentEntryHidden(true)}
                   onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
                   onDiffProposal={(payload) => void applyDiffProposal(payload)}
                   onProvideEditorDraft={provideEditorDraft}
@@ -3212,8 +3227,8 @@ export function App() {
         </div>
       )}
 
-      {/* 贴左时左侧已是助手面板，不再叠浮动球 */}
-      {!agentDockLayout ? (
+      {/* 贴左时左侧已是助手面板，不再叠浮动球；隐藏入口时也不渲染 */}
+      {!agentEntryHidden && !agentDockLayout ? (
         <AgentFab
           open={agentPanelOpen}
           onToggle={() => {
@@ -3278,6 +3293,7 @@ export function App() {
               setAgentPanelFullscreen(false);
             }}
             onTreeChanged={() => void refreshTree()}
+            onAgentEntryHidden={() => applyAgentEntryHidden(true)}
             onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
             onDiffProposal={(payload) => void applyDiffProposal(payload)}
             onProvideEditorDraft={provideEditorDraft}

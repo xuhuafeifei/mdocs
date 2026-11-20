@@ -1086,6 +1086,8 @@ export const AgentChatPanel = forwardRef<
     onOpenDocument?: (documentId: string) => void | Promise<void>;
     /** Agent 建文/建文件夹/移动等改树后回调，用于刷新侧栏 */
     onTreeChanged?: () => void | Promise<void>;
+    /** hide_agent_entry：隐藏本机 AI 入口并关面板 */
+    onAgentEntryHidden?: () => void;
     /** AI 覆写文档成功回调，刷新当前打开文档的内容 */
     onDocumentOverwritten?: (payload: {
       documentId: string;
@@ -1176,6 +1178,7 @@ export const AgentChatPanel = forwardRef<
     graphLabel,
     onOpenDocument,
     onTreeChanged,
+    onAgentEntryHidden,
     onDocumentOverwritten,
     onDiffProposal,
     onProvideEditorDraft,
@@ -2043,6 +2046,8 @@ export const AgentChatPanel = forwardRef<
       });
     } else if (event.type === "tree_changed") {
       void onTreeChanged?.();
+    } else if (event.type === "agent_entry_hidden") {
+      onAgentEntryHidden?.();
     } else if (event.type === "document_overwritten") {
       void onDocumentOverwritten?.({
         documentId: event.documentId,
