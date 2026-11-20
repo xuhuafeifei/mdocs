@@ -58,6 +58,7 @@ export function AgentConfigPanel() {
   const [apiType, setApiType] = useState<AgentApiType>("openai-completions");
   const [modelId, setModelId] = useState("deepseek-flash");
   const [contextWindow, setContextWindow] = useState(1000000);
+  const [maxOutputTokens, setMaxOutputTokens] = useState(8192);
   const [runTimeoutSeconds, setRunTimeoutSeconds] = useState(300);
   const [thinkingLevel, setThinkingLevel] = useState<AgentThinkingLevel>("low");
   const [apiKey, setApiKey] = useState("");
@@ -98,6 +99,7 @@ export function AgentConfigPanel() {
     setApiType("openai-completions");
     setModelId("deepseek-flash");
     setContextWindow(1000000);
+    setMaxOutputTokens(8192);
     setRunTimeoutSeconds(300);
     setThinkingLevel("low");
     setApiKey("");
@@ -136,6 +138,11 @@ export function AgentConfigPanel() {
         : mid,
     );
     setContextWindow(cfg.contextWindow || 1000000);
+    setMaxOutputTokens(
+      typeof cfg.maxOutputTokens === "number" && cfg.maxOutputTokens > 0
+        ? cfg.maxOutputTokens
+        : 8192,
+    );
     setRunTimeoutSeconds(
       typeof cfg.runTimeoutSeconds === "number" && cfg.runTimeoutSeconds > 0
         ? cfg.runTimeoutSeconds
@@ -251,6 +258,7 @@ export function AgentConfigPanel() {
               apiType,
               name,
               contextWindow,
+              maxOutputTokens,
               runTimeoutSeconds,
               thinkingLevel,
               ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
@@ -262,6 +270,7 @@ export function AgentConfigPanel() {
               modelId: modelId as AgentModelId,
               name,
               contextWindow,
+              maxOutputTokens,
               runTimeoutSeconds,
               thinkingLevel,
               ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
@@ -533,6 +542,23 @@ export function AgentConfigPanel() {
                     onChange={(e) => setContextWindow(Number(e.target.value) || 1000000)}
                   />
                   <p className="mdocs-agent-field-hint">{t("agentConfigContextWindowDesc")}</p>
+                </label>
+                <label className="mdocs-agent-field">
+                  <span>{t("agentConfigMaxOutputTokens")}</span>
+                  <input
+                    type="number"
+                    min={1024}
+                    max={65536}
+                    step={1}
+                    value={maxOutputTokens}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setMaxOutputTokens(
+                        Number.isFinite(n) && n >= 1024 ? Math.floor(n) : 1024,
+                      );
+                    }}
+                  />
+                  <p className="mdocs-agent-field-hint">{t("agentConfigMaxOutputTokensDesc")}</p>
                 </label>
                 <label className="mdocs-agent-field">
                   <span>{t("agentConfigRunTimeout")}</span>

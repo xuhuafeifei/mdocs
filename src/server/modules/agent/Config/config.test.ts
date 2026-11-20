@@ -41,6 +41,47 @@ describe("agent model configs", () => {
     expect(cfg?.baseUrl).toBe("https://api.deepseek.com");
     expect(cfg?.isDefault).toBe(true);
     expect(cfg?.runTimeoutSeconds).toBe(300);
+    expect(cfg?.maxOutputTokens).toBe(8192);
+  });
+
+  it("maxOutputTokens 可配置并钳制范围", () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    testDbRef.db = db;
+    seedVisitor(db, "v1-maxout");
+
+    upsertVisitorAgentConfig({
+      ownerVisitorId: "v1-maxout",
+      visitorName: "输出",
+      modelId: "deepseek-flash",
+      apiKey: "sk-m",
+      maxOutputTokens: 16384,
+    });
+    expect(getVisitorAgentConfig("v1-maxout")?.maxOutputTokens).toBe(16384);
+
+    upsertVisitorAgentConfig({
+      ownerVisitorId: "v1-maxout",
+      visitorName: "输出",
+      modelId: "deepseek-flash",
+      maxOutputTokens: 1,
+    });
+    expect(getVisitorAgentConfig("v1-maxout")?.maxOutputTokens).toBe(1024);
+
+    upsertVisitorAgentConfig({
+      ownerVisitorId: "v1-maxout",
+      visitorName: "输出",
+      modelId: "deepseek-flash",
+      maxOutputTokens: 0,
+    });
+    expect(getVisitorAgentConfig("v1-maxout")?.maxOutputTokens).toBe(1024);
+
+    upsertVisitorAgentConfig({
+      ownerVisitorId: "v1-maxout",
+      visitorName: "输出",
+      modelId: "deepseek-flash",
+      maxOutputTokens: 999999,
+    });
+    expect(getVisitorAgentConfig("v1-maxout")?.maxOutputTokens).toBe(65536);
   });
 
   it("runTimeoutSeconds 可配置并钳制范围", () => {

@@ -490,12 +490,23 @@ export function App() {
   const [systemPromptOpen, setSystemPromptOpen] = useState(false);
   const [systemPromptQuery, setSystemPromptQuery] = useState<SystemPromptDialogQuery>({});
   const agentPanelRef = useRef<AgentChatPanelHandle | null>(null);
+  /**
+   * 设置页不要吸附：否则 docs 布局未挂载，贴边面板/球都不渲染。
+   * 只临时抑制布局；agentDockSide / localStorage 偏好保留，回正文自动恢复。
+   */
+  const agentDockSuppressed = view === "settings";
   /** PC 贴左且面板打开 → 左列替换文档树 */
   const agentDockLayoutLeft =
-    agentDockSide === "left" && agentPanelOpen && !isNarrow;
+    !agentDockSuppressed &&
+    agentDockSide === "left" &&
+    agentPanelOpen &&
+    !isNarrow;
   /** PC 贴右且面板打开 → 右列助手，左侧完整侧栏保留 */
   const agentDockLayoutRight =
-    agentDockSide === "right" && agentPanelOpen && !isNarrow;
+    !agentDockSuppressed &&
+    agentDockSide === "right" &&
+    agentPanelOpen &&
+    !isNarrow;
   const agentDockLayout = agentDockLayoutLeft || agentDockLayoutRight;
 
   function applyAgentEntryHidden(hidden: boolean): void {

@@ -187,7 +187,7 @@ export function replaceDocumentMarkdownTool({ visitorId }: ToolDeps): AgentTool 
     name: "replace_document_markdown",
     label: "替换文档片段",
     description:
-      ".md 小改（一两处、标题/几句/一小段）用本工具；大面积改写请用 overwrite_document，不要连打十几次 replace。" +
+      ".md 小改（一两处、标题/几句/一小段）用本工具；长文多段改用 update_slot / batch_update_slots，不要 overwrite_document 整篇吐稿，也不要连打十几次 replace。" +
       "在整篇 Markdown 字符串上做精确子串查找替换（与 get_document format=md 同一层；不是按行号、不是正则）。" +
       "find 须为该 MD 中的精确子串，默认恰好出现 1 次，多次时传 occurrence（1-based）。" +
       "一次改多处：多次调用，每次成功后重新 get_document 再取下一段 find。" +

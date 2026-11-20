@@ -95,6 +95,8 @@ export type RunPiAgentParams = {
   visitorId: string;
   sessionId: string;
   sessionManager: AgentSessionManager;
+  /** 本轮 Model.maxTokens，截断提醒用 */
+  maxOutputTokens: number;
   onEvent: (event: AgentStreamEvent) => void;
   signal?: AbortSignal;
 };
@@ -111,6 +113,7 @@ export async function runPiAgent(params: RunPiAgentParams): Promise<PiRunTrack> 
     visitorId,
     sessionId,
     sessionManager,
+    maxOutputTokens,
     onEvent,
     signal,
   } = params;
@@ -124,6 +127,7 @@ export async function runPiAgent(params: RunPiAgentParams): Promise<PiRunTrack> 
       assets,
       attachmentToolRows,
       persistContent: persistContent ?? message,
+      maxOutputTokens,
       onEvent,
       track,
     }),
@@ -201,6 +205,7 @@ function bindAgentEvents(opts: {
     isError?: boolean;
   }>;
   persistContent: string;
+  maxOutputTokens: number;
   onEvent: (event: AgentStreamEvent) => void;
   track: PiRunTrack;
 }): (event: AgentEvent) => Promise<void> {
@@ -211,6 +216,7 @@ function bindAgentEvents(opts: {
     assets,
     attachmentToolRows,
     persistContent,
+    maxOutputTokens,
     onEvent,
     track,
   } = opts;
@@ -292,11 +298,14 @@ function bindAgentEvents(opts: {
           const visibleText = extractAssistantVisibleText(event.message);
           if (visibleText) {
             await sessionManager.appendAssistant(sessionId, visibleText);
-          } else if (msg.stopReason === "length") {
+          }
+          if (msg.stopReason === "length") {
+            track.emittedError = true;
             onEvent({
-              type: "tool_notice",
-              toolName: "agent",
-              text: "⚠️ 模型的思考过程达到了单次输出 Token 上限（8192）已被截断，未生成正文回复。建议在提示词中加上“直接输出结果/直接调用工具，无需长篇思考”。",
+              type: "error",
+              message:
+                `单次输出已达上限（${maxOutputTokens} tokens），本轮被截断。` +
+                `可到「智能助手 → 模型配置」调大「单次输出上限」，或改成分段改稿。`,
             });
           }
         }

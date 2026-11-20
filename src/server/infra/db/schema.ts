@@ -283,6 +283,7 @@ export function applySchema(db: Database.Database): void {
     migrateAgentModelConfigMultiDefault(db);
     migrateAgentModelConfigThinkingLevel(db);
     migrateAgentModelConfigRunTimeout(db);
+    migrateAgentModelConfigMaxOutputTokens(db);
     migrateDomainMembersRole(db);
     ensureDefaultDomain(db);
   });
@@ -703,5 +704,15 @@ function migrateAgentModelConfigRunTimeout(db: Database.Database): void {
   if (rows.some((r) => r.name === "run_timeout_seconds")) return;
   db.exec(
     `ALTER TABLE agent_model_configs ADD COLUMN run_timeout_seconds INTEGER NOT NULL DEFAULT 300`,
+  );
+}
+
+/** agent_model_configs.max_output_tokens：单次输出上限，默认 8192 */
+function migrateAgentModelConfigMaxOutputTokens(db: Database.Database): void {
+  const rows = db.prepare(`PRAGMA table_info(agent_model_configs)`).all() as { name: string }[];
+  if (rows.length === 0) return;
+  if (rows.some((r) => r.name === "max_output_tokens")) return;
+  db.exec(
+    `ALTER TABLE agent_model_configs ADD COLUMN max_output_tokens INTEGER NOT NULL DEFAULT 8192`,
   );
 }

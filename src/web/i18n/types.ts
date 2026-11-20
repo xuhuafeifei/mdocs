@@ -550,6 +550,8 @@ export type TranslationKey =
   | "agentConfigModel"
   | "agentConfigContextWindow"
   | "agentConfigContextWindowDesc"
+  | "agentConfigMaxOutputTokens"
+  | "agentConfigMaxOutputTokensDesc"
   | "agentConfigRunTimeout"
   | "agentConfigRunTimeoutDesc"
   | "agentConfigApiKey"

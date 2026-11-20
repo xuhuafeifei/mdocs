@@ -1293,6 +1293,8 @@ export interface AgentModelConfigPublic {
   hasApiKey: boolean;
   apiKeyMasked: string | null;
   contextWindow: number;
+  /** 单次模型输出上限（含思考与工具参数） */
+  maxOutputTokens: number;
   thinkingLevel: AgentThinkingLevel;
   /** 单轮后台运行超时（秒） */
   runTimeoutSeconds: number;
@@ -1315,6 +1317,7 @@ export function saveAgentConfigApi(input: {
   name?: string;
   apiKey?: string;
   contextWindow?: number;
+  maxOutputTokens?: number;
   thinkingLevel?: AgentThinkingLevel;
   runTimeoutSeconds?: number;
   providerId?: string;

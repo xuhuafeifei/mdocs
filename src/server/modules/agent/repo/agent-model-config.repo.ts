@@ -10,7 +10,7 @@ export type { AgentModelConfigs } from "../entity/agent-model-config.entity.js";
 
 const COLUMNS = `id, owner_visitor_id, name, provider, kind, provider_id,
   base_url, api_type, compat_json, model_id, api_key, context_window,
-  thinking_level, run_timeout_seconds, is_default, updated_at`;
+  max_output_tokens, thinking_level, run_timeout_seconds, is_default, updated_at`;
 
 export function listAgentModelConfigsByOwner(
   ownerVisitorId: string,
@@ -94,8 +94,8 @@ export function insertAgentModelConfig(
       `INSERT INTO agent_model_configs
          (id, owner_visitor_id, name, provider, kind, provider_id,
           base_url, api_type, compat_json, model_id, api_key, context_window,
-          thinking_level, run_timeout_seconds, is_default, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          max_output_tokens, thinking_level, run_timeout_seconds, is_default, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       row.id,
@@ -110,6 +110,7 @@ export function insertAgentModelConfig(
       row.model_id,
       row.api_key,
       row.context_window,
+      row.max_output_tokens,
       row.thinking_level,
       row.run_timeout_seconds,
       row.is_default,
@@ -126,8 +127,8 @@ export function updateAgentModelConfig(
       `UPDATE agent_model_configs SET
          name = ?, provider = ?, kind = ?, provider_id = ?,
          base_url = ?, api_type = ?, compat_json = ?, model_id = ?,
-         api_key = ?, context_window = ?, thinking_level = ?,
-         run_timeout_seconds = ?, is_default = ?, updated_at = ?
+         api_key = ?, context_window = ?, max_output_tokens = ?,
+         thinking_level = ?, run_timeout_seconds = ?, is_default = ?, updated_at = ?
        WHERE id = ? AND owner_visitor_id = ?`,
     )
     .run(
@@ -141,6 +142,7 @@ export function updateAgentModelConfig(
       row.model_id,
       row.api_key,
       row.context_window,
+      row.max_output_tokens,
       row.thinking_level,
       row.run_timeout_seconds,
       row.is_default,

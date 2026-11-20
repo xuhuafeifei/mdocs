@@ -553,6 +553,9 @@ export const zh: Record<TranslationKey, string> = {
   agentConfigModel: "模型",
   agentConfigContextWindow: "上下文窗口",
   agentConfigContextWindowDesc: "助手可用的 token 上限（默认 128000），用于占用圆环显示。",
+  agentConfigMaxOutputTokens: "单次输出上限",
+  agentConfigMaxOutputTokensDesc:
+    "单轮生成的 token 上限（含思考与工具参数），不是上下文窗口。默认 8192，范围 1024–65536。撞上限时会明确提示。",
   agentConfigRunTimeout: "单轮超时（秒）",
   agentConfigRunTimeoutDesc: "关闭面板后仍在后台跑；超时后自动停止（默认 300，范围 60–3600）。",
   agentConfigApiKey: "API Key",

@@ -278,6 +278,7 @@ export async function runOnboardingChat(params: {
       visitorId,
       sessionId,
       sessionManager,
+      maxOutputTokens: cfg.maxOutputTokens,
       onEvent,
       signal,
     });
@@ -326,7 +327,7 @@ export function createAgentModel(cfg: VisitorAgentConfig) {
       input: ["text", "image"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: cfg.contextWindow,
-      maxTokens: 8192,
+      maxTokens: cfg.maxOutputTokens,
     };
     models.setProvider(
       createProvider({
@@ -339,6 +340,13 @@ export function createAgentModel(cfg: VisitorAgentConfig) {
       }),
     );
   } else {
+    // DeepSeek 只认 max_tokens；pi-ai 对 deepseek.com 默认发 max_completion_tokens 会被静默忽略
+    const needsMaxTokensField =
+      cfg.kind === "deepseek" || cfg.baseUrl.includes("deepseek.com");
+    const compat = {
+      ...(cfg.compat ?? {}),
+      ...(needsMaxTokensField ? { maxTokensField: "max_tokens" as const } : {}),
+    };
     const model: Model<"openai-completions"> = {
       id: cfg.modelId,
       name: cfg.modelId,
@@ -350,8 +358,8 @@ export function createAgentModel(cfg: VisitorAgentConfig) {
       input: ["text", "image"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: cfg.contextWindow,
-      maxTokens: 8192,
-      compat: cfg.compat ?? undefined,
+      maxTokens: cfg.maxOutputTokens,
+      compat: Object.keys(compat).length > 0 ? compat : undefined,
     };
     models.setProvider(
       createProvider({

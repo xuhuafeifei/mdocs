@@ -147,6 +147,7 @@ export function upsertConfig(
       apiKey: body.apiKey as never,
       name: body.name as never,
       contextWindow: body.contextWindow as never,
+      maxOutputTokens: body.maxOutputTokens as never,
       thinkingLevel: body.thinkingLevel as never,
       runTimeoutSeconds: body.runTimeoutSeconds as never,
       providerId: body.providerId as never,

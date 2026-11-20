@@ -16,6 +16,8 @@ export interface AgentModelConfigs {
   model_id: string;
   api_key: string;
   context_window: number;
+  /** 单次模型输出上限（含思考与工具参数） */
+  max_output_tokens: number;
   /** off | low | high | max */
   thinking_level: string;
   /** 单轮 Agent 后台运行超时（秒） */

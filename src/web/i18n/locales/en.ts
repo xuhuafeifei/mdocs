@@ -559,6 +559,9 @@ export const en: Record<TranslationKey, string> = {
   agentConfigModel: "Model",
   agentConfigContextWindow: "Context window",
   agentConfigContextWindowDesc: "Token budget for the assistant (default 128000). Used for the usage ring.",
+  agentConfigMaxOutputTokens: "Max output tokens",
+  agentConfigMaxOutputTokensDesc:
+    "Per-turn generation cap (thinking + tool args), not the context window. Default 8192, range 1024–65536. Hitting the cap shows a clear error.",
   agentConfigRunTimeout: "Run timeout (seconds)",
   agentConfigRunTimeoutDesc:
     "Keeps running after the panel closes; stops automatically on timeout (default 300, range 60–3600).",

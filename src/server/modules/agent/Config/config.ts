@@ -62,9 +62,11 @@ const DEEPSEEK_FLASH_ALIASES = new Set([
 const DEEPSEEK_PRESET = {
   baseUrl: DEEPSEEK_ENDPOINT,
   apiType: "openai-completions" as AgentApiType,
+  // DeepSeek 只认 max_tokens；pi-ai 默认会发 max_completion_tokens（会被静默忽略）
   compatJson: JSON.stringify({
     supportsDeveloperRole: false,
     supportsReasoningEffort: false,
+    maxTokensField: "max_tokens",
   }),
 };
 
@@ -76,6 +78,8 @@ export function agentProviderLabel(cfg: Pick<VisitorAgentConfig, "kind" | "provi
 export type AgentCompat = {
   supportsDeveloperRole?: boolean;
   supportsReasoningEffort?: boolean;
+  /** DeepSeek 等必须用 max_tokens；默认 max_completion_tokens 会被忽略 */
+  maxTokensField?: "max_tokens" | "max_completion_tokens";
 };
 
 /** DeepSeek 实际档位；不暴露 medium（官方会映成 high） */
@@ -101,12 +105,18 @@ export type VisitorAgentConfig = {
   modelId: string;
   apiKey: string;
   contextWindow: number;
+  /** 单次模型输出上限（含思考与工具参数），默认 8192 */
+  maxOutputTokens: number;
   thinkingLevel: AgentThinkingLevel;
   /** 单轮后台运行超时（秒），默认 300 */
   runTimeoutSeconds: number;
   compat: AgentCompat | null;
   isDefault: boolean;
 };
+
+export const DEFAULT_AGENT_MAX_OUTPUT_TOKENS = 8192;
+export const MIN_AGENT_MAX_OUTPUT_TOKENS = 1024;
+export const MAX_AGENT_MAX_OUTPUT_TOKENS = 65536;
 
 export const DEFAULT_AGENT_RUN_TIMEOUT_SECONDS = 300;
 export const MIN_AGENT_RUN_TIMEOUT_SECONDS = 60;
@@ -150,6 +160,17 @@ export function normalizeContextWindow(
   const rounded = Math.floor(n);
   if (rounded < 1000) return fallback;
   return Math.min(rounded, 2_000_000);
+}
+
+export function normalizeMaxOutputTokens(
+  value: unknown,
+  fallback = DEFAULT_AGENT_MAX_OUTPUT_TOKENS,
+): number {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  const rounded = Math.floor(n);
+  if (rounded < MIN_AGENT_MAX_OUTPUT_TOKENS) return MIN_AGENT_MAX_OUTPUT_TOKENS;
+  return Math.min(rounded, MAX_AGENT_MAX_OUTPUT_TOKENS);
 }
 
 function resolveConfigName(name: string | undefined, visitorName: string, kind: AgentConfigKind): string {
@@ -198,6 +219,7 @@ function rowToConfig(row: AgentModelConfigs): VisitorAgentConfig | null {
     modelId: row.model_id,
     apiKey: effectiveApiKey,
     contextWindow: normalizeContextWindow(row.context_window),
+    maxOutputTokens: normalizeMaxOutputTokens(row.max_output_tokens),
     thinkingLevel: normalizeThinkingLevel(row.thinking_level),
     runTimeoutSeconds: normalizeRunTimeoutSeconds(row.run_timeout_seconds),
     compat: parseCompat(row.compat_json),
@@ -270,6 +292,7 @@ function buildConfigRow(input: {
   modelId?: string;
   name?: string;
   contextWindow?: number;
+  maxOutputTokens?: number;
   thinkingLevel?: string;
   runTimeoutSeconds?: number;
   providerId?: string;
@@ -285,6 +308,9 @@ function buildConfigRow(input: {
       ? resolveConfigName(input.name, input.visitorName, kind)
       : existing?.name ?? resolveConfigName(undefined, input.visitorName, kind);
   const contextWindow = normalizeContextWindow(input.contextWindow ?? existing?.context_window);
+  const maxOutputTokens = normalizeMaxOutputTokens(
+    input.maxOutputTokens ?? existing?.max_output_tokens,
+  );
   const thinkingLevel = normalizeThinkingLevel(
     input.thinkingLevel ?? existing?.thinking_level ?? "low",
   );
@@ -327,6 +353,7 @@ function buildConfigRow(input: {
       model_id: modelId,
       api_key: "", // apiKey 存 secrets 文件，DB 不再存明文
       context_window: contextWindow,
+      max_output_tokens: maxOutputTokens,
       thinking_level: thinkingLevel,
       run_timeout_seconds: runTimeoutSeconds,
       is_default: input.isDefault ? 1 : 0,
@@ -349,6 +376,7 @@ function buildConfigRow(input: {
     model_id: modelId,
     api_key: "", // apiKey 存 secrets 文件，DB 不再存明文
     context_window: contextWindow,
+    max_output_tokens: maxOutputTokens,
     thinking_level: thinkingLevel,
     run_timeout_seconds: runTimeoutSeconds,
     is_default: input.isDefault ? 1 : 0,
@@ -367,6 +395,7 @@ export function upsertVisitorAgentConfig(input: {
   apiKey?: string;
   name?: string;
   contextWindow?: number;
+  maxOutputTokens?: number;
   thinkingLevel?: string;
   runTimeoutSeconds?: number;
   providerId?: string;

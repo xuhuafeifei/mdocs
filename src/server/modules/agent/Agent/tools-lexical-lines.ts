@@ -246,6 +246,7 @@ export function overwriteAllTool({ uiDocumentId }: ToolDeps): AgentTool {
     label: "整篇 Diff 提案",
     description:
       "用完整 Markdown 对**当前打开** .md 做块级 LCS Diff 提案，**不写服务器**（≠ overwrite_document）。" +
+      "**长文禁止**：有实质正文时改用 update_slot / batch_update_slots；本工具仅短文或用户明确要求整篇 Diff。" +
       "documentId 可省略。有未决 Diff 时会被前端拒绝。",
     parameters: Type.Object({
       documentId: Type.Optional(
@@ -278,7 +279,7 @@ export function batchUpdateSlotsTool({ uiDocumentId }: ToolDeps): AgentTool {
       "documentId 可省略。ranges 每项：start/end（1-based 闭区间）+ markdown；" +
       "markdown 按 Markdown 外层块拆分后整体替换该区间（块数可多于或少于原区间，空串=删除）。" +
       "所有门牌相对**本次调用前**的文档；改多处（如 3–8 与 10–25）必须放进同一次 ranges，禁止拆成两次工具调用。" +
-      "改前先 get_document_lexical_lines。单块仍用 update_slot；整篇大改用 overwrite_all。",
+      "改前先 get_document_lexical_lines。单块仍用 update_slot；多段大改优先本工具，勿用 overwrite_all 整篇吐稿。",
     parameters: Type.Object({
       documentId: Type.Optional(
         Type.String({ description: "可省略；默认当前 UI 打开文档" }),
