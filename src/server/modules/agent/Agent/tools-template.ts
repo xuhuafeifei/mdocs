@@ -46,6 +46,7 @@ import { userSkillTools } from "./tools-user-skills";
 import { getNowTool } from "./tools-time";
 import { setThinkingLevelTool } from "./tools-thinking";
 import { hideAgentEntryTool } from "./tools-hide-entry";
+import { setCopyPreserveBlankLinesTool } from "./tools-copy-pref";
 import { readAttachmentTool } from "../attachments/tools-read-attachment";
 import { deepseekWebTools } from "./tools-web";
 import { pipelineTools } from "./tools-pipeline";
@@ -62,6 +63,7 @@ export function utilityTools(deps: ToolDeps): AgentTool[] {
     getNowTool(),
     setThinkingLevelTool(deps),
     hideAgentEntryTool(deps),
+    setCopyPreserveBlankLinesTool(deps),
     readAttachmentTool(deps),
     ...deepseekWebTools(deps),
   ];

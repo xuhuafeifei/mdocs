@@ -352,6 +352,9 @@ export const zh: Record<TranslationKey, string> = {
   hideAgentEntry: "隐藏 AI 入口",
   hideAgentEntryDesc:
     "隐藏右下角智能助手浮球；可在此重新打开。快捷键 ⌘Y（Windows：Ctrl+Y）切换。助手也可应你要求自行关闭入口。",
+  copyPreserveBlankLines: "复制全文保留空行",
+  copyPreserveBlankLinesDesc:
+    "开启后，「复制全文」会保留文档里的空白段落；关闭则经 Markdown 美化时压掉连续空行。助手也可按你的要求改这项。",
   maxUploadSize: "单文件上传上限",
   maxUploadSizeDesc: "编辑器与助手附件共用；助手读图另有 6MB 硬顶（且不超过本上限）。保存后立即生效（单位 MB）",
   maxUploadSizeSave: "保存",

@@ -60,6 +60,7 @@ import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
 import { Copy, Heading1Icon, Heading2Icon, Heading3Icon, History, InfoIcon, MinusIcon, Network, SigmaIcon, Table2Icon, ShieldUser, Users, Star, Workflow } from "lucide-react";
 import { copyTextToClipboard } from "./copyText";
+import { getCopyPreserveBlankLines } from "./copyPreserveBlankLines";
 
 import type { ActiveDocumentMeta, DocumentDetail } from "../../shared/types/document";
 import { getDocumentTaskQueue } from "./documentTaskQueue";
@@ -1320,7 +1321,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
             // 须在点击同步路径里拿正文并复制，避免丢掉用户手势
             let text = "";
             try {
-              const md = editor?.getDocument("markdown");
+              // format:false 跳过 remark，避免连续空段落被压掉
+              const md = editor?.getDocument(
+                "markdown",
+                getCopyPreserveBlankLines() ? { format: false } : undefined,
+              );
               text = typeof md === "string" ? md : "";
             } catch {
               text = "";

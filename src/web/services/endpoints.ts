@@ -1488,6 +1488,7 @@ export type AgentStreamEvent =
   | { type: "tree_changed"; reason: string }
   /** 隐藏本机 AI 入口（前端写 localStorage 并关面板） */
   | { type: "agent_entry_hidden" }
+  | { type: "copy_preserve_blank_lines"; preserve: boolean }
   /** AI 覆写文档成功，前端若打开该文档应拉取最新内容 */
   | {
       type: "document_overwritten";

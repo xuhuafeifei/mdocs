@@ -345,6 +345,8 @@ export type TranslationKey =
   | "autoEditDesc"
   | "hideAgentEntry"
   | "hideAgentEntryDesc"
+  | "copyPreserveBlankLines"
+  | "copyPreserveBlankLinesDesc"
   | "maxUploadSize"
   | "maxUploadSizeDesc"
   | "maxUploadSizeSave"
