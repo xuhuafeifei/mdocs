@@ -355,9 +355,6 @@ export const en: Record<TranslationKey, string> = {
   hideAgentEntry: "Hide AI entry",
   hideAgentEntryDesc:
     "Hide the floating assistant button. Shortcut ⌘Y (Windows: Ctrl+Y) toggles. Turn this off to show it again. The assistant can also hide itself when you ask.",
-  copyPreserveBlankLines: "Keep blank lines when copying",
-  copyPreserveBlankLinesDesc:
-    "When on, Copy full text keeps empty paragraphs. When off, Markdown pretty-print may collapse consecutive blank lines. The assistant can change this when you ask.",
   maxUploadSize: "Max upload size",
   maxUploadSizeDesc: "Shared by editor and agent attachments; agent image reads are capped at 6MB and this limit. Applies immediately (MB)",
   maxUploadSizeSave: "Save",
@@ -467,6 +464,7 @@ export const en: Record<TranslationKey, string> = {
   docInfoPermissionUpdated: "Permission updated",
   docCopyContent: "Copy document",
   docCopyContentMd: "Copy as Markdown",
+  docCopyContentMdTight: "Copy as Markdown (no extra blank lines)",
   docCopyContentHtml: "Copy as HTML",
   docCopyContentSheetDisabled: "Sheets can’t be copied yet",
   docCopySuccess: "Copied to clipboard",

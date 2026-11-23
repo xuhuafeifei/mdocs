@@ -1089,8 +1089,6 @@ export const AgentChatPanel = forwardRef<
     onTreeChanged?: () => void | Promise<void>;
     /** hide_agent_entry：隐藏本机 AI 入口并关面板 */
     onAgentEntryHidden?: () => void;
-    /** set_copy_preserve_blank_lines：写本机复制全文空行偏好 */
-    onCopyPreserveBlankLines?: (preserve: boolean) => void;
     /** AI 覆写文档成功回调，刷新当前打开文档的内容 */
     onDocumentOverwritten?: (payload: {
       documentId: string;
@@ -1186,7 +1184,6 @@ export const AgentChatPanel = forwardRef<
     onOpenDocument,
     onTreeChanged,
     onAgentEntryHidden,
-    onCopyPreserveBlankLines,
     onDocumentOverwritten,
     onDiffProposal,
     onProvideEditorDraft,
@@ -2079,8 +2076,6 @@ export const AgentChatPanel = forwardRef<
       void onTreeChanged?.();
     } else if (event.type === "agent_entry_hidden") {
       onAgentEntryHidden?.();
-    } else if (event.type === "copy_preserve_blank_lines") {
-      onCopyPreserveBlankLines?.(Boolean(event.preserve));
     } else if (event.type === "document_overwritten") {
       void onDocumentOverwritten?.({
         documentId: event.documentId,

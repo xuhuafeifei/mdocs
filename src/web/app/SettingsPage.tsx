@@ -43,10 +43,6 @@ import { TrashPanel } from "./TrashPanel";
 import { VisitorPickerModal } from "./VisitorPickerModal";
 import { useIsNarrowViewport } from "./hooks/useIsNarrowViewport";
 import { copyTextToClipboard } from "./copyText";
-import {
-  getCopyPreserveBlankLines,
-  setCopyPreserveBlankLines,
-} from "./copyPreserveBlankLines";
 import { useEdgeSwipeOpen } from "./hooks/useEdgeSwipeOpen";
 import {
   createCliTokenApi,
@@ -128,7 +124,7 @@ const SETTINGS_NAV: Array<{
   keywords: string[];
   Icon: LucideIcon;
 }> = [
-  { id: "general", labelKey: "general", keywords: ["设置", "语言", "settings", "language", "ai", "助手", "隐藏", "复制", "空行", "copy", "blank"], Icon: Settings2 },
+  { id: "general", labelKey: "general", keywords: ["设置", "语言", "settings", "language", "ai", "助手", "隐藏"], Icon: Settings2 },
   {
     id: "features",
     labelKey: "features",
@@ -188,16 +184,6 @@ export function SettingsPage(props: {
   const [agentEntryHidden, setAgentEntryHidden] = useState(() =>
     getBool("mdocs.agentEntryHidden", false),
   );
-
-  // ---- 复制全文保留空行（默认开） ----
-  const [copyPreserveBlankLines, setCopyPreserveBlankLinesState] = useState(() =>
-    getCopyPreserveBlankLines(),
-  );
-  useEffect(() => {
-    const sync = () => setCopyPreserveBlankLinesState(getCopyPreserveBlankLines());
-    window.addEventListener("mdocs:copy-preserve-blank-lines", sync);
-    return () => window.removeEventListener("mdocs:copy-preserve-blank-lines", sync);
-  }, []);
 
   const [editorFeatures, setEditorFeatures] = useState(() =>
     Object.fromEntries(EDITOR_FEATURE_TOGGLES.map((f) => [f.id, f.load()])) as Record<
@@ -846,29 +832,6 @@ export function SettingsPage(props: {
                     role="switch"
                     aria-checked={agentEntryHidden}
                     onClick={toggleAgentEntryHidden}
-                  >
-                    <span className="mdocs-toggle-knob" />
-                  </button>
-                </label>
-              </div>
-
-              {/* 复制全文保留空行 */}
-              <div className="mdocs-settings-card">
-                <label className="mdocs-settings-item">
-                  <span className="mdocs-settings-item-info">
-                    <span className="mdocs-settings-card-title">{t("copyPreserveBlankLines")}</span>
-                    <span className="mdocs-settings-item-desc">{t("copyPreserveBlankLinesDesc")}</span>
-                  </span>
-                  <button
-                    type="button"
-                    className={"mdocs-toggle" + (copyPreserveBlankLines ? " active" : "")}
-                    role="switch"
-                    aria-checked={copyPreserveBlankLines}
-                    onClick={() => {
-                      const next = !copyPreserveBlankLines;
-                      setCopyPreserveBlankLines(next);
-                      setCopyPreserveBlankLinesState(next);
-                    }}
                   >
                     <span className="mdocs-toggle-knob" />
                   </button>

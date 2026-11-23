@@ -22,7 +22,6 @@ import { isPublicWritePermission } from "../../shared/permissions.js";
 import { isFolderDescPath } from "../../shared/folderDesc.js";
 import { loadLastSession, saveLastSession } from "../storage/lastSession";
 import { copyTextToClipboard } from "./copyText";
-import { setCopyPreserveBlankLines } from "./copyPreserveBlankLines";
 import {
   ApiRequestError,
   MDOCS_API_ERROR_EVENT,
@@ -517,11 +516,6 @@ export function App() {
       setAgentPanelFullscreen(false);
     }
     window.dispatchEvent(new Event("mdocs:agent-entry-hidden"));
-  }
-
-  function applyCopyPreserveBlankLines(preserve: boolean): void {
-    setCopyPreserveBlankLines(preserve);
-    window.dispatchEvent(new Event("mdocs:copy-preserve-blank-lines"));
   }
 
   function setAgentDockSidePersist(side: AgentDockSide | null): void {
@@ -2396,7 +2390,6 @@ export function App() {
                   }}
                   onTreeChanged={() => void refreshTree()}
                   onAgentEntryHidden={() => applyAgentEntryHidden(true)}
-                  onCopyPreserveBlankLines={applyCopyPreserveBlankLines}
                   onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
                   onDiffProposal={(payload) => void applyDiffProposal(payload)}
                   onProvideEditorDraft={provideEditorDraft}
@@ -2919,7 +2912,6 @@ export function App() {
                   }}
                   onTreeChanged={() => void refreshTree()}
                   onAgentEntryHidden={() => applyAgentEntryHidden(true)}
-                  onCopyPreserveBlankLines={applyCopyPreserveBlankLines}
                   onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
                   onDiffProposal={(payload) => void applyDiffProposal(payload)}
                   onProvideEditorDraft={provideEditorDraft}
@@ -3369,7 +3361,6 @@ export function App() {
             }}
             onTreeChanged={() => void refreshTree()}
             onAgentEntryHidden={() => applyAgentEntryHidden(true)}
-            onCopyPreserveBlankLines={applyCopyPreserveBlankLines}
             onDocumentOverwritten={(payload) => void handleDocumentOverwritten(payload)}
             onDiffProposal={(payload) => void applyDiffProposal(payload)}
             onProvideEditorDraft={provideEditorDraft}

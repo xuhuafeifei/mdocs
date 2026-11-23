@@ -60,7 +60,7 @@ import type { IEditor } from "@lobehub/editor";
 import { Editor, withProps } from "@lobehub/editor/react";
 import { Copy, Heading1Icon, Heading2Icon, Heading3Icon, History, InfoIcon, MinusIcon, Network, SigmaIcon, Table2Icon, ShieldUser, Users, Star, Workflow } from "lucide-react";
 import { copyTextToClipboard } from "./copyText";
-import { getCopyPreserveBlankLines } from "./copyPreserveBlankLines";
+import { stripExcessBlankLinesFromMarkdown } from "./copyDocumentMarkdown";
 
 import type { ActiveDocumentMeta, DocumentDetail } from "../../shared/types/document";
 import { getDocumentTaskQueue } from "./documentTaskQueue";
@@ -1321,11 +1321,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
             // 须在点击同步路径里拿正文并复制，避免丢掉用户手势
             let text = "";
             try {
-              // format:false 跳过 remark，避免连续空段落被压掉
-              const md = editor?.getDocument(
-                "markdown",
-                getCopyPreserveBlankLines() ? { format: false } : undefined,
-              );
+              const md = editor?.getDocument("markdown");
               text = typeof md === "string" ? md : "";
             } catch {
               text = "";
@@ -1339,6 +1335,30 @@ export function DocumentEditor(props: DocumentEditorProps) {
         >
           <Copy size={14} />
           <span>{t("docCopyContentMd")}</span>
+        </button>
+        <button
+          type="button"
+          style={menuItemStyle}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--mdocs-hover-bg, #f5f5f5)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+          onClick={() => {
+            let text = "";
+            try {
+              const md = editor?.getDocument("markdown");
+              text = typeof md === "string" ? md : "";
+            } catch {
+              text = "";
+            }
+            if (!text.trim()) text = props.initialContent || "";
+            text = stripExcessBlankLinesFromMarkdown(text);
+            void copyTextToClipboard(text).then((ok) => {
+              props.onShowToast?.(ok ? t("docCopySuccess") : t("docCopyFailed"));
+            });
+            onClose();
+          }}
+        >
+          <Copy size={14} />
+          <span>{t("docCopyContentMdTight")}</span>
         </button>
         {props.canManageInvites ? (
           <button

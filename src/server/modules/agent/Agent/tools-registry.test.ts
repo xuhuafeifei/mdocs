@@ -48,7 +48,6 @@ const UTILITY_NAMES = [
   "get_now",
   "set_thinking_level",
   "hide_agent_entry",
-  "set_copy_preserve_blank_lines",
   "read_attachment",
 ] as const;
 
