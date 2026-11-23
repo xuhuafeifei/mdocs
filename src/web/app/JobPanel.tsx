@@ -15,6 +15,7 @@ import {
   LineChart,
 } from "lucide-react";
 import type { ActiveDocumentMeta } from "../../shared/types/document";
+import type { DomainSummary } from "../../shared/types/domain";
 import {
   cancelJobRunApi,
   deleteJobDataApi,
@@ -29,6 +30,9 @@ import {
   type JobRunRow,
 } from "../services/endpoints";
 import { useI18n } from "../i18n";
+import { DomainSelect } from "./DomainSelect";
+import { FALLBACK_DOMAIN_SUMMARY } from "../services/domainsBootstrap";
+import { localizeDomainName } from "./utils";
 import { MiniSelect } from "./MiniSelect";
 import "./JobPanel.css";
 
@@ -42,6 +46,10 @@ const STATUS_LABEL: Record<number, string> = {
 type Props = {
   meta: ActiveDocumentMeta;
   canEdit: boolean;
+  domains: DomainSummary[];
+  currentDomainId: string;
+  onDomainChange: (domainId: string) => void;
+  onDomainsChange?: (domains: DomainSummary[]) => void;
   onDelete: () => Promise<void>;
   readerChrome?: boolean;
   onOpenMobileNav?: () => void;
@@ -74,8 +82,9 @@ function statusClass(status: number): string {
 }
 
 export function JobPanel(props: Props) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const documentId = props.meta.documentId;
+  const domains = props.domains.length ? props.domains : [FALLBACK_DOMAIN_SUMMARY];
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cron, setCron] = useState("");
@@ -281,6 +290,16 @@ export function JobPanel(props: Props) {
               {cron ? `计划：${cron}` : "尚未设置 Cron"}
               {latestPoint ? ` · 最新 ${axisY}=${latestPoint.y}` : ""}
             </p>
+          </div>
+          <div className="mdocs-job-domain">
+            <DomainSelect
+              domains={domains}
+              value={props.currentDomainId}
+              onChange={props.onDomainChange}
+              onDomainsChange={props.onDomainsChange}
+              ariaLabel={t("currentDomainAria")}
+              localizeName={(name: string) => localizeDomainName(name, lang, t)}
+            />
           </div>
         </div>
         <div className="mdocs-job-toolbar-actions">

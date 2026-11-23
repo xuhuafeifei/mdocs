@@ -36,6 +36,12 @@
   flex: 1;
 }
 
+.mdocs-job-domain {
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: min(220px, 40vw);
+}
+
 .mdocs-job-title-block {
   min-width: 0;
 }

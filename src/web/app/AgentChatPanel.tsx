@@ -3487,10 +3487,15 @@ export const AgentChatPanel = forwardRef<
                 }
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void sendMessage(input);
-                  }
+                  if (e.key !== "Enter" || e.shiftKey) return;
+                  // 手机 / 触控：回车应换行；桌面仍 Enter 发送、Shift+Enter 换行
+                  const touchLike =
+                    typeof window !== "undefined" &&
+                    (window.matchMedia("(max-width: 768px)").matches ||
+                      window.matchMedia("(hover: none) and (pointer: coarse)").matches);
+                  if (touchLike) return;
+                  e.preventDefault();
+                  void sendMessage(input);
                 }}
               />
               <div className="mdocs-agent-panel-input-actions">

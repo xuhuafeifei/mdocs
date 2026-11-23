@@ -102,6 +102,10 @@ export function EditorPaneHost(props: {
         key={meta.documentId}
         meta={meta}
         canEdit={canEdit}
+        domains={props.domains}
+        currentDomainId={props.currentDomainId}
+        onDomainChange={props.onDomainChange}
+        onDomainsChange={props.onDomainsChange}
         onDelete={async () => props.onDeleteDocument(meta.documentId, meta.relativePath)}
         readerChrome={props.readerChrome}
         onOpenMobileNav={props.onOpenMobileNav}
