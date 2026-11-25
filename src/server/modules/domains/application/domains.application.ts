@@ -11,12 +11,9 @@ import {
   updateDomainName,
   type DomainMemberRole,
 } from "../repo/domain.repo.js";
-import {
-  countDocumentsByDomain,
-  listDomainIdsWithDocumentInviteForVisitor,
-} from "../../documents/repo/document.repo.js";
+import { countDocumentsByDomain } from "../../documents/repo/document.repo.js";
 import { findVisitorById } from "../../visitor/repo/visitor.repo.js";
-import { resolveDomainAccess } from "../../access/domain-access.js";
+import { canEnterDomain } from "../../access/access.js";
 import {
   changeDomainPermission,
   DomainPermissionError,
@@ -72,22 +69,14 @@ function normaliseMembersBody(
 }
 
 export function listVisibleDomains(visitorId: string | null) {
-  const db = getDb();
-  const rows = listDomains(db);
-  const documentInviteDomainIds = visitorId
-    ? new Set(listDomainIdsWithDocumentInviteForVisitor(visitorId, db))
-    : undefined;
-  const filtered = rows.filter(
-    (r) =>
-      resolveDomainAccess(db, r, r.domain_id, visitorId, { documentInviteDomainIds }).kind !==
-      "none",
-  );
+  const rows = listDomains();
+  const filtered = rows.filter((r) => canEnterDomain(visitorId, r.domain_id));
   return filtered.map((r) => ({
     domainId: r.domain_id,
     domainName: r.domain_name,
     permission: r.permission,
     creatorVisitorId: r.creator_visitor_id,
-    docCount: countDocumentsByDomain(r.domain_id, db),
+    docCount: countDocumentsByDomain(r.domain_id),
   }));
 }
 

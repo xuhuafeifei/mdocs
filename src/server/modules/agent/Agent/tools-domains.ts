@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { resolveDomainAccess } from "../../access/domain-access";
+import { canEnterDomain } from "../../access/access";
 import { getDb } from "../../../infra/db/connection";
 import {
   addDomainMember,
@@ -12,10 +12,7 @@ import {
   listDomains,
   type DomainMemberRole,
 } from "../../domains/repo/domain.repo";
-import {
-  countDocumentsByDomain,
-  listDomainIdsWithDocumentInviteForVisitor,
-} from "../../documents/repo/document.repo";
+import { countDocumentsByDomain } from "../../documents/repo/document.repo";
 import { findVisitorById } from "../../visitor/repo/visitor.repo.js";
 import { asToolResult, type ToolDeps } from "./tool-deps";
 import { changeDomainPermission, DomainPermissionError } from "../../domains/change-domain-permission";
@@ -41,24 +38,15 @@ export function listDomainsTool({ visitorId }: ToolDeps): AgentTool {
     description: "列出当前访客可见工作空间（domainId/domainName/permission/docCount）",
     parameters: Type.Object({}),
     execute: async () => {
-      const db = getDb();
-      const rows = listDomains(db);
-      const invitedDomainIds = new Set(
-        listDomainIdsWithDocumentInviteForVisitor(visitorId, db),
-      );
+      const rows = listDomains();
       const domains = rows
-        .filter(
-          (r) =>
-            resolveDomainAccess(db, r, r.domain_id, visitorId, {
-              documentInviteDomainIds: invitedDomainIds,
-            }).kind !== "none",
-        )
+        .filter((r) => canEnterDomain(visitorId, r.domain_id))
         .map((r) => ({
           domainId: r.domain_id,
           domainName: r.domain_name,
           permission: r.permission,
           creatorVisitorId: r.creator_visitor_id,
-          docCount: countDocumentsByDomain(r.domain_id, db),
+          docCount: countDocumentsByDomain(r.domain_id),
         }));
       return asToolResult({ domains });
     },

@@ -12,9 +12,7 @@ import type Database from "better-sqlite3";
 import { Jieba } from "@node-rs/jieba";
 import { dict } from "@node-rs/jieba/dict.js";
 import { getDb } from "../../infra/db/connection";
-import { findDomainById } from "../domains/repo/domain.repo";
-import { canReadDocument, makeDomainAccessInfo } from "../access/access-control";
-import type { Documents } from "../documents/repo/document.repo";
+import { canRead } from "../access/access";
 import { querySemanticNeighbors } from "./embedding-store";
 import {
   matchDocumentsFtsBody,
@@ -115,42 +113,9 @@ export async function searchDocuments(params: {
   // 语义-only 命中可能缺少 FTS 里的 display/path；从主表补
   fillMissingDocFields(db, merged);
 
-  const domainIds = Array.from(new Set(merged.map((r) => r.domain_id)));
-  const domainCache = new Map<string, { permission: string } | null>();
-  for (const did of domainIds) {
-    domainCache.set(did, findDomainById(did, db) ?? null);
-  }
-
   const results: SearchResult[] = [];
   for (const row of merged) {
-    const docRow: Documents = {
-      document_id: row.document_id,
-      domain_id: row.domain_id,
-      relative_path: row.relative_path,
-      display_name: row.display_name,
-      owner_visitor_id: row.owner_visitor_id,
-      created_by: row.owner_visitor_id,
-      updated_by: row.owner_visitor_id,
-      content_hash: "",
-      head_commit_id: null,
-      created_at: "",
-      updated_at: "",
-      permission: row.permission,
-      file_type: "md",
-      parent_id: null,
-      is_dirty: 0,
-    };
-
-    const domain = domainCache.get(row.domain_id);
-    const domainPermission = domain?.permission ?? "public";
-    const domainInfo = makeDomainAccessInfo(
-      db,
-      row.domain_id,
-      params.visitorId,
-      domainPermission,
-    );
-
-    if (!canReadDocument(docRow, params.visitorId ?? null, domainInfo)) continue;
+    if (!canRead(params.visitorId ?? null, row.domain_id, row.document_id)) continue;
 
     const snippet =
       row.bodyContent.length > 0

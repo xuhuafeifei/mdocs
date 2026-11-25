@@ -11,14 +11,31 @@ import {
   canReadDocument,
   makeDomainAccessInfo,
 } from "./access-control.js";
-import { canEnterDomainTree, resolveDomainAccess } from "./domain-access.js";
+import {
+  canAccessGraph,
+  canEnterDomainTree,
+  resolveDomainAccess,
+} from "./domain-access.js";
 
-/** 能否进入该域（看树 / 列域文档的前门）。 */
+/** 能否进入该域（看树 / 列域文档的前门；含 viaDocumentInvites）。 */
 export function canEnterDomain(visitorId: string | null, domainId: string): boolean {
   const db = getDb();
   const domain = getDomainById(domainId);
   const access = resolveDomainAccess(db, domain, domainId, visitorId);
   return canEnterDomainTree(access);
+}
+
+/**
+ * 域协作身份（resolve kind === full）。
+ * viaDocumentInvites 不算——建目录、图谱等需此级。
+ */
+export function canFullyAccessDomain(
+  visitorId: string | null,
+  domainId: string,
+): boolean {
+  const db = getDb();
+  const domain = getDomainById(domainId, db);
+  return canAccessGraph(resolveDomainAccess(db, domain, domainId, visitorId));
 }
 
 /** 能否读该文档。文档不存在或不属于 domainId → false。 */

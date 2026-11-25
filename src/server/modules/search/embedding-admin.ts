@@ -2,16 +2,9 @@
  * 语义索引管理：列表（含上次构建时间）+ 按文档勾选重建。
  */
 import { getDb } from "../../infra/db/connection";
-import { findDomainById, listDomains } from "../domains/repo/domain.repo";
-import type { Documents } from "../documents/repo/document.repo";
-import {
-  canReadDocument,
-  makeDomainAccessInfo,
-  type DomainAccessInfo,
-} from "../access/access-control";
-import { resolveDomainAccess } from "../access/domain-access";
+import { listDomains } from "../domains/service/domain.service.js";
+import { canEnterDomain, canRead } from "../access/access";
 import { readDocument } from "../../infra/storage/file-store";
-import { listDomainIdsWithDocumentInviteForVisitor } from "../documents/repo/document.repo";
 import { useLogger } from "../../infra/logger/logger";
 import { isEmbeddingReady } from "./embedding-model";
 import { upsertDocumentEmbeddings } from "./embedding-store";
@@ -40,14 +33,8 @@ export function listEmbeddingIndex(params: {
   const db = getDb();
   const visitorId = params.visitorId;
 
-  const documentInviteDomainIds =
-    visitorId ? new Set(listDomainIdsWithDocumentInviteForVisitor(visitorId, db)) : undefined;
-
-  const allDomains = listDomains(db);
-  const visibleDomains = allDomains.filter(
-    (r) =>
-      resolveDomainAccess(db, r, r.domain_id, visitorId, { documentInviteDomainIds }).kind !== "none",
-  );
+  const allDomains = listDomains();
+  const visibleDomains = allDomains.filter((r) => canEnterDomain(visitorId, r.domain_id));
   const domainNameById = new Map(visibleDomains.map((d) => [d.domain_id, d.domain_name]));
 
   let domainIds = visibleDomains.map((d) => d.domain_id);
@@ -65,7 +52,7 @@ export function listEmbeddingIndex(params: {
   const rows = db
     .prepare(
       `SELECT d.document_id, d.display_name, d.relative_path, d.domain_id,
-              d.owner_visitor_id, d.permission, d.updated_at AS document_updated_at,
+              d.updated_at AS document_updated_at,
               COUNT(c.chunk_index) AS chunk_count,
               MAX(c.updated_at) AS embedding_updated_at
        FROM documents d
@@ -81,43 +68,15 @@ export function listEmbeddingIndex(params: {
     display_name: string;
     relative_path: string;
     domain_id: string;
-    owner_visitor_id: string;
-    permission: number;
     document_updated_at: string;
     chunk_count: number;
     embedding_updated_at: string | null;
   }>;
 
-  const domainCache = new Map<string, DomainAccessInfo>();
   const items: EmbeddingIndexRow[] = [];
 
   for (const row of rows) {
-    let domainInfo = domainCache.get(row.domain_id);
-    if (!domainInfo) {
-      const domain = findDomainById(row.domain_id, db);
-      const domainPermission = domain?.permission ?? "public";
-      domainInfo = makeDomainAccessInfo(db, row.domain_id, visitorId, domainPermission);
-      domainCache.set(row.domain_id, domainInfo);
-    }
-
-    const docRow: Documents = {
-      document_id: row.document_id,
-      domain_id: row.domain_id,
-      relative_path: row.relative_path,
-      display_name: row.display_name,
-      owner_visitor_id: row.owner_visitor_id,
-      created_by: row.owner_visitor_id,
-      updated_by: row.owner_visitor_id,
-      content_hash: "",
-      head_commit_id: null,
-      created_at: "",
-      updated_at: row.document_updated_at,
-      permission: row.permission,
-      file_type: "md",
-      parent_id: null,
-      is_dirty: 0,
-    };
-    if (!canReadDocument(docRow, visitorId, domainInfo)) continue;
+    if (!canRead(visitorId, row.domain_id, row.document_id)) continue;
 
     items.push({
       documentId: row.document_id,
@@ -192,32 +151,7 @@ export async function rebuildEmbeddingIndex(params: {
         continue;
       }
 
-      const domain = findDomainById(row.domain_id, db);
-      const domainPermission = domain?.permission ?? "public";
-      const domainInfo = makeDomainAccessInfo(
-        db,
-        row.domain_id,
-        params.visitorId,
-        domainPermission,
-      );
-      const docRow: Documents = {
-        document_id: row.document_id,
-        domain_id: row.domain_id,
-        relative_path: row.relative_path,
-        display_name: row.display_name,
-        owner_visitor_id: row.owner_visitor_id,
-        created_by: row.owner_visitor_id,
-        updated_by: row.owner_visitor_id,
-        content_hash: "",
-        head_commit_id: null,
-        created_at: "",
-        updated_at: row.updated_at,
-        permission: row.permission,
-        file_type: "md",
-        parent_id: null,
-        is_dirty: 0,
-      };
-      if (!canReadDocument(docRow, params.visitorId, domainInfo)) {
+      if (!canRead(params.visitorId, row.domain_id, documentId)) {
         log.info("semantic rebuild %d/%d skip %s: no read access", i + 1, ids.length, row.display_name || documentId);
         skipped.push(documentId);
         continue;

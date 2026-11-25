@@ -10,9 +10,8 @@ import {
   listDocumentsByDomain,
   type Documents,
 } from "../documents/repo/document.repo.js";
-import { findDomainById } from "../domains/repo/domain.repo.js";
-import { resolveDomainAccess, canEnterDomainTree } from "../access/domain-access.js";
-import { canReadDocument, DocumentError, makeDomainAccessInfo } from "../access/access-control.js";
+import { canEnterDomain, canRead } from "../access/access.js";
+import { DocumentError } from "../access/access-control.js";
 import { getConfig } from "../../infra/config/index.js";
 import { FOLDER_DESC_FILENAME } from "../../../shared/folderDesc.js";
 import { getPolicy, treeIncludeTypes } from "../../../shared/file-type-policy.js";
@@ -41,17 +40,11 @@ export function buildDocumentTree(
 ): TreeNode[] {
   const cfg = getConfig();
   const effective = domainId?.trim() || cfg.defaultDomainId;
-  const db = getDb();
 
-  const domain = findDomainById(effective, db);
-  const access = resolveDomainAccess(db, domain, effective, visitorId);
-  if (!canEnterDomainTree(access)) return [];
+  if (!canEnterDomain(visitorId ?? null, effective)) return [];
 
-  const domainPermission = domain?.permission ?? "public";
-  const domainInfo = makeDomainAccessInfo(db, effective, visitorId, domainPermission);
-
-  const rows = listDocumentsByDomain(effective, db);
-  const filtered = rows.filter((r) => canReadDocument(r, visitorId ?? null, domainInfo));
+  const rows = listDocumentsByDomain(effective);
+  const filtered = rows.filter((r) => canRead(visitorId ?? null, effective, r.document_id));
 
   const typedRows = options?.includeTypes
     ? filtered.filter((r) => options.includeTypes!.includes(r.file_type))
@@ -71,8 +64,7 @@ export function buildFolderSubtree(
   visitorId?: string | null,
   options?: { includeTypes?: string[] },
 ): FolderSubtreeNode[] {
-  const db = getDb();
-  const folder = findDocumentById(folderId, db);
+  const folder = findDocumentById(folderId);
   if (!folder) {
     throw new DocumentError("DOC_NOT_FOUND", "目录不存在", 404);
   }
@@ -80,20 +72,15 @@ export function buildFolderSubtree(
     throw new DocumentError("BAD_REQUEST", "不是目录", 400);
   }
 
-  const domain = findDomainById(folder.domain_id, db);
-  const access = resolveDomainAccess(db, domain, folder.domain_id, visitorId);
-  if (!canEnterDomainTree(access)) return [];
-
-  const domainPermission = domain?.permission ?? "public";
-  const domainInfo = makeDomainAccessInfo(db, folder.domain_id, visitorId, domainPermission);
-
-  if (!canReadDocument(folder, visitorId ?? null, domainInfo)) {
+  const domainId = folder.domain_id;
+  if (!canEnterDomain(visitorId ?? null, domainId)) return [];
+  if (!canRead(visitorId ?? null, domainId, folder.document_id)) {
     return [];
   }
 
   const descendantRows = collectDescendants(folderId);
   const filtered = descendantRows.filter((r) =>
-    canReadDocument(r, visitorId ?? null, domainInfo),
+    canRead(visitorId ?? null, domainId, r.document_id),
   );
 
   const typedRows = options?.includeTypes

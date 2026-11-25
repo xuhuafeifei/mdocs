@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "../../../infra/db/connection.js";
-import { findDomainById } from "../../domains/repo/domain.repo.js";
+import { getDomainById } from "../../domains/service/domain.service.js";
 import {
   countChildrenByParent,
   deleteDocument,
@@ -8,7 +8,7 @@ import {
   findDocumentByPath,
   insertDocument,
 } from "../repo/document.repo.js";
-import { resolveDomainAccess } from "../../access/domain-access.js";
+import { canFullyAccessDomain } from "../../access/access.js";
 import {
   DocumentError,
   Permission,
@@ -37,13 +37,12 @@ export function createFolder(params: {
   const domainId = params.domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
 
-  const domainRow = findDomainById(domainId, db);
+  const domainRow = getDomainById(domainId, db);
   if (!domainRow) {
     throw new DocumentError("DOMAIN_NOT_FOUND", "工作空间不存在", 404);
   }
 
-  const access = resolveDomainAccess(db, domainRow, domainId, params.actorVisitorId);
-  if (access.kind !== "full") {
+  if (!canFullyAccessDomain(params.actorVisitorId, domainId)) {
     throw new DocumentError("FORBIDDEN", "无权在该工作空间创建目录", 403);
   }
 
