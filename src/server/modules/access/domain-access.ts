@@ -15,7 +15,7 @@ import {
   isDomainMember,
   type Domains,
 } from "../domains/service/domain.service.js";
-import { hasDocumentInviteInDomain } from "../documents/repo/document.repo";
+import { hasDocumentInviteInDomain } from "../documents/service/document.service.js";
 
 export type DomainAccessKind = "none" | "full" | "viaDocumentInvites";
 
