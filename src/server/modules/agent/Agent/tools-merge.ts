@@ -3,7 +3,8 @@
  */
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { DocumentError, assertDocumentAccess } from "../../access/access-control";
+import { assertCanWriteDocument } from "../../access/access";
+import { DocumentError } from "../../access/access-control";
 import {
   suggestDocumentMerge,
   suggestDocumentMergeMessage,
@@ -51,7 +52,7 @@ export function suggestDocumentMergeTool({ visitorId }: ToolDeps): AgentTool {
       if (!documentId) throw new Error("documentId is required");
       if (typeof localContent !== "string") throw new Error("localContent is required");
       try {
-        assertDocumentAccess(documentId, visitorId, "edit");
+        assertCanWriteDocument(visitorId, documentId);
         const data = await suggestDocumentMerge({
           actorVisitorId: visitorId,
           documentId,
@@ -112,7 +113,7 @@ export function suggestDocumentMergeMessageTool({ visitorId }: ToolDeps): AgentT
       const documentId = p.documentId?.trim();
       if (!documentId) throw new Error("documentId is required");
       try {
-        assertDocumentAccess(documentId, visitorId, "edit");
+        assertCanWriteDocument(visitorId, documentId);
         const data = await suggestDocumentMergeMessage({
           actorVisitorId: visitorId,
           documentId,

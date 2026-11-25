@@ -5,7 +5,8 @@ import { getDb } from "../../../infra/db/connection";
 import { findDocumentById } from "../../documents/repo/document.repo";
 import { listCurrentVisitorDocuments } from "../../visitor/application/visitor.application.js";
 import { resolvePageParams } from "../../../shared/request/page.params.js";
-import { assertDocumentAccess, DocumentError } from "../../access/access-control";
+import { assertCanReadDocument } from "../../access/access";
+import { DocumentError } from "../../access/access-control";
 import {
   createDocument,
   addDocumentInvite,
@@ -268,7 +269,7 @@ export function getDocumentTool({ visitorId }: ToolDeps): AgentTool {
       const format =
         rawFormat === "json" ? "json" : rawFormat === "text" ? "text" : "md";
       try {
-        assertDocumentAccess(documentId, visitorId, "read");
+        assertCanReadDocument(visitorId, documentId);
         const doc = getDocument(documentId, visitorId, format);
         let content = doc.content ?? "";
         // Job：把 SQLite 产出打进 content，方便 Agent 一次读全
@@ -326,7 +327,7 @@ export function listDocumentCommitsTool({ visitorId }: ToolDeps): AgentTool {
       if (!documentId) throw new Error("documentId is required");
       const limit = Math.min(Math.max(Math.floor(rawLimit ?? 30), 1), 100);
       try {
-        assertDocumentAccess(documentId, visitorId, "read");
+        assertCanReadDocument(visitorId, documentId);
         const all = listDocumentCommits(documentId);
         return asToolResult({
           documentId,
@@ -380,7 +381,7 @@ export function getDocumentCommitTool({ visitorId }: ToolDeps): AgentTool {
       const format =
         rawFormat === "json" ? "json" : rawFormat === "text" ? "text" : "md";
       try {
-        assertDocumentAccess(documentId, visitorId, "read");
+        assertCanReadDocument(visitorId, documentId);
         const row = findDocumentById(documentId);
         if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
         const detail = getDocumentCommit(documentId, commitId);

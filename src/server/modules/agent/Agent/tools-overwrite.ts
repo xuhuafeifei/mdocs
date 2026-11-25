@@ -1,6 +1,7 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { assertDocumentAccess, DocumentError } from "../../access/access-control";
+import { assertCanWriteDocument } from "../../access/access";
+import { DocumentError } from "../../access/access-control";
 import { getDocument, updateDocument } from "../../documents/document.service";
 import { isAlmostEmptyDocumentText } from "./almost-empty";
 import {
@@ -123,7 +124,7 @@ export function overwriteDocumentTool({
       if (!message) throw new Error("message is required");
 
       try {
-        assertDocumentAccess(documentId, visitorId, "edit");
+        assertCanWriteDocument(visitorId, documentId);
         const doc = getDocument(documentId, visitorId, "text");
         const plain = doc.content ?? "";
         const fileType = doc.fileType || FILE_TYPE.DOCUMENT;

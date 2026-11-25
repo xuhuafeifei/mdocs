@@ -1,5 +1,5 @@
 /**
- * get_document tool：与 HTTP 同一套 assertDocumentAccess，无权不可读正文。
+ * get_document tool：与 HTTP 同一套 assertCanReadDocument，无权不可读正文。
  */
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import Database from "better-sqlite3";
@@ -14,11 +14,11 @@ const fileStoreMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../../db/connection.js", () => ({
+vi.mock("../../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
-vi.mock("../../storage/file-store.js", () => ({
+vi.mock("../../../infra/storage/file-store.js", () => ({
   writeDocument: (_domainId: string, _relativePath: string, content: string) => {
     fileStoreMocks.lastWriteContent = content;
     return { contentHash: "mock-hash", bytes: content.length };

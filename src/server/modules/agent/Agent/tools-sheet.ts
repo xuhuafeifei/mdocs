@@ -4,7 +4,11 @@
  */
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { assertDocumentAccess, DocumentError } from "../../access/access-control";
+import {
+  assertCanReadDocument,
+  assertCanWriteDocument,
+} from "../../access/access";
+import { DocumentError } from "../../access/access-control";
 import { getDocument, updateDocument } from "../../documents/document.service";
 import { FILE_TYPE } from "../../../../shared/file-types";
 import {
@@ -85,7 +89,7 @@ function asAgentError(err: unknown): never {
 }
 
 function loadWorkbookForRead(documentId: string, visitorId: string) {
-  assertDocumentAccess(documentId, visitorId, "read");
+  assertCanReadDocument(visitorId, documentId);
   const doc = getDocument(documentId, visitorId, "json");
   if (doc.fileType !== FILE_TYPE.SHEET) {
     throw new Error(`NOT_A_SHEET: document fileType is '${doc.fileType}', expected sheet`);
@@ -95,7 +99,7 @@ function loadWorkbookForRead(documentId: string, visitorId: string) {
 }
 
 function loadWorkbookForEdit(documentId: string, visitorId: string) {
-  assertDocumentAccess(documentId, visitorId, "edit");
+  assertCanWriteDocument(visitorId, documentId);
   const doc = getDocument(documentId, visitorId, "json");
   if (doc.fileType !== FILE_TYPE.SHEET) {
     throw new Error(`NOT_A_SHEET: document fileType is '${doc.fileType}', expected sheet`);

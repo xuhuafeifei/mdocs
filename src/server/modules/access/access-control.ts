@@ -250,7 +250,8 @@ export function canEditDocument(
 
 /**
  * 全量鉴权：查文档 → 查域 → 判断读写删权限。
- * 抛 DocumentError（404/403），由 error-handling 中间件或路由 catch 处理。
+ * @deprecated 读/写用 `assertCanReadDocument` / `assertCanWriteDocument`（access.ts）。
+ * Nest Guard 与 delete 动作迁移前暂留。见 layout-debt D3i / D5。
  */
 export function assertDocumentAccess(
   documentId: string,

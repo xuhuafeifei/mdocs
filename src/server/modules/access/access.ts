@@ -3,10 +3,12 @@
  * 行级函数仍在 access-control.ts / domain-access.ts，供本文件与迁移期旧调用方使用。
  */
 import { getDb } from "../../infra/db/connection.js";
+import { isGraphFileType } from "../../../shared/file-types.js";
 import { getDocumentById } from "../documents/service/document.service.js";
 import { getDomainById } from "../domains/service/domain.service.js";
 import {
   DocumentError,
+  assertGraphAccess,
   canEditDocument,
   canReadDocument,
   makeDomainAccessInfo,
@@ -114,6 +116,40 @@ export function assertCanWrite(
   if (!canEditDocument(row, visitorId, domainInfo)) {
     throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
   }
+}
+
+/**
+ * 仅有 documentId 时的读断言（Agent / 旧 Guard）。
+ * 查文取 domainId 后走 assertCanRead；图谱缓存文件走 assertGraphAccess。
+ */
+export function assertCanReadDocument(
+  visitorId: string | null,
+  documentId: string,
+): void {
+  const row = getDocumentById(documentId);
+  if (!row) {
+    throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+  }
+  if (isGraphFileType(row.file_type)) {
+    assertGraphAccess(row.domain_id, visitorId);
+    return;
+  }
+  assertCanRead(visitorId, row.domain_id, documentId);
+}
+
+/**
+ * 仅有 documentId 时的写断言（Agent / 旧 Guard）。
+ * 查文取 domainId 后走 assertCanWrite。
+ */
+export function assertCanWriteDocument(
+  visitorId: string | null,
+  documentId: string,
+): void {
+  const row = getDocumentById(documentId);
+  if (!row) {
+    throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
+  }
+  assertCanWrite(visitorId, row.domain_id, documentId);
 }
 
 function loadDocInDomain(visitorId: string | null, domainId: string, documentId: string) {

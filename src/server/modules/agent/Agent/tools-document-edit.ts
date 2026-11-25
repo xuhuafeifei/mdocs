@@ -3,7 +3,8 @@
  */
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { assertDocumentAccess, DocumentError } from "../../access/access-control";
+import { assertCanWriteDocument } from "../../access/access";
+import { DocumentError } from "../../access/access-control";
 import { getDocument, updateDocument } from "../../documents/document.service";
 import { markdownToLexicalJson } from "../../documents/markdown-to-lexical";
 import { lexicalJsonToMarkdown } from "../../documents/lexical-to-markdown";
@@ -21,7 +22,7 @@ type LexRoot = {
 };
 
 function requireMdDoc(documentId: string, visitorId: string) {
-  assertDocumentAccess(documentId, visitorId, "edit");
+  assertCanWriteDocument(visitorId, documentId);
   const doc = getDocument(documentId, visitorId, "json");
   const fileType = doc.fileType || FILE_TYPE.DOCUMENT;
   if (fileType !== FILE_TYPE.DOCUMENT) {

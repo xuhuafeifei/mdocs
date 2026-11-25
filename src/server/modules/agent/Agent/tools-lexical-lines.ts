@@ -3,7 +3,8 @@
  */
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { assertDocumentAccess, DocumentError } from "../../access/access-control";
+import { assertCanReadDocument } from "../../access/access";
+import { DocumentError } from "../../access/access-control";
 import { getDocument } from "../../documents/document.service";
 import { lexicalJsonToLexicalLines } from "../../documents/lexical-to-markdown";
 import {
@@ -29,7 +30,7 @@ export function getDocumentLexicalLinesTool({ visitorId }: ToolDeps): AgentTool 
       const documentId = String((params as { documentId?: string }).documentId ?? "").trim();
       if (!documentId) throw new Error("documentId is required");
       try {
-        assertDocumentAccess(documentId, visitorId, "read");
+        assertCanReadDocument(visitorId, documentId);
         const doc = getDocument(documentId, visitorId, "json");
         if (doc.fileType && doc.fileType !== "md") {
           throw new Error(`unsupported fileType: ${doc.fileType} (only md)`);

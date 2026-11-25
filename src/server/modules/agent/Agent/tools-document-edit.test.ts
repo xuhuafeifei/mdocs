@@ -14,11 +14,11 @@ const fileStoreMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../../db/connection.js", () => ({
+vi.mock("../../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
-vi.mock("../../storage/file-store.js", () => ({
+vi.mock("../../../infra/storage/file-store.js", () => ({
   writeDocument: (_d: string, _p: string, content: string) => {
     fileStoreMocks.lastWriteContent = content;
     const hash = createHash("sha256").update(content).digest("hex");
