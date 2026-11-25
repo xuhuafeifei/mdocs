@@ -1,25 +1,17 @@
-import { getDb } from "../../../infra/db/connection.js";
 import {
   deleteDomainMemberTemplate,
   findDomainMemberTemplateById,
   insertDomainMemberTemplate,
   listDomainMemberTemplates,
-  normaliseVisitorIdsToCsv,
   updateDomainMemberTemplate,
-  visitorIdsFromStoredCsv,
-  type DomainMemberTemplateRow,
-} from "../../../infra/db/repositories/domain-member-template.repo.js";
+} from "../repo/domain-member-template.repo.js";
+import {
+  toDomainMemberTemplateResponse,
+  toDomainMemberTemplates,
+  toDomainMemberTemplatesUpdate,
+} from "../mapper/domain-member-template.mapper.js";
+import type { DomainMemberTemplateResponse } from "../response/domain-member-template.response.js";
 import { DomainError } from "../domain-error.js";
-
-function rowToDto(row: DomainMemberTemplateRow) {
-  return {
-    id: row.id,
-    displayName: row.display_name,
-    visitorIds: visitorIdsFromStoredCsv(row.domain_visitor_ids),
-    createTime: row.create_time,
-    updateTime: row.update_time,
-  };
-}
 
 function parseTemplateId(raw: string): number {
   const id = Number(raw);
@@ -29,35 +21,35 @@ function parseTemplateId(raw: string): number {
   return id;
 }
 
-export function listMemberTemplates(createVisitorId: string) {
-  const rows = listDomainMemberTemplates(getDb(), createVisitorId);
-  return rows.map(rowToDto);
+export function listMemberTemplates(
+  createVisitorId: string,
+): DomainMemberTemplateResponse[] {
+  return listDomainMemberTemplates(createVisitorId).map(toDomainMemberTemplateResponse);
 }
 
 export function createMemberTemplate(params: {
   createVisitorId: string;
   displayName: string;
   visitorIds?: string[];
-}) {
+}): DomainMemberTemplateResponse {
   const displayName = params.displayName.trim();
   if (!displayName) {
     throw new DomainError("BAD_REQUEST", "displayName is required", 400);
   }
-  const visitorIds = params.visitorIds ?? [];
   const now = new Date().toISOString();
-  const db = getDb();
-  const id = insertDomainMemberTemplate(db, {
+  const row = toDomainMemberTemplates({
     displayName,
-    domainVisitorIdsCsv: normaliseVisitorIdsToCsv(visitorIds),
+    visitorIds: params.visitorIds ?? [],
     createVisitorId: params.createVisitorId,
     createTime: now,
     updateTime: now,
   });
-  const row = findDomainMemberTemplateById(db, id, params.createVisitorId);
-  if (!row) {
+  const id = insertDomainMemberTemplate(row);
+  const created = findDomainMemberTemplateById(id, params.createVisitorId);
+  if (!created) {
     throw new DomainError("INTERNAL", "failed to load created template", 500);
   }
-  return rowToDto(row);
+  return toDomainMemberTemplateResponse(created);
 }
 
 export function updateMemberTemplate(params: {
@@ -65,29 +57,31 @@ export function updateMemberTemplate(params: {
   idRaw: string;
   displayName: string;
   visitorIds?: string[];
-}) {
+}): DomainMemberTemplateResponse {
   const id = parseTemplateId(params.idRaw);
   const displayName = params.displayName.trim();
   if (!displayName) {
     throw new DomainError("BAD_REQUEST", "displayName is required", 400);
   }
-  const visitorIds = params.visitorIds ?? [];
-  const db = getDb();
-  const updated = updateDomainMemberTemplate(db, id, params.createVisitorId, {
-    displayName,
-    domainVisitorIdsCsv: normaliseVisitorIdsToCsv(visitorIds),
-    updateTime: new Date().toISOString(),
-  });
-  if (!updated) {
+  const existing = findDomainMemberTemplateById(id, params.createVisitorId);
+  if (!existing) {
     throw new DomainError("NOT_FOUND", "template not found", 404);
   }
-  const row = findDomainMemberTemplateById(db, id, params.createVisitorId)!;
-  return rowToDto(row);
+  const next = toDomainMemberTemplatesUpdate(existing, {
+    displayName,
+    visitorIds: params.visitorIds ?? [],
+    updateTime: new Date().toISOString(),
+  });
+  if (!updateDomainMemberTemplate(next)) {
+    throw new DomainError("NOT_FOUND", "template not found", 404);
+  }
+  const updated = findDomainMemberTemplateById(id, params.createVisitorId)!;
+  return toDomainMemberTemplateResponse(updated);
 }
 
 export function deleteMemberTemplate(createVisitorId: string, idRaw: string): void {
   const id = parseTemplateId(idRaw);
-  const deleted = deleteDomainMemberTemplate(getDb(), id, createVisitorId);
+  const deleted = deleteDomainMemberTemplate(id, createVisitorId);
   if (!deleted) {
     throw new DomainError("NOT_FOUND", "template not found", 404);
   }

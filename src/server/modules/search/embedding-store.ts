@@ -5,6 +5,11 @@ import type Database from "better-sqlite3";
 import { getDb } from "../../infra/db/connection";
 import { useLogger } from "../../infra/logger/logger";
 import { EMBEDDING_DIM, embedText, isEmbeddingReady } from "./embedding-model";
+import {
+  deleteDocumentEmbeddingChunks,
+  insertDocumentEmbeddingChunk,
+  listDocumentEmbeddingChunks,
+} from "./repo/document-embedding.repo";
 
 const log = useLogger("embedding-store");
 
@@ -62,8 +67,9 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
-export function deleteEmbeddingChunks(db: Database.Database, documentId: string): void {
-  db.prepare(`DELETE FROM document_embedding_chunks WHERE document_id = ?`).run(documentId);
+/** 删除某文档全部向量块。可选 `db` 仅单测 / 事务注入。 */
+export function deleteEmbeddingChunks(documentId: string, db?: Database.Database): void {
+  deleteDocumentEmbeddingChunks(documentId, db);
 }
 
 /**
@@ -89,7 +95,7 @@ export async function upsertDocumentEmbeddings(params: {
     const now = new Date().toISOString();
 
     if (chunks.length === 0) {
-      deleteEmbeddingChunks(db, params.documentId);
+      deleteEmbeddingChunks(params.documentId, db);
       log.info("semantic build %s: empty text, cleared chunks", label);
       return;
     }
@@ -124,19 +130,25 @@ export async function upsertDocumentEmbeddings(params: {
       .prepare(`SELECT 1 AS ok FROM documents WHERE document_id = ?`)
       .get(params.documentId) as { ok: number } | undefined;
     if (!stillExists) {
-      deleteEmbeddingChunks(db, params.documentId);
+      deleteEmbeddingChunks(params.documentId, db);
       log.info("semantic build skip %s: document deleted during embed", label);
       return;
     }
 
     const tx = db.transaction(() => {
-      deleteEmbeddingChunks(db, params.documentId);
-      const insert = db.prepare(
-        `INSERT INTO document_embedding_chunks (document_id, domain_id, chunk_index, text, embedding, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      );
+      deleteEmbeddingChunks(params.documentId, db);
       for (const row of rows) {
-        insert.run(params.documentId, params.domainId, row.index, row.text, row.embedding, now);
+        insertDocumentEmbeddingChunk(
+          {
+            document_id: params.documentId,
+            domain_id: params.domainId,
+            chunk_index: row.index,
+            text: row.text,
+            embedding: row.embedding,
+            updated_at: now,
+          },
+          db,
+        );
       }
     });
     tx();
@@ -165,20 +177,7 @@ export async function querySemanticNeighbors(params: {
     const qVec = await embedText(params.query, "query");
     if (!qVec) return [];
 
-    const db = getDb();
-    const domainClause = params.domainId ? "WHERE domain_id = ?" : "";
-    const sqlParams: unknown[] = params.domainId ? [params.domainId] : [];
-    const rows = db
-      .prepare(
-        `SELECT document_id, domain_id, text, embedding
-         FROM document_embedding_chunks ${domainClause}`,
-      )
-      .all(...sqlParams) as Array<{
-      document_id: string;
-      domain_id: string;
-      text: string;
-      embedding: Buffer;
-    }>;
+    const rows = listDocumentEmbeddingChunks({ domainId: params.domainId });
 
     if (rows.length === 0) return [];
 

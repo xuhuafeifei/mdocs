@@ -16,6 +16,11 @@ import { findDomainById } from "../domains/repo/domain.repo";
 import { canReadDocument, makeDomainAccessInfo } from "../access/access-control";
 import type { Documents } from "../documents/repo/document.repo";
 import { querySemanticNeighbors } from "./embedding-store";
+import {
+  matchDocumentsFtsBody,
+  matchDocumentsFtsTitle,
+} from "./repo/document-fts.repo";
+import type { DocumentsFtsHitRow } from "./entity/search-index.entity";
 
 /** 与索引写入侧一致：查询也先 jieba，再交给 FTS5 */
 const JIEBA = Jieba.withDict(dict);
@@ -90,8 +95,8 @@ export async function searchDocuments(params: {
     const semanticHits = await trySemanticHits(params.query, params.domainId, topN * 3);
     merged = mergeFtsAndSemantic([], semanticHits);
   } else {
-    const titleRows = queryTitleFts(db, params.query, topN * 2, params.domainId);
-    const bodyRows = queryBodyFts(db, params.query, topN * 4, params.domainId);
+    const titleRows = queryTitleFts(params.query, topN * 2, params.domainId);
+    const bodyRows = queryBodyFts(params.query, topN * 4, params.domainId);
     const ftsMerged = mergeFtsHits(titleRows, bodyRows);
     if (mode === "keyword") {
       merged = ftsMerged;
@@ -259,20 +264,6 @@ function fillMissingDocFields(db: Database.Database, merged: MergedHit[]): void 
   }
 }
 
-interface FtsHitPayload {
-  document_id: string;
-  display_name: string;
-  relative_path: string;
-  domain_id: string;
-  owner_visitor_id: string;
-  permission: number;
-  bm25_score: number;
-}
-
-interface BodyFtsHit extends FtsHitPayload {
-  content: string;
-}
-
 interface MergedHit {
   document_id: string;
   display_name: string;
@@ -296,7 +287,7 @@ function rankFromBm25(bm25: number): number {
   return 1 / (1 + Math.exp(bm25));
 }
 
-function mergeFtsHits(titleRows: FtsHitPayload[], bodyRows: BodyFtsHit[]): MergedHit[] {
+function mergeFtsHits(titleRows: DocumentsFtsHitRow[], bodyRows: DocumentsFtsHitRow[]): MergedHit[] {
   const map = new Map<
     string,
     {
@@ -330,7 +321,7 @@ function mergeFtsHits(titleRows: FtsHitPayload[], bodyRows: BodyFtsHit[]): Merge
     const existing = map.get(row.document_id);
     if (existing) {
       existing.bodyRank = rankFromBm25(row.bm25_score);
-      existing.bodyContent = row.content;
+      existing.bodyContent = row.content ?? "";
       if (!existing.display_name) existing.display_name = row.display_name;
       if (!existing.relative_path) existing.relative_path = row.relative_path;
     } else {
@@ -341,7 +332,7 @@ function mergeFtsHits(titleRows: FtsHitPayload[], bodyRows: BodyFtsHit[]): Merge
         domain_id: row.domain_id,
         owner_visitor_id: row.owner_visitor_id,
         permission: row.permission,
-        bodyContent: row.content,
+        bodyContent: row.content ?? "",
         titleRank: 0,
         bodyRank: rankFromBm25(row.bm25_score),
       });
@@ -406,59 +397,23 @@ function mergeFtsAndSemantic(
 }
 
 function queryTitleFts(
-  db: Database.Database,
   query: string,
   limit: number,
-  domainIdPattern?: string,
-): FtsHitPayload[] {
+  domainId?: string,
+): DocumentsFtsHitRow[] {
   const safeQuery = escapeFts5Query(query);
   if (!safeQuery) return [];
-
-  const domainClause = domainIdPattern ? "AND domain_id = ?" : "";
-  const params: unknown[] = domainIdPattern ? [safeQuery, domainIdPattern, limit] : [safeQuery, limit];
-
-  try {
-    return db
-      .prepare(
-        `SELECT document_id, display_name, relative_path, domain_id, owner_visitor_id, permission,
-                bm25(documents_fts_title) AS bm25_score
-         FROM documents_fts_title
-         WHERE documents_fts_title MATCH ? ${domainClause}
-         ORDER BY bm25_score ASC
-         LIMIT ?`,
-      )
-      .all(...params) as FtsHitPayload[];
-  } catch {
-    return [];
-  }
+  return matchDocumentsFtsTitle({ matchQuery: safeQuery, limit, domainId });
 }
 
 function queryBodyFts(
-  db: Database.Database,
   query: string,
   limit: number,
-  domainIdPattern?: string,
-): BodyFtsHit[] {
+  domainId?: string,
+): DocumentsFtsHitRow[] {
   const safeQuery = escapeFts5Query(query);
   if (!safeQuery) return [];
-
-  const domainClause = domainIdPattern ? "AND domain_id = ?" : "";
-  const params: unknown[] = domainIdPattern ? [safeQuery, domainIdPattern, limit] : [safeQuery, limit];
-
-  try {
-    return db
-      .prepare(
-        `SELECT document_id, display_name, relative_path, domain_id, owner_visitor_id, permission, content,
-                bm25(documents_fts) AS bm25_score
-         FROM documents_fts
-         WHERE documents_fts MATCH ? ${domainClause}
-         ORDER BY bm25_score ASC
-         LIMIT ?`,
-      )
-      .all(...params) as BodyFtsHit[];
-  } catch {
-    return [];
-  }
+  return matchDocumentsFtsBody({ matchQuery: safeQuery, limit, domainId });
 }
 
 function extractSnippet(text: string, query: string, maxLen = 200): string {

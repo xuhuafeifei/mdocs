@@ -30,11 +30,11 @@ function tok(text: string): string {
   return JIEBA.cutForSearch(text, true).join(" ");
 }
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
-vi.mock("../logger/logger.js", () => ({
+vi.mock("../../infra/logger/logger.js", () => ({
   useLogger: () => ({
     debug: () => {},
     info: () => {},
@@ -355,7 +355,7 @@ describe("searchDocuments semantic merge", () => {
 
   it("deleteEmbeddingChunks leaves no rows", () => {
     insertChunk("gone", "default", unit(0));
-    deleteEmbeddingChunks(testDbRef.db!, "gone");
+    deleteEmbeddingChunks("gone", testDbRef.db!);
     const n = (
       testDbRef.db!.prepare(`SELECT COUNT(*) AS c FROM document_embedding_chunks WHERE document_id = ?`).get(
         "gone",

@@ -25,11 +25,11 @@ function lexical(text: string): string {
   });
 }
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
-vi.mock("../storage/file-store.js", () => ({
+vi.mock("../../infra/storage/file-store.js", () => ({
   writeDocument: () => ({ contentHash: "mock-hash", bytes: 0 }),
   readDocument: (_domainId: string, relativePath: string) => ({
     content: contentByPath.get(relativePath) ?? lexical("测试文档内容"),
@@ -40,7 +40,7 @@ vi.mock("../storage/file-store.js", () => ({
   deleteDocumentFile: () => {},
 }));
 
-vi.mock("../config/index.js", () => ({
+vi.mock("../../infra/config/index.js", () => ({
   getConfig: () => ({
     host: "127.0.0.1",
     port: 4000,
@@ -63,7 +63,7 @@ vi.mock("../config/index.js", () => ({
   }),
 }));
 
-vi.mock("../logger/logger.js", () => ({
+vi.mock("../../infra/logger/logger.js", () => ({
   useLogger: () => ({
     debug: () => {},
     info: () => {},
@@ -74,8 +74,9 @@ vi.mock("../logger/logger.js", () => ({
 
 /** 本文件测 FTS；语义写入只记账，删除走真实 SQL 以便断言 removeIndex */
 vi.mock("./embedding-store.js", () => ({
-  deleteEmbeddingChunks: (db: Database.Database, documentId: string) => {
-    db.prepare(`DELETE FROM document_embedding_chunks WHERE document_id = ?`).run(documentId);
+  deleteEmbeddingChunks: (documentId: string, db?: Database.Database) => {
+    const conn = db ?? testDbRef.db!;
+    conn.prepare(`DELETE FROM document_embedding_chunks WHERE document_id = ?`).run(documentId);
   },
   upsertDocumentEmbeddings: async (input: { plainText: string }) => {
     embeddedPlainTexts.push(input.plainText);

@@ -16,6 +16,12 @@ import { readDocument } from "../../infra/storage/file-store";
 import { useLogger } from "../../infra/logger/logger";
 import { deleteEmbeddingChunks, upsertDocumentEmbeddings } from "./embedding-store";
 import { isEmbeddingReady } from "./embedding-model";
+import {
+  deleteDocumentsFtsBody,
+  deleteDocumentsFtsTitle,
+  insertDocumentsFtsBody,
+  insertDocumentsFtsTitle,
+} from "./repo/document-fts.repo";
 import { ftsIndexTypes } from "../../../shared/file-type-policy";
 import { getCellValue, parseSheetDocument } from "../../../shared/sheetDocument";
 
@@ -151,9 +157,8 @@ export async function backfillMissingEmbeddings(limit = 40): Promise<number> {
  * 文档删除时调用。各步独立 try，避免 FTS 失败导致语义块漏删。
  */
 export function removeIndex(documentId: string): void {
-  const db = getDb();
   try {
-    deleteFtsRow(db, "documents_fts", "documents_fts_rowid", documentId);
+    deleteDocumentsFtsBody(documentId);
   } catch (err) {
     log.warn(
       "removeIndex fts body failed for %s: %s",
@@ -162,7 +167,7 @@ export function removeIndex(documentId: string): void {
     );
   }
   try {
-    deleteFtsRow(db, "documents_fts_title", "documents_fts_title_rowid", documentId);
+    deleteDocumentsFtsTitle(documentId);
   } catch (err) {
     log.warn(
       "removeIndex fts title failed for %s: %s",
@@ -171,7 +176,7 @@ export function removeIndex(documentId: string): void {
     );
   }
   try {
-    deleteEmbeddingChunks(db, documentId);
+    deleteEmbeddingChunks(documentId);
   } catch (err) {
     log.warn(
       "removeIndex embeddings failed for %s: %s",
@@ -278,44 +283,34 @@ export function rebuildDocument(documentId: string): {
   const titleTokens = tokenizeForSearch(doc.display_name || "");
 
   // ---- 重建正文 FTS ----
-  deleteFtsRow(db, "documents_fts", "documents_fts_rowid", documentId);
-  const bodyResult = db
-    .prepare(
-      `INSERT INTO documents_fts(content, document_id, display_name, relative_path, domain_id, owner_visitor_id, permission)
-       VALUES(?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      plainText,
-      documentId,
-      doc.display_name,
-      doc.relative_path,
-      doc.domain_id,
-      doc.owner_visitor_id,
-      doc.permission,
-    );
-  db.prepare(
-    `INSERT INTO documents_fts_rowid(document_id, fts_rowid) VALUES(?, ?)`,
-  ).run(documentId, bodyResult.lastInsertRowid);
+  deleteDocumentsFtsBody(documentId, db);
+  insertDocumentsFtsBody(
+    {
+      content: plainText,
+      document_id: documentId,
+      display_name: doc.display_name,
+      relative_path: doc.relative_path,
+      domain_id: doc.domain_id,
+      owner_visitor_id: doc.owner_visitor_id,
+      permission: doc.permission,
+    },
+    db,
+  );
 
   // ---- 重建标题 FTS ----
-  deleteFtsRow(db, "documents_fts_title", "documents_fts_title_rowid", documentId);
-  const titleResult = db
-    .prepare(
-      `INSERT INTO documents_fts_title(title, document_id, display_name, relative_path, domain_id, owner_visitor_id, permission)
-       VALUES(?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      titleTokens,
-      documentId,
-      doc.display_name,
-      doc.relative_path,
-      doc.domain_id,
-      doc.owner_visitor_id,
-      doc.permission,
-    );
-  db.prepare(
-    `INSERT INTO documents_fts_title_rowid(document_id, fts_rowid) VALUES(?, ?)`,
-  ).run(documentId, titleResult.lastInsertRowid);
+  deleteDocumentsFtsTitle(documentId, db);
+  insertDocumentsFtsTitle(
+    {
+      title: titleTokens,
+      document_id: documentId,
+      display_name: doc.display_name,
+      relative_path: doc.relative_path,
+      domain_id: doc.domain_id,
+      owner_visitor_id: doc.owner_visitor_id,
+      permission: doc.permission,
+    },
+    db,
+  );
 
   // ---- 乐观锁：确认文档未在索引期间被更新 ----
   const changed = db
@@ -335,25 +330,6 @@ export function rebuildDocument(documentId: string): {
     displayName: doc.display_name,
     relativePath: doc.relative_path,
   };
-}
-
-function deleteFtsRow(
-  db: ReturnType<typeof getDb>,
-  ftsTable: "documents_fts" | "documents_fts_title",
-  mapTable: "documents_fts_rowid" | "documents_fts_title_rowid",
-  documentId: string,
-): void {
-  const mapRow = db
-    .prepare(`SELECT fts_rowid FROM ${mapTable} WHERE document_id = ?`)
-    .get(documentId) as { fts_rowid: number } | undefined;
-  if (!mapRow) return;
-  try {
-    // 直接按 rowid 删除（FTS5 的 VALUES('delete', rowid) 在部分环境会 SQL logic error）
-    db.prepare(`DELETE FROM ${ftsTable} WHERE rowid = ?`).run(mapRow.fts_rowid);
-  } catch {
-    // 忽略删除失败
-  }
-  db.prepare(`DELETE FROM ${mapTable} WHERE document_id = ?`).run(documentId);
 }
 
 // ============================================================
