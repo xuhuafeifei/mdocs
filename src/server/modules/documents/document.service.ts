@@ -42,15 +42,14 @@ import {
   isDomainMember,
 } from "../domains/repo/domain.repo";
 import {
-  resolveDomainAccess,
-  canEnterDomainTree,
-} from "../access/domain-access";
+  canEnterDomain,
+  canFullyAccessDomain,
+  canRead,
+  canWrite,
+} from "../access/access";
 import {
   DocumentError,
   Permission,
-  canReadDocument,
-  canEditDocument,
-  makeDomainAccessInfo,
   validateDomainPermission,
 } from "../access/access-control";
 import {
@@ -142,18 +141,12 @@ export function listDocuments(
 ): DocumentSummary[] {
   const cfg = getConfig();
   const effective = domainId?.trim() || cfg.defaultDomainId;
-  const db = getDb();
 
-  const domain = findDomainById(effective, db);
-  const access = resolveDomainAccess(db, domain, effective, visitorId);
-  if (!canEnterDomainTree(access)) return [];
+  if (!canEnterDomain(visitorId ?? null, effective)) return [];
 
-  const domainPermission = domain?.permission ?? "public";
-  const domainInfo = makeDomainAccessInfo(db, effective, visitorId, domainPermission);
-
-  const rows = listDocumentsByDomain(effective, db);
+  const rows = listDocumentsByDomain(effective);
   const filtered = rows.filter((r) =>
-    canReadDocument(r, visitorId ?? null, domainInfo),
+    canRead(visitorId ?? null, effective, r.document_id),
   );
   return filtered.map(rowToSummary);
 }
@@ -166,33 +159,22 @@ export function listFolderChildren(
   folderId: string,
   visitorId?: string | null,
 ): DocumentSummary[] {
-  const db = getDb();
-
   // 先查文件夹本身，确认存在且有权限
-  const folder = findDocumentById(folderId, db);
+  const folder = findDocumentById(folderId);
   if (!folder) return [];
 
-  const domain = findDomainById(folder.domain_id, db);
-  const access = resolveDomainAccess(db, domain, folder.domain_id, visitorId);
-  if (!canEnterDomainTree(access)) return [];
-
-  const domainPermission = domain?.permission ?? "public";
-  const domainInfo = makeDomainAccessInfo(
-    db,
-    folder.domain_id,
-    visitorId,
-    domainPermission,
-  );
+  const domainId = folder.domain_id;
+  if (!canEnterDomain(visitorId ?? null, domainId)) return [];
 
   // 检查对文件夹本身是否有读权限
-  if (!canReadDocument(folder, visitorId ?? null, domainInfo)) {
+  if (!canRead(visitorId ?? null, domainId, folder.document_id)) {
     return [];
   }
 
   // 查询所有直接子节点
-  const children = findChildrenByParent(folderId, db);
+  const children = findChildrenByParent(folderId);
   const filtered = children.filter((r) =>
-    canReadDocument(r, visitorId ?? null, domainInfo),
+    canRead(visitorId ?? null, domainId, r.document_id),
   );
   return filtered.map(rowToSummary);
 }
@@ -286,13 +268,7 @@ export function createDocument(params: {
   if (!domainRow) {
     throw new DocumentError("DOMAIN_NOT_FOUND", "工作空间不存在", 404);
   }
-  const access = resolveDomainAccess(
-    db,
-    domainRow,
-    domainId,
-    params.actorVisitorId,
-  );
-  if (access.kind !== "full") {
+  if (!canFullyAccessDomain(params.actorVisitorId, domainId)) {
     throw new DocumentError("FORBIDDEN", "无权在该工作空间创建文档", 403);
   }
 
@@ -551,13 +527,7 @@ export function updateDocument(params: {
 
   const domain = findDomainById(row.domain_id, db);
   const domainPermission = domain?.permission ?? "public";
-  const domainInfo = makeDomainAccessInfo(
-    db,
-    row.domain_id,
-    params.actorVisitorId,
-    domainPermission,
-  );
-  if (!canEditDocument(row, params.actorVisitorId, domainInfo)) {
+  if (!canWrite(params.actorVisitorId, row.domain_id, params.documentId)) {
     throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
   }
 
@@ -1090,15 +1060,7 @@ export function restoreDocumentVersion(params: {
   const row = findDocumentById(params.documentId, db);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
-  const domain = findDomainById(row.domain_id, db);
-  const domainPermission = domain?.permission ?? "public";
-  const domainInfo = makeDomainAccessInfo(
-    db,
-    row.domain_id,
-    params.actorVisitorId,
-    domainPermission,
-  );
-  if (!canEditDocument(row, params.actorVisitorId, domainInfo)) {
+  if (!canWrite(params.actorVisitorId, row.domain_id, params.documentId)) {
     throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
   }
 
