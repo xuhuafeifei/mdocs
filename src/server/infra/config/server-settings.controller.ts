@@ -2,11 +2,11 @@
  * server-settings 属 infra/config，不是业务 module。
  * return 业务结果；`{ data }` 由 WrapDataInterceptor 包。
  */
-import { BadRequestException, Body, Controller, Get, Put } from "@nestjs/common";
+import { Controller, Get, Put } from "@nestjs/common";
+import { ValidatedBody } from "../../nest/validation.js";
+import { PutServerSettingsRequest } from "./put-server-settings.request.js";
 import {
   getServerSettingsPublic,
-  MAX_MAX_UPLOAD_BYTES,
-  MIN_MAX_UPLOAD_BYTES,
   setMaxUploadBytes,
 } from "./server-settings.js";
 
@@ -18,18 +18,8 @@ export class ServerSettingsController {
   }
 
   @Put()
-  put(@Body() body: { maxUploadBytes?: unknown }) {
-    const raw = body?.maxUploadBytes;
-    const n = typeof raw === "number" ? raw : Number(raw);
-    if (!Number.isFinite(n) || n <= 0) {
-      throw new BadRequestException("maxUploadBytes must be a positive number (bytes)");
-    }
-    if (n < MIN_MAX_UPLOAD_BYTES || n > MAX_MAX_UPLOAD_BYTES) {
-      throw new BadRequestException(
-        `maxUploadBytes must be between ${MIN_MAX_UPLOAD_BYTES} and ${MAX_MAX_UPLOAD_BYTES}`,
-      );
-    }
-    const maxUploadBytes = setMaxUploadBytes(n);
+  put(@ValidatedBody(PutServerSettingsRequest) body: PutServerSettingsRequest) {
+    const maxUploadBytes = setMaxUploadBytes(body.maxUploadBytes);
     return { ...getServerSettingsPublic(), maxUploadBytes };
   }
 }

@@ -6,16 +6,13 @@
 import "reflect-metadata";
 import cookieParser from "cookie-parser";
 import express from "express";
-import {
-  BadRequestException,
-  type INestApplication,
-  ValidationPipe,
-} from "@nestjs/common";
+import { type INestApplication, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { ExpressAdapter } from "@nestjs/platform-express";
 import { AppModule } from "./app.module.js";
 import { ApiExceptionFilter } from "./filters/api-exception.filter.js";
 import { WrapDataInterceptor } from "./interceptors/wrap-data.interceptor.js";
+import { validationPipeOptions } from "./validation.js";
 import { mountApiNotFound, mountWebStatic } from "./web-static.js";
 
 export async function createNestApp(): Promise<INestApplication> {
@@ -34,19 +31,7 @@ export async function createNestApp(): Promise<INestApplication> {
   app.use(express.json({ limit: "32mb" }));
   app.use(cookieParser());
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      exceptionFactory: (errors) => {
-        const message =
-          errors
-            .flatMap((e) => Object.values(e.constraints ?? {}))
-            .join("; ") || "validation failed";
-        return new BadRequestException(message);
-      },
-    }),
-  );
+  app.useGlobalPipes(new ValidationPipe(validationPipeOptions));
   app.useGlobalInterceptors(new WrapDataInterceptor());
   app.useGlobalFilters(new ApiExceptionFilter());
   await app.init();
