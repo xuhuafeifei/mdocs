@@ -11,7 +11,10 @@
  */
 
 import type Database from "better-sqlite3";
-import { isDomainMember, type Domains } from "../domains/repo/domain.repo";
+import {
+  isDomainMember,
+  type Domains,
+} from "../domains/service/domain.service.js";
 import { hasDocumentInviteInDomain } from "../documents/repo/document.repo";
 
 export type DomainAccessKind = "none" | "full" | "viaDocumentInvites";

@@ -4,7 +4,7 @@
  */
 import { getDb } from "../../infra/db/connection.js";
 import { findDocumentById } from "../documents/repo/document.repo.js";
-import { findDomainById } from "../domains/repo/domain.repo.js";
+import { getDomainById } from "../domains/service/domain.service.js";
 import {
   DocumentError,
   canEditDocument,
@@ -16,7 +16,7 @@ import { canEnterDomainTree, resolveDomainAccess } from "./domain-access.js";
 /** 能否进入该域（看树 / 列域文档的前门）。 */
 export function canEnterDomain(visitorId: string | null, domainId: string): boolean {
   const db = getDb();
-  const domain = findDomainById(domainId);
+  const domain = getDomainById(domainId);
   const access = resolveDomainAccess(db, domain, domainId, visitorId);
   return canEnterDomainTree(access);
 }
@@ -62,7 +62,7 @@ export function assertCanRead(
   if (!canEnterDomain(visitorId, domainId)) {
     throw new DocumentError("FORBIDDEN", "无权进入该域", 403);
   }
-  const domain = findDomainById(domainId, db);
+  const domain = getDomainById(domainId, db);
   const domainInfo = makeDomainAccessInfo(
     db,
     domainId,
@@ -87,7 +87,7 @@ export function assertCanWrite(
   if (!canEnterDomain(visitorId, domainId)) {
     throw new DocumentError("FORBIDDEN", "无权进入该域", 403);
   }
-  const domain = findDomainById(domainId, db);
+  const domain = getDomainById(domainId, db);
   const domainInfo = makeDomainAccessInfo(
     db,
     domainId,
@@ -104,7 +104,7 @@ function loadDocInDomain(visitorId: string | null, domainId: string, documentId:
   const db = getDb();
   const row = findDocumentById(documentId, db);
   if (!row || row.domain_id !== domainId) return null;
-  const domain = findDomainById(domainId, db);
+  const domain = getDomainById(domainId, db);
   const domainInfo = makeDomainAccessInfo(
     db,
     domainId,

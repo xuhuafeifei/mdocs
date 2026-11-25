@@ -19,7 +19,10 @@
 
 import { getDb } from "../../infra/db/connection";
 import { findDocumentById, findDocumentInvite } from "../documents/repo/document.repo";
-import { findDomainById, getDomainMemberRole } from "../domains/repo/domain.repo";
+import {
+  getDomainById,
+  getDomainMemberRole,
+} from "../domains/service/domain.service.js";
 import type { Documents } from "../documents/repo/document.repo";
 import { isGraphFileType } from "../../../shared/file-types";
 import { canAccessGraph, resolveDomainAccess } from "./domain-access";
@@ -116,7 +119,7 @@ export function makeDomainAccessInfo(
  * 获取域权限上下文（供 bookmarks 等模块使用）。
  */
 export function getDomainInfo(db: any, domainId: string, visitorId: string | null): DomainAccessInfo {
-  const domain = findDomainById(domainId, db);
+  const domain = getDomainById(domainId, db);
   const domainPermission = domain?.permission ?? "public";
   if (!visitorId || !domain) {
     return { domainPermission, isDomainMember: false, domainMemberCanWrite: false };
@@ -266,7 +269,7 @@ export function assertDocumentAccess(
   }
 
   // 读/写：需要域上下文
-  const domain = findDomainById(row.domain_id, db);
+  const domain = getDomainById(row.domain_id, db);
   const domainPermission = domain?.permission ?? "public";
   const domainInfo = makeDomainAccessInfo(db, row.domain_id, visitorId, domainPermission);
 
@@ -291,7 +294,7 @@ export function assertDocumentAccess(
  */
 export function assertGraphAccess(domainId: string, visitorId: string | null): void {
   const db = getDb();
-  const domain = findDomainById(domainId, db);
+  const domain = getDomainById(domainId, db);
   const access = resolveDomainAccess(db, domain ?? undefined, domainId, visitorId);
   if (!canAccessGraph(access)) {
     const message =
