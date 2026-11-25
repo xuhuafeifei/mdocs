@@ -104,6 +104,30 @@ function safeLexicalJsonString(editor: IEditor): string | null {
   }
 }
 
+/** Lobe 表格横向滚动容器；发布后 focus/重绘常把 scrollLeft 打回 0 */
+const TABLE_SCROLL_SELECTOR = ".editor_table_scrollable_wrapper";
+
+type TableScrollSnap = { index: number; left: number; top: number };
+
+function captureTableScrolls(root: ParentNode | null): TableScrollSnap[] {
+  if (!root) return [];
+  return Array.from(root.querySelectorAll(TABLE_SCROLL_SELECTOR)).map((node, index) => {
+    const el = node as HTMLElement;
+    return { index, left: el.scrollLeft, top: el.scrollTop };
+  });
+}
+
+function restoreTableScrolls(root: ParentNode | null, snaps: TableScrollSnap[]): void {
+  if (!root || snaps.length === 0) return;
+  const nodes = root.querySelectorAll(TABLE_SCROLL_SELECTOR);
+  for (const snap of snaps) {
+    const el = nodes[snap.index] as HTMLElement | undefined;
+    if (!el) continue;
+    el.scrollLeft = snap.left;
+    el.scrollTop = snap.top;
+  }
+}
+
 function countRootChildren(raw: string | null | undefined): number | null {
   if (!raw) return null;
   try {
@@ -815,10 +839,10 @@ export function DocumentEditor(props: DocumentEditorProps) {
         return;
       }
     }
-    const scrollHost = document.querySelector(
-      ".mdocs-editor-scroll-host",
-    ) as HTMLElement | null;
+    const scrollHost = scrollHostRef.current;
     const savedScrollTop = scrollHost?.scrollTop ?? null;
+    const savedScrollLeft = scrollHost?.scrollLeft ?? null;
+    const tableScrolls = captureTableScrolls(scrollHost);
     // 标记发布中，禁用发布按钮
     setBusy(true);
     try {
@@ -833,13 +857,19 @@ export function DocumentEditor(props: DocumentEditorProps) {
     } finally {
       // 无论成功失败，都要关闭发布中状态
       setBusy(false);
-      // 发布后若编辑器被重新聚焦，抵消「光标滚入视野」带来的跳转
-      if (scrollHost && savedScrollTop != null) {
-        scrollHost.scrollTop = savedScrollTop;
-        requestAnimationFrame(() => {
+      // 发布后若编辑器被重新聚焦，抵消「光标滚入视野」/表格横向回弹
+      const restoreScroll = () => {
+        if (scrollHost && savedScrollTop != null) {
           scrollHost.scrollTop = savedScrollTop;
-        });
-      }
+          if (savedScrollLeft != null) scrollHost.scrollLeft = savedScrollLeft;
+        }
+        restoreTableScrolls(scrollHostRef.current ?? scrollHost, tableScrolls);
+      };
+      restoreScroll();
+      requestAnimationFrame(() => {
+        restoreScroll();
+        requestAnimationFrame(restoreScroll);
+      });
     }
   }
 
