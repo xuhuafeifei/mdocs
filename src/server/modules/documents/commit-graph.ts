@@ -2,8 +2,8 @@
  * 文档提交 DAG 的图遍历与校验。
  *
  * 命名见 .mdocs-docs/archive/commit-naming-and-merge-base.md
+ * DB 由 repo 内部 getDb()；本层不接收、不传递 Database。
  */
-import type Database from "better-sqlite3";
 import { DocumentError } from "../access/access-control";
 import { findCommitById, listParentCommitIds } from "./repo/commit.repo";
 
@@ -11,17 +11,13 @@ import { findCommitById, listParentCommitIds } from "./repo/commit.repo";
  * 判断 ancestorId 是否位于 nodeId 的祖先链上（含「自身」）。
  * 沿 commit_parents 边从 nodeId 向上 BFS。
  */
-export function isAncestorOf(
-  db: Database.Database,
-  ancestorId: string,
-  nodeId: string,
-): boolean {
+export function isAncestorOf(ancestorId: string, nodeId: string): boolean {
   if (ancestorId === nodeId) return true;
   const visited = new Set<string>();
   const queue = [nodeId];
   while (queue.length > 0) {
     const cur = queue.shift()!;
-    const parents = listParentCommitIds(cur, db);
+    const parents = listParentCommitIds(cur);
     for (const p of parents) {
       if (p === ancestorId) return true;
       if (!visited.has(p)) {
@@ -35,11 +31,10 @@ export function isAncestorOf(
 
 /** 校验 commit 存在且属于指定文档，否则 400。 */
 export function assertCommitBelongsToDocument(
-  db: Database.Database,
   commitId: string,
   documentId: string,
 ): void {
-  const row = findCommitById(commitId, db);
+  const row = findCommitById(commitId);
   if (!row || row.document_id !== documentId) {
     throw new DocumentError("INVALID_COMMIT", "提交节点不存在或不属于该文档", 400);
   }
@@ -49,14 +44,10 @@ export function assertCommitBelongsToDocument(
  * 求两提交在 DAG 上的最近公共祖先（LCA），用于 merge 三路 diff 的 mergeBaseCommitId。
  * 若一方是另一方的祖先，返回祖先侧节点。
  */
-export function findMergeBaseCommitId(
-  db: Database.Database,
-  commitA: string,
-  commitB: string,
-): string {
+export function findMergeBaseCommitId(commitA: string, commitB: string): string {
   if (commitA === commitB) return commitA;
-  if (isAncestorOf(db, commitA, commitB)) return commitA;
-  if (isAncestorOf(db, commitB, commitA)) return commitB;
+  if (isAncestorOf(commitA, commitB)) return commitA;
+  if (isAncestorOf(commitB, commitA)) return commitB;
 
   const ancestorsOfA = new Set<string>();
   const queueA = [commitA];
@@ -64,7 +55,7 @@ export function findMergeBaseCommitId(
     const cur = queueA.shift()!;
     if (ancestorsOfA.has(cur)) continue;
     ancestorsOfA.add(cur);
-    for (const p of listParentCommitIds(cur, db)) {
+    for (const p of listParentCommitIds(cur)) {
       queueA.push(p);
     }
   }
@@ -76,7 +67,7 @@ export function findMergeBaseCommitId(
     if (ancestorsOfA.has(cur)) return cur;
     if (visitedB.has(cur)) continue;
     visitedB.add(cur);
-    for (const p of listParentCommitIds(cur, db)) {
+    for (const p of listParentCommitIds(cur)) {
       queueB.push(p);
     }
   }
@@ -94,7 +85,6 @@ export function findMergeBaseCommitId(
  * - localBaseCommitId 必须是 remoteCommitId 的祖先（允许远端在分叉后线性前进）
  */
 export function assertMergeFork(
-  db: Database.Database,
   localBaseCommitId: string,
   remoteCommitId: string,
 ): void {
@@ -105,7 +95,7 @@ export function assertMergeFork(
       400,
     );
   }
-  if (!isAncestorOf(db, localBaseCommitId, remoteCommitId)) {
+  if (!isAncestorOf(localBaseCommitId, remoteCommitId)) {
     throw new DocumentError(
       "BAD_REQUEST",
       "localBaseCommitId 不是 remoteCommitId 的祖先，无法合并",

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { getDb } from "../../infra/db/connection";
+import { runInTransaction } from "../../infra/db/transaction.js";
 import {
   deleteDocument,
   findDocumentById,
@@ -37,10 +37,10 @@ import {
 } from "./commit-graph";
 import { findVisitorById } from "../visitor/repo/visitor.repo.js";
 import {
-  findDomainById,
+  getDomainById,
   getDomainMemberRole,
   isDomainMember,
-} from "../domains/repo/domain.repo";
+} from "../domains/service/domain.service.js";
 import {
   canEnterDomain,
   canFullyAccessDomain,
@@ -93,6 +93,24 @@ import {
   deleteJobRunningDataByJobId,
   deleteJobRunningDetailByJobId,
 } from "../jobs/repo/job-running.repo.js";
+import {
+  toDocumentCommitDetail,
+  toDocumentCommitSummary,
+  toDocumentDetail,
+  toDocumentDetailAfterWrite,
+  toDocumentInvitePublic,
+  toDocumentInvitesRow,
+  toDocumentSummary,
+  toDocumentCommitsRow,
+  toDocumentCommitsForRestore,
+  toDocumentsForCreate,
+  toDocumentsForRestore,
+  type DocumentCommitDetail,
+  type DocumentCommitSummary,
+  type DocumentDeleteRecovery,
+} from "./mapper/document.mapper.js";
+
+export type { DocumentDeleteRecovery };
 import {
   onArticleDeleted,
   onArticleMoved,
@@ -148,7 +166,7 @@ export function listDocuments(
   const filtered = rows.filter((r) =>
     canRead(visitorId ?? null, effective, r.document_id),
   );
-  return filtered.map(rowToSummary);
+  return filtered.map(toDocumentSummary);
 }
 
 // ============================================================
@@ -176,7 +194,7 @@ export function listFolderChildren(
   const filtered = children.filter((r) =>
     canRead(visitorId ?? null, domainId, r.document_id),
   );
-  return filtered.map(rowToSummary);
+  return filtered.map(toDocumentSummary);
 }
 
 // ============================================================
@@ -262,9 +280,8 @@ export function createDocument(params: {
         : params.content;
   const cfg = getConfig();
   const domainId = params.domainId?.trim() || cfg.defaultDomainId;
-  const db = getDb();
 
-  const domainRow = findDomainById(domainId, db);
+  const domainRow = getDomainById(domainId);
   if (!domainRow) {
     throw new DocumentError("DOMAIN_NOT_FOUND", "工作空间不存在", 404);
   }
@@ -281,7 +298,7 @@ export function createDocument(params: {
     relativePath = normalizedFileName;
   } else {
     // 有 parentId，找到父节点路径并拼接
-    const parentDoc = findDocumentById(params.parentId, db);
+    const parentDoc = findDocumentById(params.parentId);
     if (!parentDoc || parentDoc.file_type !== "dir") {
       throw new DocumentError(
         "INVALID_PARENT",
@@ -296,7 +313,7 @@ export function createDocument(params: {
     relativePath = parentPath + normalizedFileName;
   }
 
-  const existing = findDocumentByPath(domainId, relativePath, db);
+  const existing = findDocumentByPath(domainId, relativePath);
   if (existing) {
     throw new DocumentError("DOC_EXISTS", "文档已存在", 409);
   }
@@ -336,34 +353,29 @@ export function createDocument(params: {
   const commitId = randomUUID();
   const blob = writeCommitBlob(write.contentHash, content);
 
-  const tx = db.transaction(() => {
-    insertDocument({
-      document_id: documentId,
-      domain_id: domainId,
-      relative_path: relativePath,
-      display_name: displayName,
-      owner_visitor_id: params.actorVisitorId,
-      created_by: params.actorVisitorId,
-      updated_by: params.actorVisitorId,
-      content_hash: write.contentHash,
-      head_commit_id: commitId,
-      created_at: now,
-      updated_at: now,
-      permission,
-      file_type: fileType,
-      parent_id: params.parentId ?? null,
-      is_dirty: 1,
-    }, db);
-    insertCommit({
-      commit_id: commitId,
-      document_id: documentId,
-      content_hash: write.contentHash,
-      blob_ref: blob.blobRef,
-      author_visitor_id: params.actorVisitorId,
-      created_at: now,
-      message: "",
-      source: "manual",
-    }, db);
+  const docRow = toDocumentsForCreate(params, {
+    documentId,
+    domainId,
+    relativePath,
+    displayName,
+    contentHash: write.contentHash,
+    headCommitId: commitId,
+    permission,
+    fileType,
+    now,
+  });
+  const commitRow = toDocumentCommitsRow({
+    commitId,
+    documentId,
+    contentHash: write.contentHash,
+    blobRef: blob.blobRef,
+    actorVisitorId: params.actorVisitorId,
+    createdAt: now,
+  });
+
+  runInTransaction(() => {
+    insertDocument(docRow);
+    insertCommit(commitRow);
     insertAuditLog({
       id: null,
       actor_visitor_id: params.actorVisitorId,
@@ -372,29 +384,13 @@ export function createDocument(params: {
       target_id: documentId,
       metadata_json: JSON.stringify({ relativePath, bytes: write.bytes }),
       created_at: now,
-    }, db);
+    });
   });
-  tx();
 
   // 异步标记并重建索引（仅 ftsIndex 类型）
   scheduleFtsIfNeeded(fileType, documentId);
 
-  return {
-    documentId,
-    domainId,
-    relativePath,
-    displayName,
-    ownerVisitorId: params.actorVisitorId,
-    updatedBy: params.actorVisitorId,
-    updatedAt: now,
-    createdAt: now,
-    content,
-    contentHash: write.contentHash,
-    permission,
-    fileType: params.fileType ?? "md",
-    parentId: params.parentId ?? null,
-    headCommitId: commitId,
-  };
+  return toDocumentDetailAfterWrite(docRow, content);
 }
 
 // ============================================================
@@ -438,14 +434,14 @@ export function getDocument(
     row.relative_path,
   );
   const invitedEdit = visitorId
-    ? resolveInvitedEditFlag(getDb(), row, visitorId)
+    ? resolveInvitedEditFlag(row, visitorId)
     : false;
   const domainMemberWrite = visitorId
-    ? resolveDomainMemberWriteFlag(getDb(), row, visitorId)
+    ? resolveDomainMemberWriteFlag(row, visitorId)
     : false;
   const finalContent = formatDocumentBodyContent(content, row.file_type, format);
   const base = {
-    ...rowToSummary(row),
+    ...toDocumentSummary(row),
     content: finalContent,
     contentHash,
     permission: row.permission,
@@ -507,8 +503,7 @@ export function updateDocument(params: {
   /** 发布来源 */
   source?: PublishSource | string;
 }): DocumentDetail {
-  const db = getDb();
-  const row = findDocumentById(params.documentId, db);
+  const row = findDocumentById(params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
   // html 等 raw：不走 markdown→Lexical
@@ -525,7 +520,7 @@ export function updateDocument(params: {
       ? params.content
       : normalizeDocumentContent(params.content, params.contentFormat);
 
-  const domain = findDomainById(row.domain_id, db);
+  const domain = getDomainById(row.domain_id);
   const domainPermission = domain?.permission ?? "public";
   if (!canWrite(params.actorVisitorId, row.domain_id, params.documentId)) {
     throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
@@ -588,40 +583,42 @@ export function updateDocument(params: {
   }
 
   // 普通线性发布：客户端 base 必须等于当前 head（未传 version 则跳过校验）
-  assertNoVersionConflict(db, row, localBaseCommitId);
+  assertNoVersionConflict(row, localBaseCommitId);
 
   const write = writeDocument(row.domain_id, row.relative_path, content);
   const commitId = randomUUID();
   const blob = writeCommitBlob(write.contentHash, content);
 
-  const tx = db.transaction(() => {
+  runInTransaction(() => {
     updateDocumentContent({...row,
       display_name: displayName,
       content_hash: write.contentHash,
       updated_by: params.actorVisitorId,
       updated_at: now,
-      permission: params.permission ?? row.permission,}, db);
-    insertCommit({
-      commit_id: commitId,
-      document_id: row.document_id,
-      content_hash: write.contentHash,
-      blob_ref: blob.blobRef,
-      author_visitor_id: params.actorVisitorId,
-      created_at: now,
-      message: publishMeta.message,
-      source: publishMeta.source,
-    }, db);
+      permission: params.permission ?? row.permission,});
+    insertCommit(
+      toDocumentCommitsRow({
+        commitId,
+        documentId: row.document_id,
+        contentHash: write.contentHash,
+        blobRef: blob.blobRef,
+        actorVisitorId: params.actorVisitorId,
+        createdAt: now,
+        message: publishMeta.message,
+        source: publishMeta.source,
+      }),
+    );
     // 有上一版 head 时挂一条父边（fast-forward）
     if (row.head_commit_id) {
       insertCommitParent({
         child_commit_id: commitId,
         parent_commit_id: row.head_commit_id,
-      }, db);
+      });
     }
     updateDocumentHeadCommit({...row,
       head_commit_id: commitId,
       updated_by: params.actorVisitorId,
-      updated_at: now,}, db);
+      updated_at: now,});
     insertAuditLog({
       id: null,
       actor_visitor_id: params.actorVisitorId,
@@ -630,9 +627,8 @@ export function updateDocument(params: {
       target_id: row.document_id,
       metadata_json: JSON.stringify({ bytes: write.bytes }),
       created_at: now,
-    }, db);
+    });
   });
-  tx();
 
   scheduleFtsIfNeeded(row.file_type, row.document_id);
 
@@ -647,13 +643,12 @@ export function updateDocument(params: {
   // 写后直接返回最新 DocumentDetail（而非要求前端再 GET）：
   // 1) 降低竞争态：避免 PUT 与后续 GET 间隙被他人再次推进 head；
   // 2) 单一真相：以后端实际落库结果为准（权限、head、invite 派生字段等）。
-  const invitedEdit = resolveInvitedEditFlag(db, row, params.actorVisitorId);
+  const invitedEdit = resolveInvitedEditFlag(row, params.actorVisitorId);
   const domainMemberWrite = resolveDomainMemberWriteFlag(
-    db,
     row,
     params.actorVisitorId,
   );
-  return buildDocumentDetail(row, {
+  return toDocumentDetail(row, {
     displayName,
     content,
     contentHash: write.contentHash,
@@ -671,30 +666,13 @@ export function updateDocument(params: {
 //  删除文档 / 恢复
 // ============================================================
 
-/** 删文审计里的 recovery 快照（head 指针，正文在 commit blob）。 */
-export type DocumentDeleteRecovery = {
-  domainId: string;
-  displayName: string;
-  fileType: string;
-  permission: number;
-  parentId: string | null;
-  ownerVisitorId: string;
-  createdBy: string;
-  contentHash: string;
-  headCommitId: string | null;
-  blobRef: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
 function buildDeleteRecovery(
-  db: ReturnType<typeof getDb>,
   row: Documents,
 ): DocumentDeleteRecovery {
   let blobRef: string | null = null;
   let contentHash = row.content_hash;
   if (row.head_commit_id) {
-    const commit = findCommitById(row.head_commit_id, db);
+    const commit = findCommitById(row.head_commit_id);
     if (commit) {
       blobRef = commit.blob_ref;
       contentHash = commit.content_hash;
@@ -747,8 +725,7 @@ export function removeDocument(params: {
   actorVisitorId: string;
   documentId: string;
 }): void {
-  const db = getDb();
-  const row = findDocumentById(params.documentId, db);
+  const row = findDocumentById(params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== params.actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可删除此文档", 403);
@@ -759,13 +736,13 @@ export function removeDocument(params: {
     parentId: row.parent_id,
   };
   const now = new Date().toISOString();
-  const recovery = buildDeleteRecovery(db, row);
-  const tx = db.transaction(() => {
+  const recovery = buildDeleteRecovery(row);
+  runInTransaction(() => {
     if (row.file_type === FILE_TYPE.JOB) {
       deleteJobRunningDataByJobId(row.document_id);
       deleteJobRunningDetailByJobId(row.document_id);
     }
-    deleteDocument(row.document_id, db);
+    deleteDocument(row.document_id);
     insertAuditLog({
       id: null,
       actor_visitor_id: params.actorVisitorId,
@@ -774,9 +751,8 @@ export function removeDocument(params: {
       target_id: row.document_id,
       metadata_json: JSON.stringify({ relativePath: row.relative_path, recovery }),
       created_at: now,
-    }, db);
+    });
   });
-  tx();
   deleteDocumentFile(row.domain_id, row.relative_path);
   // 从全文索引中移除（非 fts 类型也安全 no-op）
   removeIndex(row.document_id);
@@ -801,9 +777,8 @@ export function listDeletedDocuments(params: {
   actorVisitorId: string;
   limit?: number;
 }): DeletedDocumentListItem[] {
-  const db = getDb();
   const rows = listDocumentDeleteAuditsByActor(params.actorVisitorId,
-    params.limit ?? 50, db);
+    params.limit ?? 50);
   const out: DeletedDocumentListItem[] = [];
   for (const row of rows) {
     let meta: Record<string, unknown> = {};
@@ -844,8 +819,7 @@ export function restoreDocumentFromAudit(params: {
   actorVisitorId: string;
   auditId: number;
 }): DocumentDetail {
-  const db = getDb();
-  const audit = findAuditById(params.auditId, db);
+  const audit = findAuditById(params.auditId);
   if (!audit || audit.action !== "document.delete") {
     throw new DocumentError("AUDIT_NOT_FOUND", "删除审计不存在", 404);
   }
@@ -882,10 +856,10 @@ export function restoreDocumentFromAudit(params: {
     throw new DocumentError("NOT_RESTORABLE", "目录节点本期不支持恢复", 400);
   }
 
-  if (findDocumentById(documentId, db)) {
+  if (findDocumentById(documentId)) {
     throw new DocumentError("DOC_EXISTS", "文档已存在，无法恢复到同一 documentId", 409);
   }
-  const pathTaken = findDocumentByPath(recovery.domainId, relativePath, db);
+  const pathTaken = findDocumentByPath(recovery.domainId, relativePath);
   if (pathTaken) {
     throw new DocumentError(
       "PATH_EXISTS",
@@ -907,41 +881,28 @@ export function restoreDocumentFromAudit(params: {
   }
 
   const parentId =
-    recovery.parentId && findDocumentById(recovery.parentId, db)
+    recovery.parentId && findDocumentById(recovery.parentId)
       ? recovery.parentId
       : null;
 
   const now = new Date().toISOString();
   const write = writeDocument(recovery.domainId, relativePath, content);
 
-  const tx = db.transaction(() => {
-    insertDocument({
-      document_id: documentId,
-      domain_id: recovery.domainId,
-      relative_path: relativePath,
-      display_name: recovery.displayName,
-      owner_visitor_id: recovery.ownerVisitorId,
-      created_by: recovery.createdBy,
-      updated_by: params.actorVisitorId,
-      content_hash: write.contentHash,
-      head_commit_id: recovery.headCommitId!,
-      created_at: recovery.createdAt,
-      updated_at: now,
-      permission: recovery.permission,
-      file_type: recovery.fileType,
-      parent_id: parentId,
-      is_dirty: 1,
-    }, db);
-    insertCommit({
-      commit_id: recovery.headCommitId!,
-      document_id: documentId,
-      content_hash: write.contentHash,
-      blob_ref: recovery.blobRef!,
-      author_visitor_id: recovery.ownerVisitorId,
-      created_at: recovery.updatedAt,
-      message: "",
-      source: "manual",
-    }, db);
+  const docRow = toDocumentsForRestore(params, recovery, {
+    documentId,
+    relativePath,
+    contentHash: write.contentHash,
+    parentId,
+    now,
+  });
+  const commitRow = toDocumentCommitsForRestore(recovery, {
+    documentId,
+    contentHash: write.contentHash,
+  });
+
+  runInTransaction(() => {
+    insertDocument(docRow);
+    insertCommit(commitRow);
     insertAuditLog({
       id: null,
       actor_visitor_id: params.actorVisitorId,
@@ -954,65 +915,31 @@ export function restoreDocumentFromAudit(params: {
         headCommitId: recovery.headCommitId,
       }),
       created_at: now,
-    }, db);
+    });
   });
-  tx();
 
   scheduleFtsIfNeeded(recovery.fileType, documentId);
 
-  const row = findDocumentById(documentId, db)!;
-  return buildDocumentDetail(row, {
-    displayName: row.display_name,
-    content,
-    contentHash: row.content_hash,
-    updatedBy: row.updated_by,
-    updatedAt: row.updated_at,
-    permission: row.permission,
-    headCommitId: row.head_commit_id!,
-  });
+  return toDocumentDetailAfterWrite(findDocumentById(documentId)!, content);
 }
 
 // ============================================================
 //  版本历史 / 选版恢复（旧内容新 commit）
 // ============================================================
 
-export type DocumentCommitSummary = {
-  commitId: string;
-  createdAt: string;
-  authorVisitorId: string;
-  authorVisitorName: string | null;
-  contentHash: string;
-  isHead: boolean;
-  message: string;
-  source: PublishSource;
-};
-
-export type DocumentCommitDetail = DocumentCommitSummary & {
-  content: string;
-};
-
-function commitSourceOf(c: { source?: string | null }): PublishSource {
-  return isPublishSource(c.source) ? c.source : "manual";
-}
+export type { DocumentCommitDetail, DocumentCommitSummary };
 
 export function listDocumentCommits(documentId: string): DocumentCommitSummary[] {
-  const db = getDb();
-  const row = findDocumentById(documentId, db);
+  const row = findDocumentById(documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   const head = row.head_commit_id;
-  const commits = listCommitRowsByDocument(documentId, db);
+  const commits = listCommitRowsByDocument(documentId);
   return commits.map((c) => {
     const author = findVisitorById(c.author_visitor_id);
-    return {
-      commitId: c.commit_id,
-      createdAt: c.created_at,
-      authorVisitorId: c.author_visitor_id,
+    return toDocumentCommitSummary(c, {
+      headCommitId: head,
       authorVisitorName: author?.visitor_name ?? null,
-      contentHash: c.content_hash,
-      isHead: head != null && c.commit_id === head,
-      message: c.message ?? "",
-      source: commitSourceOf(c),
-    };
+    });
   });
 }
 
@@ -1020,10 +947,9 @@ export function getDocumentCommit(
   documentId: string,
   commitId: string,
 ): DocumentCommitDetail {
-  const db = getDb();
-  const row = findDocumentById(documentId, db);
+  const row = findDocumentById(documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
-  const commit = findCommitById(commitId, db);
+  const commit = findCommitById(commitId);
   if (!commit || commit.document_id !== documentId) {
     throw new DocumentError("COMMIT_NOT_FOUND", "版本不存在", 404);
   }
@@ -1034,17 +960,11 @@ export function getDocumentCommit(
     throw new DocumentError("BLOB_MISSING", "该版本正文不可读", 409);
   }
   const author = findVisitorById(commit.author_visitor_id);
-  return {
-    commitId: commit.commit_id,
-    createdAt: commit.created_at,
-    authorVisitorId: commit.author_visitor_id,
+  return toDocumentCommitDetail(commit, {
+    headCommitId: row.head_commit_id,
     authorVisitorName: author?.visitor_name ?? null,
-    contentHash: commit.content_hash,
-    isHead: row.head_commit_id != null && commit.commit_id === row.head_commit_id,
-    message: commit.message ?? "",
-    source: commitSourceOf(commit),
     content,
-  };
+  });
 }
 
 /**
@@ -1056,15 +976,14 @@ export function restoreDocumentVersion(params: {
   documentId: string;
   commitId: string;
 }): DocumentDetail {
-  const db = getDb();
-  const row = findDocumentById(params.documentId, db);
+  const row = findDocumentById(params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
   if (!canWrite(params.actorVisitorId, row.domain_id, params.documentId)) {
     throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
   }
 
-  const source = findCommitById(params.commitId, db);
+  const source = findCommitById(params.commitId);
   if (!source || source.document_id !== params.documentId) {
     throw new DocumentError("COMMIT_NOT_FOUND", "版本不存在", 404);
   }
@@ -1089,32 +1008,32 @@ export function restoreDocumentVersion(params: {
   const blob = writeCommitBlob(write.contentHash, content);
   const previousHead = row.head_commit_id;
 
-  const tx = db.transaction(() => {
+  runInTransaction(() => {
     updateDocumentContent({...row,
       display_name: row.display_name,
       content_hash: write.contentHash,
       updated_by: params.actorVisitorId,
-      updated_at: now,}, db);
-    insertCommit({
-      commit_id: newCommitId,
-      document_id: row.document_id,
-      content_hash: write.contentHash,
-      blob_ref: blob.blobRef,
-      author_visitor_id: params.actorVisitorId,
-      created_at: now,
-      message: "",
-      source: "manual",
-    }, db);
+      updated_at: now,});
+    insertCommit(
+      toDocumentCommitsRow({
+        commitId: newCommitId,
+        documentId: row.document_id,
+        contentHash: write.contentHash,
+        blobRef: blob.blobRef,
+        actorVisitorId: params.actorVisitorId,
+        createdAt: now,
+      }),
+    );
     if (previousHead) {
       insertCommitParent({
         child_commit_id: newCommitId,
         parent_commit_id: previousHead,
-      }, db);
+      });
     }
     updateDocumentHeadCommit({...row,
       head_commit_id: newCommitId,
       updated_by: params.actorVisitorId,
-      updated_at: now,}, db);
+      updated_at: now,});
     insertAuditLog({
       id: null,
       actor_visitor_id: params.actorVisitorId,
@@ -1127,9 +1046,8 @@ export function restoreDocumentVersion(params: {
         previousHeadCommitId: previousHead,
       }),
       created_at: now,
-    }, db);
+    });
   });
-  tx();
 
   scheduleFtsIfNeeded(row.file_type, row.document_id);
   scheduleGraphIfExtractable(row.file_type, () =>
@@ -1140,13 +1058,12 @@ export function restoreDocumentVersion(params: {
     }),
   );
 
-  const invitedEdit = resolveInvitedEditFlag(db, row, params.actorVisitorId);
+  const invitedEdit = resolveInvitedEditFlag(row, params.actorVisitorId);
   const domainMemberWrite = resolveDomainMemberWriteFlag(
-    db,
     row,
     params.actorVisitorId,
   );
-  return buildDocumentDetail(row, {
+  return toDocumentDetail(row, {
     displayName: row.display_name,
     content,
     contentHash: write.contentHash,
@@ -1173,8 +1090,7 @@ export function moveDocument(params: {
   documentId: string;
   parentId: string | null;
 }): DocumentDetail {
-  const db = getDb();
-  const row = findDocumentById(params.documentId, db);
+  const row = findDocumentById(params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== params.actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可移动此文件", 403);
@@ -1202,7 +1118,7 @@ export function moveDocument(params: {
     newParentId = null;
     newRelativePath = baseName;
   } else {
-    const parentDoc = findDocumentById(targetParent, db);
+    const parentDoc = findDocumentById(targetParent);
     if (!parentDoc || parentDoc.file_type !== "dir") {
       throw new DocumentError(
         "INVALID_PARENT",
@@ -1220,7 +1136,7 @@ export function moveDocument(params: {
     newRelativePath = `${parentPath}/${baseName}`;
   }
 
-  const existing = findDocumentByPath(row.domain_id, newRelativePath, db);
+  const existing = findDocumentByPath(row.domain_id, newRelativePath);
   if (existing && existing.document_id !== row.document_id) {
     throw new DocumentError("DOC_EXISTS", "目标位置已存在同名文档", 409);
   }
@@ -1240,12 +1156,12 @@ export function moveDocument(params: {
   }
 
   try {
-    const tx = db.transaction(() => {
+    runInTransaction(() => {
       updateDocumentLocation({...row,
       parent_id: newParentId,
         relative_path: newRelativePath,
         updated_by: params.actorVisitorId,
-        updated_at: now,}, db);
+        updated_at: now,});
       insertAuditLog({
         id: null,
         actor_visitor_id: params.actorVisitorId,
@@ -1258,9 +1174,8 @@ export function moveDocument(params: {
           parentId: newParentId,
         }),
         created_at: now,
-      }, db);
+      });
     });
-    tx();
   } catch (err) {
     if (pathChanged) {
       try {
@@ -1294,8 +1209,7 @@ function moveFolder(params: {
   documentId: string;
   parentId: string | null;
 }): DocumentDetail {
-  const db = getDb();
-  const folder = findDocumentById(params.documentId, db);
+  const folder = findDocumentById(params.documentId);
   if (!folder || folder.file_type !== FILE_TYPE.FOLDER) {
     throw new DocumentError("DOC_NOT_FOUND", "目录不存在", 404);
   }
@@ -1321,7 +1235,7 @@ function moveFolder(params: {
     newParentId = null;
     newFolderPath = baseName;
   } else {
-    const parentDoc = findDocumentById(targetParent, db);
+    const parentDoc = findDocumentById(targetParent);
     if (!parentDoc || parentDoc.file_type !== "dir") {
       throw new DocumentError(
         "INVALID_PARENT",
@@ -1347,7 +1261,7 @@ function moveFolder(params: {
 
   const oldFolderPath = folder.relative_path;
   const oldPrefix = `${oldFolderPath}/`;
-  const descendants = listDocumentsByPathPrefix(folder.domain_id, oldPrefix, db);
+  const descendants = listDocumentsByPathPrefix(folder.domain_id, oldPrefix);
   const subtree = [folder, ...descendants];
 
   const notOwned = subtree.filter((d) => d.owner_visitor_id !== params.actorVisitorId);
@@ -1377,7 +1291,7 @@ function moveFolder(params: {
 
   const movingIds = new Set(plans.map((p) => p.row.document_id));
   for (const plan of plans) {
-    const existing = findDocumentByPath(folder.domain_id, plan.newPath, db);
+    const existing = findDocumentByPath(folder.domain_id, plan.newPath);
     if (existing && !movingIds.has(existing.document_id)) {
       throw new DocumentError("DOC_EXISTS", "目标位置已存在同名文档", 409);
     }
@@ -1410,9 +1324,9 @@ function moveFolder(params: {
   }
 
   try {
-    const tx = db.transaction(() => {
+    runInTransaction(() => {
       for (const g of graphDocs) {
-        deleteDocument(g.document_id, db);
+        deleteDocument(g.document_id);
         insertAuditLog({
           id: null,
           actor_visitor_id: params.actorVisitorId,
@@ -1425,14 +1339,14 @@ function moveFolder(params: {
             reason: "graph-hidden-on-folder-move",
           }),
           created_at: now,
-        }, db);
+        });
       }
       for (const plan of plans) {
         updateDocumentLocation({...plan.row,
       parent_id: plan.newParentId,
           relative_path: plan.newPath,
           updated_by: params.actorVisitorId,
-          updated_at: now,}, db);
+          updated_at: now,});
       }
       insertAuditLog({
         id: null,
@@ -1448,9 +1362,8 @@ function moveFolder(params: {
           deletedGraphCount: graphDocs.length,
         }),
         created_at: now,
-      }, db);
+      });
     });
-    tx();
   } catch (err) {
     for (const op of [...doneDisk].reverse()) {
       try {
@@ -1483,9 +1396,9 @@ function moveFolder(params: {
     );
   }
 
-  const updated = findDocumentById(params.documentId, db)!;
+  const updated = findDocumentById(params.documentId)!;
   return {
-    ...rowToSummary(updated),
+    ...toDocumentSummary(updated),
     content: "",
     contentHash: updated.content_hash ?? "",
     permission: updated.permission,
@@ -1501,8 +1414,7 @@ export function renameDocument(params: {
   documentId: string;
   fileName: string;
 }): DocumentDetail {
-  const db = getDb();
-  const row = findDocumentById(params.documentId, db);
+  const row = findDocumentById(params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== params.actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可重命名此文件", 403);
@@ -1523,7 +1435,7 @@ export function renameDocument(params: {
     return getDocument(params.documentId, params.actorVisitorId);
   }
 
-  const existing = findDocumentByPath(row.domain_id, newRelativePath, db);
+  const existing = findDocumentByPath(row.domain_id, newRelativePath);
   if (existing && existing.document_id !== row.document_id) {
     throw new DocumentError("DOC_EXISTS", "目标位置已存在同名文档", 409);
   }
@@ -1539,12 +1451,12 @@ export function renameDocument(params: {
   }
 
   try {
-    const tx = db.transaction(() => {
+    runInTransaction(() => {
       updateDocumentLocation({...row,
       parent_id: row.parent_id ?? null,
         relative_path: newRelativePath,
         updated_by: params.actorVisitorId,
-        updated_at: now,}, db);
+        updated_at: now,});
       insertAuditLog({
         id: null,
         actor_visitor_id: params.actorVisitorId,
@@ -1556,9 +1468,8 @@ export function renameDocument(params: {
           toRelativePath: newRelativePath,
         }),
         created_at: now,
-      }, db);
+      });
     });
-    tx();
   } catch (err) {
     try {
       renameDocumentFile(row.domain_id, newRelativePath, oldPath);
@@ -1581,8 +1492,7 @@ export function removeFolder(params: {
   actorVisitorId: string;
   folderDocumentId: string;
 }): { deletedCount: number } {
-  const db = getDb();
-  let folder = findDocumentById(params.folderDocumentId, db);
+  let folder = findDocumentById(params.folderDocumentId);
   if (!folder) throw new DocumentError("DOC_NOT_FOUND", "目录不存在", 404);
 
   // 选中目录时打开的是隐藏描述文件。类型现为 folder_desc，旧数据仍可能是 md。
@@ -1590,7 +1500,7 @@ export function removeFolder(params: {
     if (!folder.parent_id) {
       throw new DocumentError("BAD_REQUEST", "描述文档无父目录", 400);
     }
-    folder = findDocumentById(folder.parent_id, db);
+    folder = findDocumentById(folder.parent_id);
     if (!folder || folder.file_type !== "dir") {
       throw new DocumentError("DOC_NOT_FOUND", "父目录不存在", 404);
     }
@@ -1607,7 +1517,7 @@ export function removeFolder(params: {
   const pathPrefix = `${folder.relative_path}/`;
 
   // 找出该目录下所有文档（包括子目录、描述文档、普通文档）
-  const allDocs = listDocumentsByPathPrefix(folder.domain_id, pathPrefix, db);
+  const allDocs = listDocumentsByPathPrefix(folder.domain_id, pathPrefix);
 
   // 加上目录本身
   const allToDelete = [...allDocs, folder];
@@ -1629,10 +1539,10 @@ export function removeFolder(params: {
   const parentOfFolder = folder.parent_id;
   const domainId = folder.domain_id;
 
-  const tx = db.transaction(() => {
+  runInTransaction(() => {
     for (const doc of allToDelete) {
-      const recovery = buildDeleteRecovery(db, doc);
-      deleteDocument(doc.document_id, db);
+      const recovery = buildDeleteRecovery(doc);
+      deleteDocument(doc.document_id);
       deletedIds.push(doc.document_id);
       insertAuditLog({
         id: null,
@@ -1646,10 +1556,9 @@ export function removeFolder(params: {
           recovery,
         }),
         created_at: now,
-      }, db);
+      });
     }
   });
-  tx();
 
   // 磁盘：有文件就删（dir / graph_dir 通常无独立文件，exists 检查后 noop）
   for (const doc of allToDelete) {
@@ -1679,16 +1588,15 @@ export function addDocumentInvite(
   targetVisitorId: string,
   targetPermission: string,
 ): void {
-  const db = getDb();
-  const row = findDocumentById(documentId, db);
+  const row = findDocumentById(documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可管理邀请", 403);
   }
 
-  const domain = findDomainById(row.domain_id, db);
+  const domain = getDomainById(row.domain_id);
 
-  if (domain && isDomainMember(domain.domain_id, targetVisitorId, db)) {
+  if (domain && isDomainMember(domain.domain_id, targetVisitorId)) {
     throw new DocumentError(
       "BAD_REQUEST",
       "该访客已是工作空间成员，无需邀请；邀请与工作空间成员互斥",
@@ -1697,12 +1605,11 @@ export function addDocumentInvite(
   }
 
   insertDocumentInvite(
-    {
-      document_id: documentId,
-      visitor_id: targetVisitorId,
+    toDocumentInvitesRow({
+      documentId,
+      visitorId: targetVisitorId,
       permission: targetPermission,
-    },
-    db,
+    }),
   );
 }
 
@@ -1711,24 +1618,19 @@ export function removeDocumentInvite(
   documentId: string,
   targetVisitorId: string,
 ): void {
-  const db = getDb();
-  const row = findDocumentById(documentId, db);
+  const row = findDocumentById(documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.owner_visitor_id !== actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可管理邀请", 403);
   }
-  deleteDocumentInvite(documentId, targetVisitorId, db);
+  deleteDocumentInvite(documentId, targetVisitorId);
 }
 
 export function getDocumentInvites(
   documentId: string,
 ): { visitorId: string; permission: string }[] {
-  const db = getDb();
-  const rows = listDocumentInvites(documentId, db);
-  return rows.map((r) => ({
-    visitorId: r.visitor_id,
-    permission: r.permission,
-  }));
+  const rows = listDocumentInvites(documentId);
+  return rows.map(toDocumentInvitePublic);
 }
 
 // ============================================================
@@ -1737,50 +1639,6 @@ export function getDocumentInvites(
 
 // --- 版本提交与冲突 ---
 
-function rowToSummary(row: Documents): DocumentSummary {
-  return {
-    documentId: row.document_id,
-    domainId: row.domain_id,
-    relativePath: row.relative_path,
-    displayName: row.display_name,
-    ownerVisitorId: row.owner_visitor_id,
-    updatedBy: row.updated_by,
-    updatedAt: row.updated_at,
-    createdAt: row.created_at,
-    permission: row.permission,
-    fileType: row.file_type,
-    parentId: row.parent_id,
-    ...(row.head_commit_id ? { headCommitId: row.head_commit_id } : {}),
-  };
-}
-
-/** 组装 API 返回的 DocumentDetail，并带上最新 headCommitId。 */
-function buildDocumentDetail(
-  row: Documents,
-  overrides: {
-    displayName: string;
-    content: string;
-    contentHash: string;
-    updatedBy: string;
-    updatedAt: string;
-    permission: number;
-    headCommitId: string;
-    invitedEdit?: boolean;
-    domainMemberWrite?: boolean;
-  },
-): DocumentDetail {
-  return {
-    ...rowToSummary({ ...row, head_commit_id: overrides.headCommitId }),
-    content: overrides.content,
-    contentHash: overrides.contentHash,
-    displayName: overrides.displayName,
-    updatedBy: overrides.updatedBy,
-    updatedAt: overrides.updatedAt,
-    permission: overrides.permission,
-    ...(overrides.invitedEdit ? { invitedEdit: true } : {}),
-    ...(overrides.domainMemberWrite ? { domainMemberWrite: true } : {}),
-  };
-}
 
 /**
  * 抛出 409 VERSION_CONFLICT。
@@ -1803,7 +1661,6 @@ function throwVersionConflict(
  * 未传 localBaseCommitId 时跳过（兼容尚未接入的前端）。
  */
 function assertNoVersionConflict(
-  db: ReturnType<typeof getDb>,
   row: Documents,
   localBaseCommitId: string | undefined,
 ): void {
@@ -1815,7 +1672,7 @@ function assertNoVersionConflict(
   if (localBaseCommitId === row.head_commit_id) return;
 
   // 走到这里：localBase 有值且与 head 不同 → 说明在你编辑期间 head 已被别人/另一标签推进 → 409
-  assertCommitBelongsToDocument(db, localBaseCommitId, row.document_id);
+  assertCommitBelongsToDocument(localBaseCommitId, row.document_id);
   const { content, contentHash } = readDocument(row.domain_id, row.relative_path);
   throwVersionConflict(row, content, contentHash);
 }
@@ -1851,7 +1708,6 @@ function publishMergeDocument(params: {
   source: PublishSource;
 }): DocumentDetail {
   const { row, actorVisitorId, content, displayName, now, message, source } = params;
-  const db = getDb();
 
   // 如果row.head_commit_id为空大概率是因为旧客户文章没有commit_id, 不能走conflict merge逻辑
   if (!row.head_commit_id) {
@@ -1866,9 +1722,9 @@ function publishMergeDocument(params: {
     throwVersionConflict(row, serverContent, contentHash);
   }
 
-  assertCommitBelongsToDocument(db, params.localBaseCommitId, row.document_id);
-  assertCommitBelongsToDocument(db, params.remoteCommitId, row.document_id);
-  assertMergeFork(db, params.localBaseCommitId, params.remoteCommitId);
+  assertCommitBelongsToDocument(params.localBaseCommitId, row.document_id);
+  assertCommitBelongsToDocument(params.remoteCommitId, row.document_id);
+  assertMergeFork(params.localBaseCommitId, params.remoteCommitId);
 
   // 写盘：工作区 + 两份历史快照（r_local 支 / merge 结果）
   const localContent = params.localSnapshotContent ?? content;
@@ -1890,56 +1746,60 @@ function publishMergeDocument(params: {
    *    2.2 更新document content
    * 3. 插入audit log
    */
-  const tx = db.transaction(() => {
+  runInTransaction(() => {
     // 本地支尖端（此前仅存在于浏览器，此处首次落库）
     // 保存r_local
-    insertCommit({
-      commit_id: localCommitId,
-      document_id: row.document_id,
-      content_hash: localHash,
-      blob_ref: localWrite.blobRef,
-      author_visitor_id: actorVisitorId,
-      created_at: now,
-      message,
-      source,
-    }, db);
+    insertCommit(
+      toDocumentCommitsRow({
+        commitId: localCommitId,
+        documentId: row.document_id,
+        contentHash: localHash,
+        blobRef: localWrite.blobRef,
+        actorVisitorId: actorVisitorId,
+        createdAt: now,
+        message,
+        source,
+      }),
+    );
     insertCommitParent({
       child_commit_id: localCommitId,
       parent_commit_id: params.localBaseCommitId,
-    }, db);
+    });
 
     updateDocumentContent({...row,
       display_name: displayName,
       content_hash: write.contentHash,
       updated_by: actorVisitorId,
       updated_at: now,
-      permission: params.permission ?? row.permission,}, db);
+      permission: params.permission ?? row.permission,});
     // merge 节点：双父 = 远端 head + r_local
-    insertCommit({
-      commit_id: mergeCommitId,
-      document_id: row.document_id,
-      content_hash: write.contentHash,
-      blob_ref: mergeBlob.blobRef,
-      author_visitor_id: actorVisitorId,
-      created_at: now,
-      message,
-      source,
-    }, db);
+    insertCommit(
+      toDocumentCommitsRow({
+        commitId: mergeCommitId,
+        documentId: row.document_id,
+        contentHash: write.contentHash,
+        blobRef: mergeBlob.blobRef,
+        actorVisitorId: actorVisitorId,
+        createdAt: now,
+        message,
+        source,
+      }),
+    );
     // merge node 拥有两个 parent, r_local 和 远端head
     // 这里存储的是远端head
     insertCommitParent({
       child_commit_id: mergeCommitId,
       parent_commit_id: params.remoteCommitId,
-    }, db);
+    });
     // 这里存储的是r_local
     insertCommitParent({
       child_commit_id: mergeCommitId,
       parent_commit_id: localCommitId,
-    }, db);
+    });
     updateDocumentHeadCommit({...row,
       head_commit_id: mergeCommitId,
       updated_by: actorVisitorId,
-      updated_at: now,}, db);
+      updated_at: now,});
     insertAuditLog({
       id: null,
       actor_visitor_id: actorVisitorId,
@@ -1953,9 +1813,8 @@ function publishMergeDocument(params: {
         mergeCommitId,
       }),
       created_at: now,
-    }, db);
+    });
   });
-  tx();
 
   scheduleFtsIfNeeded(row.file_type, row.document_id);
 
@@ -1970,9 +1829,9 @@ function publishMergeDocument(params: {
   // merge 发布同样采用“写后即返回最新资源”：
   // - 避免前端二次查询引入时序偏差；
   // - 确保 UI 使用服务端合并后的最终状态作为唯一真相。
-  const invitedEdit = resolveInvitedEditFlag(db, row, actorVisitorId);
-  const domainMemberWrite = resolveDomainMemberWriteFlag(db, row, actorVisitorId);
-  return buildDocumentDetail(row, {
+  const invitedEdit = resolveInvitedEditFlag(row, actorVisitorId);
+  const domainMemberWrite = resolveDomainMemberWriteFlag(row, actorVisitorId);
+  return toDocumentDetail(row, {
     displayName,
     content,
     contentHash: write.contentHash,
@@ -2005,22 +1864,20 @@ function normalizeDocumentContent(
 }
 
 function resolveInvitedEditFlag(
-  db: ReturnType<typeof getDb>,
   row: Documents,
   actorVisitorId: string,
 ): boolean {
   if (row.owner_visitor_id === actorVisitorId) return false;
-  const invite = findDocumentInvite(row.document_id, actorVisitorId, db);
+  const invite = findDocumentInvite(row.document_id, actorVisitorId);
   return invite?.permission === "edit";
 }
 
 function resolveDomainMemberWriteFlag(
-  db: ReturnType<typeof getDb>,
   row: Documents,
   actorVisitorId: string,
 ): boolean {
   if (row.owner_visitor_id === actorVisitorId) return false;
-  return getDomainMemberRole(row.domain_id, actorVisitorId, db) === "write";
+  return getDomainMemberRole(row.domain_id, actorVisitorId) === "write";
 }
 
 // ============================================================
@@ -2046,8 +1903,7 @@ export function getDocumentSyncStatus(
   if (localBaseCommitId === head) {
     return { status: "up_to_date", headCommitId: head };
   }
-  const db = getDb();
-  if (isAncestorOf(db, localBaseCommitId, head)) {
+  if (isAncestorOf(localBaseCommitId, head)) {
     return { status: "behind", headCommitId: head };
   }
   return { status: "ahead", headCommitId: head };
@@ -2065,18 +1921,17 @@ export function getDocumentMergeContext(
   const row = findDocumentById(documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
 
-  const db = getDb();
-  assertCommitBelongsToDocument(db, localBaseCommitId, documentId);
-  assertCommitBelongsToDocument(db, remoteCommitId, documentId);
+  assertCommitBelongsToDocument(localBaseCommitId, documentId);
+  assertCommitBelongsToDocument(remoteCommitId, documentId);
 
   let mergeBaseCommitId: string;
   try {
-    mergeBaseCommitId = findMergeBaseCommitId(db, localBaseCommitId, remoteCommitId);
+    mergeBaseCommitId = findMergeBaseCommitId(localBaseCommitId, remoteCommitId);
   } catch {
     return { mode: "two_way", mergeBaseCommitId: null, mergeBaseContent: null };
   }
 
-  const baseCommit = findCommitById(mergeBaseCommitId, db);
+  const baseCommit = findCommitById(mergeBaseCommitId);
   if (!baseCommit) {
     return { mode: "two_way", mergeBaseCommitId: null, mergeBaseContent: null };
   }

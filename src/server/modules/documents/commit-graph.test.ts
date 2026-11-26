@@ -1,18 +1,25 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import Database from "better-sqlite3";
 import { applySchema } from "../../infra/db/schema.js";
+
+const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
+
+vi.mock("../../infra/db/connection.js", () => ({
+  getDb: () => testDbRef.db,
+}));
+
 import { insertCommit, insertCommitParent } from "./repo/commit.repo.js";
 import { isAncestorOf, assertMergeFork, findMergeBaseCommitId } from "./commit-graph.js";
 import { DocumentError } from "../access/access-control.js";
 
 describe("commit-graph", () => {
-  let db: Database.Database;
   const DOC = "doc-1";
   const now = "2024-01-01T00:00:00.000Z";
 
   beforeAll(() => {
-    db = new Database(":memory:");
+    const db = new Database(":memory:");
     applySchema(db);
+    testDbRef.db = db;
     db.prepare(
       `INSERT INTO documents (
         document_id, domain_id, relative_path, display_name, owner_visitor_id,
@@ -39,28 +46,28 @@ describe("commit-graph", () => {
         created_at: now,
         message: "",
         source: "manual",
-      }, db);
+      });
     }
-    insertCommitParent({ child_commit_id: c, parent_commit_id: a }, db);
-    insertCommitParent({ child_commit_id: d, parent_commit_id: c }, db);
+    insertCommitParent({ child_commit_id: c, parent_commit_id: a });
+    insertCommitParent({ child_commit_id: d, parent_commit_id: c });
     db.prepare(`UPDATE documents SET head_commit_id = ? WHERE document_id = ?`).run(d, DOC);
   });
 
   it("isAncestorOf：祖先关系", () => {
-    expect(isAncestorOf(db, "commit-a", "commit-d")).toBe(true);
-    expect(isAncestorOf(db, "commit-c", "commit-d")).toBe(true);
-    expect(isAncestorOf(db, "commit-d", "commit-a")).toBe(false);
+    expect(isAncestorOf("commit-a", "commit-d")).toBe(true);
+    expect(isAncestorOf("commit-c", "commit-d")).toBe(true);
+    expect(isAncestorOf("commit-d", "commit-a")).toBe(false);
   });
 
   it("assertMergeFork：localBase 必须是 remote 的真祖先", () => {
-    expect(() => assertMergeFork(db, "commit-a", "commit-d")).not.toThrow();
-    expect(() => assertMergeFork(db, "commit-d", "commit-d")).toThrow(DocumentError);
-    expect(() => assertMergeFork(db, "commit-d", "commit-a")).toThrow(DocumentError);
+    expect(() => assertMergeFork("commit-a", "commit-d")).not.toThrow();
+    expect(() => assertMergeFork("commit-d", "commit-d")).toThrow(DocumentError);
+    expect(() => assertMergeFork("commit-d", "commit-a")).toThrow(DocumentError);
   });
 
   it("findMergeBaseCommitId：线性链与 reset 方向", () => {
-    expect(findMergeBaseCommitId(db, "commit-a", "commit-d")).toBe("commit-a");
-    expect(findMergeBaseCommitId(db, "commit-d", "commit-a")).toBe("commit-a");
-    expect(findMergeBaseCommitId(db, "commit-c", "commit-d")).toBe("commit-c");
+    expect(findMergeBaseCommitId("commit-a", "commit-d")).toBe("commit-a");
+    expect(findMergeBaseCommitId("commit-d", "commit-a")).toBe("commit-a");
+    expect(findMergeBaseCommitId("commit-c", "commit-d")).toBe("commit-c");
   });
 });
