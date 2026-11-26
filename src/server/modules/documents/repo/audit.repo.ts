@@ -1,5 +1,6 @@
 /**
  * audit_logs / visitor_migrations 表访问。SQL 只活在本文件。
+ * **仅** `modules/documents/service/audit.service.ts` 可 import；其余走薄 service。
  * DB 默认内部 getDb()；可选末参 `db?` 仅单测注入。
  * 入参/返回均为表实体；插入 audit_logs 不带 id，返回主键。
  */

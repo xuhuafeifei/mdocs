@@ -14,7 +14,7 @@ import {
   Permission,
   validateDomainPermission,
 } from "../../access/access-control.js";
-import { insertAuditLog } from "../repo/audit.repo.js";
+import { insertAuditLog } from "../service/audit.service.js";
 import { folderDescPathForFolder } from "../../../../shared/folderDesc.js";
 import { normalisePathSegmentForStorage } from "../../../../shared/storagePath.js";
 import { insertMarkdownDocumentWithInitialCommit } from "../initial-commit.js";

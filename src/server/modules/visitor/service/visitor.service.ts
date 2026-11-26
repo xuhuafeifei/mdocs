@@ -1,6 +1,6 @@
 import { getDb } from "../../../infra/db/connection";
 import { runInTransaction } from "../../../infra/db/transaction.js";
-import { insertAuditLog } from "../../documents/repo/audit.repo";
+import { insertAuditLog } from "../../documents/service/audit.service.js";
 import { ensurePersonalDomain } from "../../domains/personal-domain.service";
 import type { Visitors } from "../entity/visitor.entity.js";
 import {
@@ -116,7 +116,7 @@ export function registerVisitor(visitorName: string, password?: string): Registe
       target_id: visitorId,
       metadata_json: JSON.stringify({ visitorName: trimmed }),
       created_at: createdAt,
-    }, db);
+    });
   });
 
   log.info("registered visitor %s", visitorId);

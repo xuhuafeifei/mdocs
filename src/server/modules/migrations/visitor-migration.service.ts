@@ -15,7 +15,7 @@ import {
 import {
   insertAuditLog,
   insertVisitorMigration,
-} from "../documents/repo/audit.repo";
+} from "../documents/service/audit.service.js";
 import {
   countAttachmentsByOwner,
   reassignAttachmentsOwner,
@@ -188,7 +188,7 @@ export function migrateVisitor(params: {
       to_visitor_id: to.visitor_id,
       affected_counts_json: JSON.stringify(impact),
       executed_at: executedAt,
-    }, db);
+    });
     // 记录审计日志
     insertAuditLog({
       id: null,
@@ -203,7 +203,7 @@ export function migrateVisitor(params: {
         backupPath,
       }),
       created_at: executedAt,
-    }, db);
+    });
   });
   tx();
 

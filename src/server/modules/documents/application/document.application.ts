@@ -1,6 +1,6 @@
 /**
  * documents 用例编排（原根目录胖 document.service）。
- * documents 表只经 `service/document.service`；不 import `repo/document.repo`。
+ * 本聚合表经 `service/document|commit|audit.service`；不直打对应 repo。
  */
 import { randomUUID } from "node:crypto";
 import { runInTransaction } from "../../../infra/db/transaction.js";
@@ -60,7 +60,7 @@ import {
   findAuditById,
   insertAuditLog,
   listDocumentDeleteAuditsByActor,
-} from "../repo/audit.repo.js";
+} from "../service/audit.service.js";
 import {
   deleteDocumentFile,
   readCommitBlob,
@@ -771,8 +771,7 @@ export function listDeletedDocuments(params: {
   actorVisitorId: string;
   limit?: number;
 }): DeletedDocumentListItem[] {
-  const rows = listDocumentDeleteAuditsByActor(params.actorVisitorId,
-    params.limit ?? 50);
+  const rows = listDocumentDeleteAuditsByActor(params.actorVisitorId, params.limit ?? 50);
   const out: DeletedDocumentListItem[] = [];
   for (const row of rows) {
     let meta: Record<string, unknown> = {};
