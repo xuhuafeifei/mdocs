@@ -31,8 +31,17 @@ import {
 } from "./token.js";
 import { useLogger } from "../../../infra/logger/logger";
 import type { VisitorPublic } from "../../../../shared/types/visitor";
+import {
+  toVisitorPublic,
+  toVisitorSessionsRow,
+  toVisitorsForRegister,
+  toVisitorsFromSessionJoin,
+} from "../mapper/visitor.mapper.js";
 
 const log = useLogger("visitor");
+
+/** @deprecated 用 toVisitorPublic；保留兼容旧 import */
+export const toPublic = toVisitorPublic;
 
 /** 注册访客后的返回结果 */
 export interface RegisteredVisitor {
@@ -76,28 +85,26 @@ export function registerVisitor(visitorName: string, password?: string): Registe
   const passwordHash = password ? hashPassword(password) : undefined;
   const createdAt = new Date().toISOString();
 
+  const visitorRow = toVisitorsForRegister({
+    visitorId,
+    visitorName: trimmed,
+    tokenHash,
+    recoveryCodeHash,
+    passwordHash: passwordHash ?? null,
+    createdAt,
+  });
+  const sessionRow = toVisitorSessionsRow({
+    sessionId: newSessionId(),
+    visitorId,
+    tokenHash,
+    deviceName: "New Device",
+    createdAt,
+  });
+
   // 在事务中插入访客记录（含恢复码哈希和密码哈希）、创建会话、创建个人域并记录审计日志
   runInTransaction(() => {
-    insertVisitor({
-      visitor_id: visitorId,
-      visitor_name: trimmed,
-      visitor_token_hash: tokenHash,
-      recovery_code_hash: recoveryCodeHash,
-      password_hash: passwordHash ?? null,
-      created_at: createdAt,
-      last_seen_at: null,
-      disabled_at: null,
-      merged_into_visitor_id: null,
-    });
-    // 同时创建会话记录（新架构）
-    insertSession({
-      session_id: newSessionId(),
-      visitor_id: visitorId,
-      token_hash: tokenHash,
-      device_name: "New Device",
-      created_at: createdAt,
-      last_seen_at: createdAt,
-    });
+    insertVisitor(visitorRow);
+    insertSession(sessionRow);
     // domains / audit 尚未迁 repo 签名，事务内仍用单例 getDb()
     const db = getDb();
     ensurePersonalDomain(db, visitorId, trimmed);
@@ -114,17 +121,7 @@ export function registerVisitor(visitorName: string, password?: string): Registe
 
   log.info("registered visitor %s", visitorId);
   return {
-    visitor: toPublic({
-      visitor_id: visitorId,
-      visitor_name: trimmed,
-      visitor_token_hash: tokenHash,
-      recovery_code_hash: recoveryCodeHash,
-      password_hash: passwordHash ?? null,
-      created_at: createdAt,
-      last_seen_at: null,
-      disabled_at: null,
-      merged_into_visitor_id: null,
-    }),
+    visitor: toVisitorPublic(visitorRow),
     visitorToken: rawToken,
     recoveryCode,
   };
@@ -145,17 +142,7 @@ export function resolveVisitorByToken(rawToken: string): Visitors | null {
   if (session) {
     // 更新 session 最后活跃时间
     updateSessionLastSeen(session.session_id, new Date().toISOString());
-    return {
-      visitor_id: session.visitor_id,
-      visitor_name: session.visitor_name,
-      visitor_token_hash: session.visitor_token_hash,
-      recovery_code_hash: session.recovery_code_hash,
-      password_hash: session.password_hash,
-      created_at: session.created_at,
-      last_seen_at: session.last_seen_at,
-      disabled_at: session.disabled_at,
-      merged_into_visitor_id: session.merged_into_visitor_id,
-    };
+    return toVisitorsFromSessionJoin(session);
   }
 
   // 向后兼容：查旧的 visitors.visitor_token_hash
@@ -165,14 +152,15 @@ export function resolveVisitorByToken(rawToken: string): Visitors | null {
 
   // 找到旧 token → 迁移到 session 表
   const now = new Date().toISOString();
-  insertSession({
-    session_id: newSessionId(),
-    visitor_id: row.visitor_id,
-    token_hash: tokenHash,
-    device_name: "Migrated Device",
-    created_at: now,
-    last_seen_at: now,
-  });
+  insertSession(
+    toVisitorSessionsRow({
+      sessionId: newSessionId(),
+      visitorId: row.visitor_id,
+      tokenHash,
+      deviceName: "Migrated Device",
+      createdAt: now,
+    }),
+  );
 
   // 更新 visitor 最后活跃时间
   updateVisitorLastSeen(row.visitor_id, now);
@@ -220,14 +208,15 @@ export function recoverVisitor(recoveryCode: string): RegisteredVisitor | null {
     // 清除恢复码（一次性使用）
     clearRecoveryCodeAndTouch(row.visitor_id, now);
     // 创建新会话（多设备同时在线）
-    insertSession({
-      session_id: newSessionId(),
-      visitor_id: row.visitor_id,
-      token_hash: tokenHash,
-      device_name: "Recovered Device",
-      created_at: now,
-      last_seen_at: now,
-    });
+    insertSession(
+      toVisitorSessionsRow({
+        sessionId: newSessionId(),
+        visitorId: row.visitor_id,
+        tokenHash,
+        deviceName: "Recovered Device",
+        createdAt: now,
+      }),
+    );
     // 审计日志
     insertAuditLog({
       id: null,
@@ -242,30 +231,13 @@ export function recoverVisitor(recoveryCode: string): RegisteredVisitor | null {
 
   log.info("recovered visitor %s via recovery code", row.visitor_id);
   return {
-    visitor: toPublic({
+    visitor: toVisitorPublic({
       ...row,
       visitor_token_hash: tokenHash,
       recovery_code_hash: codeHash,
     }),
     visitorToken: rawToken,
     recoveryCode: "",
-  };
-}
-
-/**
- * 将数据库中的访客行转换为对外公开的访客信息结构。
- *
- * @param row - 访客数据库行
- * @returns 访客公开信息对象
- */
-export function toPublic(row: Visitors): VisitorPublic {
-  return {
-    visitorId: row.visitor_id,
-    visitorName: row.visitor_name,
-    createdAt: row.created_at,
-    lastSeenAt: row.last_seen_at,
-    disabledAt: row.disabled_at,
-    mergedIntoVisitorId: row.merged_into_visitor_id,
   };
 }
 
@@ -351,14 +323,15 @@ export function loginWithPassword(visitorName: string, password: string): Regist
   const now = new Date().toISOString();
 
   runInTransaction(() => {
-    insertSession({
-      session_id: newSessionId(),
-      visitor_id: row.visitor_id,
-      token_hash: tokenHash,
-      device_name: "Password Login",
-      created_at: now,
-      last_seen_at: now,
-    });
+    insertSession(
+      toVisitorSessionsRow({
+        sessionId: newSessionId(),
+        visitorId: row.visitor_id,
+        tokenHash,
+        deviceName: "Password Login",
+        createdAt: now,
+      }),
+    );
     updateVisitorLastSeen(row.visitor_id, now);
     insertAuditLog({
       id: null,
@@ -373,7 +346,7 @@ export function loginWithPassword(visitorName: string, password: string): Regist
 
   log.info("visitor %s logged in with password", row.visitor_id);
   return {
-    visitor: toPublic(row),
+    visitor: toVisitorPublic(row),
     visitorToken: rawToken,
     recoveryCode: "",
   };

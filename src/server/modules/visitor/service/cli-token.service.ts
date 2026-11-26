@@ -11,13 +11,15 @@ import { hashVisitorToken } from "./token.js";
 import { findVisitorById } from "../repo/visitor.repo.js";
 import type { Visitors } from "../entity/visitor.entity.js";
 import { VisitorError } from "./visitor.service.js";
+import {
+  toCliTokenCreated,
+  toCliTokenSummary,
+  toCliTokensForCreate,
+  type CliTokenCreated,
+  type CliTokenSummary,
+} from "../mapper/cli-token.mapper.js";
 
-export interface CliTokenSummary {
-  tokenId: string;
-  name: string;
-  revoked: boolean;
-  createdAt: string;
-}
+export type { CliTokenSummary, CliTokenCreated };
 
 /**
  * 为指定访客创建 CLI Token。
@@ -27,34 +29,28 @@ export interface CliTokenSummary {
 export function createCliToken(params: {
   visitorId: string;
   name?: string;
-}): { tokenId: string; token: string; name: string; createdAt: string } {
+}): CliTokenCreated {
   const rawToken = generateCliToken();
   const tokenHash = hashVisitorToken(rawToken);
   const now = new Date().toISOString();
   const name = params.name?.trim() || "cli-token";
   const tokenId = randomUUID();
 
-  insertCliToken({
-    token_id: tokenId,
-    visitor_id: params.visitorId,
-    token_hash: tokenHash,
-    name,
-    revoked: 0,
-    created_at: now,
-  });
+  insertCliToken(
+    toCliTokensForCreate(params, {
+      tokenId,
+      tokenHash,
+      name,
+      createdAt: now,
+    }),
+  );
 
-  return { tokenId, token: rawToken, name, createdAt: now };
+  return toCliTokenCreated({ tokenId, rawToken, name, createdAt: now });
 }
 
 /** 列出指定访客的所有 CLI Token（含已停用；不含已硬删）。 */
 export function listCliTokens(visitorId: string): CliTokenSummary[] {
-  const rows = listCliTokensByVisitor(visitorId);
-  return rows.map((r) => ({
-    tokenId: r.token_id,
-    name: r.name,
-    revoked: r.revoked === 1,
-    createdAt: r.created_at,
-  }));
+  return listCliTokensByVisitor(visitorId).map(toCliTokenSummary);
 }
 
 /**

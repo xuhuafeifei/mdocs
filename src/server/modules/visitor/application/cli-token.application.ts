@@ -1,9 +1,9 @@
+import type { CliTokenSummary } from "../mapper/cli-token.mapper.js";
 import {
   createCliToken,
   deleteCliToken,
   listCliTokens,
   setCliTokenRevoked,
-  type CliTokenSummary,
 } from "../service/cli-token.service.js";
 
 /** 签发 CLI Token（明文仅返回一次） */

@@ -12,13 +12,16 @@ import { ensurePersonalDomain } from "../../domains/personal-domain.service";
 import type { VisitorDirectoryEntry, VisitorPublic } from "../../../../shared/types/visitor";
 import type { PageParams } from "../../../shared/request/page.params.js";
 import {
+  toVisitorDirectoryEntry,
+  toVisitorPublic,
+} from "../mapper/visitor.mapper.js";
+import {
   findActiveVisitorByName,
   generateRecoveryCode,
   loginWithPassword,
   recoverVisitor,
   registerVisitor,
   setVisitorPassword,
-  toPublic,
   VisitorError,
 } from "../service/visitor.service.js";
 
@@ -97,18 +100,14 @@ export function changeVisitorPassword(visitorId: string, password: string): { ok
 }
 
 export function listVisitorDirectory(): { visitors: VisitorDirectoryEntry[] } {
-  const rows = listActiveVisitorsDirectory();
   return {
-    visitors: rows.map((r) => ({
-      visitorId: r.visitor_id,
-      visitorName: r.visitor_name,
-    })),
+    visitors: listActiveVisitorsDirectory().map(toVisitorDirectoryEntry),
   };
 }
 
 export function getCurrentVisitor(row: Visitors): { visitor: VisitorPublic } {
   ensurePersonalDomain(getDb(), row.visitor_id, row.visitor_name);
-  return { visitor: toPublic(row) };
+  return { visitor: toVisitorPublic(row) };
 }
 
 /**
