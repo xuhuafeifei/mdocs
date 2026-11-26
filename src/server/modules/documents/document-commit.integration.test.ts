@@ -49,13 +49,13 @@ vi.mock("../../infra/storage/file-store.js", () => ({
 
 import { DocumentError } from "../access/access-control.js";
 import { createDocument, getDocument, getDocumentMergeContext, updateDocument } from "./application/document.application.js";
-import { findCommitById } from "./repo/commit.repo.js";
+import { findCommitById } from "./service/commit.service.js";
 import { findDocumentById } from "./service/document.service.js";
 import { insertDocumentInvite } from "./service/document.service.js";
 import {
   countParents,
   listParentCommitIds,
-} from "./repo/commit.repo.js";
+} from "./service/commit.service.js";
 
 const OWNER = "owner-commit-test";
 const INVITED_EDITOR = "invited-editor";
@@ -216,13 +216,13 @@ describe("updateDocument merge 发布", () => {
     });
 
     expect(merged.headCommitId).not.toBe(head);
-    expect(countParents(merged.headCommitId!, testDbRef.db!)).toBe(2);
-    const parents = listParentCommitIds(merged.headCommitId!, testDbRef.db!);
+    expect(countParents(merged.headCommitId!)).toBe(2);
+    const parents = listParentCommitIds(merged.headCommitId!);
     expect(parents).toContain(head);
 
     const localCommitId = parents.find((p) => p !== head);
     expect(localCommitId).toBeTruthy();
-    expect(listParentCommitIds(localCommitId!, testDbRef.db!)).toEqual([base]);
+    expect(listParentCommitIds(localCommitId!)).toEqual([base]);
   });
 
   it("remoteCommitId 与当前 head 不一致时 409", () => {
@@ -290,7 +290,7 @@ describe("updateDocument merge 发布", () => {
     });
 
     expect(overwritten.headCommitId).not.toBe(head);
-    expect(countParents(overwritten.headCommitId!, testDbRef.db!)).toBe(2);
+    expect(countParents(overwritten.headCommitId!)).toBe(2);
     expect(fileStoreMocks.lastWriteContent).toBe('{"local":true}');
     expect(getDocument(created.documentId).content).toBe('{"local":true}');
   });
@@ -359,7 +359,7 @@ describe("getDocumentMergeContext", () => {
 
     expect(ctx.mode).toBe("three_way");
     expect(ctx.mergeBaseCommitId).toBe(localBase);
-    const baseCommit = findCommitById(localBase, testDbRef.db!)!;
+    const baseCommit = findCommitById(localBase)!;
     expect(ctx.mergeBaseContent).toBe(
       fileStoreMocks.commitBlobs.get(baseCommit.blob_ref),
     );

@@ -3,7 +3,7 @@
  */
 import { getDb } from "../../infra/db/connection";
 import { findDocumentById } from "./service/document.service.js";
-import { findLatestNonAutoCommit } from "./repo/commit.repo";
+import { findLatestNonAutoCommit } from "./service/commit.service.js";
 import { DocumentError } from "../access/access-control";
 import { readCommitBlob } from "../../infra/storage/file-store";
 import { getVisitorAgentConfig } from "../agent/Config/config";
@@ -84,7 +84,7 @@ export async function suggestCommitMessage(params: {
     throw new DocumentError("BAD_REQUEST", "未配置默认模型或 API Key，无法生成发布说明", 400);
   }
 
-  const base = findLatestNonAutoCommit(params.documentId, db);
+  const base = findLatestNonAutoCommit(params.documentId);
   let baseText = "";
   if (base) {
     try {

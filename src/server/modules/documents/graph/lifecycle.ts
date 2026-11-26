@@ -4,7 +4,7 @@
  */
 import { getDb } from "../../../infra/db/connection";
 import { findDocumentById } from "../service/document.service.js";
-import { findCommitById } from "../repo/commit.repo";
+import { findCommitById } from "../service/commit.service.js";
 import { readCommitBlob, readDocument } from "../../../infra/storage/file-store";
 import { extractPlainTextFromLexical } from "../lexical-text";
 import {
@@ -128,7 +128,7 @@ function readCurrentLexical(documentId: string): string | null {
 
 function readLexicalAtCommit(documentId: string, commitId: string): string | null {
   const db = getDb();
-  const commit = findCommitById(commitId, db);
+  const commit = findCommitById(commitId);
   if (!commit || commit.document_id !== documentId) return null;
   try {
     return readCommitBlob(commit.blob_ref);

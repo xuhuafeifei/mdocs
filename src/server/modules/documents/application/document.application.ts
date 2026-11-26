@@ -26,7 +26,7 @@ import {
   insertCommitParent,
   findCommitById,
   listCommitsByDocument as listCommitRowsByDocument,
-} from "../repo/commit.repo.js";
+} from "../service/commit.service.js";
 import {
   AUTO_PUBLISH_MESSAGE,
   isPublishSource,
@@ -595,8 +595,7 @@ export function updateDocument(params: {
 
   runInTransaction(() => {
     updateDocumentContent({...row, display_name: displayName, content_hash: write.contentHash, updated_by: params.actorVisitorId, updated_at: now, permission: params.permission ?? row.permission, });
-    insertCommit(
-      toDocumentCommitsRow({
+    insertCommit(toDocumentCommitsRow({
         commitId,
         documentId: row.document_id,
         contentHash: write.contentHash,
@@ -605,8 +604,7 @@ export function updateDocument(params: {
         createdAt: now,
         message: publishMeta.message,
         source: publishMeta.source,
-      }),
-    );
+      }), );
     // 有上一版 head 时挂一条父边（fast-forward）
     if (row.head_commit_id) {
       insertCommitParent({
@@ -1006,16 +1004,14 @@ export function restoreDocumentVersion(params: {
 
   runInTransaction(() => {
     updateDocumentContent({...row, display_name: row.display_name, content_hash: write.contentHash, updated_by: params.actorVisitorId, updated_at: now, });
-    insertCommit(
-      toDocumentCommitsRow({
+    insertCommit(toDocumentCommitsRow({
         commitId: newCommitId,
         documentId: row.document_id,
         contentHash: write.contentHash,
         blobRef: blob.blobRef,
         actorVisitorId: params.actorVisitorId,
         createdAt: now,
-      }),
-    );
+      }), );
     if (previousHead) {
       insertCommitParent({
         child_commit_id: newCommitId,
@@ -1724,8 +1720,7 @@ function publishMergeDocument(params: {
   runInTransaction(() => {
     // 本地支尖端（此前仅存在于浏览器，此处首次落库）
     // 保存r_local
-    insertCommit(
-      toDocumentCommitsRow({
+    insertCommit(toDocumentCommitsRow({
         commitId: localCommitId,
         documentId: row.document_id,
         contentHash: localHash,
@@ -1734,8 +1729,7 @@ function publishMergeDocument(params: {
         createdAt: now,
         message,
         source,
-      }),
-    );
+      }), );
     insertCommitParent({
       child_commit_id: localCommitId,
       parent_commit_id: params.localBaseCommitId,
@@ -1743,8 +1737,7 @@ function publishMergeDocument(params: {
 
     updateDocumentContent({...row, display_name: displayName, content_hash: write.contentHash, updated_by: actorVisitorId, updated_at: now, permission: params.permission ?? row.permission, });
     // merge 节点：双父 = 远端 head + r_local
-    insertCommit(
-      toDocumentCommitsRow({
+    insertCommit(toDocumentCommitsRow({
         commitId: mergeCommitId,
         documentId: row.document_id,
         contentHash: write.contentHash,
@@ -1753,8 +1746,7 @@ function publishMergeDocument(params: {
         createdAt: now,
         message,
         source,
-      }),
-    );
+      }), );
     // merge node 拥有两个 parent, r_local 和 远端head
     // 这里存储的是远端head
     insertCommitParent({

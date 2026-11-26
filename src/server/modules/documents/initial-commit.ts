@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { insertCommit } from "./repo/commit.repo";
+import { insertCommit } from "./service/commit.service.js";
 import { insertDocument, updateDocumentContent, updateDocumentHeadCommit } from "./service/document.service.js";
 import type { Documents } from "./entity/document.entity.js";
 import { readDocument, writeCommitBlob, writeDocument } from "../../infra/storage/file-store";
@@ -56,7 +56,7 @@ export function insertMarkdownDocumentWithInitialCommit(
     created_at: input.createdAt,
     message: "",
     source: "manual",
-  }, db);
+  });
 
   return { commitId, contentHash: write.contentHash };
 }
@@ -105,7 +105,7 @@ export function backfillFolderDescHeadCommits(db: Database.Database): void {
       created_at: now,
       message: "",
       source: "manual",
-    }, db);
+    });
     updateDocumentContent({
       ...row,
       content_hash: contentHash,

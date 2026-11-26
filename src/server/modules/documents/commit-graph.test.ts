@@ -8,7 +8,7 @@ vi.mock("../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
-import { insertCommit, insertCommitParent } from "./repo/commit.repo.js";
+import { insertCommit, insertCommitParent } from "./service/commit.service.js";
 import { isAncestorOf, assertMergeFork, findMergeBaseCommitId } from "./commit-graph.js";
 import { DocumentError } from "../access/access-control.js";
 

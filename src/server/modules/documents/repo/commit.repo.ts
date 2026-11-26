@@ -1,5 +1,6 @@
 /**
  * document_commits / commit_parents 表访问。SQL 只活在本文件。
+ * **仅** `modules/documents/service/commit.service.ts` 可 import；其余走薄 service。
  * DB 默认内部 getDb()；可选末参 `db?` 仅单测注入。
  * 入参/返回均为表实体（缺列传 null）。
  */

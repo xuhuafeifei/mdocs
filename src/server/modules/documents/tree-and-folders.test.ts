@@ -68,7 +68,7 @@ import { DocumentError } from "../access/access-control.js";
 import { findDocumentById, countChildrenByParent, listDocumentsByPathPrefix } from "./service/document.service.js";
 import { FOLDER_DESC_FILENAME } from "../../../shared/folderDesc.js";
 import type { FolderSubtreeNode } from "../../../shared/types/tree.js";
-import { findCommitById } from "./repo/commit.repo.js";
+import { findCommitById } from "./service/commit.service.js";
 import { getDb } from "../../infra/db/connection.js";
 import {
   createFolder as createFolderApi,

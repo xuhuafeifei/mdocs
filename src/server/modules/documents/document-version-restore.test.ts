@@ -57,7 +57,7 @@ import {
   restoreDocumentVersion,
   updateDocument,
 } from "./application/document.application.js";
-import { listParentCommitIds } from "./repo/commit.repo.js";
+import { listParentCommitIds } from "./service/commit.service.js";
 import { getDb } from "../../infra/db/connection.js";
 
 const OWNER = "owner-ver-1";

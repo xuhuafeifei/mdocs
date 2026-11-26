@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { applySchema } from "../../infra/db/schema.js";
 import { backfillFolderDescHeadCommits } from "./initial-commit.js";
 import { findDocumentById } from "./service/document.service.js";
-import { findCommitById } from "./repo/commit.repo.js";
+import { findCommitById } from "./service/commit.service.js";
 
 const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
 
@@ -46,6 +46,6 @@ describe("backfillFolderDescHeadCommits", () => {
   it("为无 head 的 ___desc___.md 补 commit", () => {
     const row = findDocumentById(descId);
     expect(row?.head_commit_id).toBeTruthy();
-    expect(findCommitById(row!.head_commit_id!, db)).toBeTruthy();
+    expect(findCommitById(row!.head_commit_id!)).toBeTruthy();
   });
 });

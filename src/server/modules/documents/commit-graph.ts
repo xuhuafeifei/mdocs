@@ -5,7 +5,7 @@
  * DB 由 repo 内部 getDb()；本层不接收、不传递 Database。
  */
 import { DocumentError } from "../access/access-control";
-import { findCommitById, listParentCommitIds } from "./repo/commit.repo";
+import { findCommitById, listParentCommitIds } from "./service/commit.service.js";
 
 /**
  * 判断 ancestorId 是否位于 nodeId 的祖先链上（含「自身」）。
