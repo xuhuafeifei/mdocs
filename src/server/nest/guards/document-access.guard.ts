@@ -1,10 +1,11 @@
 import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
 import type { Request } from "express";
 import {
-  assertDocumentAccess,
-  assertDocumentOwner,
-  DocumentError,
-} from "../../modules/access/access-control.js";
+  assertCanDeleteDocument,
+  assertCanReadDocument,
+  assertCanWriteDocument,
+} from "../../modules/access/access.js";
+import { assertDocumentOwner, DocumentError } from "../../modules/access/access-control.js";
 import { VisitorContext } from "../context/visitor.context.js";
 
 function documentIdFrom(req: Request): string {
@@ -19,32 +20,32 @@ function visitorIdFrom(): string | null {
   return VisitorContext.visitorId();
 }
 
-/** params.documentId + 当前访客 → assertDocumentAccess(read) */
+/** params.documentId + 当前访客 → assertCanReadDocument */
 @Injectable()
 export class DocumentReadGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
-    assertDocumentAccess(documentIdFrom(req), visitorIdFrom(), "read");
+    assertCanReadDocument(visitorIdFrom(), documentIdFrom(req));
     return true;
   }
 }
 
-/** params.documentId + 当前访客 → assertDocumentAccess(edit) */
+/** params.documentId + 当前访客 → assertCanWriteDocument */
 @Injectable()
 export class DocumentEditGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
-    assertDocumentAccess(documentIdFrom(req), visitorIdFrom(), "edit");
+    assertCanWriteDocument(visitorIdFrom(), documentIdFrom(req));
     return true;
   }
 }
 
-/** params.documentId + 当前访客 → assertDocumentAccess(delete) */
+/** params.documentId + 当前访客 → assertCanDeleteDocument */
 @Injectable()
 export class DocumentDeleteGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
-    assertDocumentAccess(documentIdFrom(req), visitorIdFrom(), "delete");
+    assertCanDeleteDocument(visitorIdFrom(), documentIdFrom(req));
     return true;
   }
 }

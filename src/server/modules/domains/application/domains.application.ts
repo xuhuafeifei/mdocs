@@ -13,7 +13,7 @@ import {
 } from "../repo/domain.repo.js";
 import { countDocumentsByDomain } from "../../documents/repo/document.repo.js";
 import { findVisitorById } from "../../visitor/repo/visitor.repo.js";
-import { canEnterDomain } from "../../access/access.js";
+import { canEnterDomains } from "../../access/access.js";
 import {
   changeDomainPermission,
   DomainPermissionError,
@@ -70,14 +70,19 @@ function normaliseMembersBody(
 
 export function listVisibleDomains(visitorId: string | null) {
   const rows = listDomains();
-  const filtered = rows.filter((r) => canEnterDomain(visitorId, r.domain_id));
-  return filtered.map((r) => ({
-    domainId: r.domain_id,
-    domainName: r.domain_name,
-    permission: r.permission,
-    creatorVisitorId: r.creator_visitor_id,
-    docCount: countDocumentsByDomain(r.domain_id),
-  }));
+  const visible = canEnterDomains(
+    visitorId,
+    rows.map((r) => r.domain_id),
+  );
+  return rows
+    .filter((r) => visible.has(r.domain_id))
+    .map((r) => ({
+      domainId: r.domain_id,
+      domainName: r.domain_name,
+      permission: r.permission,
+      creatorVisitorId: r.creator_visitor_id,
+      docCount: countDocumentsByDomain(r.domain_id),
+    }));
 }
 
 export function createDomain(params: {

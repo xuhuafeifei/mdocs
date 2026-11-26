@@ -3,7 +3,7 @@
  *
  * 覆盖：
  * - validateDomainPermission 所有域类型 × 权限值组合
- * - assertDocumentAccess 全量鉴权（doc not found / delete / read / edit）
+ * - assertCan*Document 全量鉴权（doc not found / delete / read / edit）
  */
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import Database from "better-sqlite3";
@@ -17,12 +17,12 @@ vi.mock("../../infra/db/connection.js", () => ({
   getDb: () => testDbRef.db,
 }));
 
+import { Permission, validateDomainPermission, DocumentError } from "./access-control.js";
 import {
-  Permission,
-  validateDomainPermission,
-  assertDocumentAccess,
-  DocumentError,
-} from "./access-control.js";
+  assertCanDeleteDocument,
+  assertCanReadDocument,
+  assertCanWriteDocument,
+} from "./access.js";
 import { findDomainById } from "../domains/repo/domain.repo.js";
 import type { Documents } from "../documents/repo/document.repo.js";
 
@@ -107,13 +107,13 @@ describe("document invite — read", () => {
   it("private 域：被 invite read 的非创建者可读", () => {
     seedDocInDomain({ domainPermission: "private", docPermission: Permission.PRIVATE, docId: "invite-doc" });
     seedInvite("invite-doc", OTHER, "read");
-    expect(() => assertDocumentAccess("invite-doc", OTHER, "read")).not.toThrow();
+    expect(() => assertCanReadDocument(OTHER, "invite-doc")).not.toThrow();
   });
 
   it("restricted 域：非成员被 invite read 可读", () => {
     seedDocInDomain({ domainPermission: "restricted", docPermission: Permission.DOMAIN_READ, docId: "invite-doc2" });
     seedInvite("invite-doc2", OTHER, "read");
-    expect(() => assertDocumentAccess("invite-doc2", OTHER, "read")).not.toThrow();
+    expect(() => assertCanReadDocument(OTHER, "invite-doc2")).not.toThrow();
   });
 });
 
@@ -121,37 +121,37 @@ describe("document invite — edit", () => {
   it("private 域：被 invite edit 的非创建者可编辑", () => {
     seedDocInDomain({ domainPermission: "private", docPermission: Permission.PRIVATE, docId: "edit-doc" });
     seedInvite("edit-doc", OTHER, "edit");
-    expect(() => assertDocumentAccess("edit-doc", OTHER, "edit")).not.toThrow();
+    expect(() => assertCanWriteDocument(OTHER, "edit-doc")).not.toThrow();
   });
 
   it("private 域：被 invite read 的非创建者不可编辑（403）", () => {
     seedDocInDomain({ domainPermission: "private", docPermission: Permission.PRIVATE, docId: "edit-doc2" });
     seedInvite("edit-doc2", OTHER, "read");
-    expect(() => assertDocumentAccess("edit-doc2", OTHER, "edit")).toThrow(DocumentError);
+    expect(() => assertCanWriteDocument(OTHER, "edit-doc2")).toThrow(DocumentError);
   });
 
   it("restricted 域：被 invite edit 的非成员可编辑", () => {
     seedDocInDomain({ domainPermission: "restricted", docPermission: Permission.DOMAIN_READ, docId: "edit-doc3" });
     seedInvite("edit-doc3", OTHER, "edit");
-    expect(() => assertDocumentAccess("edit-doc3", OTHER, "edit")).not.toThrow();
+    expect(() => assertCanWriteDocument(OTHER, "edit-doc3")).not.toThrow();
   });
 
   it("restricted 域：被 invite read 的非成员不可编辑（403）", () => {
     seedDocInDomain({ domainPermission: "restricted", docPermission: Permission.DOMAIN_READ, docId: "edit-doc4" });
     seedInvite("edit-doc4", OTHER, "read");
-    expect(() => assertDocumentAccess("edit-doc4", OTHER, "edit")).toThrow(DocumentError);
+    expect(() => assertCanWriteDocument(OTHER, "edit-doc4")).toThrow(DocumentError);
   });
 
   it("private 域 + domain_read：被 invite edit 的非创建者可编辑", () => {
     seedDocInDomain({ domainPermission: "private", docPermission: Permission.DOMAIN_READ, docId: "edit-doc5" });
     seedInvite("edit-doc5", OTHER, "edit");
-    expect(() => assertDocumentAccess("edit-doc5", OTHER, "edit")).not.toThrow();
+    expect(() => assertCanWriteDocument(OTHER, "edit-doc5")).not.toThrow();
   });
 
   it("private 域 + public_read：被 invite edit 的非创建者可编辑", () => {
     seedDocInDomain({ domainPermission: "private", docPermission: Permission.PUBLIC_READ, docId: "edit-doc6" });
     seedInvite("edit-doc6", OTHER, "edit");
-    expect(() => assertDocumentAccess("edit-doc6", OTHER, "edit")).not.toThrow();
+    expect(() => assertCanWriteDocument(OTHER, "edit-doc6")).not.toThrow();
   });
 
   it("private 域 + domain_write：write 成员可编辑，无需 invite", () => {
@@ -162,13 +162,13 @@ describe("document invite — edit", () => {
       memberIds: [OTHER],
       memberRole: "write",
     });
-    expect(() => assertDocumentAccess("edit-doc7", OTHER, "edit")).not.toThrow();
+    expect(() => assertCanWriteDocument(OTHER, "edit-doc7")).not.toThrow();
   });
 
   it("private 域 + domain_write：非域成员被 invite edit 可编辑", () => {
     seedDocInDomain({ domainPermission: "private", docPermission: Permission.DOMAIN_WRITE, docId: "edit-doc8" });
     seedInvite("edit-doc8", OTHER, "edit");
-    expect(() => assertDocumentAccess("edit-doc8", OTHER, "edit")).not.toThrow();
+    expect(() => assertCanWriteDocument(OTHER, "edit-doc8")).not.toThrow();
   });
 });
 
@@ -220,16 +220,16 @@ describe("validateDomainPermission", () => {
 });
 
 // ============================================================
-//  assertDocumentAccess
+//  assertCan*Document
 // ============================================================
 
-describe("assertDocumentAccess", () => {
+describe("assertCan*Document", () => {
   // ── 文档不存在 ──
 
   it("文档不存在时抛 404", () => {
-    expect(() => assertDocumentAccess("no-such-doc", OWNER, "read")).toThrow(DocumentError);
+    expect(() => assertCanReadDocument(OWNER, "no-such-doc")).toThrow(DocumentError);
     try {
-      assertDocumentAccess("no-such-doc", OWNER, "read");
+      assertCanReadDocument(OWNER, "no-such-doc");
     } catch (e) {
       expect((e as DocumentError).status).toBe(404);
     }
@@ -239,14 +239,14 @@ describe("assertDocumentAccess", () => {
 
   it("删除：创建者可删", () => {
     seedDocInDomain({ domainPermission: "public", docPermission: Permission.PUBLIC_READ });
-    expect(() => assertDocumentAccess("test-doc", OWNER, "delete")).not.toThrow();
+    expect(() => assertCanDeleteDocument(OWNER, "test-doc")).not.toThrow();
   });
 
   it("删除：非创建者不可删（403）", () => {
     seedDocInDomain({ domainPermission: "public", docPermission: Permission.PUBLIC_READ });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "delete")).toThrow(DocumentError);
+    expect(() => assertCanDeleteDocument(OTHER, "test-doc")).toThrow(DocumentError);
     try {
-      assertDocumentAccess("test-doc", OTHER, "delete");
+      assertCanDeleteDocument(OTHER, "test-doc");
     } catch (e) {
       expect((e as DocumentError).status).toBe(403);
     }
@@ -256,26 +256,26 @@ describe("assertDocumentAccess", () => {
 
   it("public 域：非创建者可读 public_read(3) 文档", () => {
     seedDocInDomain({ domainPermission: "public", docPermission: Permission.PUBLIC_READ });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "read")).not.toThrow();
+    expect(() => assertCanReadDocument(OTHER, "test-doc")).not.toThrow();
   });
 
   it("public 域：未登录可读 public_write(4) 文档", () => {
     seedDocInDomain({ domainPermission: "public", docPermission: Permission.PUBLIC_WRITE });
-    expect(() => assertDocumentAccess("test-doc", null, "read")).not.toThrow();
+    expect(() => assertCanReadDocument(null, "test-doc")).not.toThrow();
   });
 
   // ── public 域写 ──
 
   it("public 域：非创建者可写 public_write(4) 文档", () => {
     seedDocInDomain({ domainPermission: "public", docPermission: Permission.PUBLIC_WRITE });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).not.toThrow();
+    expect(() => assertCanWriteDocument(OTHER, "test-doc")).not.toThrow();
   });
 
   it("public 域：非创建者不可写 public_read(3) 文档（403）", () => {
     seedDocInDomain({ domainPermission: "public", docPermission: Permission.PUBLIC_READ });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).toThrow(DocumentError);
+    expect(() => assertCanWriteDocument(OTHER, "test-doc")).toThrow(DocumentError);
     try {
-      assertDocumentAccess("test-doc", OTHER, "edit");
+      assertCanWriteDocument(OTHER, "test-doc");
     } catch (e) {
       expect((e as DocumentError).status).toBe(403);
     }
@@ -285,14 +285,14 @@ describe("assertDocumentAccess", () => {
 
   it("restricted 域：成员可读 domain_write(2) 文档", () => {
     seedDocInDomain({ domainPermission: "restricted", docPermission: Permission.DOMAIN_WRITE, memberIds: [OTHER] });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "read")).not.toThrow();
+    expect(() => assertCanReadDocument(OTHER, "test-doc")).not.toThrow();
   });
 
   it("restricted 域：非成员不可读（403）", () => {
     seedDocInDomain({ domainPermission: "restricted", docPermission: Permission.DOMAIN_READ });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "read")).toThrow(DocumentError);
+    expect(() => assertCanReadDocument(OTHER, "test-doc")).toThrow(DocumentError);
     try {
-      assertDocumentAccess("test-doc", OTHER, "read");
+      assertCanReadDocument(OTHER, "test-doc");
     } catch (e) {
       expect((e as DocumentError).status).toBe(403);
     }
@@ -307,7 +307,7 @@ describe("assertDocumentAccess", () => {
       memberIds: [OTHER],
       memberRole: "write",
     });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).not.toThrow();
+    expect(() => assertCanWriteDocument(OTHER, "test-doc")).not.toThrow();
   });
 
   it("restricted 域：read 成员不可写 domain_write(2) 文档", () => {
@@ -317,7 +317,7 @@ describe("assertDocumentAccess", () => {
       memberIds: [OTHER],
       memberRole: "read",
     });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).toThrow(DocumentError);
+    expect(() => assertCanWriteDocument(OTHER, "test-doc")).toThrow(DocumentError);
   });
 
   it("restricted 域：write 成员可写 domain_read(1) 文档", () => {
@@ -327,7 +327,7 @@ describe("assertDocumentAccess", () => {
       memberIds: [OTHER],
       memberRole: "write",
     });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).not.toThrow();
+    expect(() => assertCanWriteDocument(OTHER, "test-doc")).not.toThrow();
   });
 
   it("restricted 域：read 成员不可写 domain_read(1) 文档", () => {
@@ -337,41 +337,46 @@ describe("assertDocumentAccess", () => {
       memberIds: [OTHER],
       memberRole: "read",
     });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).toThrow(DocumentError);
+    expect(() => assertCanWriteDocument(OTHER, "test-doc")).toThrow(DocumentError);
   });
 
   // ── private 域 ──
 
   it("private 域：非创建者不可读 private(0) 文档（403）", () => {
     seedDocInDomain({ domainPermission: "private", docPermission: Permission.PRIVATE });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "read")).toThrow(DocumentError);
+    expect(() => assertCanReadDocument(OTHER, "test-doc")).toThrow(DocumentError);
   });
 
-  it("private 域：非创建者可读 public_write(4) 文档", () => {
+  it("private 域：非成员不可读 public_write(4)（须先能进域）", () => {
     seedDocInDomain({ domainPermission: "private", docPermission: Permission.PUBLIC_WRITE });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "read")).not.toThrow();
+    expect(() => assertCanReadDocument(OTHER, "test-doc")).toThrow(DocumentError);
+    try {
+      assertCanReadDocument(OTHER, "test-doc");
+    } catch (e) {
+      expect((e as DocumentError).code).toBe("FORBIDDEN");
+    }
   });
 
   it("private 域：非创建者不可写 public_read(3) 文档（仅 owner 可写）", () => {
     seedDocInDomain({ domainPermission: "private", docPermission: Permission.PUBLIC_READ });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).toThrow(DocumentError);
+    expect(() => assertCanWriteDocument(OTHER, "test-doc")).toThrow(DocumentError);
   });
 
-  it("private 域：非创建者可写 public_write(4) 文档", () => {
+  it("private 域：非成员不可写 public_write(4)（须先能进域）", () => {
     seedDocInDomain({ domainPermission: "private", docPermission: Permission.PUBLIC_WRITE });
-    expect(() => assertDocumentAccess("test-doc", OTHER, "edit")).not.toThrow();
+    expect(() => assertCanWriteDocument(OTHER, "test-doc")).toThrow(DocumentError);
   });
 
   // ── 创建者不受限 ──
 
   it("创建者在任何域类型下都可读写任意权限文档", () => {
     seedDocInDomain({ domainPermission: "restricted", docPermission: Permission.DOMAIN_READ });
-    expect(() => assertDocumentAccess("test-doc", OWNER, "read")).not.toThrow();
-    expect(() => assertDocumentAccess("test-doc", OWNER, "edit")).not.toThrow();
+    expect(() => assertCanReadDocument(OWNER, "test-doc")).not.toThrow();
+    expect(() => assertCanWriteDocument(OWNER, "test-doc")).not.toThrow();
   });
 });
 
-describe("assertDocumentAccess graph cache", () => {
+describe("assertCanReadDocument graph cache", () => {
   function seedGraphFile(domainPermission: string, domainId = "graph-domain") {
     const db = testDbRef.db!;
     const now = new Date().toISOString();
@@ -402,17 +407,17 @@ describe("assertDocumentAccess graph cache", () => {
 
   it("公开工作空间：非属主可读域图谱（permission=1 且 owner=system）", () => {
     seedGraphFile("public", "default");
-    expect(() => assertDocumentAccess("default.graph-file", OTHER, "read")).not.toThrow();
+    expect(() => assertCanReadDocument(OTHER, "default.graph-file")).not.toThrow();
   });
 
   it("公开工作空间：域图谱仍不可通过文档写权限改", () => {
     seedGraphFile("public", "default");
-    expect(() => assertDocumentAccess("default.graph-file", OTHER, "edit")).toThrow(DocumentError);
+    expect(() => assertCanWriteDocument(OTHER, "default.graph-file")).toThrow(DocumentError);
   });
 
   it("私人工作空间：外人不可读图谱缓存", () => {
     seedGraphFile("private", OWNER);
-    expect(() => assertDocumentAccess(`${OWNER}.graph-file`, OTHER, "read")).toThrow(DocumentError);
+    expect(() => assertCanReadDocument(OTHER, `${OWNER}.graph-file`)).toThrow(DocumentError);
   });
 
   it("受限工作空间：仅 invite 不可读图谱（不授协作 full）", () => {
@@ -441,7 +446,7 @@ describe("assertDocumentAccess graph cache", () => {
       `INSERT INTO document_invites (document_id, visitor_id, permission)
        VALUES (?, ?, ?)`,
     ).run("invited-doc", OTHER, "read");
-    expect(() => assertDocumentAccess("restricted-graph.graph-file", OTHER, "read")).toThrow(
+    expect(() => assertCanReadDocument(OTHER, "restricted-graph.graph-file")).toThrow(
       DocumentError,
     );
   });
@@ -455,7 +460,7 @@ describe("assertDocumentAccess graph cache", () => {
        VALUES (?, ?, ?)`,
     ).run("restricted-graph-member", OTHER, now);
     expect(() =>
-      assertDocumentAccess("restricted-graph-member.graph-file", OTHER, "read"),
+      assertCanReadDocument(OTHER, "restricted-graph-member.graph-file"),
     ).not.toThrow();
   });
 });

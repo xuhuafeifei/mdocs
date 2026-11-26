@@ -1,87 +1,14 @@
 /**
- * 域入口控制
+ * 域入口类型与图谱判定。
  *
- * 判断访客能否看到某个域、进入该域的目录树和文档列表。
- * 这是第一道门禁——进域后单篇文档的可见性还需走 access-control.ts 的文档权限检查。
- *
- * 返回值：
- *   "none"              → 不可见
- *   "full"              → 可进域列表/树
- *   "viaDocumentInvites" → 因域内有文档邀请过我而可见（private/restricted 域非成员通道）
+ * 入口规则实现在 access.ts 内部（不对外暴露）；业务只用
+ * `canEnterDomain` / `canEnterDomains` / `canFullyAccessDomain`。
  */
-
-import type Database from "better-sqlite3";
-import {
-  isDomainMember,
-  type Domains,
-} from "../domains/service/domain.service.js";
-import { hasDocumentInviteInDomain } from "../documents/service/document.service.js";
 
 export type DomainAccessKind = "none" | "full" | "viaDocumentInvites";
 
 export interface DomainAccess {
   kind: DomainAccessKind;
-}
-
-/**
- * @deprecated 邀请预取不应暴露给调用方。重构目标：`canEnterDomains(visitorId, domainIds)` 批量门面，
- * 邀请/成员查询封在 access 内。见 ADR 022 重构 TODO。
- */
-export interface ResolveDomainAccessOptions {
-  /** 批量列域时预先查好的"有文档邀请我的域"ID 集合，省得逐域查库。 */
-  documentInviteDomainIds?: Set<string>;
-}
-
-/**
- * 解析访客对该域的入口级别。
- *
- * @deprecated 签名脏（db + Domains + options）。新代码用 `canEnterDomain(visitorId, domainId)`（access.ts）。
- * 重构：经 domains/documents **service** 查，不直打 repo；批量用 `canEnterDomains`，删掉 Options。
- * 见 `.mdocs-docs/decisions/022-access-id-facade-and-guards.md` 重构 TODO。
- */
-export function resolveDomainAccess(
-  db: Database.Database,
-  domain: Domains | undefined,
-  domainId: string,
-  visitorId: string | null | undefined,
-  options?: ResolveDomainAccessOptions,
-): DomainAccess {
-  if (!domain) return { kind: "none" };
-
-  // public 域：任何人可进
-  if (domain.permission === "public") return { kind: "full" };
-  if (!visitorId) return { kind: "none" };
-
-  // 查一下该访客在域内是否有文档邀请
-  const hasDocInviteInDomain = options?.documentInviteDomainIds
-    ? options.documentInviteDomainIds.has(domainId)
-    : hasDocumentInviteInDomain(domainId, visitorId, db);
-
-  // private 域：仅域主（domain_id === visitorId）、创建者、或有文档邀请者可见
-  if (domain.permission === "private") {
-    if (domain.domain_id === visitorId) return { kind: "full" };
-    if (domain.creator_visitor_id === visitorId) return { kind: "full" };
-    if (hasDocInviteInDomain) return { kind: "viaDocumentInvites" };
-    return { kind: "none" };
-  }
-
-  // restricted 域：仅域成员、创建者、或有文档邀请者可见
-  if (domain.permission === "restricted") {
-    if (isDomainMember(domainId, visitorId, db)) return { kind: "full" };
-    if (domain.creator_visitor_id === visitorId) return { kind: "full" };
-    if (hasDocInviteInDomain) return { kind: "viaDocumentInvites" };
-    return { kind: "none" };
-  }
-
-  return { kind: "none" };
-}
-
-/**
- * 能否拉目录树 / 域下列表：kind 不是 "none" 即可。
- * @deprecated 新代码用 `canEnterDomain(visitorId, domainId)`，不要先 resolve 再判断。
- */
-export function canEnterDomainTree(access: DomainAccess): boolean {
-  return access.kind !== "none";
 }
 
 /**

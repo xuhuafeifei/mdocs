@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { canEnterDomain } from "../../access/access";
+import { canEnterDomains } from "../../access/access";
 import { getDb } from "../../../infra/db/connection";
 import {
   addDomainMember,
@@ -39,8 +39,12 @@ export function listDomainsTool({ visitorId }: ToolDeps): AgentTool {
     parameters: Type.Object({}),
     execute: async () => {
       const rows = listDomains();
+      const visible = canEnterDomains(
+        visitorId,
+        rows.map((r) => r.domain_id),
+      );
       const domains = rows
-        .filter((r) => canEnterDomain(visitorId, r.domain_id))
+        .filter((r) => visible.has(r.domain_id))
         .map((r) => ({
           domainId: r.domain_id,
           domainName: r.domain_name,

@@ -151,6 +151,26 @@ export function isDomainMember(
 }
 
 /**
+ * 访客在给定 domainId 集合中是成员的那些域（一次查询）。
+ * `domainIds` 为空则返回 []。
+ */
+export function listDomainIdsWhereVisitorIsMember(
+  visitorId: string,
+  domainIds: string[],
+  db?: Database.Database,
+): string[] {
+  if (domainIds.length === 0) return [];
+  const placeholders = domainIds.map(() => "?").join(", ");
+  const rows = resolveDb(db)
+    .prepare(
+      `SELECT domain_id FROM domain_members
+       WHERE visitor_id = ? AND domain_id IN (${placeholders})`,
+    )
+    .all(visitorId, ...domainIds) as Array<{ domain_id: string }>;
+  return rows.map((r) => r.domain_id);
+}
+
+/**
  * 查询成员角色；非成员返回 null。
  */
 export function getDomainMemberRole(

@@ -16,6 +16,7 @@ import {
   assertCanRead,
   assertCanWrite,
   canEnterDomain,
+  canEnterDomains,
   canRead,
   canWrite,
 } from "./access.js";
@@ -44,6 +45,7 @@ function seed(options: {
   domainId?: string;
   docId?: string;
   memberIds?: string[];
+  domainName?: string;
 }) {
   const db = testDbRef.db!;
   const domainId = options.domainId ?? "d1";
@@ -52,7 +54,14 @@ function seed(options: {
   db.prepare(
     `INSERT INTO domains (domain_id, domain_name, creator_visitor_id, created_at, updated_at, permission)
      VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(domainId, "域", OWNER, now, now, options.domainPermission);
+  ).run(
+    domainId,
+    options.domainName ?? `域-${domainId}`,
+    OWNER,
+    now,
+    now,
+    options.domainPermission,
+  );
   db.prepare(
     `INSERT INTO documents
      (document_id, domain_id, relative_path, display_name, owner_visitor_id,
@@ -78,6 +87,36 @@ describe("canEnterDomain", () => {
     seed({ domainPermission: "private", docPermission: Permission.PRIVATE });
     expect(canEnterDomain(OTHER, "d1")).toBe(false);
     expect(canEnterDomain(OWNER, "d1")).toBe(true);
+  });
+});
+
+describe("canEnterDomains", () => {
+  it("批量：public 可见、private 外人不可见、restricted 成员可见", () => {
+    seed({
+      domainPermission: "public",
+      docPermission: Permission.PUBLIC_READ,
+      domainId: "pub",
+      docId: "doc-pub",
+    });
+    seed({
+      domainPermission: "private",
+      docPermission: Permission.PRIVATE,
+      domainId: "priv",
+      docId: "doc-priv",
+    });
+    seed({
+      domainPermission: "restricted",
+      docPermission: Permission.DOMAIN_READ,
+      domainId: "rest",
+      docId: "doc-rest",
+      memberIds: [OTHER],
+    });
+
+    const visible = canEnterDomains(OTHER, ["pub", "priv", "rest", "missing"]);
+    expect(visible.has("pub")).toBe(true);
+    expect(visible.has("priv")).toBe(false);
+    expect(visible.has("rest")).toBe(true);
+    expect(visible.has("missing")).toBe(false);
   });
 });
 

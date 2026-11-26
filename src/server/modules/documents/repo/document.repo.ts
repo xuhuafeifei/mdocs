@@ -369,7 +369,7 @@ export function listDocumentInvites(
  * 怎么实现：`document_invites` 按 `document_id` 关联 `documents`，用 `visitor_id = ?` 过滤，`DISTINCT` 取 `domain_id`。
  *
  * 用途：批量列域时，可预先查出所有「因文档邀请而可见」的域ID集合，
- * 避免在 resolveDomainAccess 中逐域查库。
+ * 避免在 canEnterDomains 中逐域查库。
  *
  * @param db - better-sqlite3 数据库实例
  * @param visitorId - 当前访客 ID
@@ -394,7 +394,7 @@ export function listDomainIdsWithDocumentInviteForVisitor(
  * 查的是什么：给定域里，是否存在至少一篇文档对当前访客有邀请记录。
  * 怎么实现：同样的 invite 联 documents，加上 `domain_id = ?` 与 `visitor_id = ?`，用 `EXISTS` 只判断有无一行。
  *
- * 用途：在 resolveDomainAccess 中判断 restricted/private 域是否因文档邀请而对访客可见。
+ * 用途：判断 restricted/private 域是否因文档邀请而对访客可见。
  *
  * @param db - better-sqlite3 数据库实例
  * @param domainId - 目标域 ID

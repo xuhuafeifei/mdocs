@@ -1,12 +1,8 @@
 /**
- * 统一访问控制模块
+ * 统一访问控制模块（行级实现）
  *
- * == 设计原则 ==
- * - 五级权限 + invite 叠加，域类型约束文档档位
- * - 所有读/写/删的权限判断都收拢在此，不分散到各服务和路由
- * - canReadDocument / canEditDocument 需调用方提供域上下文（域类型 + 成员身份），
- *   避免在批量操作中反复查库
- * - assertDocumentAccess 自带 DB 查询，适合路由中间件单篇鉴权
+ * 业务鉴权请用 access.ts 的 id 门面。本文件的 canReadDocument / canEditDocument
+ * 仅供门面组合与权限单测，勿在 application / agent / Guard 直接调用。
  *
  * == 鉴权顺序 ==
  *   1. 创建者（owner）→ 直接放行
@@ -17,7 +13,6 @@
  *   6. Invite 管理能力：仅限文档创建者（invites HTTP 路由，见 assertDocumentOwner）
  */
 
-import { getDb } from "../../infra/db/connection";
 import {
   getDocumentById,
   getDocumentInvite,
@@ -27,8 +22,6 @@ import {
   getDomainById,
   getDomainMemberRole,
 } from "../domains/service/domain.service.js";
-import { isGraphFileType } from "../../../shared/file-types";
-import { canAccessGraph, resolveDomainAccess } from "./domain-access";
 // ============================================================
 //  通用错误类型
 // ============================================================
@@ -102,7 +95,6 @@ export interface DomainAccessInfo {
  * 组装域访问上下文（含成员读写角色）。
  */
 export function makeDomainAccessInfo(
-  db: { prepare: Function },
   domainId: string,
   visitorId: string | null | undefined,
   domainPermission: string,
@@ -110,7 +102,7 @@ export function makeDomainAccessInfo(
   if (!visitorId) {
     return { domainPermission, isDomainMember: false, domainMemberCanWrite: false };
   }
-  const role = getDomainMemberRole(domainId, visitorId, db as any);
+  const role = getDomainMemberRole(domainId, visitorId);
   return {
     domainPermission,
     isDomainMember: role !== null,
@@ -121,13 +113,13 @@ export function makeDomainAccessInfo(
 /**
  * 获取域权限上下文（供 bookmarks 等模块使用）。
  */
-export function getDomainInfo(db: any, domainId: string, visitorId: string | null): DomainAccessInfo {
-  const domain = getDomainById(domainId, db);
+export function getDomainInfo(domainId: string, visitorId: string | null): DomainAccessInfo {
+  const domain = getDomainById(domainId);
   const domainPermission = domain?.permission ?? "public";
   if (!visitorId || !domain) {
     return { domainPermission, isDomainMember: false, domainMemberCanWrite: false };
   }
-  return makeDomainAccessInfo(db, domain.domain_id, visitorId, domainPermission);
+  return makeDomainAccessInfo(domain.domain_id, visitorId, domainPermission);
 }
 
 // ============================================================
@@ -135,11 +127,7 @@ export function getDomainInfo(db: any, domainId: string, visitorId: string | nul
 // ============================================================
 
 /**
- * 判断某访客是否有权读取该文档。
- * 注意：此函数不检查域入口（domain entry）—— 调用方应先用 canEnterDomainTree 过滤。
- *
- * @deprecated 新代码用 `canRead(visitorId, domainId, documentId)`（access.ts）。
- * 勿再让业务拼 Row / DomainAccessInfo。见 ADR 022 重构 TODO。
+ * 行级读权限（不查域入口）。仅 access 门面与单测使用；业务用 `canRead`。
  */
 export function canReadDocument(
   row: Documents,
@@ -186,9 +174,7 @@ export function canReadDocument(
 // ============================================================
 
 /**
- * 判断某访客是否有权编辑该文档。
- *
- * @deprecated 新代码用 `canWrite(visitorId, domainId, documentId)`（access.ts）。见 ADR 022 重构 TODO。
+ * 行级写权限。仅 access 门面与单测使用；业务用 `canWrite`。
  */
 export function canEditDocument(
   row: Documents,
@@ -244,71 +230,6 @@ export function canEditDocument(
   return true;
 }
 
-// ============================================================
-//  统一鉴权入口（自带 DB 查询，适合路由中间件）
-// ============================================================
-
-/**
- * 全量鉴权：查文档 → 查域 → 判断读写删权限。
- * @deprecated 读/写用 `assertCanReadDocument` / `assertCanWriteDocument`（access.ts）。
- * Nest Guard 与 delete 动作迁移前暂留。见 layout-debt D3i / D5。
- */
-export function assertDocumentAccess(
-  documentId: string,
-  visitorId: string | null,
-  action: "read" | "edit" | "delete",
-): void {
-  const db = getDb();
-  const row = getDocumentById(documentId, db);
-  if (!row) {
-    throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
-  }
-
-  // 删除：始终仅创建者
-  if (action === "delete") {
-    if (row.owner_visitor_id !== visitorId) {
-      throw new DocumentError("FORBIDDEN", "仅创建者可删除此文档", 403);
-    }
-    return;
-  }
-
-  // 读/写：需要域上下文
-  const domain = getDomainById(row.domain_id, db);
-  const domainPermission = domain?.permission ?? "public";
-  const domainInfo = makeDomainAccessInfo(db, row.domain_id, visitorId, domainPermission);
-
-  // 图谱缓存：隐藏文件 permission/owner 不作鉴权依据。
-  // 能读图 = 域协作 full（能进工作空间协作）；单篇 invite 不授图谱。
-  if (action === "read" && isGraphFileType(row.file_type)) {
-    assertGraphAccess(row.domain_id, visitorId);
-    return;
-  }
-
-  if (action === "read" && !canReadDocument(row, visitorId, domainInfo)) {
-    throw new DocumentError("FORBIDDEN", "无权读取此文档", 403);
-  }
-  if (action === "edit" && !canEditDocument(row, visitorId, domainInfo)) {
-    throw new DocumentError("FORBIDDEN", "无权编辑此文档", 403);
-  }
-}
-
-/**
- * 图谱读/生成门禁：须 resolveDomainAccess.kind === "full"。
- * private/restricted 下 viaDocumentInvites 一律 403。
- */
-export function assertGraphAccess(domainId: string, visitorId: string | null): void {
-  const db = getDb();
-  const domain = getDomainById(domainId, db);
-  const access = resolveDomainAccess(db, domain ?? undefined, domainId, visitorId);
-  if (!canAccessGraph(access)) {
-    const message =
-      domain?.permission === "private"
-        ? "私有工作空间仅主人可访问图谱"
-        : "请成为工作空间成员后再访问图谱";
-    throw new DocumentError("GRAPH_FORBIDDEN", message, 403);
-  }
-}
-
 /**
  * 文档邀请：仅创建者可列出 / 新增 / 移除邀请（与被邀请者的 edit 权限区分）。
  */
@@ -316,8 +237,7 @@ export function assertDocumentOwner(documentId: string, visitorId: string | null
   if (!visitorId) {
     throw new DocumentError("UNAUTHENTICATED", "no visitor", 401);
   }
-  const db = getDb();
-  const row = getDocumentById(documentId, db);
+  const row = getDocumentById(documentId);
   if (!row) {
     throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   }

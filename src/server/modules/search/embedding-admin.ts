@@ -3,7 +3,7 @@
  */
 import { getDb } from "../../infra/db/connection";
 import { listDomains } from "../domains/service/domain.service.js";
-import { canEnterDomain, canRead } from "../access/access";
+import { canEnterDomains, canRead } from "../access/access";
 import { readDocument } from "../../infra/storage/file-store";
 import { useLogger } from "../../infra/logger/logger";
 import { isEmbeddingReady } from "./embedding-model";
@@ -34,7 +34,11 @@ export function listEmbeddingIndex(params: {
   const visitorId = params.visitorId;
 
   const allDomains = listDomains();
-  const visibleDomains = allDomains.filter((r) => canEnterDomain(visitorId, r.domain_id));
+  const visibleIds = canEnterDomains(
+    visitorId,
+    allDomains.map((d) => d.domain_id),
+  );
+  const visibleDomains = allDomains.filter((r) => visibleIds.has(r.domain_id));
   const domainNameById = new Map(visibleDomains.map((d) => [d.domain_id, d.domain_name]));
 
   let domainIds = visibleDomains.map((d) => d.domain_id);

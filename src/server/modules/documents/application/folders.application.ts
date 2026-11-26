@@ -37,7 +37,7 @@ export function createFolder(params: {
   const domainId = params.domainId?.trim() || cfg.defaultDomainId;
   const db = getDb();
 
-  const domainRow = getDomainById(domainId, db);
+  const domainRow = getDomainById(domainId);
   if (!domainRow) {
     throw new DocumentError("DOMAIN_NOT_FOUND", "工作空间不存在", 404);
   }
