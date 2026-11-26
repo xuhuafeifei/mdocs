@@ -22,7 +22,7 @@ import {
   restoreDocumentFromAudit,
   restoreDocumentVersion,
   updateDocument,
-} from "../document.service.js";
+} from "./document.application.js";
 import { suggestCommitMessage } from "../suggest-commit-message.js";
 import { suggestDocumentMerge } from "../ai-merge.service.js";
 import { suggestMergeMessage } from "../suggest-merge-message.js";

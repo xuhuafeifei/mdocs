@@ -2,7 +2,7 @@ import { getVisitorAgentConfig } from "../../agent/Config/config.js";
 import { assertGraphAccess } from "../../access/access.js";
 import { DocumentError } from "../../access/access-control.js";
 import { getDb } from "../../../infra/db/connection.js";
-import { findDocumentById } from "../repo/document.repo.js";
+import { findDocumentById } from "../service/document.service.js";
 import { taskQueue } from "../../../infra/task-queue/index.js";
 import { FILE_TYPE } from "../../../../shared/file-types.js";
 import {

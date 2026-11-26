@@ -12,7 +12,7 @@ import {
   listDomains,
   type DomainMemberRole,
 } from "../../domains/repo/domain.repo";
-import { countDocumentsByDomain } from "../../documents/repo/document.repo";
+import { countDocumentsByDomain } from "../../documents/service/document.service.js";
 import { findVisitorById } from "../../visitor/repo/visitor.repo.js";
 import { asToolResult, type ToolDeps } from "./tool-deps";
 import { changeDomainPermission, DomainPermissionError } from "../../domains/change-domain-permission";

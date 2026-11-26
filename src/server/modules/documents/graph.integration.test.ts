@@ -58,7 +58,7 @@ vi.mock("../../infra/logger/logger.js", () => ({
 
 import { buildGraph } from "./graph";
 import type { Graph, GraphDeps } from "./graph/types.js";
-import { findDocumentById } from "./repo/document.repo.js";
+import { findDocumentById } from "./service/document.service.js";
 import { buildDocumentTree } from "../tree/tree.application.js";
 
 /* ── 测试辅助 ── */
@@ -70,7 +70,7 @@ function createFolder(name: string, parentId: string | null = null): string {
   const folderId = randomUUID();
   const now = new Date().toISOString();
   const parentPath = parentId
-    ? findDocumentById(parentId, db)!.relative_path
+    ? findDocumentById(parentId)!.relative_path
     : "";
   const folderPath = parentPath ? `${parentPath}/${name}` : name;
 
@@ -88,7 +88,7 @@ function createDoc(name: string, parentId: string | null = null, title?: string)
   const docId = randomUUID();
   const now = new Date().toISOString();
   const parentPath = parentId
-    ? findDocumentById(parentId, db)!.relative_path
+    ? findDocumentById(parentId)!.relative_path
     : "";
   const docPath = parentPath ? `${parentPath}/${name}` : name;
 
@@ -181,7 +181,7 @@ function createMockDeps(): GraphDeps {
     writeArticleCache: async () => {},
 
     getDocTitle: async (documentId: string) => {
-      const doc = findDocumentById(documentId, testDbRef.db!);
+      const doc = findDocumentById(documentId);
       return doc?.display_name || "未命名";
     },
 

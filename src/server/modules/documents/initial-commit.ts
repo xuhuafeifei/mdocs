@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { insertCommit } from "./repo/commit.repo";
-import { insertDocument, updateDocumentContent, updateDocumentHeadCommit } from "./repo/document.repo";
+import { insertDocument, updateDocumentContent, updateDocumentHeadCommit } from "./service/document.service.js";
 import type { Documents } from "./entity/document.entity.js";
 import { readDocument, writeCommitBlob, writeDocument } from "../../infra/storage/file-store";
 import { FOLDER_DESC_FILENAME } from "../../../shared/folderDesc";
@@ -31,22 +31,22 @@ export function insertMarkdownDocumentWithInitialCommit(
   const blob = writeCommitBlob(write.contentHash, input.content);
 
   insertDocument({
-    document_id: input.documentId,
-    domain_id: input.domainId,
-    relative_path: input.relativePath,
-    display_name: input.displayName,
-    owner_visitor_id: input.ownerVisitorId,
-    created_by: input.actorVisitorId,
-    updated_by: input.actorVisitorId,
-    content_hash: write.contentHash,
-    head_commit_id: commitId,
-    created_at: input.createdAt,
-    updated_at: input.updatedAt,
-    permission: input.permission,
-    file_type: input.fileType ?? "md",
-    parent_id: input.parentId,
-    is_dirty: 1,
-  }, db);
+      document_id: input.documentId,
+      domain_id: input.domainId,
+      relative_path: input.relativePath,
+      display_name: input.displayName,
+      owner_visitor_id: input.ownerVisitorId,
+      created_by: input.actorVisitorId,
+      updated_by: input.actorVisitorId,
+      content_hash: write.contentHash,
+      head_commit_id: commitId,
+      created_at: input.createdAt,
+      updated_at: input.updatedAt,
+      permission: input.permission,
+      file_type: input.fileType ?? "md",
+      parent_id: input.parentId,
+      is_dirty: 1,
+    });
   insertCommit({
     commit_id: commitId,
     document_id: input.documentId,
@@ -110,11 +110,11 @@ export function backfillFolderDescHeadCommits(db: Database.Database): void {
       ...row,
       content_hash: contentHash,
       updated_at: now,
-    }, db);
+    });
     updateDocumentHeadCommit({
       ...row,
       head_commit_id: commitId,
       updated_at: now,
-    }, db);
+    });
   }
 }

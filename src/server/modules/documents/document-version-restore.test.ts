@@ -56,7 +56,7 @@ import {
   listDocumentCommits,
   restoreDocumentVersion,
   updateDocument,
-} from "./document.service.js";
+} from "./application/document.application.js";
 import { listParentCommitIds } from "./repo/commit.repo.js";
 import { getDb } from "../../infra/db/connection.js";
 

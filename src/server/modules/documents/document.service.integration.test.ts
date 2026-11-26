@@ -1,5 +1,5 @@
 /**
- * 文档服务集成测试（document.service.ts）
+ * 文档服务集成测试（application/document.application.ts）
  *
  * 覆盖 createDocument 域权限校验、addDocumentInvite 域成员互斥。
  * 使用内存 SQLite + mock file-store，不写磁盘。
@@ -41,8 +41,8 @@ vi.mock("../../infra/storage/file-store.js", () => ({
 }));
 
 import { DocumentError, Permission } from "../access/access-control.js";
-import { createDocument, addDocumentInvite, updateDocument, moveDocument, renameDocument } from "./document.service.js";
-import { findDocumentById } from "./repo/document.repo.js";
+import { createDocument, addDocumentInvite, updateDocument, moveDocument, renameDocument } from "./application/document.application.js";
+import { findDocumentById } from "./service/document.service.js";
 import { findDomainById } from "../domains/repo/domain.repo.js";
 
 /* ── 测试辅助：直接在数据库建文件夹 ── */
@@ -52,7 +52,7 @@ function createFolderInDb(domainId: string, name: string, parentId: string | nul
   const folderId = "folder-" + Math.random().toString(36).slice(2, 10);
   const now = new Date().toISOString();
   const path = parentId
-    ? `${findDocumentById(parentId, db)!.relative_path}/${name}`
+    ? `${findDocumentById(parentId)!.relative_path}/${name}`
     : name;
   db.prepare(
     `INSERT INTO documents (document_id, domain_id, relative_path, display_name, owner_visitor_id,
@@ -264,7 +264,7 @@ describe("createDocument 域权限校验", () => {
       parentId: folderId,
     });
     // 验证数据库中 parent_id 已设置
-    const row = findDocumentById(doc.documentId, testDbRef.db!);
+    const row = findDocumentById(doc.documentId);
     expect(row?.parent_id).toBe(folderId);
   });
 });
@@ -399,7 +399,7 @@ describe("moveDocument", () => {
     expect(moved.parentId).toBe(folderId);
     expect(moved.relativePath).toBe("guide/a.md");
 
-    const row = findDocumentById(doc.documentId, testDbRef.db!);
+    const row = findDocumentById(doc.documentId);
     expect(row?.parent_id).toBe(folderId);
     expect(row?.relative_path).toBe("guide/a.md");
   });
@@ -503,9 +503,9 @@ describe("moveDocument", () => {
     expect(moved.parentId).toBe(destId);
     expect(moved.relativePath).toBe("dest/src-pack");
 
-    const folderRow = findDocumentById(srcId, testDbRef.db!);
-    const nestedRow = findDocumentById(nestedId, testDbRef.db!);
-    const leafRow = findDocumentById(leaf.documentId, testDbRef.db!);
+    const folderRow = findDocumentById(srcId);
+    const nestedRow = findDocumentById(nestedId);
+    const leafRow = findDocumentById(leaf.documentId);
     expect(folderRow?.parent_id).toBe(destId);
     expect(folderRow?.relative_path).toBe("dest/src-pack");
     expect(nestedRow?.relative_path).toBe("dest/src-pack/nested");

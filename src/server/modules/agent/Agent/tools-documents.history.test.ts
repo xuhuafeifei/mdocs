@@ -56,7 +56,7 @@ import { Permission } from "../../access/access-control.js";
 import {
   createDocument,
   updateDocument,
-} from "../../documents/document.service.js";
+} from "../../documents/application/document.application.js";
 import {
   getDocumentCommitTool,
   getDocumentTool,

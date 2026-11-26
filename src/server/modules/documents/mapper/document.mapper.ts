@@ -1,6 +1,6 @@
 /**
  * documents 聚合映射：进参/事实 → 落库行；表行 → 对外形状。
- * 对照 document-comment / my-document mapper；编排仍在 document.service（→ E3）。
+ * 对照 document-comment / my-document mapper；编排在 application/document.application.ts。
  */
 import type { PublishSource } from "../../../../shared/publish-meta.js";
 import { isPublishSource } from "../../../../shared/publish-meta.js";

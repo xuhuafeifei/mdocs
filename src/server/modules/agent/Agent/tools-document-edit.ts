@@ -5,7 +5,7 @@ import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { assertCanWriteDocument } from "../../access/access";
 import { DocumentError } from "../../access/access-control";
-import { getDocument, updateDocument } from "../../documents/document.service";
+import { getDocument, updateDocument } from "../../documents/application/document.application.js";
 import { markdownToLexicalJson } from "../../documents/markdown-to-lexical";
 import { lexicalJsonToMarkdown } from "../../documents/lexical-to-markdown";
 import { extractPlainTextFromLexical } from "../../documents/lexical-text";

@@ -7,7 +7,7 @@ import {
   findDocumentById,
   findDocumentByPath,
   insertDocument,
-} from "../repo/document.repo.js";
+} from "../service/document.service.js";
 import { canFullyAccessDomain } from "../../access/access.js";
 import {
   DocumentError,
@@ -53,7 +53,7 @@ export function createFolder(params: {
 
   let normalizedPath: string;
   if (params.parentId) {
-    const parent = findDocumentById(params.parentId, db);
+    const parent = findDocumentById(params.parentId);
     if (!parent || parent.file_type !== "dir") {
       throw new DocumentError("INVALID_PARENT", "父目录不存在", 404);
     }
@@ -65,7 +65,7 @@ export function createFolder(params: {
     normalizedPath = storageName;
   }
 
-  const existing = findDocumentByPath(domainId, normalizedPath, db);
+  const existing = findDocumentByPath(domainId, normalizedPath);
   if (existing) {
     throw new DocumentError("DOC_EXISTS", "同名目录已存在", 409);
   }
@@ -110,7 +110,7 @@ export function createFolder(params: {
       file_type: "dir",
       parent_id: params.parentId ?? null,
       is_dirty: 1,
-    }, db);
+    });
 
     const descDocumentId = `${folderId}.folder-desc`;
     insertMarkdownDocumentWithInitialCommit(db, {
@@ -136,7 +136,7 @@ export function createFolder(params: {
       target_id: folderId,
       metadata_json: JSON.stringify({ relativePath: normalizedPath }),
       created_at: now,
-    }, db);
+    });
   });
   tx();
 
@@ -145,21 +145,21 @@ export function createFolder(params: {
 
 export function deleteFolder(params: { actorVisitorId: string; folderId: string }): void {
   const db = getDb();
-  const folder = findDocumentById(params.folderId, db);
+  const folder = findDocumentById(params.folderId);
   if (!folder) throw new DocumentError("DOC_NOT_FOUND", "目录不存在", 404);
   if (folder.file_type !== "dir") throw new DocumentError("BAD_REQUEST", "不是目录", 400);
   if (folder.owner_visitor_id !== params.actorVisitorId) {
     throw new DocumentError("FORBIDDEN", "仅创建者可删除目录", 403);
   }
 
-  const childCount = countChildrenByParent(params.folderId, db);
+  const childCount = countChildrenByParent(params.folderId);
   if (childCount > 0) {
     throw new DocumentError("NOT_EMPTY", "目录不为空，无法删除", 409);
   }
 
   const now = new Date().toISOString();
   db.transaction(() => {
-    deleteDocument(params.folderId, db);
+    deleteDocument(params.folderId);
     insertAuditLog({
       id: null,
       actor_visitor_id: params.actorVisitorId,
@@ -168,6 +168,6 @@ export function deleteFolder(params: { actorVisitorId: string; folderId: string 
       target_id: params.folderId,
       metadata_json: JSON.stringify({ relativePath: folder.relative_path }),
       created_at: now,
-    }, db);
+    });
   })();
 }

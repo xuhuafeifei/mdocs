@@ -24,7 +24,7 @@ import {
   insertDocument,
   updateDocumentContent,
   type Documents,
-} from "./repo/document.repo";
+} from "./service/document.service.js";
 import { findDomainById } from "../domains/repo/domain.repo";
 import { deleteDocumentFile, readDocument, writeDocument } from "../../infra/storage/file-store";
 import {
@@ -48,7 +48,7 @@ function contentHash(str: string): string {
 /** 写隐藏文件时的 owner：优先正文/目录行，否则域创建者 */
 function resolveOwnerVisitorId(documentId: string, domainId: string): string {
   const db = getDb();
-  const doc = findDocumentById(documentId, db);
+  const doc = findDocumentById(documentId);
   if (doc) return doc.owner_visitor_id;
   const domain = findDomainById(domainId, db);
   return domain?.creator_visitor_id ?? "system";
@@ -56,8 +56,7 @@ function resolveOwnerVisitorId(documentId: string, domainId: string): string {
 
 /** 读文章级图谱缓存；不存在或解析失败返回 null */
 export function readArticleGraphFile(documentId: string): ArticleGraphFile | null {
-  const db = getDb();
-  const graphFile = findDocumentById(`${documentId}.graph-file`, db);
+  const graphFile = findDocumentById(`${documentId}.graph-file`);
   if (!graphFile) return null;
   try {
     const { content } = readDocument(graphFile.domain_id, graphFile.relative_path);
@@ -76,13 +75,12 @@ export function writeArticleGraphFile(
   documentId: string,
   file: ArticleGraphFile,
 ): void {
-  const db = getDb();
-  const doc = findDocumentById(documentId, db);
+  const doc = findDocumentById(documentId);
   if (!doc || !doc.parent_id) return;
 
   const ownerVisitorId = doc.owner_visitor_id;
   const domainId = doc.domain_id;
-  const graphDir = ensureGraphDir(db, doc.parent_id, domainId, ownerVisitorId);
+  const graphDir = ensureGraphDir(doc.parent_id, domainId, ownerVisitorId);
   const fileName = articleGraphFileName(documentId);
   const filePath = `${graphDir.relative_path}/${fileName}`;
   const content = JSON.stringify(file, null, 2);
@@ -100,21 +98,19 @@ export function writeArticleGraphFile(
 
 /** 删除文章级缓存（DB 行 + 磁盘）；不存在则 noop */
 export function deleteArticleGraphCache(documentId: string): void {
-  const db = getDb();
-  const graphFile = findDocumentById(`${documentId}.graph-file`, db);
+  const graphFile = findDocumentById(`${documentId}.graph-file`);
   if (!graphFile) return;
   try {
     deleteDocumentFile(graphFile.domain_id, graphFile.relative_path);
   } catch {
     // 盘上可能已不存在
   }
-  deleteDocument(graphFile.document_id, db);
+  deleteDocument(graphFile.document_id);
 }
 
 /** 读目录级 `___graph___.json`；不存在或解析失败返回 null */
 export function readDirGraphFile(folderId: string): DirGraphFile | null {
-  const db = getDb();
-  const graphFile = findDocumentById(`${folderId}.graph-file`, db);
+  const graphFile = findDocumentById(`${folderId}.graph-file`);
   if (!graphFile) return null;
   try {
     const { content } = readDocument(graphFile.domain_id, graphFile.relative_path);
@@ -126,8 +122,7 @@ export function readDirGraphFile(folderId: string): DirGraphFile | null {
 
 /** 写目录级图谱（含 meta.dirty）；目录行须存在 */
 export function writeDirGraphFile(folderId: string, file: DirGraphFile): void {
-  const db = getDb();
-  const folder = findDocumentById(folderId, db);
+  const folder = findDocumentById(folderId);
   if (!folder) return;
 
   const filePath = `${folder.relative_path}/${DIR_GRAPH_FILENAME}`;
@@ -145,8 +140,7 @@ export function writeDirGraphFile(folderId: string, file: DirGraphFile): void {
 
 /** 读域级图谱；不存在或解析失败返回 null */
 export function readDomainGraphFile(domainId: string): DirGraphFile | null {
-  const db = getDb();
-  const graphFile = findDocumentById(`${domainId}.graph-file`, db);
+  const graphFile = findDocumentById(`${domainId}.graph-file`);
   if (!graphFile) return null;
   try {
     const { content } = readDocument(domainId, graphFile.relative_path);
@@ -158,11 +152,10 @@ export function readDomainGraphFile(domainId: string): DirGraphFile | null {
 
 /** 写域级图谱到域根 `___graph___.json`（parent_id = null） */
 export function writeDomainGraphFile(domainId: string, file: DirGraphFile): void {
-  const db = getDb();
   const filePath = DIR_GRAPH_FILENAME;
   const content = JSON.stringify(file, null, 2);
   const ownerVisitorId = resolveOwnerVisitorId(domainId, domainId);
-  const existing = findDocumentById(`${domainId}.graph-file`, db);
+  const existing = findDocumentById(`${domainId}.graph-file`);
 
   if (existing) {
     updateDocumentContent({
@@ -171,26 +164,11 @@ export function writeDomainGraphFile(domainId: string, file: DirGraphFile): void
       content_hash: contentHash(content),
       updated_by: ownerVisitorId,
       updated_at: new Date().toISOString(),
-    }, db);
+    });
   } else {
     const now = new Date().toISOString();
     insertDocument({
-      document_id: `${domainId}.graph-file`,
-      domain_id: domainId,
-      relative_path: filePath,
-      display_name: DIR_GRAPH_FILENAME,
-      owner_visitor_id: ownerVisitorId,
-      created_by: ownerVisitorId,
-      updated_by: ownerVisitorId,
-      content_hash: contentHash(content),
-      head_commit_id: null,
-      created_at: now,
-      updated_at: now,
-      permission: 1,
-      file_type: FILE_TYPE.GRAPH_FILE,
-      parent_id: null,
-      is_dirty: 1,
-    }, db);
+      document_id: `${domainId}.graph-file`, domain_id: domainId, relative_path: filePath, display_name: DIR_GRAPH_FILENAME, owner_visitor_id: ownerVisitorId, created_by: ownerVisitorId, updated_by: ownerVisitorId, content_hash: contentHash(content), head_commit_id: null, created_at: now, updated_at: now, permission: 1, file_type: FILE_TYPE.GRAPH_FILE, parent_id: null, is_dirty: 1, });
   }
   writeDocument(domainId, filePath, content);
 }
@@ -217,8 +195,7 @@ function upsertGraphFileContent(params: {
   content: string;
   ownerVisitorId: string;
 }): void {
-  const db = getDb();
-  const existing = findDocumentByPath(params.domainId, params.relativePath, db);
+  const existing = findDocumentByPath(params.domainId, params.relativePath);
   if (existing) {
     updateDocumentContent({
       ...existing,
@@ -226,7 +203,7 @@ function upsertGraphFileContent(params: {
       content_hash: contentHash(params.content),
       updated_by: params.ownerVisitorId,
       updated_at: new Date().toISOString(),
-    }, db);
+    });
   } else {
     const now = new Date().toISOString();
     insertDocument({
@@ -245,21 +222,20 @@ function upsertGraphFileContent(params: {
       file_type: GRAPH_FILE_TYPE.FILE,
       parent_id: params.parentId,
       is_dirty: 1,
-    }, db);
+    });
   }
   writeDocument(params.domainId, params.relativePath, params.content);
 }
 
 /** 查找父目录下的 `__graph__` 子目录行 */
 function findGraphDir(
-  db: ReturnType<typeof getDb>,
   parentId: string,
   domainId: string,
 ): Documents | null {
-  const parent = findDocumentById(parentId, db);
+  const parent = findDocumentById(parentId);
   if (!parent) return null;
   const graphDirPath = `${parent.relative_path}/${ARTICLE_GRAPH_DIRNAME}`;
-  return findDocumentByPath(domainId, graphDirPath, db) || null;
+  return findDocumentByPath(domainId, graphDirPath) || null;
 }
 
 /**
@@ -267,15 +243,14 @@ function findGraphDir(
  * 仅建元数据行，不在盘上单独建空目录；文章缓存写入时会带出路径。
  */
 function ensureGraphDir(
-  db: ReturnType<typeof getDb>,
   parentId: string,
   domainId: string,
   ownerVisitorId: string,
 ): Documents {
-  const existing = findGraphDir(db, parentId, domainId);
+  const existing = findGraphDir(parentId, domainId);
   if (existing) return existing;
 
-  const parent = findDocumentById(parentId, db);
+  const parent = findDocumentById(parentId);
   if (!parent) throw new Error(`父目录不存在：${parentId}`);
 
   const now = new Date().toISOString();
@@ -283,22 +258,22 @@ function ensureGraphDir(
   const dirPath = `${parent.relative_path}/${ARTICLE_GRAPH_DIRNAME}`;
 
   insertDocument({
-    document_id: dirId,
-    domain_id: domainId,
-    relative_path: dirPath,
-    display_name: ARTICLE_GRAPH_DIRNAME,
-    owner_visitor_id: ownerVisitorId,
-    created_by: ownerVisitorId,
-    updated_by: ownerVisitorId,
-    content_hash: "",
-    head_commit_id: null,
-    created_at: now,
-    updated_at: now,
-    permission: 1,
-    file_type: GRAPH_FILE_TYPE.DIR,
-    parent_id: parentId,
-    is_dirty: 1,
-  }, db);
+      document_id: dirId,
+      domain_id: domainId,
+      relative_path: dirPath,
+      display_name: ARTICLE_GRAPH_DIRNAME,
+      owner_visitor_id: ownerVisitorId,
+      created_by: ownerVisitorId,
+      updated_by: ownerVisitorId,
+      content_hash: "",
+      head_commit_id: null,
+      created_at: now,
+      updated_at: now,
+      permission: 1,
+      file_type: GRAPH_FILE_TYPE.DIR,
+      parent_id: parentId,
+      is_dirty: 1,
+    });
 
-  return findDocumentById(dirId, db)!;
+  return findDocumentById(dirId)!;
 }

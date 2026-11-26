@@ -4,7 +4,7 @@ import {
   countDocumentsByOwner,
   listDocumentsByOwner,
   type DocumentsOwnerFilters,
-} from "../../documents/repo/document.repo";
+} from "../../documents/service/document.service.js";
 import { toMyDocumentResponse } from "../../documents/mapper/my-document.mapper.js";
 import type { MyDocumentsPageResponse } from "../../documents/response/my-document.response.js";
 import { getDb } from "../../../infra/db/connection";

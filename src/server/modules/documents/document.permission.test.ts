@@ -18,8 +18,8 @@ vi.mock("../../infra/db/connection.js", () => ({
 }));
 
 import { canReadDocument, canEditDocument, Permission, type DomainAccessInfo } from "../access/access-control.js";
-import { deleteDocumentInvite, insertDocumentInvite } from "./repo/document.repo.js";
-import type { Documents } from "./repo/document.repo.js";
+import { deleteDocumentInvite, insertDocumentInvite } from "./service/document.service.js";
+import type { Documents } from "./service/document.service.js";
 
 /* ── 测试辅助 ── */
 
@@ -65,11 +65,11 @@ beforeAll(() => {
 
 afterEach(() => {
   // 清理邀请记录，避免测试间相互污染
-  deleteDocumentInvite("doc-1", OTHER, testDbRef.db!);
-  deleteDocumentInvite("doc-1", "no-invite-visitor", testDbRef.db!);
-  deleteDocumentInvite("doc-1", "private-invited", testDbRef.db!);
-  deleteDocumentInvite("doc-1", "invited-editor", testDbRef.db!);
-  deleteDocumentInvite("doc-1", "invited-reader", testDbRef.db!);
+  deleteDocumentInvite("doc-1", OTHER);
+  deleteDocumentInvite("doc-1", "no-invite-visitor");
+  deleteDocumentInvite("doc-1", "private-invited");
+  deleteDocumentInvite("doc-1", "invited-editor");
+  deleteDocumentInvite("doc-1", "invited-reader");
 });
 
 // ============================================================
@@ -118,10 +118,7 @@ describe("canReadDocument", () => {
   });
 
   it("restricted 域：非成员有 invite 可读", () => {
-    insertDocumentInvite(
-      { document_id: "doc-1", visitor_id: OTHER, permission: "read" },
-      testDbRef.db!,
-    );
+    insertDocumentInvite({ document_id: "doc-1", visitor_id: OTHER, permission: "read" }, testDbRef.db!, );
     expect(canReadDocument(makeDoc({ permission: Permission.DOMAIN_READ }), OTHER, ctx("restricted", false))).toBe(true);
   });
 
@@ -136,10 +133,7 @@ describe("canReadDocument", () => {
   });
 
   it("private 域：非创建者有 invite 可读 0 档文档", () => {
-    insertDocumentInvite(
-      { document_id: "doc-1", visitor_id: "private-invited", permission: "read" },
-      testDbRef.db!,
-    );
+    insertDocumentInvite({ document_id: "doc-1", visitor_id: "private-invited", permission: "read" }, testDbRef.db!, );
     expect(canReadDocument(makeDoc({ permission: Permission.PRIVATE }), "private-invited", ctx("private", false))).toBe(true);
   });
 
@@ -234,18 +228,12 @@ describe("canEditDocument", () => {
   });
 
   it("restricted 域：非成员有 invite=edit 可写", () => {
-    insertDocumentInvite(
-      { document_id: "doc-1", visitor_id: "invited-editor", permission: "edit" },
-      testDbRef.db!,
-    );
+    insertDocumentInvite({ document_id: "doc-1", visitor_id: "invited-editor", permission: "edit" }, testDbRef.db!, );
     expect(canEditDocument(makeDoc({ permission: Permission.DOMAIN_WRITE }), "invited-editor", ctx("restricted", false))).toBe(true);
   });
 
   it("restricted 域：非成员有 invite=read 不可写", () => {
-    insertDocumentInvite(
-      { document_id: "doc-1", visitor_id: "invited-reader", permission: "read" },
-      testDbRef.db!,
-    );
+    insertDocumentInvite({ document_id: "doc-1", visitor_id: "invited-reader", permission: "read" }, testDbRef.db!, );
     expect(canEditDocument(makeDoc({ permission: Permission.DOMAIN_WRITE }), "invited-reader", ctx("restricted", false))).toBe(false);
   });
 

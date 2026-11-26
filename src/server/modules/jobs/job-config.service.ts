@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { DocumentError } from "../access/access-control";
-import { getDb } from "../../infra/db/connection";
-import { findDocumentById } from "../documents/repo/document.repo";
-import { updateDocumentContent } from "../documents/repo/document.repo";
+import { findDocumentById } from "../documents/service/document.service.js";
+import { updateDocumentContent } from "../documents/service/document.service.js";
 import { readDocument, writeDocument } from "../../infra/storage/file-store";
 import { FILE_TYPE } from "../../../shared/file-types";
 import { withJobFileLock } from "./job-file-lock";
@@ -31,8 +30,7 @@ export type SaveMonitorConfigInput = {
 };
 
 function loadJobRow(documentId: string) {
-  const db = getDb();
-  const row = findDocumentById(documentId, db);
+  const row = findDocumentById(documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (row.file_type !== FILE_TYPE.JOB) {
     throw new DocumentError("BAD_REQUEST", "文档不是 Job 类型", 400);
@@ -59,11 +57,7 @@ function writeJobDoc(params: {
   );
   const now = new Date().toISOString();
   updateDocumentContent({
-    ...params.row,
-    content_hash: write.contentHash,
-    updated_by: params.actorVisitorId,
-    updated_at: now,
-  });
+    ...params.row, content_hash: write.contentHash, updated_by: params.actorVisitorId, updated_at: now, });
   return params.doc;
 }
 

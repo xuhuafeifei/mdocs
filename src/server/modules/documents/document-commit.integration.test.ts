@@ -48,10 +48,10 @@ vi.mock("../../infra/storage/file-store.js", () => ({
 }));
 
 import { DocumentError } from "../access/access-control.js";
-import { createDocument, getDocument, getDocumentMergeContext, updateDocument } from "./document.service.js";
+import { createDocument, getDocument, getDocumentMergeContext, updateDocument } from "./application/document.application.js";
 import { findCommitById } from "./repo/commit.repo.js";
-import { findDocumentById } from "./repo/document.repo.js";
-import { insertDocumentInvite } from "./repo/document.repo.js";
+import { findDocumentById } from "./service/document.service.js";
+import { insertDocumentInvite } from "./service/document.service.js";
 import {
   countParents,
   listParentCommitIds,
@@ -92,14 +92,8 @@ describe("updateDocument 版本冲突", () => {
       content: '{"v":1}',
       domainId: "default",
     });
-    insertDocumentInvite(
-      {
-        document_id: created.documentId,
-        visitor_id: INVITED_EDITOR,
-        permission: "edit",
-      },
-      testDbRef.db!,
-    );
+    insertDocumentInvite({
+        document_id: created.documentId, visitor_id: INVITED_EDITOR, permission: "edit", }, testDbRef.db!, );
 
     const updated = updateDocument({
       actorVisitorId: INVITED_EDITOR,
@@ -126,7 +120,7 @@ describe("updateDocument 版本冲突", () => {
       version: { localBaseCommitId: base },
     });
     expect(updated.headCommitId).not.toBe(base);
-    const row = findDocumentById(created.documentId, testDbRef.db!);
+    const row = findDocumentById(created.documentId);
     expect(row?.head_commit_id).toBe(updated.headCommitId);
   });
 
@@ -308,14 +302,8 @@ describe("updateDocument merge 发布", () => {
       content: '{"base":true}',
       domainId: "default",
     });
-    insertDocumentInvite(
-      {
-        document_id: created.documentId,
-        visitor_id: INVITED_EDITOR,
-        permission: "edit",
-      },
-      testDbRef.db!,
-    );
+    insertDocumentInvite({
+        document_id: created.documentId, visitor_id: INVITED_EDITOR, permission: "edit", }, testDbRef.db!, );
     const base = created.headCommitId!;
     const remote = updateDocument({
       actorVisitorId: OWNER,

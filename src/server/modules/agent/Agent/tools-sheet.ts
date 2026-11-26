@@ -9,7 +9,7 @@ import {
   assertCanWriteDocument,
 } from "../../access/access";
 import { DocumentError } from "../../access/access-control";
-import { getDocument, updateDocument } from "../../documents/document.service";
+import { getDocument, updateDocument } from "../../documents/application/document.application.js";
 import { FILE_TYPE } from "../../../../shared/file-types";
 import {
   addWorkbookSheet,

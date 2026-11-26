@@ -63,9 +63,9 @@ vi.mock("../../infra/logger/logger.js", () => ({
 }));
 
 import { buildDocumentTree, buildFolderSubtree } from "../tree/tree.application.js";
-import { createDocument, removeFolder } from "./document.service.js";
+import { createDocument, removeFolder } from "./application/document.application.js";
 import { DocumentError } from "../access/access-control.js";
-import { findDocumentById, countChildrenByParent, listDocumentsByPathPrefix } from "./repo/document.repo.js";
+import { findDocumentById, countChildrenByParent, listDocumentsByPathPrefix } from "./service/document.service.js";
 import { FOLDER_DESC_FILENAME } from "../../../shared/folderDesc.js";
 import type { FolderSubtreeNode } from "../../../shared/types/tree.js";
 import { findCommitById } from "./repo/commit.repo.js";
@@ -96,7 +96,7 @@ function createFolder(name: string, domainId: string = "default", parentId: stri
   const folderId = randomUUID();
   const now = new Date().toISOString();
   const folderPath = parentId
-    ? `${(findDocumentById(parentId, db)!.relative_path)}/${name}`
+    ? `${(findDocumentById(parentId)!.relative_path)}/${name}`
     : name;
 
   db.prepare(

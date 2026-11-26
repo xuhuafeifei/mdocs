@@ -1,6 +1,6 @@
 /**
  * 【仅 Vitest】比较 Lobe 导出 Lexical 与 markdown 解析结果的结构差异。
- * 不参与 `document.service` / 路由等运行时路径；仅被 `*.test.ts` 引用。
+ * 不参与 document.application / 路由等运行时路径；仅被 `*.test.ts` 引用。
  */
 export type LexicalStructureMismatch = string;
 

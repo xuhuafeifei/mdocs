@@ -1,9 +1,9 @@
 /**
- * 图谱缓存生命周期：与 document.service 主链路解耦。
+ * 图谱缓存生命周期：与 document.application 主链路解耦。
  * 主链路只 schedule；隐藏文件 IO 全在本模块 + graph.service 导出函数。
  */
 import { getDb } from "../../../infra/db/connection";
-import { findDocumentById } from "../repo/document.repo";
+import { findDocumentById } from "../service/document.service.js";
 import { findCommitById } from "../repo/commit.repo";
 import { readCommitBlob, readDocument } from "../../../infra/storage/file-store";
 import { extractPlainTextFromLexical } from "../lexical-text";
@@ -35,14 +35,13 @@ export async function markAncestorsDirty(params: {
   folderId: string | null;
 }): Promise<void> {
   let p: string | null = params.folderId;
-  const db = getDb();
   while (p != null) {
     const file = readDirGraphFile(p);
     if (file) {
       file.meta.dirty = true;
       writeDirGraphFile(p, file);
     }
-    const row = findDocumentById(p, db);
+    const row = findDocumentById(p);
     p = row?.parent_id ?? null;
   }
   const domainFile = readDomainGraphFile(params.domainId);
@@ -118,8 +117,7 @@ export async function onFolderDeleted(params: {
 }
 
 function readCurrentLexical(documentId: string): string | null {
-  const db = getDb();
-  const doc = findDocumentById(documentId, db);
+  const doc = findDocumentById(documentId);
   if (!doc) return null;
   try {
     return readDocument(doc.domain_id, doc.relative_path).content;

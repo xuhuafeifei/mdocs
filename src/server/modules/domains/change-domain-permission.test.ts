@@ -1,15 +1,22 @@
 import Database from "better-sqlite3";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { applySchema } from "../../infra/db/schema.js";
 import {
   countDocumentsByOwner,
   listDocumentsByOwner,
-} from "../documents/repo/document.repo.js";
+} from "../documents/service/document.service.js";
 import { changeDomainPermission, DomainPermissionError } from "./change-domain-permission.js";
+
+const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
+
+vi.mock("../../infra/db/connection.js", () => ({
+  getDb: () => testDbRef.db!,
+}));
 
 function seed() {
   const db = new Database(":memory:");
   applySchema(db);
+  testDbRef.db = db;
   db.prepare(
     `INSERT INTO visitors (visitor_id, visitor_name, visitor_token_hash, created_at) VALUES (?, ?, ?, ?)`,
   ).run("owner", "Owner", "h", "2026-01-01T00:00:00.000Z");
@@ -48,22 +55,21 @@ describe("changeDomainPermission", () => {
 
 describe("listDocumentsByOwner filters", () => {
   it("filters by domain", () => {
-    const db = seed();
+    seed();
     const filters = { ...emptyFilters, domainId: "d1" };
-    expect(countDocumentsByOwner("owner", filters, db)).toBe(1);
-    const rows = listDocumentsByOwner("owner", filters, { offset: 0, limit: 20 }, db);
+    expect(countDocumentsByOwner("owner", filters)).toBe(1);
+    const rows = listDocumentsByOwner("owner", filters, { offset: 0, limit: 20 });
     expect(rows[0]?.document_id).toBe("doc-a");
-    expect(countDocumentsByOwner("owner", emptyFilters, db)).toBe(2);
+    expect(countDocumentsByOwner("owner", emptyFilters)).toBe(2);
   });
 
   it("filters by fileType md vs sheet", () => {
-    const db = seed();
-    db.prepare(`UPDATE documents SET file_type = 'sheet' WHERE document_id = 'doc-b'`).run();
+    seed();
+    testDbRef.db!.prepare(`UPDATE documents SET file_type = 'sheet' WHERE document_id = 'doc-b'`).run();
     const sheets = listDocumentsByOwner(
       "owner",
       { ...emptyFilters, fileType: "sheet" },
       { offset: 0, limit: 20 },
-      db,
     );
     expect(sheets).toHaveLength(1);
     expect(sheets[0]?.document_id).toBe("doc-b");
@@ -72,7 +78,6 @@ describe("listDocumentsByOwner filters", () => {
       "owner",
       { ...emptyFilters, fileType: "md" },
       { offset: 0, limit: 20 },
-      db,
     );
     expect(mds).toHaveLength(1);
     expect(mds[0]?.document_id).toBe("doc-a");

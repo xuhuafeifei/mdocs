@@ -1,6 +1,7 @@
 /**
  * documents / document_invites 表访问。SQL 只活在本文件。
- * DB 默认内部 getDb()；可选末参 `db?` 仅单测注入。
+ * **仅** `modules/documents/service/document.service.ts` 可 import；其余走薄 service。
+ * DB 默认内部 getDb()；可选末参 `db?` 仅单测注入（供 service 层外的测试勿直打）。
  * 入参/返回均为表实体或查询 Row（缺列传 null）；不做 HTTP 映射与分页加工。
  */
 import type Database from "better-sqlite3";

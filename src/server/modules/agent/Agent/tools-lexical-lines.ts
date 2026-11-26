@@ -5,7 +5,7 @@ import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { assertCanReadDocument } from "../../access/access";
 import { DocumentError } from "../../access/access-control";
-import { getDocument } from "../../documents/document.service";
+import { getDocument } from "../../documents/application/document.application.js";
 import { lexicalJsonToLexicalLines } from "../../documents/lexical-to-markdown";
 import {
   validateBatchSlotRanges,

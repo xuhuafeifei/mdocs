@@ -1,11 +1,10 @@
 /**
  * Agent / CLI：从 local 正文 + tip/base 构建冲突 md，再跑 AI merge / merge-message。
  */
-import { getDb } from "../../infra/db/connection";
-import { findDocumentById } from "./repo/document.repo";
+import { findDocumentById } from "./service/document.service.js";
 import { DocumentError } from "../access/access-control";
 import { canAiMerge } from "../../../shared/file-type-policy";
-import { getDocument, getDocumentMergeContext } from "./document.service";
+import { getDocument, getDocumentMergeContext } from "./application/document.application.js";
 import { contentToDiffText } from "./suggest-commit-message";
 import { buildConflictMarkdownFromTexts } from "./build-conflict-markdown";
 import { suggestMergeResolutions } from "./suggest-merge-resolutions";
@@ -49,8 +48,7 @@ export async function suggestDocumentMerge(params: {
   unresolvedCount: number;
   headCommitId: string | null;
 }> {
-  const db = getDb();
-  const row = findDocumentById(params.documentId, db);
+  const row = findDocumentById(params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (!canAiMerge(row.file_type)) {
     throw new DocumentError("BAD_REQUEST", "该文件类型不支持 AI 行级合并", 400);

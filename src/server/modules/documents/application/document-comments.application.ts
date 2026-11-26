@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 import { DocumentError } from "../../access/access-control.js";
-import { findDocumentById } from "../repo/document.repo.js";
+import { findDocumentById } from "../service/document.service.js";
 import {
   findDocumentCommentById,
   insertDocumentComment,
@@ -72,7 +72,7 @@ export function deleteDocumentComment(
     throw new DocumentError("BAD_REQUEST", MISSING_COMMENT_MESSAGE, 400);
   }
 
-  const doc = findDocumentById(comment.document_id, db);
+  const doc = findDocumentById(comment.document_id);
   const isDocOwner = doc?.owner_visitor_id === visitorId;
   const isCommentAuthor = comment.visitor_id === visitorId;
   if (!isCommentAuthor && !isDocOwner) {

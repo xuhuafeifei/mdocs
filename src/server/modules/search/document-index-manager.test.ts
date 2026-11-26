@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { Jieba } from "@node-rs/jieba";
 import { dict } from "@node-rs/jieba/dict.js";
 import { applySchema } from "../../infra/db/schema.js";
-import { createDocument } from "../documents/document.service.js";
+import { createDocument } from "../documents/application/document.application.js";
 import { Permission } from "../access/access-control.js";
 import { rebuildAllDirty, removeIndex, rebuildDocument } from "./document-index-manager.js";
 import { searchDocuments } from "./search.service.js";

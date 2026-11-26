@@ -55,8 +55,8 @@ import {
   listDeletedDocuments,
   removeDocument,
   restoreDocumentFromAudit,
-} from "./document.service.js";
-import { findDocumentById } from "./repo/document.repo.js";
+} from "./application/document.application.js";
+import { findDocumentById } from "./service/document.service.js";
 
 const OWNER = "owner-recovery-1";
 const OTHER = "other-recovery-1";
@@ -95,7 +95,7 @@ describe("document delete recovery", () => {
     const head = created.headCommitId!;
 
     removeDocument({ actorVisitorId: OWNER, documentId: docId });
-    expect(findDocumentById(docId, testDbRef.db!)).toBeUndefined();
+    expect(findDocumentById(docId)).toBeUndefined();
 
     const deleted = listDeletedDocuments({ actorVisitorId: OWNER });
     expect(deleted).toHaveLength(1);

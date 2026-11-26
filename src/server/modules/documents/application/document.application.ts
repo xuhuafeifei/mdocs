@@ -1,5 +1,9 @@
+/**
+ * documents 用例编排（原根目录胖 document.service）。
+ * documents 表只经 `service/document.service`；不 import `repo/document.repo`。
+ */
 import { randomUUID } from "node:crypto";
-import { runInTransaction } from "../../infra/db/transaction.js";
+import { runInTransaction } from "../../../infra/db/transaction.js";
 import {
   deleteDocument,
   findDocumentById,
@@ -16,47 +20,47 @@ import {
   updateDocumentHeadCommit,
   updateDocumentLocation,
   type Documents,
-} from "./repo/document.repo";
+} from "../service/document.service.js";
 import {
   insertCommit,
   insertCommitParent,
   findCommitById,
   listCommitsByDocument as listCommitRowsByDocument,
-} from "./repo/commit.repo";
+} from "../repo/commit.repo.js";
 import {
   AUTO_PUBLISH_MESSAGE,
   isPublishSource,
   PUBLISH_MESSAGE_MAX_LENGTH,
   type PublishSource,
-} from "../../../shared/publish-meta";
+} from "../../../../shared/publish-meta.js";
 import {
   assertCommitBelongsToDocument,
   assertMergeFork,
   findMergeBaseCommitId,
   isAncestorOf,
-} from "./commit-graph";
-import { findVisitorById } from "../visitor/repo/visitor.repo.js";
+} from "../commit-graph.js";
+import { findVisitorById } from "../../visitor/repo/visitor.repo.js";
 import {
   getDomainById,
   getDomainMemberRole,
   isDomainMember,
-} from "../domains/service/domain.service.js";
+} from "../../domains/service/domain.service.js";
 import {
   canEnterDomain,
   canFullyAccessDomain,
   canRead,
   canWrite,
-} from "../access/access";
+} from "../../access/access.js";
 import {
   DocumentError,
   Permission,
   validateDomainPermission,
-} from "../access/access-control";
+} from "../../access/access-control.js";
 import {
   findAuditById,
   insertAuditLog,
   listDocumentDeleteAuditsByActor,
-} from "./repo/audit.repo";
+} from "../repo/audit.repo.js";
 import {
   deleteDocumentFile,
   readCommitBlob,
@@ -66,33 +70,33 @@ import {
   sha256,
   writeCommitBlob,
   writeDocument,
-} from "../../infra/storage/file-store";
+} from "../../../infra/storage/file-store.js";
 import {
   markDirty,
   removeIndex,
   rebuildDocument,
-} from "../search/document-index-manager";
-import { upsertDocumentEmbeddings } from "../search/embedding-store";
+} from "../../search/document-index-manager.js";
+import { upsertDocumentEmbeddings } from "../../search/embedding-store.js";
 import type {
   DocumentDetail,
   DocumentMergeContext,
   DocumentSummary,
   DocumentSyncStatus,
   PublishVersionContext,
-} from "../../../shared/types/document";
-import { getConfig } from "../../infra/config";
-import { markdownToLexicalJson } from "./markdown-to-lexical";
-import { lexicalJsonToMarkdown } from "./lexical-to-markdown";
-import { extractPlainTextFromLexical } from "./lexical-text";
-import { FILE_TYPE, isGraphFileType } from "../../../shared/file-types";
-import { isFolderDescPath } from "../../../shared/folderDesc";
-import { getPolicy } from "../../../shared/file-type-policy";
-import { ensureJobFileContent } from "../jobs/job-file";
-import { getJobRuntimeSnapshot } from "../jobs/job-run.service";
+} from "../../../../shared/types/document.js";
+import { getConfig } from "../../../infra/config/index.js";
+import { markdownToLexicalJson } from "../markdown-to-lexical.js";
+import { lexicalJsonToMarkdown } from "../lexical-to-markdown.js";
+import { extractPlainTextFromLexical } from "../lexical-text.js";
+import { FILE_TYPE, isGraphFileType } from "../../../../shared/file-types.js";
+import { isFolderDescPath } from "../../../../shared/folderDesc.js";
+import { getPolicy } from "../../../../shared/file-type-policy.js";
+import { ensureJobFileContent } from "../../jobs/job-file.js";
+import { getJobRuntimeSnapshot } from "../../jobs/job-run.service.js";
 import {
   deleteJobRunningDataByJobId,
   deleteJobRunningDetailByJobId,
-} from "../jobs/repo/job-running.repo.js";
+} from "../../jobs/repo/job-running.repo.js";
 import {
   toDocumentCommitDetail,
   toDocumentCommitSummary,
@@ -108,7 +112,7 @@ import {
   type DocumentCommitDetail,
   type DocumentCommitSummary,
   type DocumentDeleteRecovery,
-} from "./mapper/document.mapper.js";
+} from "../mapper/document.mapper.js";
 
 export type { DocumentDeleteRecovery };
 import {
@@ -117,7 +121,7 @@ import {
   onArticlePublished,
   onFolderDeleted,
   scheduleGraphLifecycle,
-} from "./graph/lifecycle";
+} from "../graph/lifecycle.js";
 
 function scheduleFtsIfNeeded(fileType: string, documentId: string): void {
   const policy = getPolicy(fileType as any);
@@ -590,12 +594,7 @@ export function updateDocument(params: {
   const blob = writeCommitBlob(write.contentHash, content);
 
   runInTransaction(() => {
-    updateDocumentContent({...row,
-      display_name: displayName,
-      content_hash: write.contentHash,
-      updated_by: params.actorVisitorId,
-      updated_at: now,
-      permission: params.permission ?? row.permission,});
+    updateDocumentContent({...row, display_name: displayName, content_hash: write.contentHash, updated_by: params.actorVisitorId, updated_at: now, permission: params.permission ?? row.permission, });
     insertCommit(
       toDocumentCommitsRow({
         commitId,
@@ -615,10 +614,7 @@ export function updateDocument(params: {
         parent_commit_id: row.head_commit_id,
       });
     }
-    updateDocumentHeadCommit({...row,
-      head_commit_id: commitId,
-      updated_by: params.actorVisitorId,
-      updated_at: now,});
+    updateDocumentHeadCommit({...row, head_commit_id: commitId, updated_by: params.actorVisitorId, updated_at: now, });
     insertAuditLog({
       id: null,
       actor_visitor_id: params.actorVisitorId,
@@ -1009,11 +1005,7 @@ export function restoreDocumentVersion(params: {
   const previousHead = row.head_commit_id;
 
   runInTransaction(() => {
-    updateDocumentContent({...row,
-      display_name: row.display_name,
-      content_hash: write.contentHash,
-      updated_by: params.actorVisitorId,
-      updated_at: now,});
+    updateDocumentContent({...row, display_name: row.display_name, content_hash: write.contentHash, updated_by: params.actorVisitorId, updated_at: now, });
     insertCommit(
       toDocumentCommitsRow({
         commitId: newCommitId,
@@ -1030,10 +1022,7 @@ export function restoreDocumentVersion(params: {
         parent_commit_id: previousHead,
       });
     }
-    updateDocumentHeadCommit({...row,
-      head_commit_id: newCommitId,
-      updated_by: params.actorVisitorId,
-      updated_at: now,});
+    updateDocumentHeadCommit({...row, head_commit_id: newCommitId, updated_by: params.actorVisitorId, updated_at: now, });
     insertAuditLog({
       id: null,
       actor_visitor_id: params.actorVisitorId,
@@ -1157,11 +1146,7 @@ export function moveDocument(params: {
 
   try {
     runInTransaction(() => {
-      updateDocumentLocation({...row,
-      parent_id: newParentId,
-        relative_path: newRelativePath,
-        updated_by: params.actorVisitorId,
-        updated_at: now,});
+      updateDocumentLocation({...row, parent_id: newParentId, relative_path: newRelativePath, updated_by: params.actorVisitorId, updated_at: now, });
       insertAuditLog({
         id: null,
         actor_visitor_id: params.actorVisitorId,
@@ -1342,11 +1327,7 @@ function moveFolder(params: {
         });
       }
       for (const plan of plans) {
-        updateDocumentLocation({...plan.row,
-      parent_id: plan.newParentId,
-          relative_path: plan.newPath,
-          updated_by: params.actorVisitorId,
-          updated_at: now,});
+        updateDocumentLocation({...plan.row, parent_id: plan.newParentId, relative_path: plan.newPath, updated_by: params.actorVisitorId, updated_at: now, });
       }
       insertAuditLog({
         id: null,
@@ -1452,11 +1433,7 @@ export function renameDocument(params: {
 
   try {
     runInTransaction(() => {
-      updateDocumentLocation({...row,
-      parent_id: row.parent_id ?? null,
-        relative_path: newRelativePath,
-        updated_by: params.actorVisitorId,
-        updated_at: now,});
+      updateDocumentLocation({...row, parent_id: row.parent_id ?? null, relative_path: newRelativePath, updated_by: params.actorVisitorId, updated_at: now, });
       insertAuditLog({
         id: null,
         actor_visitor_id: params.actorVisitorId,
@@ -1604,13 +1581,11 @@ export function addDocumentInvite(
     );
   }
 
-  insertDocumentInvite(
-    toDocumentInvitesRow({
+  insertDocumentInvite(toDocumentInvitesRow({
       documentId,
       visitorId: targetVisitorId,
       permission: targetPermission,
-    }),
-  );
+    }), );
 }
 
 export function removeDocumentInvite(
@@ -1766,12 +1741,7 @@ function publishMergeDocument(params: {
       parent_commit_id: params.localBaseCommitId,
     });
 
-    updateDocumentContent({...row,
-      display_name: displayName,
-      content_hash: write.contentHash,
-      updated_by: actorVisitorId,
-      updated_at: now,
-      permission: params.permission ?? row.permission,});
+    updateDocumentContent({...row, display_name: displayName, content_hash: write.contentHash, updated_by: actorVisitorId, updated_at: now, permission: params.permission ?? row.permission, });
     // merge 节点：双父 = 远端 head + r_local
     insertCommit(
       toDocumentCommitsRow({
@@ -1796,10 +1766,7 @@ function publishMergeDocument(params: {
       child_commit_id: mergeCommitId,
       parent_commit_id: localCommitId,
     });
-    updateDocumentHeadCommit({...row,
-      head_commit_id: mergeCommitId,
-      updated_by: actorVisitorId,
-      updated_at: now,});
+    updateDocumentHeadCommit({...row, head_commit_id: mergeCommitId, updated_by: actorVisitorId, updated_at: now, });
     insertAuditLog({
       id: null,
       actor_visitor_id: actorVisitorId,

@@ -11,7 +11,7 @@ import {
   updateDomainName,
   type DomainMemberRole,
 } from "../repo/domain.repo.js";
-import { countDocumentsByDomain } from "../../documents/repo/document.repo.js";
+import { countDocumentsByDomain } from "../../documents/service/document.service.js";
 import { findVisitorById } from "../../visitor/repo/visitor.repo.js";
 import { canEnterDomains } from "../../access/access.js";
 import {
@@ -256,7 +256,7 @@ export function renameDomain(params: {
   if (domain.creator_visitor_id !== params.actorVisitorId) {
     throw new DomainError("FORBIDDEN", "only the creator can modify this domain", 403);
   }
-  if (countDocumentsByDomain(params.domainId, db) > 0) {
+  if (countDocumentsByDomain(params.domainId) > 0) {
     throw new DomainError(
       "DOMAIN_HAS_DOCUMENTS",
       "cannot modify domain with documents",
@@ -295,7 +295,7 @@ export function deleteDomain(actorVisitorId: string, domainId: string): void {
   if (domain.creator_visitor_id !== actorVisitorId) {
     throw new DomainError("FORBIDDEN", "only the creator can delete this domain", 403);
   }
-  if (countDocumentsByDomain(domainId, db) > 0) {
+  if (countDocumentsByDomain(domainId) > 0) {
     throw new DomainError(
       "DOMAIN_HAS_DOCUMENTS",
       "cannot delete domain with documents",

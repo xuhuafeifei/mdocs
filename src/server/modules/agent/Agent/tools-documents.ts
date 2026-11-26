@@ -2,7 +2,7 @@ import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { TreeNode } from "../../../../shared/types/tree";
 import { getDb } from "../../../infra/db/connection";
-import { findDocumentById } from "../../documents/repo/document.repo";
+import { findDocumentById } from "../../documents/service/document.service.js";
 import { listCurrentVisitorDocuments } from "../../visitor/application/visitor.application.js";
 import { resolvePageParams } from "../../../shared/request/page.params.js";
 import { assertCanReadDocument } from "../../access/access";
@@ -16,7 +16,7 @@ import {
   listDocumentCommits,
   moveDocument,
   renameDocument,
-} from "../../documents/document.service";
+} from "../../documents/application/document.application.js";
 import { buildDocumentTree } from "../../tree/tree.application.js";
 import { createFolder } from "../../documents/application/folders.application.js";
 import { searchDocuments, tokenizeQuery, type SearchMode } from "../../search/search.service";

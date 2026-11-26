@@ -3,13 +3,12 @@
  * 过渡：鉴权+列文+建树仍揉在一起；目标改走 access 门面 + documents 薄查询。见 ADR 022。
  * tree 无表，不设 service/repo。
  */
-import { getDb } from "../../infra/db/connection.js";
 import {
   findChildrenByParent,
   findDocumentById,
   listDocumentsByDomain,
   type Documents,
-} from "../documents/repo/document.repo.js";
+} from "../documents/service/document.service.js";
 import { canEnterDomain, canRead } from "../access/access.js";
 import { DocumentError } from "../access/access-control.js";
 import { getConfig } from "../../infra/config/index.js";
@@ -92,14 +91,13 @@ export function buildFolderSubtree(
 }
 
 function collectDescendants(folderId: string): Documents[] {
-  const db = getDb();
   const out: Documents[] = [];
-  const queue = [...findChildrenByParent(folderId, db)];
+  const queue = [...findChildrenByParent(folderId)];
   while (queue.length > 0) {
     const row = queue.shift()!;
     out.push(row);
     if (row.file_type === "dir") {
-      queue.push(...findChildrenByParent(row.document_id, db));
+      queue.push(...findChildrenByParent(row.document_id));
     }
   }
   return out;

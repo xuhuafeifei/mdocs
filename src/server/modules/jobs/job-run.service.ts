@@ -1,5 +1,5 @@
 import { DocumentError } from "../access/access-control";
-import { findDocumentById } from "../documents/repo/document.repo";
+import { findDocumentById } from "../documents/service/document.service.js";
 import { FILE_TYPE } from "../../../shared/file-types";
 import { readDocument } from "../../infra/storage/file-store";
 import { parseJobFileContent } from "./job-file";

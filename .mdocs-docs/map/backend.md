@@ -74,7 +74,7 @@
 - **定位**：
   | 路径 | 符号 |
   |------|------|
-  | `src/server/documents/document.service.ts` | 文档业务（含 html raw / FTS·图谱政策门控）；`removeDocument` recovery / `restoreDocumentFromAudit` / `listDeletedDocuments`；`moveDocument`（含 `dir` 子树，图谱隐藏文件删除）；`listDocumentCommits` / `restoreDocumentVersion` |
+  | `src/server/modules/documents/application/document.application.ts` | 文档用例编排（含 html raw / FTS·图谱政策门控）；`removeDocument` recovery / `restoreDocumentFromAudit` / `listDeletedDocuments`；`moveDocument`（含 `dir` 子树，图谱隐藏文件删除）；`listDocumentCommits` / `restoreDocumentVersion` |
   | `src/server/modules/tree/controller/tree.controller.ts` | Nest `GET /api/tree` + `CanEnterDomainGuard` |
   | `src/server/modules/tree/tree.application.ts` | 编排层唯一文件：`getDocumentTree` / `buildDocumentTree` / `buildFolderSubtree` |
   | `src/server/storage/file-store.ts` | `readDocument` / `writeDocument`（拟增 rename） |
@@ -124,7 +124,7 @@
   | `src/server/agent/Agent/tools-sheet.ts` | 工作簿多表：`sheet_*`（`append_rows` / `update_row` / `insert_rows_at` / `overwrite` / `get_styles` 等）+ tab CRUD |
   | `src/shared/sheetDocument.ts` | `.sheet` v2：`sheets[]` + `activeSheetId`；`insertSheetRows` / `overwriteSheetTab` / `collectSheetCellStyles` |
   | `src/server/agent/Agent/tools-documents.ts` | `renameDocumentTool`（同目录改 basename） |
-  | `src/server/documents/document.service.ts` | `renameDocument` |
+  | `src/server/modules/documents/application/document.application.ts` | `renameDocument` |
   | `src/server/agent/Agent/tools-domains.ts` | `listDomainsTool` `createDomainTool` 等 |
   | `src/server/agent/Agent/system-prompt.ts` | `buildSystemPrompt` |
   | `src/server/routes/agent.routes.ts` | `buildAgentRouter`（含 `/choice` `/sessions` `/session/open`） |

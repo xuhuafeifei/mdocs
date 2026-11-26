@@ -46,7 +46,7 @@ vi.mock("../../../infra/storage/file-store.js", () => ({
 }));
 
 import { Permission } from "../../access/access-control.js";
-import { createDocument, getDocument } from "../../documents/document.service.js";
+import { createDocument, getDocument } from "../../documents/application/document.application.js";
 import {
   appendDocumentTool,
   replaceDocumentMarkdownTool,

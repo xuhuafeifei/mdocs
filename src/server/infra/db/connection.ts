@@ -21,8 +21,9 @@ export function getDb(): Database.Database {
   const db = new Database(cfg.dbFile);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
-  applySchema(db);
+  // Schema / backfill 经薄 service 会再 getDb()；须先挂上单例，避免递归建库或连错连接。
   instance = db;
+  applySchema(db);
   return db;
 }
 

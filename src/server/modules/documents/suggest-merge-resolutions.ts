@@ -6,8 +6,7 @@
  * 2. 其余冲突只把冲突块送给模型，要 JSON 字符串数组（短输出）
  * 3. 与无冲突原文拼回完整正文
  */
-import { getDb } from "../../infra/db/connection";
-import { findDocumentById } from "./repo/document.repo";
+import { findDocumentById } from "./service/document.service.js";
 import { DocumentError } from "../access/access-control";
 import { getVisitorAgentConfig } from "../agent/Config/config";
 import { canAiMerge } from "../../../shared/file-type-policy";
@@ -159,8 +158,7 @@ export async function suggestMergeResolutions(params: {
   documentId: string;
   conflictMarkdown: string;
 }): Promise<{ mergedMarkdown: string }> {
-  const db = getDb();
-  const row = findDocumentById(params.documentId, db);
+  const row = findDocumentById(params.documentId);
   if (!row) throw new DocumentError("DOC_NOT_FOUND", "文档不存在", 404);
   if (!canAiMerge(row.file_type)) {
     throw new DocumentError("BAD_REQUEST", "该文件类型不支持 AI 行级合并", 400);

@@ -21,7 +21,7 @@ pnpm typecheck        # type-check both server and web tsconfig
 pnpm mdocs            # CLI tool (e.g., pnpm mdocs version / visitor list / migrate / update)
 ```
 
-Run a single test file: `pnpm vitest run src/server/documents/document.service.test.ts`
+Run a single test file: `pnpm vitest run src/server/modules/documents/document.service.integration.test.ts`
 
 ## Architecture
 

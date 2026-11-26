@@ -24,7 +24,7 @@ import {
   assertCanWriteDocument,
 } from "./access.js";
 import { findDomainById } from "../domains/repo/domain.repo.js";
-import type { Documents } from "../documents/repo/document.repo.js";
+import type { Documents } from "../documents/service/document.service.js";
 
 /* ── 生命周期 ── */
 

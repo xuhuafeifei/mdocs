@@ -26,7 +26,7 @@ import {
 } from "./graph";
 import type { Graph } from "./graph/types";
 import { getDb } from "../../infra/db/connection";
-import { findDocumentById, listDocumentsByDomain } from "./repo/document.repo";
+import { findDocumentById, listDocumentsByDomain } from "./service/document.service.js";
 import { findDomainById } from "../domains/repo/domain.repo";
 import { FILE_TYPE } from "../../../shared/file-types";
 
@@ -181,7 +181,7 @@ async function runDomainGraph(
   }
 
   // 域下 parent_id 为空的一级节点（排除图谱隐藏文件）
-  const allDocs = listDocumentsByDomain(payload.targetId, db);
+  const allDocs = listDocumentsByDomain(payload.targetId);
   const topLevelDocs = allDocs.filter(
     (d) =>
       !d.parent_id &&
@@ -269,8 +269,7 @@ async function runDocGraph(
   scheduler: TaskScheduler,
 ): Promise<void> {
   const startTime = Date.now();
-  const db = getDb();
-  const doc = findDocumentById(payload.targetId, db);
+  const doc = findDocumentById(payload.targetId);
   if (!doc) {
     throw new Error(`文档不存在：${payload.targetId}`);
   }

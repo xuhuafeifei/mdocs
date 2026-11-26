@@ -34,7 +34,7 @@ vi.mock("../../../infra/storage/file-store.js", () => ({
 }));
 
 import { Permission } from "../../access/access-control.js";
-import { createDocument, getDocument, updateDocument } from "../../documents/document.service.js";
+import { createDocument, getDocument, updateDocument } from "../../documents/application/document.application.js";
 import { overwriteDocumentTool } from "./tools-overwrite.js";
 
 const OWNER = "owner-1";
