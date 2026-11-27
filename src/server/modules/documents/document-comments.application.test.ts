@@ -1,5 +1,12 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import Database from "better-sqlite3";
+
+const testDbRef = vi.hoisted(() => ({ db: null as Database.Database | null }));
+
+vi.mock("../../infra/db/connection.js", () => ({
+  getDb: () => testDbRef.db!,
+}));
+
 import {
   createDocumentComment,
   deleteDocumentComment,
@@ -45,32 +52,34 @@ function createTestDb(): Database.Database {
   return db;
 }
 
-function insertDocument(db: Database.Database, ownerVisitorId: string): void {
-  db.prepare(`
+function insertDocument(ownerVisitorId: string): void {
+  testDbRef.db!
+    .prepare(
+      `
     INSERT INTO documents (
       document_id, domain_id, relative_path, display_name,
       owner_visitor_id, created_by, updated_by, content_hash,
       created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    "doc-1",
-    "default",
-    "test.md",
-    "Test",
-    ownerVisitorId,
-    ownerVisitorId,
-    ownerVisitorId,
-    "hash",
-    new Date().toISOString(),
-    new Date().toISOString(),
-  );
+  `,
+    )
+    .run(
+      "doc-1",
+      "default",
+      "test.md",
+      "Test",
+      ownerVisitorId,
+      ownerVisitorId,
+      ownerVisitorId,
+      "hash",
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
 }
 
 describe("document comments", () => {
-  let db: Database.Database;
-
   beforeEach(() => {
-    db = createTestDb();
+    testDbRef.db = createTestDb();
   });
 
   describe("createDocumentComment", () => {
@@ -83,7 +92,7 @@ describe("document comments", () => {
         replyToVisitorId: null,
         replyToVisitorName: null,
         content: "这是一篇评论",
-      }, db);
+      });
 
       expect(comment.commentId).toBeTruthy();
       expect(comment.documentId).toBe("doc-1");
@@ -93,7 +102,7 @@ describe("document comments", () => {
       expect(comment.parentId).toBeNull();
       expect(comment.isDeleted).toBe(false);
 
-      const stored = findDocumentCommentById(comment.commentId, db);
+      const stored = findDocumentCommentById(comment.commentId);
       expect(stored?.is_deleted).toBe(0);
       expect(stored?.visitor_id).toBe("visitor-a");
     });
@@ -107,7 +116,7 @@ describe("document comments", () => {
         replyToVisitorId: null,
         replyToVisitorName: null,
         content: "根评论",
-      }, db);
+      });
 
       const reply = createDocumentComment({
         documentId: "doc-1",
@@ -117,7 +126,7 @@ describe("document comments", () => {
         replyToVisitorId: "visitor-a",
         replyToVisitorName: "Alice",
         content: "回复根评论",
-      }, db);
+      });
 
       expect(reply.parentId).toBe(rootComment.commentId);
       expect(reply.replyToVisitorId).toBe("visitor-a");
@@ -133,7 +142,7 @@ describe("document comments", () => {
         replyToVisitorId: null,
         replyToVisitorName: null,
         content: "根评论",
-      }, db);
+      });
 
       const reply = createDocumentComment({
         documentId: "doc-1",
@@ -143,7 +152,7 @@ describe("document comments", () => {
         replyToVisitorId: "visitor-a",
         replyToVisitorName: "Alice",
         content: "回复",
-      }, db);
+      });
 
       expect(() =>
         createDocumentComment({
@@ -154,7 +163,7 @@ describe("document comments", () => {
           replyToVisitorId: "visitor-b",
           replyToVisitorName: "Bob",
           content: "回复的回复",
-        }, db),
+        }),
       ).toThrow("只能回复根评论，不支持更深层级嵌套");
     });
 
@@ -168,7 +177,7 @@ describe("document comments", () => {
           replyToVisitorId: null,
           replyToVisitorName: null,
           content: "   ",
-        }, db),
+        }),
       ).toThrow("评论内容不能为空");
     });
 
@@ -183,7 +192,7 @@ describe("document comments", () => {
           replyToVisitorId: null,
           replyToVisitorName: null,
           content: longContent,
-        }, db),
+        }),
       ).toThrow("评论内容不能超过 512 个字符");
     });
 
@@ -197,7 +206,7 @@ describe("document comments", () => {
         replyToVisitorId: null,
         replyToVisitorName: null,
         content,
-      }, db);
+      });
       expect(comment.content.length).toBe(512);
     });
   });
@@ -212,17 +221,17 @@ describe("document comments", () => {
         replyToVisitorId: null,
         replyToVisitorName: null,
         content: "我的评论",
-      }, db);
+      });
 
-      const result = deleteDocumentComment(comment.commentId, "visitor-a", db);
+      const result = deleteDocumentComment(comment.commentId, "visitor-a");
       expect(result.success).toBe(true);
 
-      const deleted = findDocumentCommentById(comment.commentId, db);
+      const deleted = findDocumentCommentById(comment.commentId);
       expect(deleted?.is_deleted).toBe(1);
     });
 
     it("文档创建者可以删除该文档下的任意评论", () => {
-      insertDocument(db, "visitor-a");
+      insertDocument("visitor-a");
 
       const comment = createDocumentComment({
         documentId: "doc-1",
@@ -232,17 +241,17 @@ describe("document comments", () => {
         replyToVisitorId: null,
         replyToVisitorName: null,
         content: "别人的评论",
-      }, db);
+      });
 
-      const result = deleteDocumentComment(comment.commentId, "visitor-a", db);
+      const result = deleteDocumentComment(comment.commentId, "visitor-a");
       expect(result.success).toBe(true);
 
-      const deleted = findDocumentCommentById(comment.commentId, db);
+      const deleted = findDocumentCommentById(comment.commentId);
       expect(deleted?.is_deleted).toBe(1);
     });
 
     it("非作者且非文档创建者不能删除评论", () => {
-      insertDocument(db, "visitor-a");
+      insertDocument("visitor-a");
 
       const comment = createDocumentComment({
         documentId: "doc-1",
@@ -252,15 +261,15 @@ describe("document comments", () => {
         replyToVisitorId: null,
         replyToVisitorName: null,
         content: "别人的评论",
-      }, db);
+      });
 
-      expect(() => deleteDocumentComment(comment.commentId, "visitor-c", db)).toThrow(
+      expect(() => deleteDocumentComment(comment.commentId, "visitor-c")).toThrow(
         "只能删除自己的评论或文档下的评论",
       );
     });
 
     it("删除不存在的评论应该报错", () => {
-      expect(() => deleteDocumentComment("non-existent-id", "visitor-a", db)).toThrow("评论不存在");
+      expect(() => deleteDocumentComment("non-existent-id", "visitor-a")).toThrow("评论不存在");
     });
   });
 
@@ -274,7 +283,7 @@ describe("document comments", () => {
         replyToVisitorId: null,
         replyToVisitorName: null,
         content: "评论 1",
-      }, db);
+      });
 
       createDocumentComment({
         documentId: "doc-1",
@@ -284,9 +293,9 @@ describe("document comments", () => {
         replyToVisitorId: null,
         replyToVisitorName: null,
         content: "评论 2",
-      }, db);
+      });
 
-      const { comments } = listDocumentComments("doc-1", db);
+      const { comments } = listDocumentComments("doc-1");
       expect(comments.length).toBe(2);
       expect(comments.some((c) => c.content === "评论 1")).toBe(true);
       expect(comments.some((c) => c.content === "评论 2")).toBe(true);
@@ -301,7 +310,7 @@ describe("document comments", () => {
         replyToVisitorId: null,
         replyToVisitorName: null,
         content: "文档 1 的评论",
-      }, db);
+      });
 
       createDocumentComment({
         documentId: "doc-2",
@@ -311,10 +320,10 @@ describe("document comments", () => {
         replyToVisitorId: null,
         replyToVisitorName: null,
         content: "文档 2 的评论",
-      }, db);
+      });
 
-      const comments1 = listDocumentComments("doc-1", db).comments;
-      const comments2 = listDocumentComments("doc-2", db).comments;
+      const comments1 = listDocumentComments("doc-1").comments;
+      const comments2 = listDocumentComments("doc-2").comments;
 
       expect(comments1.length).toBe(1);
       expect(comments2.length).toBe(1);
@@ -328,10 +337,10 @@ describe("document comments", () => {
         visitorId: "visitor-a",
         visitorName: "Alice",
         content: "待删",
-      }, db);
-      deleteDocumentComment(comment.commentId, "visitor-a", db);
+      });
+      deleteDocumentComment(comment.commentId, "visitor-a");
 
-      const listed = listDocumentComments("doc-1", db);
+      const listed = listDocumentComments("doc-1");
       expect(listed.comments).toHaveLength(1);
       expect(listed.comments[0]!.isDeleted).toBe(true);
       expect(listed.total).toBe(0);
